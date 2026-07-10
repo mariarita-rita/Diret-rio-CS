@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento Atendimento — Junho 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2; --branco:#FFFFFF;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .back-link{ display:inline-block; font-size:12px; color:rgba(255,255,255,.55); text-decoration:none; margin-bottom:16px; }
+  .back-link:hover{ color:#fff; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:44px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:30px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.azul { color:var(--azul2); }
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); } .chip-ok { background:var(--verde-cl); color:var(--verde); } .chip-info { background:var(--azul-cl); color:var(--azul2); }
+  .motivos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .motivo-item { background:#fff; border:1px solid var(--brd); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:14px; }
+  .motivo-num { font-size:28px; font-weight:800; min-width:36px; line-height:1; }
+  .motivo-txt b { font-size:13px; font-weight:700; display:block; margin-bottom:1px; }
+  .motivo-txt span { font-size:11px; color:var(--cinza); }
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:170px repeat(3,1fr); }
+  .hist-cell { padding:10px 14px; font-size:12px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:11px; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-junho { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+  .chip { display:inline-block; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; vertical-align:middle; }
+  .chip-laranja{ background:var(--lar-cl); color:var(--laranja); }
+  .chip-verm{ background:var(--verm-cl); color:var(--verm); }
+  .chip-alta{ background:var(--verm-cl); color:var(--verm); }
+  .chip-media{ background:var(--lar-cl); color:var(--laranja); }
+  .chip-baixa{ background:var(--azul-cl); color:var(--azul2); }
+  .evento-box{ margin-top:12px; padding:10px 12px; background:var(--lar-cl); border-left:3px solid var(--laranja); border-radius:6px; font-size:11.5px; color:#78350F; line-height:1.5; }
+  .reco-check{ width:16px; height:16px; cursor:pointer; accent-color: var(--azul2); }
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+  /* --- ranking bars (novo para Atendimento) --- */
+  .rank-box{ background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px 18px; }
+  .rank-box-titulo{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cinza); margin-bottom:12px; }
+  .rank-row{ display:grid; grid-template-columns:98px 1fr 56px; align-items:center; gap:10px; margin-bottom:9px; }
+  .rank-row:last-child{ margin-bottom:0; }
+  .rank-nome{ font-size:12px; font-weight:600; color:var(--preto); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rank-track{ background:var(--cinza-cl); border-radius:4px; height:10px; overflow:hidden; }
+  .rank-fill{ height:100%; border-radius:4px; background:linear-gradient(90deg,var(--azul2),#6366F1); }
+  .rank-fill.verm{ background:linear-gradient(90deg,#DC2626,#F87171); }
+  .rank-val{ text-align:right; font-size:12px; font-weight:700; color:var(--preto); font-variant-numeric:tabular-nums; }
+  .rank-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  /* --- quote cards --- */
+  .quote-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .quote-card{ background:#fff; border:1px solid var(--brd); border-radius:10px; padding:13px 16px; border-left:3px solid var(--azul2); }
+  .quote-card.satisfeito{ border-left-color:var(--verde); }
+  .quote-card.insatisfeito{ border-left-color:var(--verm); }
+  .quote-autor{ font-size:12px; font-weight:700; color:var(--azul2); margin-bottom:5px; }
+  .quote-card.satisfeito .quote-autor{ color:var(--verde); }
+  .quote-card.insatisfeito .quote-autor{ color:var(--verm); }
+  .quote-texto{ font-size:12.5px; color:var(--preto); line-height:1.55; }
+  /* --- bar chart vertical --- */
+  .bar-chart{ display:flex; align-items:flex-end; gap:10px; height:150px; padding:16px 8px 0; border-bottom:1px solid var(--brd); background:#fff; border:1px solid var(--brd); border-top:none; border-radius:0 0 10px 10px; }
+  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .bar-fill{ width:100%; max-width:34px; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#6366F1,var(--azul2)); }
+  .bar-val{ font-size:10px; font-weight:700; color:var(--preto); margin-bottom:4px; }
+  .bar-wrap{ background:linear-gradient(90deg,var(--azul1),var(--azul2)); border-radius:10px 10px 0 0; padding:8px 14px; }
+  .bar-wrap-titulo{ font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.06em; }
+  .bar-labels{ display:flex; gap:10px; padding:6px 8px 0; }
+  .bar-label-col{ flex:1; text-align:center; font-size:10px; color:var(--cinza); }
+  @media(max-width:700px) {
+    .hist-row { grid-template-columns:100px repeat(3,1fr); font-size:11px; }
+    .hist-cell { padding:8px 8px; }
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .motivos-grid { grid-template-columns:1fr; }
+    .rank-grid2 { grid-template-columns:1fr; }
+    .quote-grid { grid-template-columns:1fr; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:30px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <a href="fechamentos.html" class="back-link">← Voltar aos Fechamentos</a>
+      <p class="hero-eyebrow">Londrisoft · Atendimento</p>
+      <h1 class="hero-titulo">Fechamento<span>Junho 2026</span></h1>
+      <p class="hero-desc">Chat, telefone e satisfação da equipe de atendimento — dados corrigidos com arquivo bruto da central (Issabel).</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado do mês</p>
+      <div class="panel-destaque">
+        <div><p class="dk">CSAT geral</p><p class="dv">88,2%</p></div>
+        <div class="dpct"><strong>419/475</strong><span>respondentes</span></div>
+      </div>
+      <div class="panel-item"><span class="k">Chat válidos</span><span class="v">1.460</span></div>
+      <div class="panel-item"><span class="k">Ligações recebidas (base corrigida)</span><span class="v">372</span></div>
+      <div class="panel-item"><span class="k">Taxa atendimento telefone</span><span class="v azul">80,1% ✔</span></div>
+      <div class="panel-item"><span class="k">TMA chat / TME chat</span><span class="v">1h 52min / 1min 26s</span></div>
+      <div class="evento-box"><strong>Eventos:</strong> Instabilidade no servidor com impacto Gestor e Unique.</div>
+    </div>
+  </div>
+</div>
+
+<div class="conteudo">
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Resultado do mês</p><h2 class="sec-titulo">Visão geral</h2></div>
+      <p class="sec-desc">1.460 chats válidos e 372 ligações na base de cálculo corrigida. CSAT geral de 88,2% e taxa de atendimento telefônico de 80,1%.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">Chat válidos</p><p class="num-val azul">1.460</p><p class="num-sub">dentro do horário: 1.383</p></div>
+      <div class="num-card"><p class="num-label">Ligações recebidas</p><p class="num-val">372</p><p class="num-sub">base de cálculo corrigida</p></div>
+      <div class="num-card"><p class="num-label">CSAT geral</p><p class="num-val verde">88,2%</p><p class="num-sub">419/475 respondentes</p></div>
+      <div class="num-card"><p class="num-label">TMA chat</p><p class="num-val">1h 52min</p><p class="num-sub">tempo médio de atendimento</p></div>
+      <div class="num-card"><p class="num-label">TME chat</p><p class="num-val">1min 26s</p><p class="num-sub">tempo médio de espera</p></div>
+      <div class="num-card"><p class="num-label">Taxa atendimento tel.</p><p class="num-val azul">80,1%</p><p class="num-sub">298 de 372 válidas</p></div>
+    </div>
+    <div class="rank-grid2" style="margin-bottom:14px;">
+      <div class="rank-box">
+        <p class="rank-box-titulo">Distribuição do chat</p>
+        <div class="rank-row"><span class="rank-nome">Dentro horário</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">1.383</span></div>
+        <div class="rank-row"><span class="rank-nome">Fora do horário</span><div class="rank-track"><div class="rank-fill" style="width:6%"></div></div><span class="rank-val">77</span></div>
+        <div class="rank-row"><span class="rank-nome">Desconsiderados</span><div class="rank-track"><div class="rank-fill" style="width:3%"></div></div><span class="rank-val">40</span></div>
+      </div>
+      <div class="rank-box">
+        <p class="rank-box-titulo">Ligações externas (base cálculo)</p>
+        <div class="rank-row"><span class="rank-nome">Atendidas</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">298 (80,1%)</span></div>
+        <div class="rank-row"><span class="rank-nome">Desistência fila</span><div class="rank-track"><div class="rank-fill verm" style="width:6%"></div></div><span class="rank-val">18</span></div>
+        <div class="rank-row"><span class="rank-nome">Não atendidas</span><div class="rank-track"><div class="rank-fill verm" style="width:19%"></div></div><span class="rank-val">56</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Evolução mensal — abril a junho</h2></div>
+      <p class="sec-desc">CSAT geral subiu em maio e recuou em junho. TMA do chat piorou nos últimos dois meses. Taxa de atendimento telefônico quase dobrou após a correção da base com o arquivo bruto da Issabel.</p>
+    </div>
+    <div class="hist-wrap">
+      <div class="hist-row">
+        <div class="hist-cell hist-head">Indicador</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Abril</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Maio</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Junho</div>
+      </div>
+      <div class="hist-row">
+        <div class="hist-cell hist-mes">CSAT geral</div>
+        <div class="hist-cell hist-val">89,1%</div>
+        <div class="hist-cell hist-val">90,5%</div>
+        <div class="hist-cell hist-val hist-junho">88,2%</div>
+      </div>
+      <div class="hist-row">
+        <div class="hist-cell hist-mes">TMA chat</div>
+        <div class="hist-cell hist-val">59min 41s</div>
+        <div class="hist-cell hist-val">43 min</div>
+        <div class="hist-cell hist-val hist-junho">1h 52min</div>
+      </div>
+      <div class="hist-row">
+        <div class="hist-cell hist-mes">TME chat</div>
+        <div class="hist-cell hist-val">1min 28s</div>
+        <div class="hist-cell hist-val">5,09 min</div>
+        <div class="hist-cell hist-val hist-junho">1min 26s</div>
+      </div>
+      <div class="hist-row">
+        <div class="hist-cell hist-mes">Chat válidos</div>
+        <div class="hist-cell hist-val">1.392</div>
+        <div class="hist-cell hist-val" style="color:var(--cinza);">não informado</div>
+        <div class="hist-cell hist-val hist-junho">1.460</div>
+      </div>
+      <div class="hist-row">
+        <div class="hist-cell hist-mes">Ligações recebidas</div>
+        <div class="hist-cell hist-val">710</div>
+        <div class="hist-cell hist-val" style="color:var(--cinza);">não informado</div>
+        <div class="hist-cell hist-val hist-junho">372</div>
+      </div>
+      <div class="hist-row">
+        <div class="hist-cell hist-mes">Taxa atendimento tel.</div>
+        <div class="hist-cell hist-val">45,6%</div>
+        <div class="hist-cell hist-val" style="color:var(--cinza);">não informado</div>
+        <div class="hist-cell hist-val hist-junho">80,1%</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="alerta alerta-laranja"><strong>Eventos: instabilidade no servidor com impacto Gestor e Unique</strong> <span class="chip chip-laranja">⚠ Instabilidade</span> — quatro dias de instabilidade sistêmica no mês (09/06, 15/06, 23/06 e 25/06), com destaque para o pico de 189 conversas em 15/06 (CSAT caiu para 79%) e o maior volume de ligações do mês em 09/06 (117 recebidas, só 34% atendidas). Detalhamento completo na seção "Instabilidades do mês".</div>
+      <div class="alerta alerta-laranja">TMA do chat saltou de 43min (maio) para 1h 52min em junho — atenção ao aumento no tempo médio de atendimento.</div>
+      <div class="alerta alerta-verde">Taxa de atendimento telefônico quase dobrou: de 45,6% (abril) para 80,1% (junho), após a correção da base de cálculo com o arquivo bruto da Issabel.</div>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Chat — conversas por atendente</h2></div>
+      <p class="sec-desc">1.380 conversas com atendente humano dentro do horário. Meta de TMA &lt;25min não foi atingida por nenhum atendente.</p>
+    </div>
+    <div class="rank-grid2" style="margin-bottom:14px;">
+      <div class="rank-box">
+        <p class="rank-box-titulo">Volume de conversas</p>
+        <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">285</span></div>
+        <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:92.6%"></div></div><span class="rank-val">264</span></div>
+        <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:91.9%"></div></div><span class="rank-val">262</span></div>
+        <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:77.2%"></div></div><span class="rank-val">220</span></div>
+        <div class="rank-row"><span class="rank-nome">D. Balaguer</span><div class="rank-track"><div class="rank-fill" style="width:68.8%"></div></div><span class="rank-val">196</span></div>
+        <div class="rank-row"><span class="rank-nome">Valerio</span><div class="rank-track"><div class="rank-fill" style="width:53.7%"></div></div><span class="rank-val">153</span></div>
+      </div>
+      <div class="rank-box">
+        <p class="rank-box-titulo">TMA por atendente (menor é melhor)</p>
+        <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:49.7%"></div></div><span class="rank-val">1h17</span></div>
+        <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:52.3%"></div></div><span class="rank-val">1h21</span></div>
+        <div class="rank-row"><span class="rank-nome">Valerio</span><div class="rank-track"><div class="rank-fill" style="width:54.2%"></div></div><span class="rank-val">1h24</span></div>
+        <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill verm" style="width:86.5%"></div></div><span class="rank-val">2h14</span></div>
+        <div class="rank-row"><span class="rank-nome">D. Balaguer</span><div class="rank-track"><div class="rank-fill verm" style="width:97.4%"></div></div><span class="rank-val">2h31</span></div>
+        <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill verm" style="width:100%"></div></div><span class="rank-val">2h35</span></div>
+      </div>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Atendente</th><th>Conversas</th><th>%</th><th>TMA</th><th>TME</th><th>CSAT</th><th>% Resp.</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Valerio Marcos</td><td class="td-r">153</td><td class="td-r">11,1%</td><td class="td-r">1h 24min</td><td class="td-r">1min 56s</td><td class="td-r">94,0%</td><td class="td-r">32,7%</td></tr>
+          <tr><td class="negrito">Daniel Vitor</td><td class="td-r">285</td><td class="td-r">20,7%</td><td class="td-r">1h 21min</td><td class="td-r">0min 46s</td><td class="td-r">85,6%</td><td class="td-r">41,4%</td></tr>
+          <tr><td class="negrito">Jaqueline</td><td class="td-r">264</td><td class="td-r">19,1%</td><td class="td-r">1h 17min</td><td class="td-r">1min 32s</td><td class="td-r">82,6%</td><td class="td-r">32,6%</td></tr>
+          <tr><td class="negrito">Alexsandro</td><td class="td-r">262</td><td class="td-r">19,0%</td><td class="td-r">2h 14min</td><td class="td-r">1min 30s</td><td class="td-r">90,0%</td><td class="td-r">30,5%</td></tr>
+          <tr><td class="negrito">Thalyta</td><td class="td-r">220</td><td class="td-r">15,9%</td><td class="td-r">2h 35min</td><td class="td-r">1min 36s</td><td class="td-r">90,1%</td><td class="td-r">32,3%</td></tr>
+          <tr><td class="negrito">Daniel Balaguer</td><td class="td-r">196</td><td class="td-r">14,2%</td><td class="td-r">2h 31min</td><td class="td-r">1min 38s</td><td class="td-r">89,7%</td><td class="td-r">29,6%</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">TOTAL / MÉDIA</td><td class="td-r negrito">1.380</td><td class="td-r negrito">100%</td><td class="td-r negrito">1h 52min</td><td class="td-r negrito">1min 26s</td><td class="td-r negrito">87,9%</td><td class="td-r negrito">33,5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Canal telefone</p><h2 class="sec-titulo">Telefone — dados corrigidos (Issabel)</h2></div>
+      <p class="sec-desc">Reprocessamento do arquivo bruto da central identificou 213 ligações atendidas sem ticket correspondente no Octadesk.</p>
+    </div>
+    <div class="rank-grid2" style="margin-bottom:14px;">
+      <div class="rank-box">
+        <p class="rank-box-titulo">Atendidas por atendente</p>
+        <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">68</span></div>
+        <div class="rank-row"><span class="rank-nome">D. Balaguer</span><div class="rank-track"><div class="rank-fill" style="width:83.8%"></div></div><span class="rank-val">57</span></div>
+        <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:79.4%"></div></div><span class="rank-val">54</span></div>
+        <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:64.7%"></div></div><span class="rank-val">44</span></div>
+        <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:60.3%"></div></div><span class="rank-val">41</span></div>
+        <div class="rank-row"><span class="rank-nome">Valerio</span><div class="rank-track"><div class="rank-fill" style="width:50%"></div></div><span class="rank-val">34</span></div>
+      </div>
+      <div class="rank-box">
+        <p class="rank-box-titulo">TMA telefone por atendente</p>
+        <div class="rank-row"><span class="rank-nome">D. Balaguer</span><div class="rank-track"><div class="rank-fill" style="width:44.5%"></div></div><span class="rank-val">7:55</span></div>
+        <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:78.3%"></div></div><span class="rank-val">13:55</span></div>
+        <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill verm" style="width:80.3%"></div></div><span class="rank-val">14:16</span></div>
+        <div class="rank-row"><span class="rank-nome">Valerio</span><div class="rank-track"><div class="rank-fill verm" style="width:94.5%"></div></div><span class="rank-val">16:47</span></div>
+        <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill verm" style="width:100%"></div></div><span class="rank-val">17:46</span></div>
+        <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:0%;background:var(--brd);"></div></div><span class="rank-val">—</span></div>
+      </div>
+    </div>
+    <p class="sec-desc" style="margin-bottom:10px;">Referência de classificação por cor: verde &lt;15min · azul 13-15min · amarelo 15-20min · vermelho &gt;20min.</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Classificação</th><th>Qtd</th><th>% base</th></tr></thead>
+        <tbody>
+          <tr><td>Atendidas</td><td class="td-r negrito">298</td><td class="td-r">80,1%</td></tr>
+          <tr><td>Desistência por fila (≥30s)</td><td class="td-r">18</td><td class="td-r">4,8%</td></tr>
+          <tr><td>Não atendidas (ring sem resposta)</td><td class="td-r">56</td><td class="td-r">15,1%</td></tr>
+          <tr><td>Desistência imediata (&lt;30s) — excluída da base</td><td class="td-r">257</td><td class="td-r">—</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Base de cálculo</td><td class="td-r negrito">372</td><td class="td-r">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Conferência Issabel × Octadesk</th><th>Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Ligações atendidas (central Issabel)</td><td class="td-r negrito">298</td></tr>
+          <tr><td>Tickets registrados (Octadesk)</td><td class="td-r">85</td></tr>
+          <tr><td>Diferença sem ticket</td><td class="td-r verm negrito" style="color:var(--verm);">213</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alerta alerta-laranja">213 ligações atendidas na central Issabel não possuem ticket correspondente no Octadesk — recomenda-se investigar o registro no funil de atendimento.</div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Qualidade</p><h2 class="sec-titulo">Satisfação (CSAT)</h2></div>
+      <p class="sec-desc">CSAT combinado de 88,2% com 920 conversas sem resposta à pesquisa, de um total de 1.383 no horário.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">CSAT chat</p><p class="num-val verde">87,9%</p><p class="num-sub">407/463 respondentes</p></div>
+      <div class="num-card"><p class="num-label">CSAT telefone</p><p class="num-val verde">100%</p><p class="num-sub">12/12 avaliações</p></div>
+      <div class="num-card"><p class="num-label">CSAT combinado</p><p class="num-val azul">88,2%</p><p class="num-sub">419/475 respondentes</p></div>
+      <div class="num-card"><p class="num-label">Não responderam</p><p class="num-val">920</p><p class="num-sub">de 1.383 conversas no horário</p></div>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Atendente</th><th>Satisfeito</th><th>Insatisfeito</th><th>Total</th><th>CSAT</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Valerio Marcos</td><td class="td-r">47</td><td class="td-r">3</td><td class="td-r">50</td><td class="td-r negrito" style="color:var(--verde);">94,0%</td></tr>
+          <tr><td class="negrito">Thalyta</td><td class="td-r">64</td><td class="td-r">7</td><td class="td-r">71</td><td class="td-r negrito" style="color:var(--verde);">90,1%</td></tr>
+          <tr><td class="negrito">Alexsandro</td><td class="td-r">72</td><td class="td-r">8</td><td class="td-r">80</td><td class="td-r negrito" style="color:var(--verde);">90,0%</td></tr>
+          <tr><td class="negrito">Daniel Balaguer</td><td class="td-r">52</td><td class="td-r">6</td><td class="td-r">58</td><td class="td-r negrito" style="color:var(--verde);">89,7%</td></tr>
+          <tr><td class="negrito">Daniel Vitor</td><td class="td-r">101</td><td class="td-r">17</td><td class="td-r">118</td><td class="td-r negrito">85,6%</td></tr>
+          <tr><td class="negrito">Jaqueline</td><td class="td-r">71</td><td class="td-r">15</td><td class="td-r">86</td><td class="td-r negrito">82,6%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Demanda</p><h2 class="sec-titulo">Picos de demanda — chat</h2></div>
+      <p class="sec-desc">Pico de volume às 9h (223 conversas). Segunda e terça concentram os dias de maior movimento.</p>
+    </div>
+    <div class="bar-wrap"><span class="bar-wrap-titulo">Volume por horário</span></div>
+    <div class="bar-chart">
+      <div class="bar-col"><span class="bar-val">164</span><div class="bar-fill" style="height:73.5%"></div></div>
+      <div class="bar-col"><span class="bar-val">223</span><div class="bar-fill" style="height:100%"></div></div>
+      <div class="bar-col"><span class="bar-val">201</span><div class="bar-fill" style="height:90.1%"></div></div>
+      <div class="bar-col"><span class="bar-val">148</span><div class="bar-fill" style="height:66.4%"></div></div>
+      <div class="bar-col"><span class="bar-val">102</span><div class="bar-fill" style="height:45.7%"></div></div>
+      <div class="bar-col"><span class="bar-val">176</span><div class="bar-fill" style="height:78.9%"></div></div>
+      <div class="bar-col"><span class="bar-val">186</span><div class="bar-fill" style="height:83.4%"></div></div>
+      <div class="bar-col"><span class="bar-val">139</span><div class="bar-fill" style="height:62.3%"></div></div>
+      <div class="bar-col"><span class="bar-val">64</span><div class="bar-fill" style="height:28.7%"></div></div>
+    </div>
+    <div class="bar-labels" style="margin-bottom:20px;">
+      <div class="bar-label-col">08h</div><div class="bar-label-col">09h</div><div class="bar-label-col">10h</div><div class="bar-label-col">11h</div><div class="bar-label-col">13h</div><div class="bar-label-col">14h</div><div class="bar-label-col">15h</div><div class="bar-label-col">16h</div><div class="bar-label-col">17h</div>
+    </div>
+    <div class="motivos-grid">
+      <div class="motivo-item" style="border-left:3px solid var(--laranja);"><span class="motivo-num" style="color:var(--azul2);">189</span><div class="motivo-txt"><b>15/06 (segunda) <span class="chip chip-laranja">⚠ Instabilidade</span></b><span>Top 1 — dia de maior volume · CSAT 79%</span></div></div>
+      <div class="motivo-item"><span class="motivo-num" style="color:var(--azul2);">178</span><div class="motivo-txt"><b>09/06 (terça)</b><span>Top 2</span></div></div>
+      <div class="motivo-item"><span class="motivo-num" style="color:inherit;">107</span><div class="motivo-txt"><b>22/06 (segunda)</b><span>Top 3</span></div></div>
+      <div class="motivo-item"><span class="motivo-num" style="color:inherit;">96</span><div class="motivo-txt"><b>23/06 (terça)</b><span>Top 4</span></div></div>
+      <div class="motivo-item"><span class="motivo-num" style="color:inherit;">79</span><div class="motivo-txt"><b>30/06 (terça)</b><span>Top 5</span></div></div>
+      <div class="motivo-item"><span class="motivo-num" style="color:inherit;">09h</span><div class="motivo-txt"><b>Horário de pico</b><span>223 conversas — top 1</span></div></div>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Causa-raiz</p><h2 class="sec-titulo">Instabilidades do mês <span class="chip chip-laranja">⚠ 4 dias impactados</span></h2></div>
+      <p class="sec-desc">4 dias com instabilidade sistêmica em junho: 09/06 e 25/06 (Gestor Nuvem, sistema próprio), 15/06 (pico geral) e 23/06 (Sefaz, sistema externo). Juntos somam 182 ligações não atendidas.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">Dias analisados</p><p class="num-val azul">4</p><p class="num-sub">09/06 · 15/06 · 23/06 · 25/06</p></div>
+      <div class="num-card"><p class="num-label">Pior CSAT</p><p class="num-val verm">79%</p><p class="num-sub">15/06 — pico geral</p></div>
+      <div class="num-card"><p class="num-label">Maior TME</p><p class="num-val" style="color:var(--laranja);">2min 59s</p><p class="num-sub">23/06 — Sefaz</p></div>
+      <div class="num-card"><p class="num-label">Maior % não atend. tel.</p><p class="num-val verm">68%</p><p class="num-sub">25/06 — Gestor Nuvem</p></div>
+      <div class="num-card"><p class="num-label">Total não atend. (4 dias)</p><p class="num-val verm">182</p><p class="num-sub">ligações não atendidas</p></div>
+    </div>
+
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Data</th><th>Motivo</th><th>Chat vol.</th><th>TME chat</th><th>CSAT</th><th>Tel. recebidas</th><th>Não atend.</th><th>% não atend.</th><th>TMA tel.</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito" style="color:var(--laranja);">09/06 ⚠</td><td>Gestor Nuvem <span style="font-size:10px;color:var(--cinza);">(sistema próprio)</span></td><td class="td-r">184</td><td class="td-r">1min 47s</td><td class="td-r">87%</td><td class="td-r">117</td><td class="td-r">77</td><td class="td-r">66%</td><td class="td-r">8min 52s</td></tr>
+          <tr><td class="negrito" style="color:var(--laranja);">15/06 ⚠</td><td>Pico geral</td><td class="td-r">189</td><td class="td-r">1min 20s</td><td class="td-r">79%</td><td class="td-r">37</td><td class="td-r">23</td><td class="td-r">62%</td><td class="td-r">10min 14s</td></tr>
+          <tr><td class="negrito">23/06</td><td>Sefaz <span style="font-size:10px;color:var(--cinza);">(sistema externo)</span></td><td class="td-r">101</td><td class="td-r">2min 59s</td><td class="td-r">86%</td><td class="td-r">88</td><td class="td-r">54</td><td class="td-r">61%</td><td class="td-r">6min 49s</td></tr>
+          <tr><td class="negrito">25/06</td><td>Gestor Nuvem <span style="font-size:10px;color:var(--cinza);">(sistema próprio)</span></td><td class="td-r">48</td><td class="td-r">1min 45s</td><td class="td-r">91%</td><td class="td-r">41</td><td class="td-r">28</td><td class="td-r">68%</td><td class="td-r">15min 01s</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Média do mês</td><td>—</td><td class="td-r negrito">68</td><td class="td-r negrito">1min 50s</td><td class="td-r negrito">87,9%</td><td class="td-r negrito">372</td><td class="td-r negrito">74</td><td class="td-r negrito">19,9%</td><td class="td-r negrito">12min 08s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alerta alerta-azul"><strong>Dois padrões identificados:</strong> (1) volume alto com resposta rápida e sem resolução — 09/06 e 15/06, ambos com TME próximo ou abaixo da média, mas telefone sobrecarregado por conta do "overflow" do chat. (2) conversas longas aguardando normalização — 23/06 (Sefaz, sistema externo) e 25/06 (Gestor Nuvem, sistema próprio), com alta taxa de ligações não atendidas.</div>
+
+    <div class="rank-box" style="margin:16px 0;">
+      <p class="rank-box-titulo">09/06/2026 · instabilidade Gestor Nuvem <span style="font-size:10px;color:var(--cinza);text-transform:none;font-weight:400;">(sistema próprio)</span> <span class="chip chip-laranja">⚠ Instabilidade</span></p>
+      <div class="num-grid" style="grid-template-columns:repeat(3,1fr);margin-top:10px;margin-bottom:10px;">
+        <div class="num-card"><p class="num-label">Chat (dentro hor.)</p><p class="num-val" style="color:var(--laranja);">184</p><p class="num-sub">2º maior do mês — média: 68</p></div>
+        <div class="num-card"><p class="num-label">TME médio</p><p class="num-val">1min 47s</p><p class="num-sub">mês: 1min 50s</p></div>
+        <div class="num-card"><p class="num-label">Dur. média</p><p class="num-val">54min</p><p class="num-sub">mês: 1h 04min</p></div>
+        <div class="num-card"><p class="num-label">CSAT dia</p><p class="num-val verde">87%</p><p class="num-sub">mês: 87,9%</p></div>
+        <div class="num-card"><p class="num-label">Tel. atendidas</p><p class="num-val verm">40/117</p><p class="num-sub">34% — maior volume do mês</p></div>
+        <div class="num-card"><p class="num-label">TMA tel.</p><p class="num-val">8min 52s</p><p class="num-sub">mês: 12min 08s</p></div>
+      </div>
+      <p class="sec-desc" style="margin-bottom:6px;">Padrão muito parecido com o de 15/06: volume alto (184 conversas, 2º maior do mês), TME baixo e CSAT praticamente na média — sinal de triagem rápida, sem resolução.</p>
+      <p class="sec-desc" style="margin-bottom:6px;"><strong>Chat:</strong> 184 conversas dentro do horário, concentradas de manhã — 44 às 8h, 40 às 9h e 38 às 10h, caindo bastante depois. TME de 1min47s praticamente igual à média do mês (1min50s), confirmando que a fila foi bem absorvida. Duração média de 54min ficou abaixo da média mensal (1h04), reforçando o padrão de atendimentos rápidos sem resolução. CSAT de 87% — bem diferente do 15/06 (79%), sugerindo que a comunicação sobre a instabilidade foi melhor conduzida pela equipe nesse dia.</p>
+      <p class="sec-desc" style="margin-bottom:6px;"><strong>Atendentes:</strong> distribuição equilibrada — Jaqueline (39), Daniel Balaguer (38) e Thalyta (38) absorveram mais conversas. Thalyta teve o maior TME (2min34s). Daniel Balaguer teve a maior duração média — 1h24min — indicando que pegou os casos mais complexos do dia.</p>
+      <p class="sec-desc" style="margin-bottom:10px;"><strong>Telefone (o dado mais crítico do dia):</strong> 117 ligações — o maior volume de todo o mês — com apenas 40 atendidas (34%) e 77 não atendidas. TMA curto de 8min52s (igual ao da Sefaz) indica respostas rápidas e padronizadas. O impacto se arrastou: 67 ligações no dia 11/06 com apenas 28% de atendimento — provável "cauda" da instabilidade, com clientes que não conseguiram falar no dia 9 tentando novamente.</p>
+      <div class="alerta alerta-verm">⚠ Destaque: maior volume de ligações do mês inteiro (117), com apenas 34% de atendimento. Chat bem gerido em volume e satisfação — telefone sobrecarregado, com impacto arrastado até 11/06.</div>
+    </div>
+
+    <div class="rank-box" style="margin:16px 0;">
+      <p class="rank-box-titulo">Maior pico do mês — 15/06/2026 · instabilidade sistêmica geral <span class="chip chip-laranja">⚠ Instabilidade</span></p>
+      <div class="num-grid" style="grid-template-columns:repeat(3,1fr);margin-top:10px;margin-bottom:10px;">
+        <div class="num-card"><p class="num-label">Chat (dentro hor.)</p><p class="num-val verm">189</p><p class="num-sub">maior do mês — média: 68</p></div>
+        <div class="num-card"><p class="num-label">TME médio</p><p class="num-val">1min 20s</p><p class="num-sub">mês: 1min 50s</p></div>
+        <div class="num-card"><p class="num-label">Dur. média</p><p class="num-val">36min</p><p class="num-sub">mês: 1h 04min</p></div>
+        <div class="num-card"><p class="num-label">CSAT dia</p><p class="num-val verm">79%</p><p class="num-sub">mês: 87,9%</p></div>
+        <div class="num-card"><p class="num-label">Tel. atendidas</p><p class="num-val">14/37</p><p class="num-sub">38% — mês: 80,1%</p></div>
+        <div class="num-card"><p class="num-label">TMA tel.</p><p class="num-val">10min 14s</p><p class="num-sub">mês: 12min 08s</p></div>
+      </div>
+      <p class="sec-desc" style="margin-bottom:10px;">Padrão identificado: volume explosivo concentrado na abertura, sem resolução. 189 conversas representam quase 3× a média — mas o TME ficou abaixo da média (1min20s) porque 61 conversas chegaram às 08h e a equipe respondeu rápido com conversas curtas (36min vs 1h04 da média), típico de triagem sem resolução. O reflexo real aparece no CSAT: 79%, com 12 insatisfeitos em 58 avaliações. No telefone, 23 de 37 ligações não foram atendidas (62%) — a equipe absorvia o pico do chat quando o telefone abriu às 10h, sem capacidade para os dois canais simultaneamente.</p>
+      <div class="alerta alerta-laranja"><strong>Contexto operacional (relatado pela equipe):</strong> a orientação padrão do atendimento em momentos de instabilidade é pedir para o cliente fechar o sistema e tentar novamente mais tarde. Nesse episódio, porém, a comunicação enviada aos clientes informou apenas a ocorrência da instabilidade e, depois, a normalização — sem reforçar a orientação padrão. Quando alguns clientes questionaram se realmente havia normalizado, foram orientados a acionar o suporte, o que aumentou ainda mais a fila. Some-se a isso que a coordenação estava de férias e o supervisor em seu 3º dia no setor.</div>
+      <div class="alerta alerta-verm">⚠ Destaque: CSAT 79% — 9pp abaixo da média mensal. 12 insatisfeitos em 58 avaliações.</div>
+    </div>
+
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th style="width:34px;">✓</th><th>#</th><th>Recomendação</th><th>Prioridade</th></tr></thead>
+        <tbody>
+          <tr><td class="td-c"><input type="checkbox" class="reco-check" data-reco="jun26-reco-1"></td><td class="td-c negrito">1</td><td>Criar protocolo de comunicação proativa ao cliente nos dias de instabilidade sistêmica (aviso no chat antes de escalar)</td><td class="td-c"><span class="chip chip-alta">Alta</span></td></tr>
+          <tr><td class="td-c"><input type="checkbox" class="reco-check" data-reco="jun26-reco-2"></td><td class="td-c negrito">2</td><td>Mapear os sistemas críticos (Sefaz, Gestor Nuvem) e manter mensagens-padrão prontas para uso pela equipe</td><td class="td-c"><span class="chip chip-alta">Alta</span></td></tr>
+          <tr><td class="td-c"><input type="checkbox" class="reco-check" data-reco="jun26-reco-3"></td><td class="td-c negrito">3</td><td>Quando a equipe não conseguir dar conta dos dois canais, ativar mensagem na central telefônica orientando o cliente a chamar no chat ou WhatsApp, deixando o telefone temporariamente indisponível — mais fácil direcionar um atendente para vários clientes de uma vez</td><td class="td-c"><span class="chip chip-media">Média</span></td></tr>
+          <tr><td class="td-c"><input type="checkbox" class="reco-check" data-reco="jun26-reco-4" checked></td><td class="td-c negrito">4</td><td>Incluir registro de causa-raiz nos fechamentos mensais para correlacionar picos com eventos sistêmicos <span class="chip" style="background:var(--verde-cl);color:var(--verde);">Concluído neste fechamento</span></td><td class="td-c"><span class="chip chip-baixa">Baixa</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Reconhecimento</p><h2 class="sec-titulo">Elogios recebidos no mês</h2></div>
+      <p class="sec-desc">Comentários espontâneos de clientes destacando atendentes específicos.</p>
+    </div>
+    <div class="quote-grid">
+      <div class="quote-card satisfeito"><p class="quote-autor">Daniel Vitor — chat</p><p class="quote-texto">"Daniel é uma pessoa muito eficiente e principalmente muito paciente, pois para nós clientes da área fiscal é muito difícil. Excelente atendente!"</p></div>
+      <div class="quote-card satisfeito"><p class="quote-autor">Alexsandro — chat</p><p class="quote-texto">"Atendimento pessoal é muito, mas muito mais eficiente que conversar com I.A. Obrigado!"</p></div>
+      <div class="quote-card satisfeito"><p class="quote-autor">Thalyta — chat</p><p class="quote-texto">"Atendimento perfeito da Thally, pela primeira vez conseguiram resolver esse problema. Parabéns!"</p></div>
+      <div class="quote-card satisfeito"><p class="quote-autor">Valerio Marcos — chat</p><p class="quote-texto">"Gostaria de registrar meu elogio ao atendente VALERIO pelo excelente atendimento prestado. Muito solícito e prestativo."</p></div>
+      <div class="quote-card satisfeito"><p class="quote-autor">Jaqueline — chat</p><p class="quote-texto">"Atende Jaqueline com excelente atendimento, agilidade e finalizado o atendimento com excelência."</p></div>
+      <div class="quote-card satisfeito"><p class="quote-autor">Valerio Marcos — telefone</p><p class="quote-texto">"Muito satisfeito com apoio."</p></div>
+      <div class="quote-card satisfeito"><p class="quote-autor">Jaqueline — telefone</p><p class="quote-texto">"Atendimento prestativo e resolveu o problema."</p></div>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Pesquisa de satisfação</p><h2 class="sec-titulo">Comentários da pesquisa</h2></div>
+      <p class="sec-desc">113 conversas com comentário — 60 elogios, 5 pontos de atenção e 48 neutros/mistos.</p>
+    </div>
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="num-card"><p class="num-label">Elogios</p><p class="num-val verde">60</p><p class="num-sub">56 chat + 4 telefone</p></div>
+      <div class="num-card"><p class="num-label">Críticos</p><p class="num-val verm">5</p><p class="num-sub">pontos de atenção</p></div>
+      <div class="num-card"><p class="num-label">Neutros/mistos</p><p class="num-val">48</p><p class="num-sub">comentários sem polaridade clara</p></div>
+      <div class="num-card"><p class="num-label">Total com comentário</p><p class="num-val azul">113</p><p class="num-sub">do total de respondentes</p></div>
+    </div>
+    <div class="rank-box" style="margin-bottom:14px;">
+      <p class="rank-box-titulo">Elogios por atendente (chat)</p>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">10</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:80%"></div></div><span class="rank-val">8</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:60%"></div></div><span class="rank-val">6</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:60%"></div></div><span class="rank-val">6</span></div>
+      <div class="rank-row"><span class="rank-nome">D. Balaguer</span><div class="rank-track"><div class="rank-fill" style="width:60%"></div></div><span class="rank-val">6</span></div>
+      <div class="rank-row"><span class="rank-nome">Valerio</span><div class="rank-track"><div class="rank-fill" style="width:40%"></div></div><span class="rank-val">4</span></div>
+    </div>
+    <p class="sec-desc" style="margin-bottom:10px;font-weight:600;color:var(--preto);">Pontos de atenção (5 comentários)</p>
+    <div class="quote-grid">
+      <div class="quote-card insatisfeito"><p class="quote-autor">Daniel Vitor — Insatisfeito</p><p class="quote-texto">"Não resolvem o problema, como sempre. Adiam o problema. Faz falta o Marcelo."</p></div>
+      <div class="quote-card insatisfeito"><p class="quote-autor">Daniel Balaguer — Insatisfeito</p><p class="quote-texto">"Não foi resolvido o problema."</p></div>
+      <div class="quote-card"><p class="quote-autor">Daniel Balaguer — Satisfeito</p><p class="quote-texto">"Se vocês não resolverem a ECD da APAE a responsabilidade da multa ficará por conta de vocês."</p></div>
+      <div class="quote-card insatisfeito"><p class="quote-autor">Alexsandro — Insatisfeito</p><p class="quote-texto">"Estou tentando resolver a questão da impressora de etiquetas há vários dias. Preciso urgente de solução."</p></div>
+      <div class="quote-card"><p class="quote-autor">Daniel Vitor — Satisfeito</p><p class="quote-texto">"Fui bem atendida pelo atendente. Só ainda não conseguiu resolver, pois ele depende de outro setor."</p></div>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Recorrência</p><h2 class="sec-titulo">Clientes com maior frequência no chat</h2></div>
+      <p class="sec-desc">Rodrigo Remi e Barbara apresentam frequência bem acima da média. Recomenda-se verificar se há problema recorrente não resolvido.</p>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Cliente</th><th>Telefone</th><th>Contatos</th></tr></thead>
+        <tbody>
+          <tr><td class="td-c negrito">1</td><td>Rodrigo Remi</td><td>+55 43 9606-8690</td><td class="td-r negrito">20</td></tr>
+          <tr><td class="td-c negrito">2</td><td>Barbara</td><td>+55 43 9848-0423</td><td class="td-r negrito">15</td></tr>
+          <tr><td class="td-c negrito">3</td><td>Taisa</td><td>+55 65 9959-9004</td><td class="td-r">13</td></tr>
+          <tr><td class="td-c negrito">4</td><td>Naiara Morais</td><td>+55 44 9990-1810</td><td class="td-r">12</td></tr>
+          <tr><td class="td-c negrito">5</td><td>Rafaela</td><td>+55 43 3026-2653</td><td class="td-r">12</td></tr>
+          <tr><td class="td-c negrito">6</td><td>Alternativa - Financeiro</td><td>+55 43 9179-3508</td><td class="td-r">11</td></tr>
+          <tr><td class="td-c negrito">7</td><td>Iroan Sordi</td><td>+55 43 9605-3179</td><td class="td-r">10</td></tr>
+          <tr><td class="td-c negrito">8</td><td>Matheus</td><td>+55 43 9164-1903</td><td class="td-r">9</td></tr>
+          <tr><td class="td-c negrito">9</td><td>Cintia</td><td>+55 43 9123-0057</td><td class="td-r">8</td></tr>
+          <tr><td class="td-c negrito">10</td><td>Barbara Ribeiro</td><td>+55 43 9919-9722</td><td class="td-r">8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alerta alerta-laranja">Rodrigo Remi (20 contatos) e Barbara (15 contatos) estão bem acima da média — verificar se há problema recorrente não resolvido.</div>
+  </section>
+
+</div>
+<div class="rodape">Londrisoft Customer Success · Fechamento Mensal Atendimento · Junho 2026 · Uso interno</div>
+<script>
+document.querySelectorAll('.reco-check').forEach(function(cb){
+  var key = 'fechamento-atendimento-2026-06-' + cb.dataset.reco;
+  var saved = localStorage.getItem(key);
+  if (saved !== null) { cb.checked = (saved === 'true'); }
+  cb.addEventListener('change', function(){ localStorage.setItem(key, cb.checked); });
+});
+</script>
+</body>
+</html>
