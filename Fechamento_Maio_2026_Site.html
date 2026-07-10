@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento CSM — Maio 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2; --branco:#FFFFFF;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:48px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:32px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.azul { color:var(--azul2); }
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); } .chip-ok { background:var(--verde-cl); color:var(--verde); } .chip-info { background:var(--azul-cl); color:var(--azul2); }
+  .csm-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px; }
+  .csm-card { background:#fff; border:1px solid var(--brd); border-radius:12px; overflow:hidden; }
+  .csm-topo { background:linear-gradient(135deg,var(--azul1),var(--azul2)); padding:14px 16px 12px; display:flex; justify-content:space-between; align-items:flex-start; }
+  .csm-nome { font-size:14px; font-weight:700; color:#fff; line-height:1.2; margin-bottom:6px; }
+  .csm-nivel-chip { display:inline-block; background:rgba(255,255,255,.15); color:rgba(255,255,255,.9); font-size:9px; font-weight:700; padding:3px 9px; border-radius:20px; letter-spacing:.06em; text-transform:uppercase; }
+  .csm-pos { display:flex; flex-direction:column; align-items:center; min-width:44px; }
+  .csm-pos-num { font-size:22px; font-weight:800; color:rgba(255,255,255,.25); line-height:1; }
+  .medalha { font-size:26px; line-height:1; }
+  .pos-label { font-size:9px; font-weight:700; color:rgba(255,255,255,.4); letter-spacing:.06em; text-transform:uppercase; margin-top:2px; }
+  .csm-corpo { padding:14px 16px; }
+  .mrr-bloco { background:var(--cinza-cl); border-radius:8px; padding:10px 12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+  .mrr-bloco-label { font-size:10px; font-weight:600; color:var(--cinza); text-transform:uppercase; letter-spacing:.06em; }
+  .mrr-bloco-val { font-size:20px; font-weight:800; color:var(--azul2); }
+  .csm-prog-row { display:flex; justify-content:space-between; font-size:10px; color:var(--cinza); margin-bottom:3px; }
+  .csm-prog { height:5px; background:var(--brd); border-radius:3px; overflow:hidden; margin-bottom:12px; }
+  .csm-prog-fill { height:100%; background:linear-gradient(90deg,var(--azul2),#6366F1); border-radius:3px; }
+  .csm-linha { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid var(--cinza-cl); }
+  .csm-linha:last-child { border-bottom:none; }
+  .csm-linha .k { color:var(--cinza); } .csm-linha .v { font-weight:600; }
+  .motivos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .motivo-item { background:#fff; border:1px solid var(--brd); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:14px; }
+  .motivo-num { font-size:28px; font-weight:800; min-width:36px; line-height:1; }
+  .motivo-txt b { font-size:13px; font-weight:700; display:block; margin-bottom:1px; }
+  .motivo-txt span { font-size:11px; color:var(--cinza); }
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:120px repeat(4,1fr); }
+  .hist-cell { padding:10px 14px; font-size:12px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:11px; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-junho { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+  @media(max-width:700px) {
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .motivos-grid { grid-template-columns:1fr; }
+    .hist-row { grid-template-columns:80px repeat(4,1fr); font-size:11px; }
+    .hist-cell { padding:8px 8px; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:34px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="hero-eyebrow">Londrisoft · Customer Success · CSM</p>
+      <h1 class="hero-titulo">Fechamento<span>Maio 2026</span></h1>
+      <p class="hero-desc">Resultados, desempenho e análise da equipe de Customer Success — referência maio 2026.</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado da equipe</p>
+      <div class="panel-destaque">
+        <div><p class="dk">MRR incremental</p><p class="dv">R$ 7.929</p></div>
+        <div class="dpct"><strong>110,8%</strong><span>da ultra meta</span></div>
+      </div>
+      <div class="panel-item"><span class="k">Meta (1,5%) — R$ 2.861</span><span class="v verde">277,1% ✔</span></div>
+      <div class="panel-item"><span class="k">Super meta (3%) — R$ 4.292</span><span class="v verde">184,7% ✔</span></div>
+      <div class="panel-item"><span class="k">Ultra meta (4%) — R$ 7.153</span><span class="v azul">110,8% ✔</span></div>
+      <div class="panel-item"><span class="k">WON totais</span><span class="v">196 negócios</span></div>
+      <div class="panel-item"><span class="k">LOST totais</span><span class="v">63 — vs 29 em abril (+117%) ⚠</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="conteudo">
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Resultado do mês</p><h2 class="sec-titulo">Visão geral</h2></div>
+      <p class="sec-desc">Maio foi o 2° mês consecutivo na ultra meta. Guilherme assumiu a liderança no primeiro mês com meta própria. Principal alerta: perdidos subiram 117%.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">MRR gerado</p><p class="num-val verde">R$ 7.929</p><p class="num-sub">toda a equipe</p></div>
+      <div class="num-card"><p class="num-label">% da ultra meta</p><p class="num-val roxo">110,8%</p><p class="num-sub">2° mês consecutivo</p></div>
+      <div class="num-card"><p class="num-label">WON</p><p class="num-val">196</p><p class="num-sub">negócios fechados</p></div>
+      <div class="num-card"><p class="num-label">LOST</p><p class="num-val">63</p><p class="num-sub">vs 29 em abril (+117%) ⚠</p></div>
+      <div class="num-card"><p class="num-label">Nível equipe</p><p class="num-val roxo">Ultra</p><p class="num-sub">superávit R$ 776 sobre a ultra meta</p></div>
+    </div>
+    <div class="alerta alerta-verde">Ultra meta batida pelo 2° mês consecutivo. Guilherme lidera com R$ 3.218 no primeiro mês com meta própria.</div>
+<div class="alerta alerta-verm">Perdidos saltaram de 29 para 63 (+117%) — pico do trimestre. Concorrência atingiu 10 casos.</div>
+
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Ranking dos CSMs</h2></div>
+      <p class="sec-desc">Guilherme estreou com meta própria e já liderou o ranking. Gian ficou em férias — carteira gerou downsell e 11 perdidos sem cobertura.</p>
+    </div>
+    <div class="csm-grid">
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div>
+            <p class="csm-nome">Guilherme Camargo</p>
+            <span class="csm-nivel-chip">Ultra meta · 4%</span>
+          </div>
+          <div class="csm-pos">
+            <span class="medalha">🥇</span>
+            <span class="pos-label">1° lugar</span>
+          </div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco">
+            <span class="mrr-bloco-label">MRR incremental</span>
+            <span class="mrr-bloco-val">R$ 3.218,24</span>
+          </div>
+          <div class="csm-prog-row"><span>Ultra meta R$ 2.384</span><span>135%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;background:linear-gradient(90deg, var(--azul2), #6366F1);"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">65 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 49,51</span></div>
+          <div class="csm-linha"><span class="k">Maior deal</span><span class="v">R$ 417,46</span></div>
+        </div>
+      </div>
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div>
+            <p class="csm-nome">Lucineia Felix</p>
+            <span class="csm-nivel-chip">Ultra meta · 4%</span>
+          </div>
+          <div class="csm-pos">
+            <span class="medalha">🥈</span>
+            <span class="pos-label">2° lugar</span>
+          </div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco">
+            <span class="mrr-bloco-label">MRR incremental</span>
+            <span class="mrr-bloco-val">R$ 2.615,43</span>
+          </div>
+          <div class="csm-prog-row"><span>Ultra meta R$ 2.384</span><span>110%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;background:linear-gradient(90deg, var(--azul2), #6366F1);"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">66 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 39,63</span></div>
+          <div class="csm-linha"><span class="k">Maior deal</span><span class="v">R$ 330,90</span></div>
+        </div>
+      </div>
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div>
+            <p class="csm-nome">Deyvide Aliher</p>
+            <span class="csm-nivel-chip">Super meta · 3%</span>
+          </div>
+          <div class="csm-pos">
+            <span class="medalha">🥉</span>
+            <span class="pos-label">3° lugar</span>
+          </div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco">
+            <span class="mrr-bloco-label">MRR incremental</span>
+            <span class="mrr-bloco-val">R$ 2.028,90</span>
+          </div>
+          <div class="csm-prog-row"><span>Ultra meta R$ 2.384</span><span>85%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;background:linear-gradient(90deg, var(--azul2), #6366F1);"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">49 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 41,41</span></div>
+          <div class="csm-linha"><span class="k">Faltou ultra</span><span class="v">R$ 355,43</span></div>
+        </div>
+      </div>
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div>
+            <p class="csm-nome">Patrícia Carvalho</p>
+            <span class="csm-nivel-chip">Sem meta — treinamento</span>
+          </div>
+          <div class="csm-pos">
+            <span class="medalha"><span class="csm-pos-num">4°</span></span>
+            <span class="pos-label">4° lugar</span>
+          </div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco">
+            <span class="mrr-bloco-label">MRR incremental</span>
+            <span class="mrr-bloco-val">R$ 441,51</span>
+          </div>
+          <div class="csm-prog-row"><span>Sem meta individual</span><span>—</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:20%;background:linear-gradient(90deg, var(--azul2), #6366F1);"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">14 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 31,54</span></div>
+          <div class="csm-linha"><span class="k">Contribuição</span><span class="v">Positiva p/ equipe</span></div>
+        </div>
+      </div>
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div>
+            <p class="csm-nome">Gian Luca</p>
+            <span class="csm-nivel-chip">Férias</span>
+          </div>
+          <div class="csm-pos">
+            <span class="medalha"><span class="csm-pos-num">5°</span></span>
+            <span class="pos-label">5° lugar</span>
+          </div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco">
+            <span class="mrr-bloco-label">MRR incremental</span>
+            <span class="mrr-bloco-val">−R$ 375,25</span>
+          </div>
+          <div class="csm-prog-row"><span>Sem meta — férias</span><span>—</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:20%;background:linear-gradient(90deg, var(--azul2), #6366F1);"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">1 WON / downsell</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">—</span></div>
+          <div class="csm-linha"><span class="k">Impacto</span><span class="v">Negativo (−R$ 399)</span></div>
+        </div>
+      </div></div>
+    <div class="alerta alerta-verde"><strong>Guilherme:</strong> de R$ 39 em abril para R$ 3.218 em maio — melhor estreia da equipe.</div>
+<div class="alerta alerta-laranja"><strong>Gian em férias sem cobertura:</strong> 11 perdidos e downsell de R$ 399. Redistribuir carteiras críticas em afastamentos futuros.</div>
+
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Composição</p><h2 class="sec-titulo">Mix de negócios</h2></div>
+      <p class="sec-desc">Lucineia teve o melhor upsell do mês (R$ 917, 35% do MRR). Deyvide manteve força em reativações (25% do MRR).</p>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>CSM</th><th>Renovação</th><th>Upsell</th><th>Crossell</th><th>Reativação</th><th>Ticket médio</th><th>Maior deal</th></tr></thead>
+        <tbody><tr><td class="negrito">Guilherme</td><td>59x — R$ 2.255 (70%)</td><td>3x — R$ 216 (7%)</td><td>2x — R$ 329 (10%)</td><td>1x — R$ 417 (13%)</td><td class="td-r">R$ 49,51</td><td class="td-r">R$ 417,46</td></tr>
+<tr><td class="negrito">Lucineia</td><td>58x — R$ 1.678 (64%)</td><td>7x — R$ 917 (35%)</td><td>1x — R$ 20 (1%)</td><td>—</td><td class="td-r">R$ 39,63</td><td class="td-r">R$ 330,90</td></tr>
+<tr><td class="negrito">Deyvide</td><td>41x — R$ 1.251 (62%)</td><td>4x — R$ 253 (12%)</td><td>1x — R$ 24 (1%)</td><td>3x — R$ 501 (25%)</td><td class="td-r">R$ 41,41</td><td class="td-r">R$ 199,90</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Pipeline</p><h2 class="sec-titulo">Negócios perdidos</h2></div>
+      <p class="sec-desc">63 perdidos — pico do trimestre. "Já foi renovado" (16x) e "pendência financeira" (17x) concentram metade dos casos.</p>
+    </div>
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Total</p><p class="num-val">63</p><p class="num-sub">vs 29 em abril (+117%) ⚠</p></div>
+      <div class="num-card"><p class="num-label">Concorrência</p><p class="num-val verm">10</p><p class="num-sub">outro software</p></div>
+      <div class="num-card"><p class="num-label">Pend. financeira</p><p class="num-val" style="color:var(--laranja);">17</p><p class="num-sub">recuperáveis</p></div>
+      <div class="num-card"><p class="num-label">Irreversíveis</p><p class="num-val">6</p><p class="num-sub">CNPJ baixado</p></div>
+    </div>
+    <div class="motivos-grid"><div class="motivo-item"><span class="motivo-num" style="color:var(--verm);">17</span><div class="motivo-txt"><b>Pendência financeira</b><span>Recuperável — acionar financeiro</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:var(--laranja);">16</span><div class="motivo-txt"><b>Já foi renovado</b><span>Duplicata — 100% evitável</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:var(--laranja);">8</span><div class="motivo-txt"><b>N.q.e. o motivo</b><span>Campo não preenchido</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:var(--verm);">5</span><div class="motivo-txt"><b>Contratou outro software</b><span>Perda real</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:inherit;">5</span><div class="motivo-txt"><b>Sem demanda</b><span>CNPJ encerrando</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:var(--verm);">5</span><div class="motivo-txt"><b>Oferta concorrência</b><span>Perda por preço/proposta</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:inherit;">3</span><div class="motivo-txt"><b>CNPJ baixado</b><span>Irreversível</span></div></div>
+<div class="motivo-item"><span class="motivo-num" style="color:inherit;">4</span><div class="motivo-txt"><b>Outros</b><span>Interesse futuro, sem contato</span></div></div></div>
+    <div style="margin-top:14px;"><div class="alerta alerta-verm"><strong>"Já foi renovado" (16x):</strong> duplicatas no CRM — 100% evitável. Implementar deduplicação.</div>
+<div class="alerta alerta-verm">Concorrência atingiu 10 casos — pico histórico até então. Tendência crescente.</div>
+</div>
+  </section>
+
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Histórico — março a junho</h2></div>
+      <p class="sec-desc">Maio consolida a ultra meta pelo 2° mês. Guilherme entra como protagonista enquanto Deyvide segue em queda pelo 3° mês.</p>
+    </div>
+    <div class="hist-wrap">
+      <div class="hist-row">
+        <div class="hist-cell hist-head">Indicador</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Março</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Abril</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Maio</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Junho</div>
+      </div>
+      <div class="hist-row"><div class="hist-cell hist-mes">MRR equipe</div><div class="hist-cell hist-val" style="">R$ 4.589</div><div class="hist-cell hist-val" style="">R$ 7.592</div><div class="hist-cell hist-val hist-junho" style="">R$ 7.928</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">Nível</div><div class="hist-cell hist-val" style=""><span class="chip chip-info">Meta</span></div><div class="hist-cell hist-val" style=""><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell hist-val hist-junho" style=""><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">WON</div><div class="hist-cell hist-val" style="">109</div><div class="hist-cell hist-val" style="">204</div><div class="hist-cell hist-val hist-junho" style="">196</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">LOST</div><div class="hist-cell hist-val" style="">48</div><div class="hist-cell hist-val" style="">29</div><div class="hist-cell hist-val hist-junho" style="">63</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">Guilherme</div><div class="hist-cell hist-val" style="">R$ 39</div><div class="hist-cell hist-val" style="">R$ 39</div><div class="hist-cell hist-val hist-junho" style="">R$ 3.218</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">Deyvide</div><div class="hist-cell hist-val" style="">R$ 2.906</div><div class="hist-cell hist-val" style="">R$ 2.409</div><div class="hist-cell hist-val hist-junho" style="">R$ 2.028</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">Gian</div><div class="hist-cell hist-val" style="">R$ 876</div><div class="hist-cell hist-val" style="">R$ 2.843</div><div class="hist-cell hist-val hist-junho" style="">−R$ 375</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">Lucineia</div><div class="hist-cell hist-val" style="">R$ 741</div><div class="hist-cell hist-val" style="">R$ 2.300</div><div class="hist-cell hist-val hist-junho" style="">R$ 2.615</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+<div class="hist-row"><div class="hist-cell hist-mes">Patrícia</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div><div class="hist-cell hist-val hist-junho" style="">R$ 441</div><div class="hist-cell hist-val" style="color:var(--cinza);">—</div></div>
+    </div>
+    <div style="margin-top:14px;"><div class="alerta alerta-verde">MRR de equipe cresceu 73% de março a maio. Guilherme como nova força da equipe.</div>
+<div class="alerta alerta-laranja">Deyvide em queda pelo 3° mês consecutivo — menor MRR desde o início do programa.</div>
+</div>
+  </section>
+
+</div>
+<div class="rodape">Londrisoft Customer Success · Fechamento Mensal CSM · Maio 2026 · Uso interno</div>
+</body>
+</html>
