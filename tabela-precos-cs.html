@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tabela de Preços 2026 · Customer Success</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#000035;
+    --ink-soft:#374151;
+    --bg:#F2F4F8;
+    --card:#FFFFFF;
+    --line:#F0F4FF;
+    --brand:#3A86FF;
+    --ok:#16A34A;
+    --ok-bg:#DCFCE7;
+    --warn:#DC2626;
+    --warn-bg:#FDEBE9;
+    --info:#CA8A04;
+    --info-bg:#FFF4DC;
+    --min:#CA8A04;
+    --local:#3A86FF;
+    --nuvem:#0A41B4;
+    --unique:#3A86FF;
+    --sgestor:#CA8A04;
+    --scontador:#16A34A;
+    --waipe:#DC2626;
+    font-size:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  header{
+    background:var(--ink);
+    color:#fff;
+    padding:28px 24px 24px;
+  }
+  .header-inner{max-width:1280px;margin:0 auto;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
+  .eyebrow{
+    font-family:'Archivo',sans-serif;
+    font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
+    color:#A8C5FF;margin-bottom:6px;
+  }
+  h1{font-family:'Archivo',sans-serif;font-weight:800;font-size:1.7rem;line-height:1.15}
+  .header-note{font-size:.82rem;color:#E5E7EB;max-width:440px}
+  main{max-width:1280px;margin:0 auto;padding:20px 24px 60px}
+
+  /* ---------- Simulador ---------- */
+  .simulador{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px 20px;
+    margin-top:-46px;
+    box-shadow:0 8px 24px rgba(19,31,53,.10);
+    display:flex;flex-wrap:wrap;gap:16px 24px;align-items:center;
+    position:sticky;top:10px;z-index:20;
+  }
+  .sim-bloco{display:flex;flex-direction:column;gap:6px}
+  .sim-titulo{
+    font-family:'Archivo',sans-serif;font-weight:700;font-size:.82rem;
+  }
+  .sim-titulo small{font-family:'Inter';font-weight:400;font-size:.72rem;color:var(--ink-soft);display:block}
+  .sim-controls{display:flex;align-items:center;gap:12px;min-width:250px;flex:1}
+  input[type=range]{flex:1;accent-color:var(--brand);height:6px;cursor:pointer;min-width:120px}
+  .sim-value{
+    display:flex;align-items:center;gap:4px;
+    border:1.5px solid var(--line);border-radius:10px;padding:6px 10px;background:#fff;
+  }
+  .sim-value input{
+    width:56px;border:none;outline:none;font:600 1rem 'Inter';text-align:right;color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+  .sim-value.moeda input{width:96px}
+  .sim-value span{font-weight:600;color:var(--ink-soft);font-size:.9rem}
+  .sim-status{
+    border-radius:10px;padding:8px 14px;font-size:.78rem;font-weight:600;line-height:1.4;
+    max-width:330px;
+  }
+  .sim-status.ok{background:var(--ok-bg);color:var(--ok)}
+  .sim-status.warn{background:var(--warn-bg);color:var(--warn)}
+  .sim-status.warn::before{content:"⚠ "}
+  .sim-status.info{background:var(--info-bg);color:var(--info)}
+  .sim-status.info::before{content:"• "}
+
+  /* ---------- Filtros ---------- */
+  .filtros{
+    display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+    margin:22px 0 14px;
+  }
+  .busca{
+    flex:1;min-width:220px;display:flex;align-items:center;gap:8px;
+    background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:9px 14px;
+  }
+  .busca:focus-within{border-color:var(--brand)}
+  .busca svg{flex-shrink:0;opacity:.45}
+  .busca input{border:none;outline:none;font:400 .92rem 'Inter';width:100%;background:transparent;color:var(--ink)}
+  select{
+    font:500 .88rem 'Inter';color:var(--ink);
+    background:var(--card);border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer;
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+  .chip{
+    font:600 .78rem 'Inter';padding:7px 13px;border-radius:999px;cursor:pointer;
+    border:1.5px solid var(--line);background:var(--card);color:var(--ink-soft);
+    transition:all .15s;
+  }
+  .chip:hover{border-color:var(--chip-c,var(--brand))}
+  .chip.on{background:var(--chip-c,var(--brand));border-color:var(--chip-c,var(--brand));color:#fff}
+  .chip:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+  /* ---------- Tabela ---------- */
+  .tabela-wrap{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:auto;
+  }
+  table{width:100%;border-collapse:collapse;min-width:1020px}
+  thead th{
+    font-family:'Archivo',sans-serif;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-soft);text-align:left;padding:12px 14px;background:#F8FAFC;
+    border-bottom:1.5px solid var(--line);position:sticky;top:0;
+  }
+  thead th.num{text-align:right}
+  tbody td{
+    padding:11px 14px;font-size:.88rem;border-bottom:1px solid var(--line);vertical-align:middle;
+  }
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#F8FAFC}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:500;white-space:nowrap}
+  td.preco-tabela{font-weight:700}
+  td.preco-min{color:var(--min);font-weight:600}
+  td.preco-sim{font-weight:700;color:var(--ok)}
+  tr.excede td.preco-sim{color:var(--warn)}
+  td.var-pos{color:var(--warn);font-weight:600}
+  td.var-neg{color:var(--ok);font-weight:600}
+  .badge{
+    display:inline-block;font:600 .68rem 'Inter';padding:3px 9px;border-radius:999px;white-space:nowrap;
+  }
+  .badge.sem{background:#EEF1F6;color:var(--ink-soft)}
+  .badge.consulta{background:var(--info-bg);color:var(--info)}
+  .badge.negociacao{background:#F0F4FF;color:var(--unique)}
+  .badge.autoriza{background:var(--warn-bg);color:var(--warn)}
+  .tag{
+    display:inline-block;font:700 .66rem 'Archivo';letter-spacing:.05em;text-transform:uppercase;
+    padding:4px 9px;border-radius:6px;color:#fff;background:var(--tc,var(--brand));white-space:nowrap;
+  }
+  .plano-nome{font-weight:600}
+  .plano-det{font-size:.75rem;color:var(--ink-soft);margin-top:2px}
+  .min-nota{font-size:.68rem;color:var(--ink-soft);font-weight:400;display:block}
+  .periodo{font-size:.82rem;color:var(--ink-soft)}
+  .vazio{padding:44px;text-align:center;color:var(--ink-soft);font-size:.92rem}
+  .contagem{font-size:.78rem;color:var(--ink-soft);margin:10px 2px 40px}
+
+  .regras{
+    margin-top:26px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+  }
+  .regras h2{font-family:'Archivo',sans-serif;font-size:.95rem;margin-bottom:10px}
+  .regras h3{font-family:'Archivo',sans-serif;font-size:.8rem;margin:16px 0 8px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+  .regras ul{list-style:none;display:grid;gap:8px}
+  .regras li{font-size:.85rem;color:var(--ink-soft);padding-left:18px;position:relative;line-height:1.45}
+  .regras li::before{content:"—";position:absolute;left:0;color:var(--brand)}
+  .regras strong{color:var(--ink)}
+
+  @media (max-width:640px){
+    h1{font-size:1.3rem}
+    .simulador{margin-top:-30px;position:static}
+    main{padding:16px 14px 48px}
+    header{padding:22px 14px 40px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <p class="eyebrow">Customer Success · Londrisoft</p>
+      <h1>Tabela de Preços 2026</h1>
+    </div>
+    <p class="header-note">Valores vigentes da nova tabela. A alçada padrão do CSM é <strong>15%</strong> — planos Simplaz têm limite de <strong>10%</strong> e alguns itens não têm desconto.</p>
+  </div>
+</header>
+
+<main>
+  <!-- Simulador -->
+  <section class="simulador" aria-label="Simulador de desconto e reajuste">
+    <div class="sim-bloco" style="flex:1;min-width:280px">
+      <div class="sim-titulo">Simular desconto <small>Aplica sobre o preço de tabela, respeitando a regra de cada plano</small></div>
+      <div class="sim-controls">
+        <input type="range" id="descRange" min="0" max="30" step="0.5" value="0" aria-label="Percentual de desconto">
+        <div class="sim-value">
+          <input type="number" id="descInput" min="0" max="30" step="0.5" value="0" aria-label="Percentual de desconto">
+          <span>%</span>
+        </div>
+      </div>
+    </div>
+    <div class="sim-bloco">
+      <div class="sim-titulo">Valor atual do cliente <small>Compara o preço simulado com o que ele paga hoje</small></div>
+      <div class="sim-value moeda">
+        <span>R$</span>
+        <input type="number" id="valorAtual" min="0" step="0.01" placeholder="0,00" aria-label="Valor atual pago pelo cliente">
+      </div>
+    </div>
+  </section>
+
+  <!-- Filtros -->
+  <section class="filtros" aria-label="Filtros">
+    <div class="busca">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="busca" placeholder="Buscar plano, produto ou valor…">
+    </div>
+    <select id="filtroPeriodo" aria-label="Filtrar por periodicidade">
+      <option value="">Todas as periodicidades</option>
+      <option value="Anual">Anual</option>
+      <option value="Semestral">Semestral</option>
+      <option value="Mensal">Mensal</option>
+    </select>
+    <div class="chips" id="chips" role="group" aria-label="Filtrar por produto"></div>
+  </section>
+
+  <!-- Tabela -->
+  <div class="tabela-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Plano</th>
+          <th>Periodicidade</th>
+          <th class="num">Preço de tabela</th>
+          <th class="num">Valor mínimo</th>
+          <th class="num">Preço simulado</th>
+          <th class="num">Variação vs. atual</th>
+        </tr>
+      </thead>
+      <tbody id="corpo"></tbody>
+    </table>
+    <div class="vazio" id="vazio" hidden>Nenhum plano encontrado com os filtros atuais.</div>
+  </div>
+  <p class="contagem" id="contagem"></p>
+
+  <!-- Regras -->
+  <section class="regras">
+    <h2>Regras de desconto e observações</h2>
+    <ul>
+      <li><strong>Alçada padrão do CSM: 15%</strong> de desconto sobre o preço de tabela. <strong>Descontos acima do limite de cada plano exigem autorização da Coordenação de CS.</strong></li>
+      <li><strong>Simplaz</strong> (Bronze, Prata e Ouro): limite de desconto de <strong>10%</strong>. Planos <strong>Ouro Personalizado</strong> não têm valor mínimo — <strong>descontos sob consulta</strong> com a Coordenação de CS.</li>
+      <li><strong>Sem desconto:</strong> Usuário adicional Gestor Local (R$ 19,90), Usuário adicional Gestor Nuvem (R$ 29,85) e Unique Light (R$ 238,70).</li>
+      <li><strong>Valores mínimos fixos:</strong> Plano NF-e Local <strong>R$ 130,00</strong> · Plano NF-e Nuvem <strong>R$ 148,00</strong>.</li>
+    </ul>
+    <h3>Waipe — regras comerciais</h3>
+    <ul>
+      <li><strong>Individual (R$ 99/mês)</strong> é fechado: 1 usuário e 1 empresa fixos, <strong>sem adicionais</strong>. Segundo usuário ou segunda empresa = migração para o Time.</li>
+      <li><strong>Time (R$ 249/mês)</strong>: 3 usuários inclusos. Usuário adicional em faixas decrescentes (4–10: R$ 79 · 11–25: R$ 55 · 26+: R$ 35) e empresa adicional do grupo econômico por R$ 149 — valores de expansão sem desconto.</li>
+      <li><strong>Enterprise</strong>: mensalidade sob negociação com <strong>piso interno de R$ 990</strong>. Implantação cobrada à parte: hora do time R$ 350 · pacote Essencial ~R$ 12.600 · pacote Avançado ~R$ 33.600 (referências a validar). Enterprise só quando há integração com sistema externo via Waipe Flow — volume de usuários/empresas escala dentro do Time.</li>
+      <li><strong>Consumo</strong>: Conversas IA e Créditos de Execução são pools separados, com tolerância de 20% e excedente de R$ 19,90 por milhão de tokens. Após dois meses consecutivos acima da tolerância, o plano é ajustado.</li>
+      <li>Precificação Waipe em fase de teste nas negociações (ref. Pesquisa de mercado e posicionamento — Rafael Hasegawa). Dúvidas sobre casos específicos: acionar o Rafael.</li>
+    </ul>
+    <h3>Simplaz — notas de precificação</h3>
+    <ul>
+      <li>NFS-e nacional entra dentro do teto único de manifestações; a carga retroativa inicial (desde 01/01/2026) não consome o teto mensal.</li>
+      <li>Simplaz Contador — Ouro Personalizado: R$ 120,00 por pacote adicional de 1.000 notas, conforme demanda do cliente.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+const LIMITE_PADRAO = 15;
+
+const PRODUTOS = [
+  {id:"GESTOR LOCAL", cor:"var(--local)"},
+  {id:"GESTOR NUVEM", cor:"var(--nuvem)"},
+  {id:"UNIQUE", cor:"var(--unique)"},
+  {id:"SIMPLAZ GESTOR", cor:"var(--sgestor)"},
+  {id:"SIMPLAZ CONTADOR", cor:"var(--scontador)"},
+  {id:"WAIPE", cor:"var(--waipe)"},
+];
+
+/*
+  Políticas de desconto (campo "pol"):
+  - padrao     → mínimo = tabela −15%; acima de 15% requer autorização
+  - limite10   → mínimo = tabela −10%; acima de 10% requer autorização (Simplaz)
+  - sem        → sem desconto; simulação não se aplica
+  - consulta   → sem valor mínimo; desconto sob consulta (Simplaz Personalizado)
+  - minFixo    → valor mínimo fixo em R$ (campo "min"); simulado abaixo do mínimo requer autorização
+  - semMinimo  → sem valor mínimo exibido; desconto simulado normalmente (Waipe)
+  - negociacao → preço sob negociação (piso exibido); sem simulação
+*/
+const DADOS = [
+  // GESTOR LOCAL
+  {p:"GESTOR LOCAL", plano:"Plano Avançado", det:"", per:"Anual", preco:636.00, pol:"padrao"},
+  {p:"GESTOR LOCAL", plano:"Plano Avançado", det:"", per:"Semestral", preco:955.00, pol:"padrao"},
+  {p:"GESTOR LOCAL", plano:"Plano Intermediário", det:"", per:"Anual", preco:360.00, pol:"padrao"},
+  {p:"GESTOR LOCAL", plano:"Plano Intermediário", det:"", per:"Semestral", preco:585.00, pol:"padrao"},
+  {p:"GESTOR LOCAL", plano:"Plano Básico", det:"", per:"Anual", preco:259.00, pol:"padrao"},
+  {p:"GESTOR LOCAL", plano:"Plano Básico", det:"", per:"Semestral", preco:390.00, pol:"padrao"},
+  {p:"GESTOR LOCAL", plano:"Plano NF-e", det:"", per:"Anual", preco:140.00, pol:"minFixo", min:130.00},
+  {p:"GESTOR LOCAL", plano:"Plano NF-e", det:"", per:"Semestral", preco:120.00, pol:"minFixo", min:130.00},
+  {p:"GESTOR LOCAL", plano:"Usuário adicional", det:"Valor por usuário", per:"Mensal", preco:19.90, pol:"sem"},
+
+  // GESTOR NUVEM
+  {p:"GESTOR NUVEM", plano:"Plano Avançado", det:"", per:"Anual", preco:719.00, pol:"padrao"},
+  {p:"GESTOR NUVEM", plano:"Plano Avançado", det:"", per:"Semestral", preco:1150.00, pol:"padrao"},
+  {p:"GESTOR NUVEM", plano:"Plano Intermediário", det:"", per:"Anual", preco:419.00, pol:"padrao"},
+  {p:"GESTOR NUVEM", plano:"Plano Intermediário", det:"", per:"Semestral", preco:655.00, pol:"padrao"},
+  {p:"GESTOR NUVEM", plano:"Plano Básico", det:"", per:"Anual", preco:299.00, pol:"padrao"},
+  {p:"GESTOR NUVEM", plano:"Plano Básico", det:"", per:"Semestral", preco:467.00, pol:"padrao"},
+  {p:"GESTOR NUVEM", plano:"Plano NF-e", det:"", per:"Anual", preco:169.00, pol:"minFixo", min:148.00},
+  {p:"GESTOR NUVEM", plano:"Plano NF-e", det:"", per:"Semestral", preco:155.00, pol:"minFixo", min:148.00},
+  {p:"GESTOR NUVEM", plano:"Usuário adicional", det:"Valor por usuário", per:"Mensal", preco:29.85, pol:"sem"},
+
+  // UNIQUE
+  {p:"UNIQUE", plano:"Plano Light", det:"", per:"Anual", preco:238.70, pol:"sem"},
+  {p:"UNIQUE", plano:"Plano Plus", det:"", per:"Anual", preco:447.00, pol:"padrao"},
+  {p:"UNIQUE", plano:"Plano Premium", det:"", per:"Anual", preco:677.00, pol:"padrao"},
+  {p:"UNIQUE", plano:"Plano Empresarial", det:"", per:"Anual", preco:447.00, pol:"padrao"},
+
+  // SIMPLAZ GESTOR (Empresário)
+  {p:"SIMPLAZ GESTOR", plano:"Bronze", det:"20 XML/mês · 3 usuários", per:"Anual", preco:47.90, pol:"limite10"},
+  {p:"SIMPLAZ GESTOR", plano:"Prata", det:"150 XML/mês · 10 usuários", per:"Anual", preco:95.90, pol:"limite10"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro", det:"300 XML/mês · usuários ilimitados", per:"Anual", preco:167.90, pol:"limite10"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro Personalizado", det:"500 XML/mês", per:"Anual", preco:279.84, pol:"consulta"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro Personalizado", det:"600 XML/mês", per:"Anual", preco:335.80, pol:"consulta"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro Personalizado", det:"700 XML/mês", per:"Anual", preco:391.76, pol:"consulta"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro Personalizado", det:"800 XML/mês", per:"Anual", preco:447.74, pol:"consulta"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro Personalizado", det:"900 XML/mês", per:"Anual", preco:503.70, pol:"consulta"},
+  {p:"SIMPLAZ GESTOR", plano:"Ouro Personalizado", det:"1.000 XML/mês", per:"Anual", preco:559.66, pol:"consulta"},
+
+  // SIMPLAZ CONTADOR
+  {p:"SIMPLAZ CONTADOR", plano:"Bronze", det:"1.000 notas · 3 usuários", per:"Anual", preco:120.00, pol:"limite10"},
+  {p:"SIMPLAZ CONTADOR", plano:"Prata", det:"2.000 notas · 10 usuários", per:"Anual", preco:240.00, pol:"limite10"},
+  {p:"SIMPLAZ CONTADOR", plano:"Ouro", det:"4.000 notas · usuários ilimitados", per:"Anual", preco:480.00, pol:"limite10"},
+  {p:"SIMPLAZ CONTADOR", plano:"Ouro Personalizado", det:"Pacote adicional de 1.000 notas", per:"Anual", preco:120.00, pol:"consulta"},
+
+  // WAIPE
+  {p:"WAIPE", plano:"Waipe Individual", det:"1 usuário fixo · 1 empresa · 500 conversas IA · sem adicionais", per:"Mensal", preco:99.00, pol:"semMinimo"},
+  {p:"WAIPE", plano:"Waipe Time", det:"3 usuários · 1.500 conversas IA · governança e expansão", per:"Mensal", preco:249.00, pol:"semMinimo"},
+  {p:"WAIPE", plano:"Waipe Enterprise", det:"Automação personalizada via Waipe Flow · implantação à parte", per:"Mensal", preco:990.00, pol:"negociacao"},
+  {p:"WAIPE", plano:"Time — Usuário adicional", det:"4–10: R$ 79 · 11–25: R$ 55 · 26+: R$ 35 (faixas decrescentes)", per:"Mensal", preco:null, pol:"faixas"},
+  {p:"WAIPE", plano:"Time — Empresa adicional", det:"Por empresa do grupo econômico", per:"Mensal", preco:149.00, pol:"sem"},
+  {p:"WAIPE", plano:"Excedente de tokens", det:"Por milhão de tokens · tolerância de 20% da franquia", per:"Mensal", preco:19.90, pol:"sem"},
+];
+
+const fmt = v => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const fmtPct = v => (v>0?"+":"") + v.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1}) + "%";
+const corDe = p => PRODUTOS.find(x=>x.id===p).cor;
+
+const corpo = document.getElementById("corpo");
+const vazio = document.getElementById("vazio");
+const contagem = document.getElementById("contagem");
+const busca = document.getElementById("busca");
+const filtroPeriodo = document.getElementById("filtroPeriodo");
+const chipsEl = document.getElementById("chips");
+const descRange = document.getElementById("descRange");
+const descInput = document.getElementById("descInput");
+const valorAtualEl = document.getElementById("valorAtual");
+
+let produtosAtivos = new Set(PRODUTOS.map(p=>p.id));
+let desconto = 0;
+
+// chips de produto
+PRODUTOS.forEach(prod=>{
+  const b = document.createElement("button");
+  b.className = "chip on";
+  b.textContent = prod.id;
+  b.style.setProperty("--chip-c", prod.cor);
+  b.setAttribute("aria-pressed","true");
+  b.onclick = ()=>{
+    if(produtosAtivos.has(prod.id) && produtosAtivos.size === PRODUTOS.length){
+      produtosAtivos = new Set([prod.id]); // primeiro clique isola o produto
+    } else if(produtosAtivos.has(prod.id)){
+      produtosAtivos.delete(prod.id);
+      if(produtosAtivos.size===0) produtosAtivos = new Set(PRODUTOS.map(p=>p.id));
+    } else {
+      produtosAtivos.add(prod.id);
+    }
+    document.querySelectorAll(".chip").forEach((c,i)=>{
+      const on = produtosAtivos.has(PRODUTOS[i].id);
+      c.classList.toggle("on", on);
+      c.setAttribute("aria-pressed", String(on));
+    });
+    render();
+  };
+  chipsEl.appendChild(b);
+});
+
+function setDesconto(v){
+  v = Math.max(0, Math.min(30, Number(v)||0));
+  desconto = v;
+  descRange.value = v;
+  descInput.value = v;
+  render();
+}
+descRange.addEventListener("input", e=>setDesconto(e.target.value));
+descInput.addEventListener("input", e=>setDesconto(e.target.value));
+valorAtualEl.addEventListener("input", render);
+busca.addEventListener("input", render);
+filtroPeriodo.addEventListener("change", render);
+
+// Calcula células de mínimo / simulado / status por linha
+function calc(d){
+  const r = {minHtml:"—", simHtml:"—", simValor:null, excede:false};
+
+  if(d.pol === "faixas"){
+    r.minHtml = '<span class="badge sem">Sem desconto</span>';
+    r.simValor = null;
+    return r;
+  }
+  if(d.pol === "negociacao"){
+    r.minHtml = '<span class="badge negociacao">Sob negociação</span>';
+    r.simValor = null;
+    return r;
+  }
+  if(d.pol === "semMinimo"){
+    r.minHtml = "—";
+    const sim = d.preco * (1 - desconto/100);
+    r.simValor = sim;
+    r.simHtml = desconto>0 ? fmt(sim) : "—";
+    return r;
+  }
+  if(d.pol === "sem"){
+    r.minHtml = '<span class="badge sem">Sem desconto</span>';
+    r.simValor = d.preco; // não aplica desconto
+    r.simHtml = desconto>0 ? fmt(d.preco)+' <span class="min-nota">desconto não se aplica</span>' : "—";
+    return r;
+  }
+  if(d.pol === "consulta"){
+    r.minHtml = '<span class="badge consulta">Sob consulta</span>';
+    r.simValor = null;
+    r.simHtml = desconto>0 ? '<span class="badge consulta">Sob consulta</span>' : "—";
+    return r;
+  }
+  if(d.pol === "minFixo"){
+    const minimo = Math.min(d.min, d.preco);
+    const semMargem = d.min >= d.preco;
+    r.minHtml = fmt(minimo) + '<span class="min-nota">mínimo fixo</span>';
+    if(semMargem) r.minHtml = fmt(d.preco) + '<span class="min-nota">tabela já no mínimo</span>';
+    const sim = d.preco * (1 - desconto/100);
+    r.simValor = sim;
+    r.excede = desconto > 0 && sim < minimo - 0.005;
+    r.simHtml = desconto>0 ? fmt(sim) : "—";
+    return r;
+  }
+  // padrao (15%) e limite10 (10%)
+  const limite = d.pol === "limite10" ? 10 : LIMITE_PADRAO;
+  const minimo = d.preco * (1 - limite/100);
+  r.minHtml = fmt(minimo) + `<span class="min-nota">−${limite}%</span>`;
+  const sim = d.preco * (1 - desconto/100);
+  r.simValor = sim;
+  r.excede = desconto > limite;
+  r.simHtml = desconto>0 ? fmt(sim) : "—";
+  return r;
+}
+
+function render(){
+  const q = busca.value.trim().toLowerCase();
+  const per = filtroPeriodo.value;
+  const atual = Number(valorAtualEl.value) || 0;
+
+  const linhas = DADOS.filter(d=>{
+    if(!produtosAtivos.has(d.p)) return false;
+    if(per && d.per !== per) return false;
+    if(q){
+      const alvo = (d.p+" "+d.plano+" "+d.det+" "+d.per+" "+(d.preco!=null?fmt(d.preco):"")).toLowerCase();
+      if(!alvo.includes(q)) return false;
+    }
+    return true;
+  });
+
+  let excedentes = 0;
+
+  corpo.innerHTML = linhas.map(d=>{
+    const c = calc(d);
+    if(c.excede) excedentes++;
+
+    // preço de tabela
+    let precoHtml;
+    if(d.pol === "faixas") precoHtml = '<span class="badge sem">Por faixa</span>';
+    else if(d.pol === "negociacao") precoHtml = 'Piso ' + fmt(d.preco);
+    else precoHtml = fmt(d.preco);
+
+    // variação vs valor atual do cliente
+    let varHtml = "—", varClass = "";
+    if(atual > 0){
+      const ref = c.simValor != null ? c.simValor : (d.pol==="negociacao" ? d.preco : null);
+      if(ref != null){
+        const pct = (ref/atual - 1) * 100;
+        varHtml = fmtPct(pct);
+        varClass = pct > 0 ? "var-pos" : (pct < 0 ? "var-neg" : "");
+      }
+    }
+
+    return `<tr class="${c.excede?"excede":""}">
+      <td><span class="tag" style="--tc:${corDe(d.p)}">${d.p}</span></td>
+      <td>
+        <div class="plano-nome">${d.plano} ${c.excede?'<span class="badge autoriza">Requer autorização</span>':""}</div>
+        ${d.det ? `<div class="plano-det">${d.det}</div>` : ""}
+      </td>
+      <td class="periodo">${d.per}</td>
+      <td class="num preco-tabela">${precoHtml}</td>
+      <td class="num preco-min">${c.minHtml}</td>
+      <td class="num preco-sim">${c.simHtml}</td>
+      <td class="num ${varClass}">${varHtml}</td>
+    </tr>`;
+  }).join("");
+
+  vazio.hidden = linhas.length > 0;
+  let resumo = `${linhas.length} plano${linhas.length===1?"":"s"} exibido${linhas.length===1?"":"s"} · desconto simulado: ${desconto}%`;
+  if(atual > 0) resumo += ` · valor atual do cliente: ${fmt(atual)}`;
+  if(excedentes > 0) resumo += ` · ${excedentes} linha${excedentes===1?"":"s"} requer${excedentes===1?"":"em"} autorização da Coordenação de CS`;
+  contagem.textContent = resumo;
+}
+
+render();
+</script>
+</body>
+</html>
