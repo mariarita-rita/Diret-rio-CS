@@ -517,12 +517,26 @@ async function cuFetch(path){
 }
 function cfVal(task,id){
   const f=task.custom_fields?.find(x=>x.id===id);
-  if(!f||f.value===null||f.value===undefined)return null;
-  if(f.type==='drop_down'&&f.value!==null){
+  if(!f)return null;
+
+  // Labels — value é array de IDs, cruzar com options para pegar os labels
+  if(f.type==='labels'){
+    if(!Array.isArray(f.value)||f.value.length===0)return [];
+    const opts=f.type_config?.options||[];
+    return f.value.map(v=>{
+      // v pode ser objeto {id, label} ou string/número com o ID
+      if(typeof v==='object'&&v!==null)return v.label||v.name||null;
+      const opt=opts.find(o=>o.id===v||o.orderindex===v);
+      return opt?.label||opt?.name||null;
+    }).filter(Boolean);
+  }
+
+  if(f.value===null||f.value===undefined)return null;
+
+  if(f.type==='drop_down'){
     const opt=f.type_config?.options?.find(o=>o.orderindex===f.value||o.id===f.value);
     return opt?.name||null;
   }
-  if(f.type==='labels'&&Array.isArray(f.value))return f.value.map(v=>v.label||v.name).filter(Boolean);
   if(f.type==='checkbox')return f.value===true||f.value==='true';
   return f.value;
 }
@@ -548,7 +562,7 @@ async function loadAllData(){
   try{
     let page=0,all=[];
     while(true){
-      const r=await cuFetch(`/list/${CU_LIST_CARTEIRA}/task?page=${page}&limit=100&include_closed=true`);
+      const r=await cuFetch(`/list/${CU_LIST_CARTEIRA}/task?page=${page}&limit=100&include_closed=true&include_custom_fields=true`);
       if(!r.tasks||r.tasks.length===0)break;
       all=all.concat(r.tasks);
       if(r.last_page)break;
