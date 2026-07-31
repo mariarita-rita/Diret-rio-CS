@@ -247,9 +247,28 @@ export async function getCarteira() {
     );
     const linhas = tasks.map(mapTask);
     const porId = new Map();
-    for (const l of linhas) porId.set(l.id, { listId: LISTA_CARTEIRA, gerente: l.gerente });
+    for (const l of linhas) porId.set(l.id, { listId: LISTA_CARTEIRA, gerente: l.gerente, linha: l });
     return { linhas, porId };
   });
+}
+
+/**
+ * Localiza o cliente na lista Carteira e devolve a linha completa.
+ * Usado pelo /api/moskit para derivar do ClickUp — e nao do corpo enviado pelo
+ * navegador — os dados de identificacao do cliente e o responsavel.
+ * Se a task nao estiver no cache (cliente criado agora), recarrega uma vez.
+ *
+ * @returns {Promise<object|null>} a linha da carteira, ou null se nao existir
+ */
+export async function localizarCliente(taskId) {
+  let carteira = await getCarteira();
+  let achado = carteira.porId.get(taskId);
+  if (!achado) {
+    cacheCarteira.em = 0;
+    carteira = await getCarteira();
+    achado = carteira.porId.get(taskId);
+  }
+  return achado?.linha || null;
 }
 
 export async function getMetas() {
