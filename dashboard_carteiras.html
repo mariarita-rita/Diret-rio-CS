@@ -438,35 +438,14 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────
-const CU_TOKEN         = 'pk_42926569_SQW3J2N5BH5HFME8QOQEN5JN3HY6AEGR';
-const CU_LIST_CARTEIRA = '901327787926';
-const CU_LIST_METAS    = '901327940637';
+// Nenhuma credencial aqui. Token do ClickUp, chave do Moskit, IDs das listas e
+// IDs dos campos personalizados vivem apenas no servidor, em /api/clickup.js e
+// /api/moskit.js. Este arquivo só conversa com /api/*.
 const PAGE_SIZE        = 50;
 const MESES_A_FRENTE   = 2;
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CSMS  = ['Gian Luca','Lucineia Felix','Guilherme Camargo','Patricia Carvalho'];
 
-// Campos Carteira
-const CF = {
-  ID_NUCLEO:'6126a50b-7afb-40fd-8654-26a687f34258', MRR:'59888807-a3f3-42f0-aebd-f63032011ed1',
-  GERENTE:'3898a8f4-bb21-46d7-88ee-79d164033fdf',   PLANO_GESTOR:'806ccb6e-5368-43de-8fca-bcb7ba25d918',
-  PLANO_UNIQUE:'fd73720e-da1b-4e8b-aa8a-02d77f38b486', BASE_RENOV:'06f3d2e9-f32a-4146-ac21-844b500a174e',
-  CRITERIO:'28f77e01-ba41-48c9-a07b-0e89bc9ac35b',  ALERTAS:'6ce5db54-1a1d-4dfa-944d-4b01b8832549',
-  CNPJ:'1e819aec-0121-44c2-8a92-302c2f0e4450',      CIDADE:'beaef1da-fffa-419f-9827-093b5452f8fc',
-  FIN_STATUS:'c290f699-8d56-437c-9319-1cf282430d12', OUTROS_SRV:'f8397dca-a5a5-494e-815c-3206efa7c562',
-  OBS:'114a9169-2a63-42b6-b9d3-8596232d0401',       NPS:'49b335f4-98b9-40b6-acf6-f06ca3061621',
-  ACOMP:'94b85690-3d47-4edf-9209-0a671cfb570b',     MOTIVO_PERDA:'57b588ce-81f5-4728-94e5-b22d1966862a',
-  DATA_CANCEL:'7a36a0b2-6de0-4f9b-8278-d7338e42b325',
-  CSAT:'98acac2a-932b-4c60-8a16-bd2e211961d5',
-};
-// Campos Metas
-const CM = {
-  MRR_ATINGIDO:'3f9f68a3-58f8-4a3c-9e40-131e6e7b940e', DOWNSELL:'099e8c77-5ea3-4ab2-81e4-0f12e18ea9f9',
-  META:'66a8ff49-2a0e-4e6a-98db-7854e674a5cf',          SUPER_META:'575f8269-a094-4ad5-8eaa-9806e128368a',
-  ULTRA_META:'659aaee9-d3e9-4f89-aa65-b10e40178ab1',    META_ESP:'28627910-6605-4389-bcca-5efccb2cc264',
-  COMISSAO:'fe0deee4-885c-42d8-9c0e-0a562320fd82',      BONUS_EQ:'c6585dcb-c590-411d-9213-517b7f3c119c',
-  GERENTE:'3898a8f4-bb21-46d7-88ee-79d164033fdf',       MES_REF:'6f335424-3dcc-4cf0-9df3-2cdb367efde3',
-};
 const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};
 const BONUS_EQ_VAL = {super:100,ultra:200};
 
@@ -476,117 +455,109 @@ const CSM_COLORS = {
   'Guilherme Camargo': {dot:'#5BAF7A',bg:'#EBF7EF',text:'#1A6B3A',border:'#B5DEC4'},
   'Patricia Carvalho': {dot:'#CA8A04',bg:'#FEFCE8',text:'#713F12',border:'#FDE68A'},
 };
-const SENHAS = {
-  'geral@2026':        {nivel:'consulta',nome:'Consulta Geral'},
-  'Mar!@2026':         {nivel:'gestao',  nome:'Gestão'},
-  'gian02514@2026':    {nivel:'csm',csm:'Gian Luca',         nome:'Gian Luca'},
-  'luci0101@2026':     {nivel:'csm',csm:'Lucineia Felix',    nome:'Lucineia Felix'},
-  'gui0256@2026':      {nivel:'csm',csm:'Guilherme Camargo', nome:'Guilherme Camargo'},
-  'patricia1502@2026': {nivel:'csm',csm:'Patricia Carvalho', nome:'Patricia Carvalho'},
-};
 // Abas por nível de acesso
-// consulta: pesquisa, monitoramento, processos, tabela
-// csm: + própria carteira
+// consulta: monitoramento, processos, tabela
+// csm: + própria carteira (o backend só devolve a carteira dele)
 // gestao: tudo
 
 let session=null,allData=[],metasData=[],filtered=[];
+let mrrEquipe=0;
 let currentTab='geral',currentPage=1,currentSort='cliente-asc',currentSearch='';
 
+// ── API ───────────────────────────────────────────────────
+// Sem nenhum header de autorização: o cookie de sessão é httpOnly e viaja
+// sozinho. Quem decide o que este perfil pode ler e escrever é o servidor —
+// mexer em `session` aqui no console não muda nada do lado de lá.
+async function api(url,opts){
+  const r=await fetch(url,{credentials:'same-origin',...opts});
+  let data={};
+  try{data=await r.json();}catch(_){}
+  if(r.status===401&&data.code==='sessao_invalida'){sessaoExpirada();throw new Error('sessao');}
+  if(!r.ok){
+    const e=new Error(data.error||('Erro '+r.status));
+    e.status=r.status;e.code=data.code;
+    throw e;
+  }
+  return data;
+}
+function apiPost(url,body){
+  return api(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+}
+
 // ── LOGIN ─────────────────────────────────────────────────
-function doLogin(){
-  const v=document.getElementById('login-input').value.trim();
-  const f=SENHAS[v];
-  if(!f){document.getElementById('login-error').textContent='Senha incorreta.';return;}
-  session=f;
+function aplicarSessao(s){
+  session={nivel:s.nivel,csm:s.csm||null,nome:s.nome};
   document.getElementById('login-overlay').style.display='none';
-  document.getElementById('user-badge').textContent=f.nome;
+  document.getElementById('user-badge').textContent=s.nome;
   buildTabs(); loadAllData();
 }
-function doLogout(){
-  session=null;
+async function doLogin(){
+  const inp=document.getElementById('login-input');
+  const err=document.getElementById('login-error');
+  const btn=document.querySelector('.login-btn');
+  err.textContent='';
+  if(!inp.value){err.textContent='Digite a senha.';return;}
+  btn.disabled=true;btn.textContent='Entrando...';
+  try{
+    const s=await apiPost('/api/login',{senha:inp.value});
+    inp.value='';
+    aplicarSessao(s);
+  }catch(e){
+    err.textContent=e.message||'Senha incorreta.';
+  }finally{
+    btn.disabled=false;btn.textContent='Entrar';
+  }
+}
+async function doLogout(){
+  try{await fetch('/api/login?action=logout',{method:'POST',credentials:'same-origin'});}catch(_){}
+  encerrarSessao('');
+}
+function sessaoExpirada(){encerrarSessao('Sua sessão expirou. Entre novamente.');}
+function encerrarSessao(msg){
+  session=null;allData=[];metasData=[];filtered=[];mrrEquipe=0;
   document.getElementById('login-input').value='';
-  document.getElementById('login-error').textContent='';
+  document.getElementById('login-error').textContent=msg;
+  document.getElementById('user-badge').textContent='';
   document.getElementById('login-overlay').style.display='flex';
 }
-
-// ── CLICKUP ───────────────────────────────────────────────
-async function cuFetch(path){
-  const r=await fetch('https://api.clickup.com/api/v2'+path,
-    {headers:{'Authorization':CU_TOKEN,'Content-Type':'application/json'}});
-  return r.json();
+// Cookie ainda válido? Evita pedir a senha de novo a cada F5.
+async function restaurarSessao(){
+  try{
+    const r=await fetch('/api/login',{credentials:'same-origin'});
+    if(!r.ok)return;
+    const s=await r.json();
+    if(s&&s.autenticado)aplicarSessao(s);
+  }catch(_){}
 }
-function cfVal(task,id){
-  const f=task.custom_fields?.find(x=>x.id===id);
-  if(!f)return null;
 
-  // Labels — value é array de IDs, cruzar com options para pegar os labels
-  if(f.type==='labels'){
-    if(!Array.isArray(f.value)||f.value.length===0)return [];
-    const opts=f.type_config?.options||[];
-    return f.value.map(v=>{
-      // v pode ser objeto {id, label} ou string/número com o ID
-      if(typeof v==='object'&&v!==null)return v.label||v.name||null;
-      const opt=opts.find(o=>o.id===v||o.orderindex===v);
-      return opt?.label||opt?.name||null;
-    }).filter(Boolean);
-  }
-
-  if(f.value===null||f.value===undefined)return null;
-
-  if(f.type==='drop_down'){
-    const opt=f.type_config?.options?.find(o=>o.orderindex===f.value||o.id===f.value);
-    return opt?.name||null;
-  }
-  if(f.type==='checkbox')return f.value===true||f.value==='true';
-  return f.value;
-}
-function mapTask(t){
-  return{
-    id:t.id,nome:t.name,status:(t.status?.status||'').toLowerCase(),
-    descricao:t.description||'',
-    idNucleo:cfVal(t,CF.ID_NUCLEO), mrr:Number(cfVal(t,CF.MRR))||0,
-    gerente:cfVal(t,CF.GERENTE),   planoGestor:cfVal(t,CF.PLANO_GESTOR),
-    planoUnique:cfVal(t,CF.PLANO_UNIQUE), baseRenov:cfVal(t,CF.BASE_RENOV),
-    criterio:cfVal(t,CF.CRITERIO), alertas:cfVal(t,CF.ALERTAS)||[],
-    cnpj:cfVal(t,CF.CNPJ),         cidade:cfVal(t,CF.CIDADE),
-    finStatus:cfVal(t,CF.FIN_STATUS), outrosSrv:cfVal(t,CF.OUTROS_SRV)||[],
-    obs:cfVal(t,CF.OBS),           nps:cfVal(t,CF.NPS),
-    acomp:cfVal(t,CF.ACOMP),       motivoPerda:cfVal(t,CF.MOTIVO_PERDA),
-    dataCancel:cfVal(t,CF.DATA_CANCEL),
-    csat:cfVal(t,CF.CSAT),
-  };
-}
+// ── DADOS ─────────────────────────────────────────────────
+// A paginação da carteira, a leitura dos campos personalizados e o filtro por
+// CSM acontecem todos no servidor. O que chega aqui já é só o que este perfil
+// tem direito de ver.
 async function loadAllData(){
   const lbar=document.getElementById('lbar');
+  const lwrap=lbar.parentElement;
+  lwrap.style.display='block';
   lbar.style.width='15%';
   try{
-    let page=0,all=[];
-    while(true){
-      const r=await cuFetch(`/list/${CU_LIST_CARTEIRA}/task?page=${page}&limit=100&include_closed=true&include_custom_fields=true`);
-      if(!r.tasks||r.tasks.length===0)break;
-      all=all.concat(r.tasks);
-      if(r.last_page)break;
-      page++;
-      lbar.style.width=Math.min(60,15+page*5)+'%';
-    }
-    allData=all.map(mapTask);
+    const r=await api('/api/clickup?action=carteira');
+    allData=r.tasks||[];
     lbar.style.width='75%';
-    const mr=await cuFetch(`/list/${CU_LIST_METAS}/task?include_closed=false`);
-    metasData=(mr.tasks||[]).map(t=>({
-      id:t.id,nome:t.name,
-      gerente:cfVal(t,CM.GERENTE),   mrrAt:Number(cfVal(t,CM.MRR_ATINGIDO))||0,
-      downsell:Number(cfVal(t,CM.DOWNSELL))||0, meta:Number(cfVal(t,CM.META))||0,
-      superMeta:Number(cfVal(t,CM.SUPER_META))||0, ultraMeta:Number(cfVal(t,CM.ULTRA_META))||0,
-      metaEsp:Number(cfVal(t,CM.META_ESP))||0,  mesRef:cfVal(t,CM.MES_REF),
-    }));
+    const mr=await api('/api/clickup?action=metas');
+    metasData=mr.tasks||[];
+    mrrEquipe=Number(mr.mrrEquipe)||0;
     lbar.style.width='100%';
-    setTimeout(()=>lbar.parentElement.style.display='none',400);
+    setTimeout(()=>lwrap.style.display='none',400);
     filtered=[...allData];
     applyFilters();
     document.getElementById('update-info').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){
+    if(e.message==='sessao')return;
+    lwrap.style.display='none';
     document.getElementById('update-info').textContent='Erro ao carregar';
-    document.getElementById('table-body').innerHTML='<tr><td colspan="9" class="state-msg">Erro ao carregar dados do ClickUp.</td></tr>';
+    const tb=document.getElementById('table-body');
+    tb.innerHTML='<tr><td colspan="9" class="state-msg"></td></tr>';
+    tb.querySelector('td').textContent='Erro ao carregar dados: '+(e.message||'falha de conexão');
   }
 }
 
@@ -605,7 +576,8 @@ function buildTabs(){
   // Abas de carteira (csm e gestão)
   const tabsCarteira = [];
   if(session.nivel==='csm'){
-    tabsCarteira.push({id:'geral',label:'Visão Geral',csm:null});
+    // Sem "Visão Geral" para CSM: o backend só devolve a própria carteira, então
+    // a aba seria uma cópia idêntica da aba abaixo.
     tabsCarteira.push({id:'minha',label:session.csm,csm:session.csm});
   } else if(session.nivel==='gestao'){
     tabsCarteira.push({id:'geral',label:'Visão Geral',csm:null});
@@ -855,8 +827,9 @@ function renderMeta(csm,accent,col){
     return`<div class="regua-marker" style="left:${p}%"><div class="regua-marker-line"></div><div class="regua-marker-label">${l}<br>${fmtc(v)}</div></div>`;
   };
 
-  // Bônus equipe
-  const mrrEq=metasData.reduce((s,m)=>s+(m.mrrAt-m.downsell),0);
+  // Bônus equipe — o total líquido da equipe vem agregado do servidor, para que
+  // um CSM não precise receber a meta individual dos colegas.
+  const mrrEq=mrrEquipe;
   let bEq=0,bEqLabel='';
   if(mrrEq>=META_EQ.especial){bEq=0;bEqLabel='Bônus surpresa! 🎁';}
   else if(mrrEq>=META_EQ.ultra){bEq=BONUS_EQ_VAL.ultra;bEqLabel='Ultrameta equipe! +R$ 200';}
@@ -1156,6 +1129,7 @@ function openDetail(rStr,showMRR){
     ${showMRR?`<div style="font-size:10px;color:var(--neutral-400)">MRR</div><div class="detail-mrr">${fmt(r.mrr)}</div>`:''}
     ${alertasH}
     ${strip}
+    ${session.nivel==='consulta'?'':`
     <button onclick="openMoskitModal(_currentDetailCliente)"
       style="width:100%;margin-bottom:8px;padding:9px;border-radius:8px;border:none;
              background:linear-gradient(135deg,#3A86FF,#0A41B4);color:#fff;font-size:13px;
@@ -1167,7 +1141,7 @@ function openDetail(rStr,showMRR){
              background:linear-gradient(135deg,#16A34A,#15803D);color:#fff;font-size:13px;
              font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
       📋 Abrir acompanhamento
-    </button>
+    </button>`}
     <div style="border-top:1px solid var(--neutral-100);padding-top:4px">
       ${drow('ID Núcleo',r.idNucleo||'—')}
       ${drow('CNPJ',r.cnpj||'—')}
@@ -1200,32 +1174,10 @@ function fmtc(v){if(v>=1000)return'R$ '+(v/1000).toLocaleString('pt-BR',{minimum
 
 
 // ── MOSKIT CONFIG ─────────────────────────────────────────
-const MOSKIT_WEBHOOK = 'https://hook.us2.make.com/sf8gc1lpixfm571je4e7clxftyf1s3h2'; // cole a URL do webhook do Make aqui
-const MOSKIT_PIPELINE = 91432; // funil de renovações
-
-// IDs dos campos personalizados
-const MCF = {
-  ID_NUCLEO:    'CF_g40MLBiYSjOzYD29',
-  CNPJ:         'CF_Lo1qjyidSaYRODer',
-  RAZAO_SOCIAL: 'CF_oJZmP1iKCQaRzDgv',
-  PLANO_ATUAL:  'CF_Lo1qjyiPiaYQNDer',
-  MENS_ANTERIOR:'CF_wPVm2Vi2Car10mK6',
-  PAGAMENTO:    'CF_AE5mpEiQil7yVDO3',
-  VIGENCIA:     'CF_R7PDNQiviKvoYmWJ',
-  BASE_MES:     'CF_y5lm56iyiVXGRDwW',
-  OPORTUNIDADE: 'CF_dN7MGPioiAKV8meY',
-  ORIGEM:       'CF_A4wMWNiLiBoLXqB8',
-  SUGESTAO:     'CF_VrKMbQiaC8ZwAqZY',
-  OBSERVACAO:   'CF_0WGqoEiKCad6GmnP',
-};
-
-// IDs dos responsáveis no Moskit
-const MOSKIT_USERS = {
-  'Gian Luca':         144977,
-  'Lucineia Felix':    153658,
-  'Guilherme Camargo': 155181,
-  'Patricia Carvalho': 156549,
-};
+// Chave da API, funil, etapa, board, createdBy, IDs dos campos personalizados e
+// o mapa de responsáveis ficam todos em /api/moskit.js. Aqui sobram apenas as
+// opções dos selects, que são rótulos de formulário e não segredo — o servidor
+// revalida cada ID escolhido contra a própria allowlist.
 
 // Opções dos campos de lista
 const MOSKIT_OPTS = {
@@ -1355,68 +1307,32 @@ async function criarNegocioMoskit() {
   btn.textContent = '⏳ Criando...';
   document.getElementById('moskit-error').style.display = 'none';
 
-  // Responsável pelo gerente do cliente
-  const gerenteNome = r.gerente || '';
-  const responsavelId = Object.entries(MOSKIT_USERS).find(([k]) => gerenteNome.includes(k.split(' ')[0]))?.[1] || 133497;
-
   const getOpt = id => document.getElementById(id).value || null;
 
-  // Campos fixos
-  const customFields = [
-    { id: MCF.ID_NUCLEO,    numericValue: r.idNucleo ? Number(r.idNucleo) : 0 },
-    { id: MCF.CNPJ,         numericValue: r.cnpj ? Number(String(r.cnpj).replace(/\D/g,'')) : 0 },
-    { id: MCF.RAZAO_SOCIAL, textValue: r.nome },
-    { id: MCF.MENS_ANTERIOR,textValue: document.getElementById('msk-mensalidade').value },
-  ];
-
-  // Campos de texto opcionais
-  const obs = document.getElementById('msk-obs').value;
-  const sug = document.getElementById('msk-sugestao').value;
-  if (obs) customFields.push({ id: MCF.OBSERVACAO, textValue: obs });
-  if (sug) customFields.push({ id: MCF.SUGESTAO,   textValue: sug });
-
-  // Campos de opção — só inclui se selecionado
-  if (getOpt('msk-plano'))  customFields.push({ id: MCF.PLANO_ATUAL,  options: [Number(getOpt('msk-plano'))] });
-  if (getOpt('msk-base'))   customFields.push({ id: MCF.BASE_MES,     options: [Number(getOpt('msk-base'))] });
-  if (oport)                customFields.push({ id: MCF.OPORTUNIDADE, options: [Number(oport)] });
-  if (getOpt('msk-origem')) customFields.push({ id: MCF.ORIGEM,       options: [Number(getOpt('msk-origem'))] });
-
-  const body = {
-    name:        nome,
-    price:       valor,
-    status:      'OPEN',
-    pipeline:    { id: MOSKIT_PIPELINE },
-    stage:       { id: 438018 },
-    responsible: { id: responsavelId },
-    createdBy:   { id: 133497 },
-    entityCustomFields: customFields,
-  };
-
   try {
-    const resp = await fetch('https://api.moskitcrm.com/v2/deals', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': 'f996086a-e461-4b17-b1d5-0396946d65e0'
-      },
-      body: JSON.stringify(body)
+    // Só vão daqui os campos que a usuária preencheu. ID Núcleo, CNPJ, razão
+    // social, mensalidade anterior e o responsável são resolvidos no servidor a
+    // partir do taskId, direto no ClickUp.
+    const data = await apiPost('/api/moskit?action=deal', {
+      taskId:       r.id,
+      nome:         nome,
+      valor:        valor,
+      oportunidade: oport,
+      plano:        getOpt('msk-plano'),
+      base:         getOpt('msk-base'),
+      origem:       getOpt('msk-origem'),
+      sugestao:     document.getElementById('msk-sugestao').value,
+      obs:          document.getElementById('msk-obs').value,
     });
 
-    const data = await resp.json();
-
-    if (resp.ok) {
-      const sucEl = document.getElementById('moskit-success');
-      sucEl.style.display = 'block';
-      sucEl.textContent = '✅ Negócio criado com sucesso no Moskit! ID: ' + data.id;
-      btn.textContent = '✅ Criado!';
-      setTimeout(() => document.getElementById('moskit-overlay').classList.remove('open'), 2500);
-    } else {
-      mostrarErroMoskit('Erro ' + resp.status + ': ' + (data.message || JSON.stringify(data)));
-      btn.disabled = false;
-      btn.textContent = '🤝 Criar no Moskit';
-    }
+    const sucEl = document.getElementById('moskit-success');
+    sucEl.style.display = 'block';
+    sucEl.textContent = '✅ Negócio criado com sucesso no Moskit! ID: ' + data.id;
+    btn.textContent = '✅ Criado!';
+    setTimeout(() => document.getElementById('moskit-overlay').classList.remove('open'), 2500);
   } catch(e) {
-    mostrarErroMoskit('Erro de conexão: ' + e.message);
+    if (e.message === 'sessao') return;
+    mostrarErroMoskit(e.message || 'Erro de conexão.');
     btn.disabled = false;
     btn.textContent = '🤝 Criar no Moskit';
   }
@@ -1435,10 +1351,8 @@ function closeMoskitModal(e) {
 
 
 // ── ACOMPANHAMENTO ────────────────────────────────────────
+// Board, etapa e responsável são travados em /api/moskit.js.
 let _acompCliente = null;
-const MOSKIT_API_KEY = 'f996086a-e461-4b17-b1d5-0396946d65e0';
-const ACOMP_BOARD  = 32342;
-const ACOMP_STEP   = 124287; // Nova solicitação
 
 function openAcompModal(r) {
   _acompCliente = r;
@@ -1491,7 +1405,6 @@ async function criarAcompanhamento() {
 
   const tipoId    = document.getElementById('acomp-tipo-id').value;
   const tipoCu    = document.getElementById('acomp-tipo-cu').value;
-  const tipoLabel = document.getElementById('acomp-tipo-label').value;
   const origemId  = document.getElementById('acomp-origem').value;
 
   if (!tipoId)   { mostrarErroAcomp('Selecione o tipo de solicitação.'); return; }
@@ -1502,79 +1415,46 @@ async function criarAcompanhamento() {
   btn.textContent = '⏳ Criando...';
   document.getElementById('acomp-error').style.display = 'none';
 
-  const gerenteNome   = r.gerente || '';
-  const responsavelId = Object.entries(MOSKIT_USERS).find(([k]) => gerenteNome.includes(k.split(' ')[0]))?.[1] || 133497;
-  const conversa      = document.getElementById('acomp-conversa').value;
-  const obs           = document.getElementById('acomp-obs').value;
-  const nomeProjeto   = 'Acompanhamento - ' + r.nome + ' - ' + tipoLabel;
-
-  // 1. Criar projeto no Moskit
-  // Campos customizados do projeto
-  const projCustomFields = [
-    { id: 'CF_3LvDvpH1iGbdrM6a', options: [Number(tipoId)] },
-    { id: 'CF_POEMyKHZi807bDdk', options: [Number(origemId)] },
-  ];
-  if (conversa) projCustomFields.push({ id: 'CF_3LvDvpH4CLBLPM6a', textValue: conversa });
-  if (obs)      projCustomFields.push({ id: 'CF_Rg7MnxHLC3lE2Dvd', textValue: obs });
-
-  const bodyMoskit = {
-    name:        nomeProjeto,
-    archived:    false,
-    board:       { id: ACOMP_BOARD },
-    step:        { id: ACOMP_STEP },
-    responsible: { id: responsavelId },
-    createdBy:   { id: 133497 },
-    entityCustomFields: projCustomFields,
-  };
-
   try {
-    const respMoskit = await fetch('https://api.moskitcrm.com/v2/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': MOSKIT_API_KEY },
-      body: JSON.stringify(bodyMoskit)
+    // 1. Projeto no Moskit — nome, board, etapa e responsável montados no servidor
+    const proj = await apiPost('/api/moskit?action=project', {
+      taskId:   r.id,
+      tipo:     tipoId,
+      origem:   origemId,
+      conversa: document.getElementById('acomp-conversa').value,
+      obs:      document.getElementById('acomp-obs').value,
     });
-    const dataMoskit = await respMoskit.json();
-    if (!respMoskit.ok) {
-      mostrarErroAcomp('Erro Moskit: ' + (dataMoskit.message || respMoskit.status));
-      btn.disabled = false; btn.textContent = '📋 Abrir acompanhamento';
-      return;
-    }
 
-    // 2. Atualizar ClickUp — Em acompanhamento, Etapa e Tipo
-    const alertasSelecionados = [...document.querySelectorAll('#acomp-alertas-tags .label-tag.selected')]
-      .map(t => t.dataset.id);
-
-    // Atualizar campos no ClickUp
+    // 2. ClickUp — Em acompanhamento, Etapa e Tipo.
+    // Os 4 campos abaixo são exatamente os da allowlist de /api/clickup.
     const cuUpdates = [
-      { id: '94b85690-3d47-4edf-9209-0a671cfb570b', value: true },
-      { id: 'd15028f2-40c6-44da-a5dc-3d608eef6f48', value: '94eb0e3e-de65-432d-b74d-a342689d5d85' },
-      { id: 'a4acad54-a6da-477f-b1fc-b3cbf56bbd08', value: tipoCu },
+      { fieldId: '94b85690-3d47-4edf-9209-0a671cfb570b', value: true },
+      { fieldId: 'd15028f2-40c6-44da-a5dc-3d608eef6f48', value: '94eb0e3e-de65-432d-b74d-a342689d5d85' },
+      { fieldId: 'a4acad54-a6da-477f-b1fc-b3cbf56bbd08', value: tipoCu },
     ];
-
     await Promise.all(cuUpdates.map(f =>
-      fetch(`https://api.clickup.com/api/v2/task/${r.id}/field/${f.id}`, {
-        method: 'POST',
-        headers: { 'Authorization': CU_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: f.value })
-      })
+      apiPost('/api/clickup?action=set-field', { taskId: r.id, fieldId: f.fieldId, value: f.value })
     ));
 
-    // Alertas — labels precisam ser adicionados um por um
+    // Alertas — campo de labels, enviado como array
+    const alertasSelecionados = [...document.querySelectorAll('#acomp-alertas-tags .label-tag.selected')]
+      .map(t => t.dataset.id);
     if (alertasSelecionados.length) {
-      await fetch(`https://api.clickup.com/api/v2/task/${r.id}/field/6ce5db54-1a1d-4dfa-944d-4b01b8832549`, {
-        method: 'POST',
-        headers: { 'Authorization': CU_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: alertasSelecionados })
+      await apiPost('/api/clickup?action=set-field', {
+        taskId:  r.id,
+        fieldId: '6ce5db54-1a1d-4dfa-944d-4b01b8832549',
+        value:   alertasSelecionados,
       });
     }
 
     document.getElementById('acomp-success').style.display = 'block';
-    document.getElementById('acomp-success').textContent = '✅ Acompanhamento criado! Projeto Moskit #' + dataMoskit.id + ' · ClickUp atualizado.';
+    document.getElementById('acomp-success').textContent = '✅ Acompanhamento criado! Projeto Moskit #' + proj.id + ' · ClickUp atualizado.';
     btn.textContent = '✅ Criado!';
     setTimeout(() => document.getElementById('acomp-overlay').classList.remove('open'), 2500);
 
   } catch(e) {
-    mostrarErroAcomp('Erro de conexão: ' + e.message);
+    if (e.message === 'sessao') return;
+    mostrarErroAcomp(e.message || 'Erro de conexão.');
     btn.disabled = false;
     btn.textContent = '📋 Abrir acompanhamento';
   }
@@ -1593,6 +1473,7 @@ function closeAcompModal(e) {
 
 // ── EVENTS ────────────────────────────────────────────────
 document.getElementById('search-inline').addEventListener('input',e=>{currentSearch=e.target.value;currentPage=1;applyFilters();});
+restaurarSessao();
 </script>
 
 <!-- MOSKIT MODAL -->
