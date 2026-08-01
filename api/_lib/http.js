@@ -3,15 +3,53 @@
 //
 // Arquivos dentro de /api com prefixo "_" não viram endpoints na Vercel.
 
+/** Loopback: a única situação em que uma origem `http://` é legítima. */
+const RE_LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+
+function hostLoopback(host) {
+  return RE_LOOPBACK.test(String(host || ''));
+}
+
 /**
- * Produção = deploy real na Vercel (production ou preview, ambos servidos por
- * HTTPS). `vercel dev` roda com VERCEL_ENV/NODE_ENV = development.
- * Na dúvida — variável ausente — assume produção: falha fechada.
+ * O esquema `http` é aceitável nesta requisição?
+ *
+ * Critério é o HOST, não variável de ambiente. `vercel dev` não define
+ * VERCEL_ENV nem NODE_ENV no runtime das funções — medido: ambos ausentes — e
+ * qualquer regra baseada neles trata dev como produção e derruba o CORS local.
+ * Host sempre existe, em qualquer runtime.
+ *
+ * A decisão exige que `host` E `x-forwarded-host` (quando presente) sejam
+ * loopback. XFH é, em princípio, cabeçalho escrito pelo cliente; na Vercel a
+ * plataforma o sobrescreve, mas privilégio não se concede com base em garantia
+ * de configuração. Em deploy publicado nenhum dos dois é loopback.
  */
-function ehProducao() {
-  const vercel = process.env.VERCEL_ENV;
-  if (vercel) return vercel !== 'development';
-  return process.env.NODE_ENV !== 'development';
+function aceitaHttp(req) {
+  const direto = req.headers.host;
+  const encaminhado = req.headers['x-forwarded-host'];
+  if (!hostLoopback(direto)) return false;
+  if (encaminhado && !hostLoopback(encaminhado)) return false;
+  // Segunda tranca, redundante de propósito: deploy publicado nunca libera http.
+  const publicado = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+  return !publicado;
+}
+
+/**
+ * Filtra entradas de ALLOWED_ORIGINS.
+ * `https://` passa. `http://` só em loopback — assim, cadastrar
+ * `ALLOWED_ORIGINS=http://algum-dominio` no ambiente de produção da Vercel não
+ * afrouxa nada: a entrada é descartada e o descarte vai para o log.
+ * Qualquer outro esquema (ou lixo não parseável) é recusado.
+ */
+function origemExtraValida(origem) {
+  let u;
+  try {
+    u = new URL(origem);
+  } catch {
+    return false;
+  }
+  if (u.protocol === 'https:') return true;
+  if (u.protocol === 'http:') return hostLoopback(u.host);
+  return false;
 }
 
 /** Origens aceitas: a própria origem do deploy + extras opcionais em ALLOWED_ORIGINS. */
@@ -21,13 +59,19 @@ export function origensPermitidas(req) {
   if (host) {
     // Casar Origin com o host da própria requisição é a definição de mesma origem.
     set.add(`https://${host}`);
-    // O esquema http existe só para o `vercel dev` (http://localhost:3000).
-    // Em deploy publicado, http:// não é origem aceita.
-    if (!ehProducao()) set.add(`http://${host}`);
+    if (aceitaHttp(req)) set.add(`http://${host}`);
   }
   for (const extra of String(process.env.ALLOWED_ORIGINS || '').split(',')) {
     const o = extra.trim();
-    if (o) set.add(o);
+    if (!o) continue;
+    if (!origemExtraValida(o)) {
+      console.error(
+        `[cors] entrada de ALLOWED_ORIGINS descartada: ${JSON.stringify(o)} — ` +
+          'apenas https://, ou http:// em loopback'
+      );
+      continue;
+    }
+    set.add(o);
   }
   return set;
 }

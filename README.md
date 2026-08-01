@@ -79,6 +79,14 @@ da variável na Vercel. Não precisa mexer em código.
 | ------------------ | -------------- |
 | `ALLOWED_ORIGINS`  | Origens extras aceitas pelo CORS, separadas por vírgula. Por padrão só a própria origem do deploy é aceita. Use apenas se o dashboard passar a ser servido de outro domínio. |
 
+**Nunca cadastre uma origem `http://` fora de loopback nesta variável** — e em
+particular não a use para "resolver" problema de ambiente local mexendo nas
+variáveis de Production na Vercel. Não é só recomendação: o código **recusa**.
+Cada entrada passa por validação (`origemExtraValida`, em `api/_lib/http.js`) e
+só é aceita se for `https://`, ou `http://` com host loopback. Entrada recusada é
+descartada e registra `console.error` no log da função — se uma origem que você
+cadastrou não estiver funcionando, o log diz por quê.
+
 ---
 
 ## Níveis de acesso
@@ -236,9 +244,21 @@ vercel dev
 O cookie é emitido com `Secure`. Chrome e Firefox aceitam cookie `Secure` em
 `http://localhost`, então o login funciona no `vercel dev` sem alteração.
 
-A origem `http://<host>` só entra na lista de origens aceitas **fora de produção**
-(`VERCEL_ENV=development`, que é o do `vercel dev`). Em `production` e em `preview`
-só `https://` é aceito, e a ausência da variável também fecha para `https://`.
+A origem `http://<host>` só é aceita quando o host é **loopback** (`localhost`,
+`127.0.0.1` ou `[::1]`, com porta opcional). É o caso do `vercel dev`, e não é o
+caso de nenhum deploy, onde o host é o domínio da Vercel ou o customizado.
+
+A regra é o host, e **não** variável de ambiente, por um motivo medido: no runtime
+das funções sob `vercel dev`, `VERCEL_ENV` e `NODE_ENV` **não existem** — a única
+marca de ambiente definida é `VERCEL_URL`. Qualquer regra que dependa delas
+classifica o desenvolvimento local como produção e derruba o CORS local. Host
+sempre existe, em qualquer runtime, e num deploy publicado nunca é loopback.
+
+A decisão exige que `host` **e** `x-forwarded-host` (quando presente) sejam
+loopback: `x-forwarded-host` é, em princípio, escrito pelo cliente, e liberação de
+esquema não se apoia em cabeçalho assim. Há ainda uma segunda tranca redundante:
+com `VERCEL_ENV` em `production` ou `preview`, `http://` é recusado de qualquer
+forma.
 
 ### O que validar manualmente
 
