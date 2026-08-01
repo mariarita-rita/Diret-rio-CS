@@ -187,13 +187,21 @@ async function cu(path, init = {}) {
 
 // ── Leitura dos campos personalizados (portado do front) ──────────────────
 
+/** id de opcao -> rotulo, aprendido do type_config nas leituras. Ver cfVal. */
+const rotulosAprendidos = new Map();
+
 function cfVal(task, id) {
   const f = task.custom_fields?.find((x) => x.id === id);
   if (!f) return null;
 
   if (f.type === 'labels') {
-    if (!Array.isArray(f.value) || f.value.length === 0) return [];
     const opts = f.type_config?.options || [];
+    // Aprende id -> rotulo do proprio ClickUp. E o que permite refletir uma escrita
+    // no cache sem reler a lista inteira, e sem hardcodar acentuacao de rotulo.
+    for (const o of opts) {
+      if (o?.id) rotulosAprendidos.set(o.id, o.label || o.name || null);
+    }
+    if (!Array.isArray(f.value) || f.value.length === 0) return [];
     return f.value
       .map((v) => {
         if (typeof v === 'object' && v !== null) return v.label || v.name || null;
@@ -449,8 +457,48 @@ export async function gravarCampo(taskId, fieldId, value) {
   });
 }
 
-/** Invalida o cache da carteira depois de uma escrita. */
+/**
+ * Invalida o cache da carteira. Ultimo recurso: a proxima leitura paga ~28 chamadas.
+ *
+ * `cacheTasks` NAO e limpo: ele guarda listId e gerente, e nenhum campo da allowlist
+ * de escrita altera qualquer um dos dois. Limpar era desperdicio de cota.
+ */
 export function invalidarCarteira() {
   cacheCarteira.em = 0;
-  cacheTasks.clear();
+}
+
+/**
+ * Reflete uma escrita já confirmada na linha em cache, em vez de derrubar o cache.
+ *
+ * Motivo: a linha em cache ficava velha depois de escrever, e a pessoa via o valor
+ * antigo — marcava de novo, e cada recarga custa ~28 chamadas de uma cota de 100/min
+ * compartilhada pelo time. Derrubar o cache resolveria a corretude ao custo de 28
+ * chamadas na leitura seguinte; refletir custa zero.
+ *
+ * Só é chamada depois de `200` do ClickUp, então a escrita está aplicada.
+ */
+export function refletirEscrita(taskId, fieldId, valor) {
+  const carteira = soSeQuente(cacheCarteira);
+  if (!carteira) return; // cache frio: a proxima leitura ja vem do ClickUp
+  const alvo = carteira.porId.get(taskId);
+  if (!alvo?.linha) return;
+
+  if (fieldId === CF.ACOMP) {
+    alvo.linha.acomp = valor === true;
+    return;
+  }
+
+  if (fieldId === CF.ALERTAS) {
+    const rotulos = (Array.isArray(valor) ? valor : []).map((id) => rotulosAprendidos.get(id));
+    if (rotulos.some((r) => !r)) {
+      // Rotulo desconhecido: preferir custo a divergencia.
+      invalidarCarteira();
+      return;
+    }
+    alvo.linha.alertas = rotulos;
+    return;
+  }
+
+  // Etapa e Tipo de solicitacao nao aparecem na linha que mapTask devolve — nao ha
+  // nada a refletir, e o cache continua valido.
 }

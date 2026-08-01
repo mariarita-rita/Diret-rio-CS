@@ -28,8 +28,8 @@ import {
   getCarteira,
   getMetas,
   gravarCampo,
-  invalidarCarteira,
   localizarTask,
+  refletirEscrita,
 } from './_lib/clickup.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -164,7 +164,9 @@ async function escreverCampo(req, res, sessao) {
   }
 
   await gravarCampo(taskId, fieldId, valor);
-  invalidarCarteira();
+  // Reflete no cache em vez de derruba-lo: derrubar custaria ~28 chamadas na leitura
+  // seguinte, de uma cota de 100/min compartilhada por todo o time.
+  refletirEscrita(taskId, fieldId, valor);
   return res.status(200).json({ ok: true, campo: campo.nome });
 }
 

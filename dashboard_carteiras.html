@@ -1482,14 +1482,28 @@ async function criarAcompanhamento() {
     ));
 
     // Alertas — campo de labels, enviado como array
-    const alertasSelecionados = [...document.querySelectorAll('#acomp-alertas-tags .label-tag.selected')]
-      .map(t => t.dataset.id);
+    const tagsSelecionadas = [...document.querySelectorAll('#acomp-alertas-tags .label-tag.selected')];
+    const alertasSelecionados = tagsSelecionadas.map(t => t.dataset.id);
+    // Os rótulos vêm da própria interface, que os recebeu do ClickUp — evita
+    // adivinhar acentuação ao refletir a escrita na tabela.
+    const alertasRotulos = tagsSelecionadas.map(t => t.textContent.trim()).filter(Boolean);
     if (alertasSelecionados.length) {
       await apiPost('/api/clickup?action=set-field', {
         taskId:  r.id,
         fieldId: '6ce5db54-1a1d-4dfa-944d-4b01b8832549',
         value:   alertasSelecionados,
       });
+    }
+
+    // A tabela não era atualizada depois de escrever: a pessoa marcava o campo, a
+    // tela não mudava, e ela marcava de novo — e cada recarga custa ~28 chamadas de
+    // uma cota de 100/min compartilhada pelo time. Refletir localmente custa zero.
+    // `200` significa escrita aplicada; foi verificado no histórico do ClickUp.
+    const linhaLocal = allData.find(x => x.id === r.id);
+    if (linhaLocal) {
+      linhaLocal.acomp = true;
+      if (alertasRotulos.length) linhaLocal.alertas = alertasRotulos;
+      applyFilters();
     }
 
     document.getElementById('acomp-success').style.display = 'block';

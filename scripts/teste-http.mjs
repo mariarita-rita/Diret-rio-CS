@@ -58,6 +58,7 @@ const stubClickup = `
   export async function getMetas() { return { linhas: [] }; }
   export async function gravarCampo() {}
   export function invalidarCarteira() {}
+  export function refletirEscrita() {}
   export async function localizarTask() { return null; }
   export async function localizarCliente() { return null; }
 `;
@@ -526,6 +527,78 @@ console.log('\n[22] 429 sem Retry-After cai para a janela padrao');
   await cu({ method: 'GET', headers: cabecalhos({ cookie }), query: { action: 'carteira' } }, r);
   checar('esperaSegundos padrao', r.corpo.esperaSegundos, 60);
   checar('mensagem com 60s', /Aguarde 60 segundos/.test(r.corpo.error), true);
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[23] escrita reflete no cache em vez de derruba-lo (S3)');
+{
+  const chamadas = [];
+  const fetchOriginal = globalThis.fetch;
+  const ALERTA_A = 'ddaddf7d-9ffa-49de-9b53-6e63acbbceb3';
+  const ALERTA_B = '06759f74-83bb-427a-8ddd-77aa2f9f94c5';
+
+  const ok = (corpo) => ({
+    ok: true, status: 200,
+    headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+    json: async () => corpo, text: async () => '',
+  });
+
+  globalThis.fetch = async (url) => {
+    chamadas.push(String(url));
+    if (/\/field\//.test(String(url))) return ok({});
+    // Uma pagina com uma task, com type_config de labels para os rotulos serem aprendidos
+    return ok({
+      last_page: true,
+      tasks: [{
+        id: 'tX', name: 'Cliente Y', list: { id: '901327787926' }, status: { status: 'ativo' },
+        custom_fields: [
+          { id: '94b85690-3d47-4edf-9209-0a671cfb570b', type: 'checkbox', value: false },
+          { id: '6ce5db54-1a1d-4dfa-944d-4b01b8832549', type: 'labels', value: [],
+            type_config: { options: [
+              { id: ALERTA_A, label: 'Risco de Churn' },
+              { id: ALERTA_B, label: 'Cliente Insatisfeito' },
+            ] } },
+        ],
+      }],
+    });
+  };
+
+  const lib = await import(libClickupUnica('reflete'));
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const c1 = await lib.getCarteira();
+  checar('leitura inicial: acomp false', c1.linhas[0].acomp, false);
+  checar('leitura inicial: alertas vazio', c1.linhas[0].alertas, []);
+
+  // Escrita do checkbox, refletida
+  await lib.gravarCampo('tX', '94b85690-3d47-4edf-9209-0a671cfb570b', true);
+  lib.refletirEscrita('tX', '94b85690-3d47-4edf-9209-0a671cfb570b', true);
+  chamadas.length = 0;
+  const c2 = await lib.getCarteira();
+  checar('depois da escrita: acomp true', c2.linhas[0].acomp, true);
+  checar('  e a releitura custou 0 chamadas', chamadas.length, 0);
+
+  // Escrita de labels, traduzida pelos rotulos aprendidos do ClickUp
+  lib.refletirEscrita('tX', '6ce5db54-1a1d-4dfa-944d-4b01b8832549', [ALERTA_A, ALERTA_B]);
+  chamadas.length = 0;
+  const c3 = await lib.getCarteira();
+  checar('alertas refletidos com rotulo correto', c3.linhas[0].alertas, ['Risco de Churn', 'Cliente Insatisfeito']);
+  checar('  sem chamada extra', chamadas.length, 0);
+
+  // Rotulo desconhecido: prefere custo a divergencia
+  lib.refletirEscrita('tX', '6ce5db54-1a1d-4dfa-944d-4b01b8832549', ['00000000-0000-0000-0000-000000000000']);
+  chamadas.length = 0;
+  await lib.getCarteira();
+  checar('rotulo desconhecido invalida (relê do ClickUp)', chamadas.length > 0, true);
+
+  // Campo que nao aparece na linha: nao invalida
+  const c4 = await lib.getCarteira();
+  chamadas.length = 0;
+  lib.refletirEscrita('tX', 'd15028f2-40c6-44da-a5dc-3d608eef6f48', '94eb0e3e-de65-432d-b74d-a342689d5d85');
+  await lib.getCarteira();
+  checar('Etapa nao invalida o cache', chamadas.length, 0);
+  checar('  e a linha segue intacta', c4.linhas[0].id, 'tX');
+
   globalThis.fetch = fetchOriginal;
 }
 
