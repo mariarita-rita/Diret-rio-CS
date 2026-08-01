@@ -136,7 +136,9 @@ Cookie: `httpOnly`, `Secure`, `SameSite=Strict`, validade de 12h, assinado com
 HMAC-SHA256. O payload carrega apenas `{ nivel, csm, nome, iat }`.
 
 Rate limiting: 5 tentativas por IP em 15 minutos. **É um contador em memória, por
-instância serverless** — corta força bruta de origem única, mas não é um limite
+processo** — e "por processo" é mais fraco do que "por instância": no `vercel dev`
+cada invocação nasce num processo novo, e o contador nunca acumula (ver teste 9).
+Corta força bruta de origem única, mas não é um limite
 global forte. Se algum dia precisar de garantia real, isso exige um armazenamento
 compartilhado (Vercel KV ou Upstash), o que traria dependência nova.
 
@@ -363,10 +365,37 @@ de teste:
   alertas. Confira o projeto no board 32342 e, no ClickUp, os campos
   *Em acompanhamento*, *Etapa*, *Tipo* e *Alertas* atualizados.
 
-**9. Rate limiting do login**
+**9. Rate limiting do login — NÃO EXECUTÁVEL LOCALMENTE**
 
-Erre a senha 6 vezes seguidas. A sexta tem que voltar `429` com
+Em produção: erre a senha 6 vezes seguidas; a sexta deve voltar `429` com
 `code: "muitas_tentativas"`.
+
+**Não tente localmente — não funciona, e não é bug.** O `vercel dev` cria um
+**processo novo por invocação**. Medido com um endpoint de contador temporário:
+cinco chamadas seguidas devolveram `chamadas: 1` nas cinco, com PID diferente em
+cada uma (21288, 704, 12928, 16488, 2356). O `Map` de tentativas
+(`api/login.js:31`) nasce vazio a cada requisição, então nenhuma quantidade de
+tentativas dispara o 429 — testado, seis tentativas seguidas retornaram
+`senha_incorreta`, inclusive com `X-Forwarded-For` fixo para descartar variação de
+IP.
+
+A lógica em si está correta, e é verificável fora do runtime: em processo único dá
+cinco 401 e depois 429 com `Retry-After`, senha certa durante o bloqueio continua
+429, e IP diferente entra normalmente.
+
+**Como ler o resultado em produção:**
+
+- 429 aparecendo prova que o controle funciona **naquele momento, naquela
+  instância**.
+- 429 **não** aparecendo não prova nada — pode ser instância nova, pode ser
+  reciclagem, pode ser escalonamento distribuindo as tentativas.
+
+**Portanto:** este controle é *best-effort*. Ele corta força bruta ingênua de
+origem única contra uma instância quente, e evita que um atacante force trabalho
+de `scrypt` ilimitado no servidor. Não é limite global, não é durável e não é por
+perfil. **A defesa real é senha forte + `scrypt`** — o rate limiting é conveniência
+sobre isso, não a proteção principal. Garantia real exigiria estado compartilhado
+(Vercel KV ou Upstash), com a dependência nova que vem junto.
 
 **10. Cabeçalhos de cache**
 
