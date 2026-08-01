@@ -306,7 +306,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
 .moskit-btn-primary:disabled{opacity:0.5;cursor:not-allowed}
 .moskit-btn-secondary{background:var(--neutral-100);color:var(--neutral-700)}
 .moskit-btn-secondary:hover{background:var(--neutral-200)}
-.moskit-success{background:var(--success-bg);border:1px solid #86EFAC;border-radius:8px;padding:10px 14px;font-size:13px;color:#15803D;display:none}
+.moskit-success{background:var(--success-bg);border:1px solid #86EFAC;border-radius:8px;padding:10px 14px;font-size:13px;color:#15803D;display:none;white-space:pre-line}
 .moskit-error{background:var(--error-bg);border:1px solid #FCA5A5;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);display:none}
 
 
@@ -318,7 +318,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
 .acomp-modal-title{font-size:15px;font-weight:700;color:var(--brand-night);display:flex;align-items:center;gap:8px}
 .acomp-modal-body{padding:20px 22px;display:flex;flex-direction:column;gap:14px}
 .acomp-modal-footer{padding:14px 22px;border-top:1px solid var(--neutral-200);display:flex;gap:10px;justify-content:flex-end;position:sticky;bottom:0;background:#fff}
-.acomp-success{background:var(--success-bg);border:1px solid #86EFAC;border-radius:8px;padding:10px 14px;font-size:13px;color:#15803D;display:none}
+.acomp-success{background:var(--success-bg);border:1px solid #86EFAC;border-radius:8px;padding:10px 14px;font-size:13px;color:#15803D;display:none;white-space:pre-line}
 .acomp-error{background:var(--error-bg);border:1px solid #FCA5A5;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);display:none}
 .label-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .label-tag{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--neutral-200);background:#fff;color:var(--neutral-700);transition:all 0.15s}
@@ -1327,9 +1327,11 @@ async function criarNegocioMoskit() {
 
     const sucEl = document.getElementById('moskit-success');
     sucEl.style.display = 'block';
-    sucEl.textContent = '✅ Negócio criado com sucesso no Moskit! ID: ' + data.id;
+    sucEl.textContent = '✅ Negócio criado com sucesso no Moskit! ID: ' + data.id
+      + (data.aviso ? '\n⚠️ ' + data.aviso : '');
     btn.textContent = '✅ Criado!';
-    setTimeout(() => document.getElementById('moskit-overlay').classList.remove('open'), 2500);
+    // Com aviso o modal não fecha sozinho: fechar em 2,5s esconderia o recado.
+    if (!data.aviso) setTimeout(() => document.getElementById('moskit-overlay').classList.remove('open'), 2500);
   } catch(e) {
     if (e.message === 'sessao') return;
     mostrarErroMoskit(e.message || 'Erro de conexão.');
@@ -1448,9 +1450,11 @@ async function criarAcompanhamento() {
     }
 
     document.getElementById('acomp-success').style.display = 'block';
-    document.getElementById('acomp-success').textContent = '✅ Acompanhamento criado! Projeto Moskit #' + proj.id + ' · ClickUp atualizado.';
+    document.getElementById('acomp-success').textContent = '✅ Acompanhamento criado! Projeto Moskit #' + proj.id + ' · ClickUp atualizado.'
+      + (proj.aviso ? '\n⚠️ ' + proj.aviso : '');
     btn.textContent = '✅ Criado!';
-    setTimeout(() => document.getElementById('acomp-overlay').classList.remove('open'), 2500);
+    // Com aviso o modal não fecha sozinho: fechar em 2,5s esconderia o recado.
+    if (!proj.aviso) setTimeout(() => document.getElementById('acomp-overlay').classList.remove('open'), 2500);
 
   } catch(e) {
     if (e.message === 'sessao') return;

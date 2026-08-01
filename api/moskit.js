@@ -88,6 +88,12 @@ const MAX_NOME = 200;
 const MAX_TEXTO = 4000;
 const MAX_VALOR = 100000000;
 
+// Aviso devolvido ao navegador quando o responsavel nao pode ser identificado.
+// Diz o que fazer sem expor mapa de ids, nome de variavel nem detalhe do upstream.
+const AVISO_SEM_RESPONSAVEL =
+  'Atenção: criado SEM responsável identificado. O gerente deste cliente não ' +
+  'corresponde a nenhum CSM cadastrado — defina o responsável manualmente no Moskit.';
+
 // ── Handler ───────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -179,18 +185,26 @@ async function criarNegocio(res, corpo, cliente) {
   if (base !== null) campos.push({ id: CF_DEAL.BASE_MES, options: [base] });
   if (origem !== null) campos.push({ id: CF_DEAL.ORIGEM, options: [origem] });
 
+  const responsavel = responsavelDe(cliente.gerente);
+
   const criado = await moskit('/deals', {
     name: nome,
     price: valor,
     status: 'OPEN',
     pipeline: { id: PIPELINE_RENOVACOES },
     stage: { id: STAGE_NOVO_NEGOCIO },
-    responsible: { id: responsavelDe(cliente.gerente) },
+    responsible: { id: responsavel.id },
     createdBy: { id: CREATED_BY },
     entityCustomFields: campos,
   });
 
-  return res.status(200).json({ ok: true, id: criado?.id ?? null });
+  return res.status(200).json({
+    ok: true,
+    id: criado?.id ?? null,
+    ...(responsavel.identificado
+      ? {}
+      : { aviso: AVISO_SEM_RESPONSAVEL, code: 'responsavel_nao_identificado' }),
+  });
 }
 
 // ── action=project ────────────────────────────────────────────────────────
@@ -218,17 +232,25 @@ async function criarProjeto(res, corpo, cliente) {
   // Nome do projeto montado no servidor a partir do cliente e do rotulo do tipo.
   const nome = `Acompanhamento - ${cliente.nome} - ${TIPOS_ACOMP.get(tipo)}`.slice(0, MAX_NOME);
 
+  const responsavel = responsavelDe(cliente.gerente);
+
   const criado = await moskit('/projects', {
     name: nome,
     archived: false,
     board: { id: ACOMP_BOARD },
     step: { id: ACOMP_STEP },
-    responsible: { id: responsavelDe(cliente.gerente) },
+    responsible: { id: responsavel.id },
     createdBy: { id: CREATED_BY },
     entityCustomFields: campos,
   });
 
-  return res.status(200).json({ ok: true, id: criado?.id ?? null });
+  return res.status(200).json({
+    ok: true,
+    id: criado?.id ?? null,
+    ...(responsavel.identificado
+      ? {}
+      : { aviso: AVISO_SEM_RESPONSAVEL, code: 'responsavel_nao_identificado' }),
+  });
 }
 
 // ── Cliente Moskit ────────────────────────────────────────────────────────
@@ -261,12 +283,27 @@ async function moskit(caminho, corpo) {
 
 // ── Utilidades ────────────────────────────────────────────────────────────
 
+/**
+ * Responsável no Moskit, resolvido a partir do gerente registrado no ClickUp.
+ *
+ * Quando não casa, a criação continua — bloquear o fluxo seria pior — mas o
+ * fallback deixa de ser silencioso: registra ERRO no log da função com o valor
+ * que não casou e devolve `identificado: false`, para o handler avisar quem está
+ * usando. Antes, o negócio nascia atribuído ao createdBy sem nenhum sinal, e a
+ * pessoa só descobria olhando o funil no Moskit.
+ *
+ * @returns {{id: number, identificado: boolean}}
+ */
 function responsavelDe(gerente) {
   const nome = String(gerente || '');
   for (const [csm, id] of Object.entries(RESPONSAVEIS)) {
-    if (pertenceAoCsm(nome, csm)) return id;
+    if (pertenceAoCsm(nome, csm)) return { id, identificado: true };
   }
-  return CREATED_BY;
+  console.error(
+    `[moskit] responsavel nao identificado: gerente=${JSON.stringify(nome)} nao casa com ` +
+      `nenhum CSM do mapa; criando com createdBy=${CREATED_BY} como fallback`
+  );
+  return { id: CREATED_BY, identificado: false };
 }
 
 function soNumero(v) {

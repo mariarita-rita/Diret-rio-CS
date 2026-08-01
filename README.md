@@ -178,6 +178,13 @@ Identificação do cliente (ID Núcleo, CNPJ, razão social, mensalidade anterio
 responsável são lidos da task do ClickUp apontada por `taskId` — não vêm do
 navegador. É isso que aplica o escopo por CSM também na escrita.
 
+Se o *Gerente* do cliente não corresponder a nenhum CSM do mapa, o registro **é
+criado** com o `createdBy` como responsável, e a resposta vem com
+`code: "responsavel_nao_identificado"` mais um `aviso` legível. O dashboard mostra
+esse aviso e deixa o modal aberto, em vez de fechar sozinho. No log da função fica
+um `console.error` com o valor de *Gerente* que não casou. O fluxo não é bloqueado
+de propósito — mas a atribuição errada não passa mais em silêncio.
+
 ---
 
 ## Cache
