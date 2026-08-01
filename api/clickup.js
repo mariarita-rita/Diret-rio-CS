@@ -32,28 +32,34 @@ const CACHE_LEITURA = 'private, max-age=300, stale-while-revalidate=600';
 const MAX_LABELS = 10;
 
 export default async function handler(req, res) {
-  if (!aplicarCors(req, res)) {
-    return erro(res, 403, 'origem_nao_permitida', 'Origem não permitida.');
-  }
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  // req.query, como req.body, e getter lazy no runtime da Vercel: fica dentro
+  // do try junto com todo o resto.
+  let acao = '';
 
-  const sessao = exigirSessao(req, res);
-  if (!sessao) return undefined;
-
-  const acao = String(req.query?.action || '');
-
+  // O try cobre o handler INTEIRO, inclusive CORS e exigirSessao. Antes eles
+  // ficavam de fora, e um ErroConfig ali derrubava a funcao em vez de responder.
   try {
+    acao = String(req.query?.action || '');
+
+    if (!aplicarCors(req, res)) {
+      return erro(res, 403, 'origem_nao_permitida', 'Origem não permitida.');
+    }
+    if (req.method === 'OPTIONS') return res.status(204).end();
+
+    const sessao = exigirSessao(req, res);
+    if (!sessao) return undefined;
+
     if (req.method === 'GET' && acao === 'carteira') return await lerCarteira(res, sessao);
     if (req.method === 'GET' && acao === 'metas') return await lerMetas(res, sessao);
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
+
+    if (!['carteira', 'metas', 'set-field'].includes(acao)) {
+      return erro(res, 400, 'acao_invalida', 'Ação inválida.');
+    }
+    return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido para esta ação.');
   } catch (e) {
     return tratarErro(res, e, acao);
   }
-
-  if (!['carteira', 'metas', 'set-field'].includes(acao)) {
-    return erro(res, 400, 'acao_invalida', 'Ação inválida.');
-  }
-  return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido para esta ação.');
 }
 
 // ── Leitura ───────────────────────────────────────────────────────────────

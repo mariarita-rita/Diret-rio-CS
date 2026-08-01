@@ -260,6 +260,23 @@ esquema não se apoia em cabeçalho assim. Há ainda uma segunda tranca redundan
 com `VERCEL_ENV` em `production` ou `preview`, `http://` é recusado de qualquer
 forma.
 
+### Testes automatizados dos caminhos de falha
+
+```bash
+node scripts/teste-http.mjs
+```
+
+Sem dependências, só Node. Garante a regra de que **nada derruba a função**: corpo
+malformado, `Content-Type` ausente ou diferente de `application/json`, corpo vazio,
+corpo acima do limite, JSON válido mas não-objeto e `SESSION_SECRET` ausente ou
+curto — todos viram 400 ou 500 tratado, nos três endpoints. Inclui uma rajada de 60
+corpos malformados.
+
+O harness monta `req.body` como **getter que lança**, reproduzindo o runtime da
+Vercel. Isso é essencial: entregar `body` já parseado como propriedade comum não
+exercita a camada onde o parse acontece, e foi o ponto cego que deixou passar um
+`ApiError: Invalid JSON` capaz de derrubar a função inteira.
+
 ### O que validar manualmente
 
 Com o `vercel dev` rodando em `http://localhost:3000`:

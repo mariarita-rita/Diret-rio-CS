@@ -62,23 +62,34 @@ function registrarFalha(ip, agora) {
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
-  if (!aplicarCors(req, res)) {
-    return erro(res, 403, 'origem_nao_permitida', 'Origem não permitida.');
-  }
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  // O try cobre o handler INTEIRO. O ramo GET nao tinha protecao nenhuma: com
+  // SESSION_SECRET ausente, exigirSessao lancava e derrubava a funcao.
+  try {
+    if (!aplicarCors(req, res)) {
+      return erro(res, 403, 'origem_nao_permitida', 'Origem não permitida.');
+    }
+    if (req.method === 'OPTIONS') return res.status(204).end();
 
-  const acao = String(req.query?.action || '');
+    const acao = String(req.query?.action || '');
 
-  if (req.method === 'GET') return sessaoAtual(req, res);
-  if (req.method !== 'POST') {
-    return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido.');
-  }
-  if (acao === 'logout') {
-    res.setHeader('Set-Cookie', cookieLimpo());
-    return res.status(200).json({ ok: true });
-  }
+    if (req.method === 'GET') return sessaoAtual(req, res);
+    if (req.method !== 'POST') {
+      return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido.');
+    }
+    if (acao === 'logout') {
+      res.setHeader('Set-Cookie', cookieLimpo());
+      return res.status(200).json({ ok: true });
+    }
 
-  return autenticar(req, res);
+    return await autenticar(req, res);
+  } catch (e) {
+    if (e instanceof ErroConfig) {
+      console.error('[login] configuracao:', e.message);
+      return erro(res, 500, 'nao_configurado', 'Autenticação não configurada no servidor.');
+    }
+    console.error(`[login] falha inesperada: ${e?.name}: ${e?.message}`);
+    return erro(res, 500, 'erro_interno', 'Erro interno na autenticação.');
+  }
 }
 
 function sessaoAtual(req, res) {

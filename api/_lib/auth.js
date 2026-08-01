@@ -113,8 +113,22 @@ export function cookieLimpo() {
  * nenhum outro 401 desta API carrega esse código.
  */
 export function exigirSessao(req, res) {
-  const token = lerCookies(req)[COOKIE_NOME];
-  const sessao = token ? verificarSessao(token) : null;
+  let sessao = null;
+  try {
+    const token = lerCookies(req)[COOKIE_NOME];
+    sessao = token ? verificarSessao(token) : null;
+  } catch (e) {
+    // SESSION_SECRET ausente ou curto faz verificarSessao lançar ErroConfig.
+    // Antes isso subia sem tratamento pelos três endpoints — exigirSessao é
+    // chamada fora do try em clickup.js e moskit.js, e no ramo GET de login.js —
+    // e derrubava a função. Falha de configuração é 500 tratado, não queda.
+    if (e instanceof ErroConfig) {
+      console.error('[auth] configuracao:', e.message);
+      erro(res, 500, 'nao_configurado', 'Sessão não configurada no servidor.');
+      return null;
+    }
+    throw e;
+  }
   if (!sessao) {
     res.setHeader('Set-Cookie', cookieLimpo());
     erro(res, 401, 'sessao_invalida', 'Sessão ausente ou expirada. Faça login novamente.');

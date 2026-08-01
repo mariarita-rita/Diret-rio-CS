@@ -117,32 +117,94 @@ export class ErroCorpo extends Error {
 }
 
 const LIMITE_CORPO = 100 * 1024;
+const RE_JSON = /^application\/json\b/i;
+
+/**
+ * Lê `req.body` UMA vez, protegido.
+ *
+ * No runtime da Vercel `req.body` é um *getter*: faz o parse no momento do acesso
+ * e LANÇA (`ApiError: Invalid JSON`) quando o corpo não é JSON válido. Acessar
+ * isso fora de try derrubava a função inteira — qualquer POST com corpo
+ * malformado, sem sessão e sem conhecimento nenhum do sistema, tirava o endpoint
+ * do ar. A mensagem do runtime morre aqui e nunca chega à resposta.
+ *
+ * Ler uma única vez também evita repetir o parse — e o throw — a cada acesso.
+ */
+function lerBodyProtegido(req) {
+  try {
+    return { ok: true, valor: req.body };
+  } catch {
+    return { ok: false, valor: undefined };
+  }
+}
+
+/** Faz o parse e exige um objeto JSON. Qualquer falha vira ErroCorpo. */
+function comoObjetoJson(texto) {
+  let v;
+  try {
+    v = JSON.parse(texto);
+  } catch {
+    throw new ErroCorpo();
+  }
+  // JSON válido mas inutilizável como corpo: "null", "3", "\"x\"", "[]".
+  if (!v || typeof v !== 'object' || Array.isArray(v)) {
+    throw new ErroCorpo('Corpo da requisição deve ser um objeto JSON.');
+  }
+  return v;
+}
 
 /**
  * Lê o corpo JSON da requisição.
- * A Vercel normalmente já entrega req.body parseado; os outros ramos existem
- * para `vercel dev` e para runtimes que não fazem o parse.
+ *
+ * Contrato: **nada aqui derruba a função**. Todo caminho de falha — parse
+ * inválido, Content-Type ausente ou errado, corpo vazio, corpo acima do limite,
+ * erro de leitura do stream — sai como ErroCorpo, que os endpoints traduzem em
+ * 400 `corpo_invalido`.
  */
 export async function lerCorpo(req) {
-  if (Buffer.isBuffer(req.body)) {
-    if (!req.body.length) return {};
-    try { return JSON.parse(req.body.toString('utf8')); } catch { throw new ErroCorpo(); }
+  const declarado = Number(req.headers['content-length']);
+  if (Number.isFinite(declarado) && declarado > LIMITE_CORPO) {
+    throw new ErroCorpo('Corpo da requisição muito grande.');
   }
-  if (req.body && typeof req.body === 'object') return req.body;
-  if (typeof req.body === 'string') {
-    if (!req.body) return {};
-    try { return JSON.parse(req.body); } catch { throw new ErroCorpo(); }
+  if (!RE_JSON.test(req.headers['content-type'] || '')) {
+    throw new ErroCorpo('Corpo da requisição deve ser application/json.');
   }
 
+  const lido = lerBodyProtegido(req);
+  if (!lido.ok) throw new ErroCorpo();
+  const body = lido.valor;
+
+  // Buffer antes de objeto: Buffer também é objeto.
+  if (Buffer.isBuffer(body)) {
+    if (!body.length) throw new ErroCorpo('Corpo da requisição vazio.');
+    if (body.length > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
+    return comoObjetoJson(body.toString('utf8'));
+  }
+  if (typeof body === 'string') {
+    if (!body.trim()) throw new ErroCorpo('Corpo da requisição vazio.');
+    if (body.length > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
+    return comoObjetoJson(body);
+  }
+  if (body && typeof body === 'object') {
+    if (Array.isArray(body)) throw new ErroCorpo('Corpo da requisição deve ser um objeto JSON.');
+    return body;
+  }
+
+  // Runtime que não faz o parse: lê o stream com teto de tamanho.
   const pedacos = [];
   let total = 0;
-  for await (const pedaco of req) {
-    total += pedaco.length;
-    if (total > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
-    pedacos.push(pedaco);
+  try {
+    for await (const pedaco of req) {
+      total += pedaco.length;
+      if (total > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
+      pedacos.push(pedaco);
+    }
+  } catch (e) {
+    if (e instanceof ErroCorpo) throw e;
+    throw new ErroCorpo(); // falha de leitura do stream também não derruba
   }
-  if (!total) return {};
-  try { return JSON.parse(Buffer.concat(pedacos).toString('utf8')); } catch { throw new ErroCorpo(); }
+  if (!total) throw new ErroCorpo('Corpo da requisição vazio.');
+  return comoObjetoJson(Buffer.concat(pedacos).toString('utf8'));
 }
 
 // ── Validadores de entrada ────────────────────────────────────────────────

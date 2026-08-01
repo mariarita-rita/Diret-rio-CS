@@ -98,7 +98,19 @@ const AVISO_SEM_RESPONSAVEL =
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+  // req.query, como req.body, e getter lazy no runtime da Vercel: fica dentro do try.
+  let acao = '';
 
+  // O try externo cobre o handler INTEIRO, inclusive CORS e exigirSessao.
+  try {
+    acao = String(req.query?.action || '');
+    return await despachar(req, res, acao);
+  } catch (e) {
+    return tratarErro(res, e, acao);
+  }
+}
+
+async function despachar(req, res, acao) {
   if (!aplicarCors(req, res)) {
     return erro(res, 403, 'origem_nao_permitida', 'Origem não permitida.');
   }
@@ -107,7 +119,6 @@ export default async function handler(req, res) {
   const sessao = exigirSessao(req, res);
   if (!sessao) return undefined;
 
-  const acao = String(req.query?.action || '');
   if (acao !== 'deal' && acao !== 'project') {
     return erro(res, 400, 'acao_invalida', 'Ação inválida.');
   }
@@ -126,26 +137,23 @@ export default async function handler(req, res) {
     throw e;
   }
 
-  try {
-    // O cliente e sempre resolvido pelo taskId no ClickUp. E dali que saem
-    // ID Nucleo, CNPJ, razao social, mensalidade e responsavel.
-    if (!taskIdValido(corpo.taskId)) {
-      return erro(res, 400, 'task_invalida', 'taskId inválido.');
-    }
-    const cliente = await localizarCliente(corpo.taskId);
-    if (!cliente) {
-      return erro(res, 403, 'cliente_fora_do_escopo', 'Cliente não encontrado na carteira.');
-    }
-    if (sessao.nivel === 'csm' && !pertenceAoCsm(cliente.gerente, sessao.csm)) {
-      return erro(res, 403, 'fora_da_carteira', 'Este cliente não está na sua carteira.');
-    }
-
-    return acao === 'deal'
-      ? await criarNegocio(res, corpo, cliente)
-      : await criarProjeto(res, corpo, cliente);
-  } catch (e) {
-    return tratarErro(res, e, acao);
+  // O cliente e sempre resolvido pelo taskId no ClickUp. E dali que saem
+  // ID Nucleo, CNPJ, razao social, mensalidade e responsavel.
+  if (!taskIdValido(corpo.taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
   }
+  const cliente = await localizarCliente(corpo.taskId);
+  if (!cliente) {
+    return erro(res, 403, 'cliente_fora_do_escopo', 'Cliente não encontrado na carteira.');
+  }
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(cliente.gerente, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este cliente não está na sua carteira.');
+  }
+
+  // Erro daqui para baixo sobe para o try do handler, que chama tratarErro.
+  return acao === 'deal'
+    ? await criarNegocio(res, corpo, cliente)
+    : await criarProjeto(res, corpo, cliente);
 }
 
 // ── action=deal ───────────────────────────────────────────────────────────
