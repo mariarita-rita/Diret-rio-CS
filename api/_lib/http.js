@@ -8,9 +8,11 @@ export function origensPermitidas(req) {
   const set = new Set();
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   if (host) {
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    set.add(`${proto}://${host}`);
+    // Os dois esquemas para o MESMO host. Casar Origin com o host da propria
+    // requisicao ja e a definicao de mesma origem; aceitar http tambem e o que
+    // faz o `vercel dev` (http://localhost:3000) funcionar sem afrouxar nada.
     set.add(`https://${host}`);
+    set.add(`http://${host}`);
   }
   for (const extra of String(process.env.ALLOWED_ORIGINS || '').split(',')) {
     const o = extra.trim();

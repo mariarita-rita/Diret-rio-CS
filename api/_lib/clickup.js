@@ -226,14 +226,39 @@ async function comCache(slot, produzir) {
   }
 }
 
+/**
+ * Paginacao completa da lista, em lotes concorrentes.
+ * No navegador esse laco era sequencial e sem prazo; aqui ele roda dentro de uma
+ * funcao serverless, que tem limite de tempo. Buscar LOTE paginas por vez corta o
+ * tempo de parede sem chegar perto do limite de requisicoes do ClickUp.
+ * Promise.all preserva a ordem, então a ordem das tasks nao muda.
+ */
 async function buscarPaginado(listaId, extra) {
+  const LOTE = 4;
   const out = [];
-  for (let page = 0; page < MAX_PAGINAS; page++) {
-    const r = await cu(`/list/${listaId}/task?page=${page}&limit=100&${extra}`);
-    const tasks = r.tasks || [];
-    if (tasks.length === 0) break;
-    out.push(...tasks);
-    if (r.last_page) break;
+  let fim = false;
+
+  for (let page = 0; page < MAX_PAGINAS && !fim; page += LOTE) {
+    const paginas = [];
+    for (let i = 0; i < LOTE && page + i < MAX_PAGINAS; i++) paginas.push(page + i);
+
+    const respostas = await Promise.all(
+      paginas.map((p) => cu(`/list/${listaId}/task?page=${p}&limit=100&${extra}`))
+    );
+
+    for (const r of respostas) {
+      const tasks = r.tasks || [];
+      if (tasks.length === 0) {
+        fim = true;
+        break;
+      }
+      out.push(...tasks);
+      // As paginas seguintes do lote, se houver, vem depois do fim da lista.
+      if (r.last_page) {
+        fim = true;
+        break;
+      }
+    }
   }
   return out;
 }
