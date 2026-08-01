@@ -107,15 +107,27 @@ export function cookieLimpo() {
 
 // ── Guarda usada pelos endpoints ──────────────────────────────────────────
 
+const MSG_SESSAO = 'Sessão ausente ou expirada. Faça login novamente.';
+
 /**
  * Exige cookie de sessão válido. Em caso de falha já responde 401 e devolve null.
  * O código "sessao_invalida" é o sinal que o front usa para reabrir o login —
  * nenhum outro 401 desta API carrega esse código.
+ *
+ * `detalharExpiracao` acrescenta `expirada: true` ao corpo quando havia cookie e
+ * ele não validou — para o front distinguir "sua sessão caiu" de "você nunca
+ * entrou", que hoje são o mesmo 401 e por isso o reload não mostra mensagem.
+ *
+ * SÓ o `GET /api/login` pede isso. Nos proxies o 401 permanece genérico, byte a
+ * byte: diferenciar lá criaria oráculo de "existe sessão aqui". No /api/login não
+ * vaza nada — quem mandou cookie inválido já sabe que tinha um.
  */
-export function exigirSessao(req, res) {
+export function exigirSessao(req, res, { detalharExpiracao = false } = {}) {
   let sessao = null;
+  let tinhaToken = false;
   try {
     const token = lerCookies(req)[COOKIE_NOME];
+    tinhaToken = Boolean(token);
     sessao = token ? verificarSessao(token) : null;
   } catch (e) {
     // SESSION_SECRET ausente ou curto faz verificarSessao lançar ErroConfig.
@@ -131,7 +143,12 @@ export function exigirSessao(req, res) {
   }
   if (!sessao) {
     res.setHeader('Set-Cookie', cookieLimpo());
-    erro(res, 401, 'sessao_invalida', 'Sessão ausente ou expirada. Faça login novamente.');
+    if (detalharExpiracao && tinhaToken) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(401).json({ error: MSG_SESSAO, code: 'sessao_invalida', expirada: true });
+      return null;
+    }
+    erro(res, 401, 'sessao_invalida', MSG_SESSAO);
     return null;
   }
   return sessao;
@@ -179,43 +196,96 @@ export function pertenceAoCsm(gerente, csm) {
 // Mantenha em sincronia com scripts/gerar-hash.js.
 
 const KEYLEN = 64;
+const SALT_BYTES = 16;
+
+/**
+ * Parâmetros ACEITOS, não uma faixa do algoritmo.
+ *
+ * A versão anterior aceitava N até 1048576 e r até 32, e calculava
+ * `maxmem = 256*N*r`. No extremo permitido isso pedia 8,2 GB ao crypto.scrypt —
+ * e falha de alocação em código nativo aborta o processo, que `try/catch` não
+ * captura. Ou seja: uma variável de ambiente com parâmetros altos derrubava a
+ * função em vez de virar 401.
+ *
+ * A lista abaixo tem exatamente o que scripts/gerar-hash.js emite.
+ * AO AUMENTAR O CUSTO: adicione a tupla nova aqui e MANTENHA a antiga até que
+ * todos os hashes tenham sido regerados — remover antes tranca todo mundo fora.
+ */
+const PARAMS_ACEITOS = [{ N: 16384, r: 8, p: 1 }];
+const MAXMEM_TETO = 64 * 1024 * 1024;
+
+function paramsAceitos(N, r, p) {
+  return PARAMS_ACEITOS.some((x) => x.N === N && x.r === r && x.p === p);
+}
 
 function scryptAsync(senha, salt, N, r, p) {
   return new Promise((resolve, reject) => {
-    // maxmem precisa acompanhar N*r*128 com folga.
-    const maxmem = 256 * N * r + 1024 * 1024;
+    // maxmem acompanha N*r*128 com folga, e nunca passa do teto: todas as
+    // tuplas de PARAMS_ACEITOS ficam muito abaixo dele.
+    const maxmem = Math.min(256 * N * r + 1024 * 1024, MAXMEM_TETO);
     crypto.scrypt(senha, salt, KEYLEN, { N, r, p, maxmem }, (err, dk) =>
       err ? reject(err) : resolve(dk)
     );
   });
 }
 
-/** Confere a senha contra um hash no formato acima. Nunca lança por hash malformado. */
+/**
+ * Decodifica base64 exigindo tamanho exato e ida-e-volta idêntica.
+ *
+ * O round-trip é o que pega truncamento: `Buffer.from` descarta lixo no fim sem
+ * reclamar, então um campo cortado decodifica "com sucesso" para menos bytes.
+ * Era assim que um hash corrompido virava "senha incorreta" silencioso.
+ */
+function base64Exato(texto, bytes) {
+  const buf = Buffer.from(texto, 'base64');
+  if (buf.length !== bytes) return null;
+  if (buf.toString('base64') !== texto) return null;
+  return buf;
+}
+
+/**
+ * Confere a senha contra um hash `scrypt$N$r$p$salt$hash`.
+ *
+ * Nunca lança. Distingue os dois desfechos que antes eram o mesmo `false`:
+ *   { ok: true }                        senha correta
+ *   { ok: false, motivo: 'senha_errada' }   senha errada — rotina, sem log
+ *   { ok: false, motivo: <outro> }          CONFIGURAÇÃO inválida — quem chama loga
+ *
+ * A distinção existe porque hash malformado produzia exatamente a mesma resposta
+ * de senha errada, sem nenhum registro. Seis variáveis com valor errado geraram
+ * "senha incorreta" para todas as senhas e nada no log.
+ */
 export async function conferirSenha(senha, armazenado) {
-  if (typeof armazenado !== 'string') return false;
+  if (typeof armazenado !== 'string') return { ok: false, motivo: 'nao_e_texto' };
+
   const partes = armazenado.trim().split('$');
-  if (partes.length !== 6 || partes[0] !== 'scrypt') return false;
+  if (partes.length !== 6) {
+    return { ok: false, motivo: `formato (${partes.length} campos, esperado 6)` };
+  }
+  if (partes[0] !== 'scrypt') return { ok: false, motivo: 'prefixo_nao_scrypt' };
 
   const N = Number(partes[1]);
   const r = Number(partes[2]);
   const p = Number(partes[3]);
-  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return false;
-  if (N < 1024 || N > 1048576 || r < 1 || r > 32 || p < 1 || p > 16) return false;
-
-  let salt;
-  let esperado;
-  try {
-    salt = Buffer.from(partes[4], 'base64');
-    esperado = Buffer.from(partes[5], 'base64');
-  } catch {
-    return false;
+  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) {
+    return { ok: false, motivo: 'parametros_nao_inteiros' };
   }
-  if (!salt.length || esperado.length !== KEYLEN) return false;
-
-  try {
-    const calculado = await scryptAsync(senha, salt, N, r, p);
-    return crypto.timingSafeEqual(calculado, esperado);
-  } catch {
-    return false;
+  if (!paramsAceitos(N, r, p)) {
+    return { ok: false, motivo: `parametros_nao_aceitos (N=${N} r=${r} p=${p})` };
   }
+
+  const salt = base64Exato(partes[4], SALT_BYTES);
+  if (!salt) return { ok: false, motivo: `salt_invalido (esperado ${SALT_BYTES}B em base64)` };
+
+  const esperado = base64Exato(partes[5], KEYLEN);
+  if (!esperado) return { ok: false, motivo: `hash_invalido (esperado ${KEYLEN}B em base64)` };
+
+  let calculado;
+  try {
+    calculado = await scryptAsync(senha, salt, N, r, p);
+  } catch (e) {
+    return { ok: false, motivo: `falha_no_scrypt (${e?.code || e?.name})` };
+  }
+  if (crypto.timingSafeEqual(calculado, esperado)) return { ok: true };
+  return { ok: false, motivo: 'senha_errada' };
 }

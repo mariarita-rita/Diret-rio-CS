@@ -92,8 +92,21 @@ export default async function handler(req, res) {
   }
 }
 
+/** Pares de variáveis que carregam hash idêntico. */
+function hashesDuplicados(configurados) {
+  const vistos = new Map();
+  const pares = [];
+  for (const { perfil, hash } of configurados) {
+    const anterior = vistos.get(hash);
+    if (anterior) pares.push([anterior, perfil.env]);
+    else vistos.set(hash, perfil.env);
+  }
+  return pares;
+}
+
 function sessaoAtual(req, res) {
-  const sessao = exigirSessao(req, res);
+  // Único lugar que pede o detalhe de expiração — ver exigirSessao.
+  const sessao = exigirSessao(req, res, { detalharExpiracao: true });
   if (!sessao) return undefined;
   return res.status(200).json({
     autenticado: true,
@@ -133,28 +146,49 @@ async function autenticar(req, res) {
     return erro(res, 401, 'senha_incorreta', 'Senha incorreta.');
   }
 
+  const configurados = PERFIS.map((p) => ({ perfil: p, hash: process.env[p.env] })).filter(
+    (x) => Boolean(x.hash)
+  );
+
+  if (configurados.length === 0) {
+    console.error('[login] nenhuma variável AUTH_* configurada no ambiente.');
+    return erro(res, 500, 'nao_configurado', 'Autenticação não configurada no servidor.');
+  }
+
+  // Hashes idênticos entre perfis: o salt é aleatório, então dois perfis com a
+  // MESMA senha produzem hashes diferentes. Valor repetido significa o mesmo
+  // conteúdo colado em duas variáveis — foi o que aconteceu quando as seis
+  // AUTH_* receberam o valor do SESSION_SECRET. Como o laço abaixo para no
+  // primeiro que casa, isso daria acesso ao perfil errado. Recusa tudo.
+  const duplicados = hashesDuplicados(configurados);
+  if (duplicados.length) {
+    for (const [a, b] of duplicados) {
+      console.error(`[login] configuracao invalida: ${a} e ${b} tem o MESMO valor de hash.`);
+    }
+    return erro(res, 500, 'nao_configurado', 'Autenticação não configurada no servidor.');
+  }
+
   // Não há usuário: a própria senha identifica o perfil, então testamos todos
   // os hashes configurados.
   let perfil = null;
-  let algumConfigurado = false;
   try {
-    for (const p of PERFIS) {
-      const hash = process.env[p.env];
-      if (!hash) continue;
-      algumConfigurado = true;
-      if (await conferirSenha(senha, hash)) {
+    for (const { perfil: p, hash } of configurados) {
+      const r = await conferirSenha(senha, hash);
+      if (r.ok) {
         perfil = p;
         break;
+      }
+      // Senha errada é rotina e não gera log. Qualquer outro motivo é
+      // configuração inválida, e aí o log NOMEIA a variável — sem a senha e sem
+      // o hash. Antes os dois casos eram o mesmo `false` silencioso, e um valor
+      // errado no ambiente aparecia como "senha incorreta" sem nada no log.
+      if (r.motivo !== 'senha_errada') {
+        console.error(`[login] ${p.env}: valor invalido — ${r.motivo}`);
       }
     }
   } catch (e) {
     console.error('[login] falha ao conferir senha:', e.name);
     return erro(res, 500, 'erro_interno', 'Erro interno na autenticação.');
-  }
-
-  if (!algumConfigurado) {
-    console.error('[login] nenhuma variável AUTH_* configurada no ambiente.');
-    return erro(res, 500, 'nao_configurado', 'Autenticação não configurada no servidor.');
   }
 
   if (!perfil) {

@@ -524,6 +524,16 @@ function encerrarSessao(msg){
 async function restaurarSessao(){
   try{
     const r=await fetch('/api/login',{credentials:'same-origin'});
+    if(r.status===401){
+      // Havia cookie e ele não vale mais (expirou, ou o SESSION_SECRET foi
+      // rotacionado): mesma mensagem do caso em que a sessão cai com a página
+      // aberta. Antes o 401 era engolido aqui e a pessoa recebia a tela de login
+      // sem explicação nenhuma — o que acontece a cada rotação do segredo.
+      let d={};
+      try{d=await r.json();}catch(_){}
+      if(d.expirada)sessaoExpirada();
+      return;   // sem cookie: tela de login limpa, que é o certo para quem nunca entrou
+    }
     if(!r.ok)return;
     const s=await r.json();
     if(s&&s.autenticado)aplicarSessao(s);

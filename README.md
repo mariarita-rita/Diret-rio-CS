@@ -132,6 +132,23 @@ Todos exigem cookie de sessão válido e aceitam apenas a própria origem
 | `POST` | `?action=logout` | limpa o cookie |
 | `GET`  | —     | devolve a sessão atual, ou 401 |
 
+O 401 do `GET` — **e só o dele** — acrescenta `expirada: true` quando havia cookie
+e ele não validou. É o que permite ao dashboard mostrar "Sua sessão expirou" também
+depois de um F5, em vez de uma tela de login sem explicação. Nos proxies o 401
+permanece genérico, byte a byte igual com e sem cookie: diferenciar lá criaria
+oráculo de "existe sessão aqui". No `/api/login` não vaza nada — quem mandou cookie
+inválido já sabe que tinha um.
+
+**Configuração das senhas, recusada quando inválida:** o valor de cada `AUTH_*` é
+validado em estrutura (6 campos, prefixo `scrypt`), em parâmetros (só os que o
+`gerar-hash.js` emite — ver `PARAMS_ACEITOS` em `api/_lib/auth.js`) e em tamanho
+**decodificado** de salt e hash, com round-trip de base64 para pegar truncamento.
+Valor inválido gera `console.error` **nomeando a variável** e o motivo — nunca a
+senha nem o hash — enquanto a resposta ao cliente segue 401 genérico. Duas `AUTH_*`
+com hash **idêntico** fazem `/api/login` responder 500: salt é aleatório, então
+valor repetido significa o mesmo conteúdo colado duas vezes, e como o primeiro
+match ganha isso daria acesso ao perfil errado.
+
 Cookie: `httpOnly`, `Secure`, `SameSite=Strict`, validade de 12h, assinado com
 HMAC-SHA256. O payload carrega apenas `{ nivel, csm, nome, iat }`.
 
@@ -409,5 +426,21 @@ Depois de publicar, repita em produção e confira que a leitura da carteira vol
 
 **11. Expiração da sessão**
 
-Para não esperar 12h: troque o `SESSION_SECRET` na Vercel e recarregue. A próxima
-chamada volta 401 e a tela de login reabre com "Sua sessão expirou".
+Para não esperar 12h: troque o `SESSION_SECRET` e reinicie o `vercel dev` (o
+`.env.local` só é lido no boot). Nada a reverter — o segredo novo é tão válido
+quanto o antigo.
+
+Verifique os **dois** caminhos, que são diferentes:
+
+- Com a página aberta, sem recarregar: `try { await api('/api/clickup?action=metas'); } catch(e) {}`
+  no console → overlay com "Sua sessão expirou. Entre novamente."
+- Depois **F5** → a mesma mensagem. Isso depende do `expirada: true` no
+  `GET /api/login`; sem ele, `restaurarSessao()` engolia o 401 e a pessoa recebia a
+  tela de login em branco, sem saber por que foi deslogada. Acontece a cada rotação
+  do segredo.
+
+Entrar de novo com qualquer perfil deve funcionar normalmente.
+
+O ramo do TTL de 12h em si é coberto por `scripts/teste-http.mjs` (caso 19), que
+forja `iat` antigo com um segredo de teste: 11h59 válido, 12h01 expirado, `iat` no
+futuro além da tolerância recusado, e token assinado com outro segredo recusado.

@@ -277,6 +277,141 @@ console.log('\n[12] sessao segue valida depois da rajada');
   checar('clickup metas -> 200', r.code, 200);
 }
 
+console.log('\n[13] conferirSenha distingue senha errada de configuracao invalida');
+{
+  const bom = hashScrypt('abc');
+  const p = bom.split('$');
+
+  const casos = [
+    ['senha correta', await auth.conferirSenha('abc', bom), { ok: true }],
+    ['senha errada', (await auth.conferirSenha('xyz', bom)).motivo, 'senha_errada'],
+    ['nao e texto', (await auth.conferirSenha('abc', 12345)).motivo, 'nao_e_texto'],
+    ['prefixo errado', (await auth.conferirSenha('abc', `bcrypt$${p.slice(1).join('$')}`)).motivo, 'prefixo_nao_scrypt'],
+  ];
+  for (const [nome, real, esperado] of casos) checar(nome, real, esperado);
+
+  // campos: 3 e 7 em vez de 6
+  checar('poucos campos', (await auth.conferirSenha('abc', 'scrypt$16384$8')).motivo, 'formato (3 campos, esperado 6)');
+  checar('campos demais', (await auth.conferirSenha('abc', `${bom}$extra`)).motivo, 'formato (7 campos, esperado 6)');
+
+  // o valor de 64 chars base64url que causou o incidente real
+  checar('valor sem $ (o incidente)', (await auth.conferirSenha('abc', 'A'.repeat(64))).motivo, 'formato (1 campos, esperado 6)');
+
+  // salt e hash truncados: estrutura intacta, 6 campos, prefixo ok
+  const saltCortado = `scrypt$16384$8$1$${p[4].slice(0, 8)}$${p[5]}`;
+  checar('salt truncado', (await auth.conferirSenha('abc', saltCortado)).motivo.startsWith('salt_invalido'), true);
+  const hashCortado = `scrypt$16384$8$1$${p[4]}$${p[5].slice(0, 40)}`;
+  checar('hash truncado', (await auth.conferirSenha('abc', hashCortado)).motivo.startsWith('hash_invalido'), true);
+  const saltVazio = `scrypt$16384$8$1$$${p[5]}`;
+  checar('salt apagado (expansao de $)', (await auth.conferirSenha('abc', saltVazio)).motivo.startsWith('salt_invalido'), true);
+
+  // round-trip: base64 nao canonico decodifica "com sucesso" mas nao volta igual
+  checar('base64 nao canonico no salt',
+    (await auth.conferirSenha('abc', `scrypt$16384$8$1$${p[4].replace(/=+$/, '')}$${p[5]}`)).motivo.startsWith('salt_invalido'), true);
+}
+
+console.log('\n[14] faixa de N/r estreitada ao que gerar-hash.js produz');
+{
+  const p = hashScrypt('abc').split('$');
+  const com = (N, r, pp) => `scrypt$${N}$${r}$${pp}$${p[4]}$${p[5]}`;
+  for (const [N, r, pp] of [[1024, 8, 1], [1048576, 32, 1], [32768, 8, 1], [16384, 16, 1], [16384, 8, 2]]) {
+    const m = (await auth.conferirSenha('abc', com(N, r, pp))).motivo;
+    checar(`N=${N} r=${r} p=${pp} recusado`, m.startsWith('parametros_nao_aceitos'), true);
+  }
+  checar('16384/8/1 aceito', (await auth.conferirSenha('abc', com(16384, 8, 1))).ok, true);
+}
+
+console.log('\n[15] hashes identicos entre perfis -> 500, com log nomeando as variaveis');
+{
+  const guardado = process.env.AUTH_CONSULTA;
+  process.env.AUTH_CONSULTA = process.env.AUTH_GESTAO; // mesmo valor nas duas
+  const capturados = [];
+  const original = console.error;
+  console.error = (...a) => capturados.push(a.join(' '));
+
+  const r = await chamar(login, { method: 'POST', headers: cabecalhos(), query: {}, body: { senha: SENHA_GESTAO } });
+
+  console.error = original;
+  checar('500 nao_configurado', [r.code, r.cod], [500, 'nao_configurado']);
+  checar('logou o par de variaveis', capturados.some((l) => l.includes('AUTH_CONSULTA') && l.includes('AUTH_GESTAO')), true);
+  checar('nao vaza hash no log', capturados.some((l) => l.includes(process.env.AUTH_GESTAO)), false);
+  process.env.AUTH_CONSULTA = guardado;
+}
+
+console.log('\n[16] configuracao invalida gera log nomeando a variavel');
+{
+  const guardado = process.env.AUTH_CONSULTA;
+  process.env.AUTH_CONSULTA = 'A'.repeat(64); // formato do incidente real
+  const capturados = [];
+  const original = console.error;
+  console.error = (...a) => capturados.push(a.join(' '));
+
+  const r = await chamar(login, { method: 'POST', headers: cabecalhos(), query: {}, body: { senha: 'qualquer-coisa-errada' } });
+
+  console.error = original;
+  checar('resposta ao cliente segue 401 genérico', [r.code, r.cod], [401, 'senha_incorreta']);
+  checar('log nomeia AUTH_CONSULTA', capturados.some((l) => l.includes('AUTH_CONSULTA') && l.includes('valor invalido')), true);
+  checar('log nao contem a senha', capturados.some((l) => l.includes('qualquer-coisa-errada')), false);
+  process.env.AUTH_CONSULTA = guardado;
+}
+
+console.log('\n[17] senha errada com tudo bem configurado NAO gera log');
+{
+  const capturados = [];
+  const original = console.error;
+  console.error = (...a) => capturados.push(a.join(' '));
+  const r = await chamar(login, { method: 'POST', headers: cabecalhos(), query: {}, body: { senha: 'errada' } });
+  console.error = original;
+  checar('401 senha_incorreta', [r.code, r.cod], [401, 'senha_incorreta']);
+  checar('zero logs', capturados.length, 0);
+}
+
+console.log('\n[18] expirada: true apenas no GET /api/login, e apenas com cookie presente');
+{
+  const invalido = `${auth.COOKIE_NOME}=lixo.assinaturaerrada`;
+
+  const r1 = res();
+  await login({ method: 'GET', headers: cabecalhos({ cookie: invalido }), query: {} }, r1);
+  checar('GET /api/login com cookie invalido: 401', r1.code, 401);
+  checar('  code inalterado', r1.corpo.code, 'sessao_invalida');
+  checar('  expirada: true', r1.corpo.expirada, true);
+
+  const r2 = res();
+  await login({ method: 'GET', headers: cabecalhos(), query: {} }, r2);
+  checar('GET /api/login SEM cookie: 401', r2.code, 401);
+  checar('  sem campo expirada', r2.corpo.expirada, undefined);
+
+  // Proxies nao diferenciam: nenhum oraculo de "existe sessao aqui"
+  const r3 = res();
+  await clickup({ method: 'GET', headers: cabecalhos({ cookie: invalido }), query: { action: 'carteira' } }, r3);
+  checar('clickup com cookie invalido: 401 sem expirada', [r3.code, r3.corpo.expirada], [401, undefined]);
+
+  const r4 = res();
+  await clickup({ method: 'GET', headers: cabecalhos(), query: { action: 'carteira' } }, r4);
+  checar('clickup sem cookie: corpo IDENTICO ao anterior', JSON.stringify(r4.corpo), JSON.stringify(r3.corpo));
+
+  const r5 = res();
+  await moskit({ method: 'POST', headers: cabecalhos({ cookie: invalido }), query: { action: 'deal' }, body: { taskId: 'abc123' } }, r5);
+  checar('moskit com cookie invalido: 401 sem expirada', [r5.code, r5.corpo.expirada], [401, undefined]);
+}
+
+console.log('\n[19] TTL de 12h e rotacao de segredo (sem esperar 12h)');
+{
+  const b64u = (b) => Buffer.from(b).toString('base64url');
+  const tokenCom = (iat, segredo = process.env.SESSION_SECRET) => {
+    const corpo = b64u(JSON.stringify({ nivel: 'gestao', csm: null, nome: 'G', iat }));
+    return `${corpo}.${b64u(crypto.createHmac('sha256', segredo).update(corpo).digest())}`;
+  };
+  const H = 3600000;
+  const agora = Date.now();
+  checar('recem emitido: valido', auth.verificarSessao(tokenCom(agora))?.nivel, 'gestao');
+  checar('11h59: valido', auth.verificarSessao(tokenCom(agora - 11.98 * H))?.nivel, 'gestao');
+  checar('12h01: expirado', auth.verificarSessao(tokenCom(agora - 12.02 * H)), null);
+  checar('iat +5min: recusado', auth.verificarSessao(tokenCom(agora + 5 * 60 * 1000)), null);
+  checar('outro segredo (rotacao): recusado', auth.verificarSessao(tokenCom(agora, 'Z'.repeat(48))), null);
+  checar('adulterado: recusado', auth.verificarSessao(tokenCom(agora).slice(0, -3) + 'aaa'), null);
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);
