@@ -77,17 +77,33 @@ async function lerCarteira(res, sessao) {
 async function lerMetas(res, sessao) {
   const { linhas } = await getMetas();
 
-  // MRR liquido da equipe: numero agregado, usado para o bonus de equipe.
-  // Nao permite identificar o resultado individual de ninguem.
-  const mrrEquipe = linhas.reduce((s, m) => s + (m.mrrAt - m.downsell), 0);
-
+  // mrrEquipe acompanha `visiveis`: consulta nao recebe valor financeiro nenhum,
+  // nem individual (lerCarteira zera o mrr) nem agregado. Agregado nao identifica
+  // o resultado de ninguem, mas continua sendo numero financeiro — e o README
+  // define consulta como perfil sem acesso a valor financeiro.
   let visiveis;
-  if (sessao.nivel === 'gestao') visiveis = linhas;
-  else if (sessao.nivel === 'csm') visiveis = linhas.filter((m) => pertenceAoCsm(m.gerente, sessao.csm));
-  else visiveis = [];
+  let mrrEquipe = 0;
+  if (sessao.nivel === 'gestao') {
+    visiveis = linhas;
+    mrrEquipe = somarMrrEquipe(linhas);
+  } else if (sessao.nivel === 'csm') {
+    visiveis = linhas.filter((m) => pertenceAoCsm(m.gerente, sessao.csm));
+    mrrEquipe = somarMrrEquipe(linhas);
+  } else {
+    visiveis = [];
+  }
 
   res.setHeader('Cache-Control', CACHE_LEITURA);
   return res.status(200).json({ tasks: visiveis, mrrEquipe });
+}
+
+/**
+ * MRR liquido da equipe, usado no bonus de equipe.
+ * Somado sobre TODAS as metas mesmo para o CSM — de proposito: o numero do bonus
+ * e da equipe inteira, e nao permite isolar o resultado de ninguem.
+ */
+function somarMrrEquipe(linhas) {
+  return linhas.reduce((s, m) => s + (m.mrrAt - m.downsell), 0);
 }
 
 // ── Escrita ───────────────────────────────────────────────────────────────

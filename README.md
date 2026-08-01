@@ -93,8 +93,18 @@ aumenta nem um pouco o acesso aos dados.
 | `csm`      | somente a própria            | somente a própria      | somente a própria | sim |
 | `gestao`   | completa                     | liberado               | liberado | sim |
 
+Para `consulta`, "não" em MRR vale para **todo** número financeiro: o `mrr` de cada
+linha sai zerado e o agregado `mrrEquipe` sai `0`.
+
 O filtro por CSM acontece antes da resposta sair do servidor: a carteira dos
 outros CSMs nunca chega ao navegador.
+
+O critério do filtro é **igualdade de nome completo**, normalizado (sem acentos,
+sem espaço repetido, sem diferença de caixa), entre o campo *Gerente* da task e o
+nome do perfil em `PERFIS` (`api/_lib/auth.js`). Não há casamento parcial: um
+*Gerente* preenchido como `Gian` ou `Gian Luca Silva` **não** casa com o perfil
+`Gian Luca`. Se um CSM entrar e a carteira aparecer vazia, o primeiro lugar para
+olhar é a grafia do campo *Gerente* no ClickUp.
 
 O perfil `csm` não tem mais a aba **Visão Geral**. Como o backend passou a
 devolver somente a carteira dele, a aba seria uma cópia idêntica da aba própria.
@@ -129,7 +139,7 @@ Sempre responde `Cache-Control: no-store`.
 | Método | `action`    | O que faz |
 | ------ | ----------- | --------- |
 | `GET`  | `carteira`  | lista `901327787926`, paginada inteira no servidor, `include_closed=true`, `include_custom_fields=true` |
-| `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais o campo agregado `mrrEquipe` |
+| `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais o campo agregado `mrrEquipe` (`0` para `consulta`) |
 | `POST` | `set-field` | `{ taskId, fieldId, value }` |
 
 Não existe path livre. Os dois IDs de lista são constantes no servidor.
@@ -218,6 +228,10 @@ vercel dev
 
 O cookie é emitido com `Secure`. Chrome e Firefox aceitam cookie `Secure` em
 `http://localhost`, então o login funciona no `vercel dev` sem alteração.
+
+A origem `http://<host>` só entra na lista de origens aceitas **fora de produção**
+(`VERCEL_ENV=development`, que é o do `vercel dev`). Em `production` e em `preview`
+só `https://` é aceito, e a ausência da variável também fecha para `https://`.
 
 ### O que validar manualmente
 

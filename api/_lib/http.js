@@ -3,16 +3,27 @@
 //
 // Arquivos dentro de /api com prefixo "_" não viram endpoints na Vercel.
 
+/**
+ * Produção = deploy real na Vercel (production ou preview, ambos servidos por
+ * HTTPS). `vercel dev` roda com VERCEL_ENV/NODE_ENV = development.
+ * Na dúvida — variável ausente — assume produção: falha fechada.
+ */
+function ehProducao() {
+  const vercel = process.env.VERCEL_ENV;
+  if (vercel) return vercel !== 'development';
+  return process.env.NODE_ENV !== 'development';
+}
+
 /** Origens aceitas: a própria origem do deploy + extras opcionais em ALLOWED_ORIGINS. */
 export function origensPermitidas(req) {
   const set = new Set();
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   if (host) {
-    // Os dois esquemas para o MESMO host. Casar Origin com o host da propria
-    // requisicao ja e a definicao de mesma origem; aceitar http tambem e o que
-    // faz o `vercel dev` (http://localhost:3000) funcionar sem afrouxar nada.
+    // Casar Origin com o host da própria requisição é a definição de mesma origem.
     set.add(`https://${host}`);
-    set.add(`http://${host}`);
+    // O esquema http existe só para o `vercel dev` (http://localhost:3000).
+    // Em deploy publicado, http:// não é origem aceita.
+    if (!ehProducao()) set.add(`http://${host}`);
   }
   for (const extra of String(process.env.ALLOWED_ORIGINS || '').split(',')) {
     const o = extra.trim();

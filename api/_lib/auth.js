@@ -129,15 +129,34 @@ export function podeEscrever(sessao) {
 }
 
 /**
- * Escopo de leitura/escrita por CSM.
- * Reproduz o critério que o front usava: o campo "Gerente" do ClickUp contém
- * o primeiro nome do CSM.
+ * Normaliza nome para comparação: sem acentos, sem espaço repetido, minúsculas.
+ * "  Gián  Lúca " e "gian luca" viram a mesma coisa.
+ */
+function normalizarNome(v) {
+  return String(v ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '') // marcas combinantes separadas pelo NFD
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Escopo de leitura/escrita por CSM: nome COMPLETO normalizado, igualdade exata.
+ *
+ * O critério antigo — o campo "Gerente" do ClickUp *contém* o primeiro nome do
+ * CSM — casava parcialmente. Bastaria entrar um segundo CSM cujo primeiro nome
+ * estivesse contido no de outro (ou um "Gerente" com nome composto) para a
+ * carteira de um vazar para o outro. Igualdade exata não tem essa falha.
+ *
+ * Em troca, exige que o valor do campo "Gerente" no ClickUp seja idêntico ao
+ * nome em PERFIS. Divergência não vaza dado: devolve carteira vazia.
  */
 export function pertenceAoCsm(gerente, csm) {
   if (!csm) return true;
-  const primeiro = String(csm).trim().split(' ')[0].toLowerCase();
-  if (!primeiro) return false;
-  return String(gerente || '').toLowerCase().includes(primeiro);
+  const alvo = normalizarNome(csm);
+  if (!alvo) return false;
+  return normalizarNome(gerente) === alvo;
 }
 
 // ── Senhas ────────────────────────────────────────────────────────────────
