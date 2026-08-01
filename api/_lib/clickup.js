@@ -86,11 +86,15 @@ export const CAMPOS_ESCRITA = {
 // ── Erros ─────────────────────────────────────────────────────────────────
 
 export class ErroUpstream extends Error {
-  /** Guarda apenas o status. O corpo da resposta do ClickUp nunca sai daqui. */
-  constructor(status) {
+  /**
+   * Guarda o status e, quando o upstream informa, os segundos até a cota liberar.
+   * O corpo da resposta nunca sai daqui.
+   */
+  constructor(status, esperaSegundos = null) {
     super(`ClickUp respondeu ${status}`);
     this.name = 'ErroUpstream';
     this.status = status;
+    this.esperaSegundos = esperaSegundos;
   }
 }
 
@@ -107,6 +111,52 @@ function chave() {
   return k;
 }
 
+// ── Cota do ClickUp ───────────────────────────────────────────────────────
+// O limite e por TOKEN e por MINUTO, e o token e um so, do servidor: a cota e
+// compartilhada por todas as pessoas usando o dashboard. O ClickUp informa o
+// estado em toda resposta, e antes esses cabecalhos eram descartados junto com o
+// resto — o que tornava o custo por operacao uma estimativa.
+const cota = { limite: null, restante: null, reset: null, anunciado: false };
+
+/** Estado de cota observado nesta instancia. Somente numeros, nada sensivel. */
+export function cotaClickUp() {
+  return { ...cota };
+}
+
+function registrarCota(r) {
+  const limite = Number(r.headers.get('x-ratelimit-limit'));
+  const restante = Number(r.headers.get('x-ratelimit-remaining'));
+  const reset = Number(r.headers.get('x-ratelimit-reset'));
+  if (Number.isFinite(limite)) cota.limite = limite;
+  if (Number.isFinite(restante)) cota.restante = restante;
+  if (Number.isFinite(reset)) cota.reset = reset;
+
+  // Uma linha por processo, so para registrar o limite do plano.
+  if (!cota.anunciado && cota.limite !== null) {
+    cota.anunciado = true;
+    console.log(`[clickup] cota do plano: ${cota.limite}/min (restante agora: ${cota.restante})`);
+  }
+
+  // Uma leitura de carteira inteira consome ~28 chamadas. Avisar antes de estourar.
+  if (cota.limite && cota.restante !== null && cota.restante <= Math.max(30, cota.limite * 0.2)) {
+    console.error(`[clickup] COTA BAIXA: restante=${cota.restante}/${cota.limite} reset=${cota.reset}`);
+  }
+}
+
+/** Segundos a esperar, preferindo Retry-After e caindo para X-RateLimit-Reset. */
+function esperaDe(r) {
+  const ra = Number(r.headers.get('retry-after'));
+  if (Number.isFinite(ra) && ra > 0) return Math.ceil(ra);
+  const reset = Number(r.headers.get('x-ratelimit-reset'));
+  if (Number.isFinite(reset) && reset > 0) {
+    // Alguns retornos vem em epoch de segundos, outros em segundos relativos.
+    const agora = Math.floor(Date.now() / 1000);
+    const delta = reset > agora ? reset - agora : reset;
+    if (delta > 0 && delta <= 3600) return Math.ceil(delta);
+  }
+  return null;
+}
+
 /** Chamada bruta ao ClickUp. O token nunca aparece em retorno, erro ou log. */
 async function cu(path, init = {}) {
   const r = await fetch(BASE + path, {
@@ -117,10 +167,20 @@ async function cu(path, init = {}) {
       ...(init.headers || {}),
     },
   });
+
+  registrarCota(r);
+
   if (!r.ok) {
     // Corpo lido e descartado para nao vazar detalhe do upstream ao navegador.
     await r.text().catch(() => '');
-    throw new ErroUpstream(r.status);
+    const espera = r.status === 429 ? esperaDe(r) : null;
+    if (r.status === 429) {
+      console.error(
+        `[clickup] 429 limite de requisicoes. espera=${espera !== null ? espera + 's' : 'nao informada'} ` +
+          `restante=${cota.restante}/${cota.limite}`
+      );
+    }
+    throw new ErroUpstream(r.status, espera);
   }
   return r.json();
 }
@@ -277,23 +337,45 @@ export async function getCarteira() {
   });
 }
 
+/** Dados do slot SE ja estiverem quentes. Nunca dispara busca. */
+function soSeQuente(slot) {
+  return slot.dados && Date.now() - slot.em < TTL_MS ? slot.dados : null;
+}
+
 /**
  * Localiza o cliente na lista Carteira e devolve a linha completa.
  * Usado pelo /api/moskit para derivar do ClickUp — e nao do corpo enviado pelo
  * navegador — os dados de identificacao do cliente e o responsavel.
- * Se a task nao estiver no cache (cliente criado agora), recarrega uma vez.
+ *
+ * CUSTO: aproveita a carteira se ela ja estiver quente; senao busca UMA task.
+ * A versao anterior chamava getCarteira() e, se nao achasse, invalidava e chamava
+ * de novo — 28 a 56 chamadas ao ClickUp para resolver um cliente, contra uma cota
+ * medida de 100/min compartilhada por todo o time.
  *
  * @returns {Promise<object|null>} a linha da carteira, ou null se nao existir
  */
 export async function localizarCliente(taskId) {
-  let carteira = await getCarteira();
-  let achado = carteira.porId.get(taskId);
-  if (!achado) {
-    cacheCarteira.em = 0;
-    carteira = await getCarteira();
-    achado = carteira.porId.get(taskId);
+  const carteira = soSeQuente(cacheCarteira);
+  if (carteira) {
+    const achado = carteira.porId.get(taskId);
+    if (achado) return achado.linha;
   }
-  return achado?.linha || null;
+
+  const task = await buscarTaskUnica(taskId);
+  if (!task) return null;
+  // Cliente vem SO da lista Carteira. Metas nao serve aqui.
+  if (String(task?.list?.id || '') !== LISTA_CARTEIRA) return null;
+  return mapTask(task);
+}
+
+/** Busca uma task por id. Devolve null quando o ClickUp diz que nao existe. */
+async function buscarTaskUnica(taskId) {
+  try {
+    return await cu(`/task/${taskId}?include_subtasks=false`);
+  } catch (e) {
+    if (e instanceof ErroUpstream && (e.status === 404 || e.status === 400)) return null;
+    throw e;
+  }
 }
 
 export async function getMetas() {
@@ -314,29 +396,37 @@ export async function getMetas() {
  * @returns {Promise<{listId:string, gerente:string|null}|null>} null = fora do escopo
  */
 export async function localizarTask(taskId) {
-  const carteira = await getCarteira();
-  const naCarteira = carteira.porId.get(taskId);
-  if (naCarteira) return naCarteira;
-
-  const metas = await getMetas();
-  const nasMetas = metas.porId.get(taskId);
-  if (nasMetas) return nasMetas;
-
   const agora = Date.now();
+
+  // 1. Indice de tasks ja resolvidas: ZERO chamadas.
   const guardado = cacheTasks.get(taskId);
   if (guardado && agora - guardado.em < TTL_TASK_MS) {
     return guardado.permitida ? { listId: guardado.listId, gerente: guardado.gerente } : null;
   }
 
-  let task;
-  try {
-    task = await cu(`/task/${taskId}?include_subtasks=false`);
-  } catch (e) {
-    if (e instanceof ErroUpstream && (e.status === 404 || e.status === 400)) {
-      cacheTasks.set(taskId, { em: agora, permitida: false });
-      return null;
-    }
-    throw e;
+  // 2. Caches de leitura, SO se ja estiverem quentes: ZERO chamadas.
+  //    Aqui NAO chamamos getCarteira()/getMetas() de proposito. Elas custam 28 e 1
+  //    chamadas quando frias, e uma escrita nao pode pagar isso: a ordem anterior
+  //    (carteira inteira primeiro) fazia cada set-field custar 29 chamadas de uma
+  //    cota medida em 100/min, e invalidarCarteira() garantia que a escrita
+  //    seguinte pagasse de novo.
+  const carteira = soSeQuente(cacheCarteira);
+  if (carteira) {
+    const naCarteira = carteira.porId.get(taskId);
+    if (naCarteira) return naCarteira;
+  }
+  const metas = soSeQuente(cacheMetas);
+  if (metas) {
+    const nasMetas = metas.porId.get(taskId);
+    if (nasMetas) return nasMetas;
+  }
+
+  // 3. A task sozinha: UMA chamada. Nao encontrar no cache quente nao decide nada
+  //    — a task pode ser nova, ou estar na outra lista.
+  const task = await buscarTaskUnica(taskId);
+  if (!task) {
+    cacheTasks.set(taskId, { em: agora, permitida: false });
+    return null;
   }
 
   const listId = String(task?.list?.id || '');

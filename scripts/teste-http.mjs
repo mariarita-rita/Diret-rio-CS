@@ -77,6 +77,24 @@ const login = await carregar('api/login.js');
 const clickup = await carregar('api/clickup.js');
 const moskit = await carregar('api/moskit.js');
 
+/**
+ * data: URL do _lib/clickup.js real, ÚNICA por variante.
+ * import() cacheia por URL: sem o sufixo, dois testes compartilhariam a mesma
+ * instância — e o cache de carteira de um contaminaria o outro.
+ */
+const libClickupUnica = (tag) => dataUrl(ler('api/_lib/clickup.js') + `\n// variante:${tag}\n`);
+
+/** Como carregar(), mas com o _lib/clickup.js REAL em vez do stub. */
+const carregarCom = (arquivo, libClickupUrl) =>
+  import(
+    dataUrl(
+      ler(arquivo)
+        .replace("'./_lib/http.js'", `'${httpUrl}'`)
+        .replace("'./_lib/auth.js'", `'${authUrl}'`)
+        .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
+    )
+  ).then((m) => m.default);
+
 // ── Harness ───────────────────────────────────────────────────────────────
 
 /** Reproduz o getter do runtime da Vercel: acessar .body LANÇA. */
@@ -410,6 +428,105 @@ console.log('\n[19] TTL de 12h e rotacao de segredo (sem esperar 12h)');
   checar('iat +5min: recusado', auth.verificarSessao(tokenCom(agora + 5 * 60 * 1000)), null);
   checar('outro segredo (rotacao): recusado', auth.verificarSessao(tokenCom(agora, 'Z'.repeat(48))), null);
   checar('adulterado: recusado', auth.verificarSessao(tokenCom(agora).slice(0, -3) + 'aaa'), null);
+}
+
+console.log('\n[20] custo em chamadas ao ClickUp por operacao (T2)');
+{
+  // Carrega o _lib/clickup.js REAL com o fetch interceptado, para CONTAR chamadas.
+  const chamadas = [];
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    chamadas.push(String(url));
+    const u = String(url);
+    // Uma task avulsa
+    if (/\/task\/[^/?]+\?/.test(u)) {
+      return respostaOk({
+        id: 'tsk1', name: 'Cliente X', list: { id: '901327787926' }, status: { status: 'ativo' },
+        custom_fields: [{ id: '3898a8f4-bb21-46d7-88ee-79d164033fdf', type: 'drop_down', value: 0,
+                          type_config: { options: [{ orderindex: 0, name: 'Gian Luca' }] } }],
+      });
+    }
+    // Paginacao de lista: 3 paginas cheias e o resto vazio
+    const m = u.match(/[?&]page=(\d+)/);
+    const page = m ? Number(m[1]) : 0;
+    const tasks = page < 3 ? Array.from({ length: 100 }, (_, i) => ({
+      id: `t${page}_${i}`, name: 'x', list: { id: '901327787926' }, status: { status: 'ativo' }, custom_fields: [],
+    })) : [];
+    return respostaOk({ tasks, last_page: page >= 3 });
+  };
+  function respostaOk(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '99'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo,
+      text: async () => JSON.stringify(corpo),
+    };
+  }
+  // As respostas usam Map; o codigo chama headers.get(), que Map tem.
+
+  const lib = await import(libClickupUnica('custo'));
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  chamadas.length = 0;
+  await lib.localizarTask('tsk1');
+  const custoEscritaFria = chamadas.length;
+  checar('localizarTask com cache frio: 1 chamada (era 29)', custoEscritaFria, 1);
+
+  chamadas.length = 0;
+  await lib.localizarTask('tsk1');
+  checar('  segunda vez, do indice: 0 chamadas', chamadas.length, 0);
+
+  chamadas.length = 0;
+  await lib.localizarCliente('tsk1');
+  checar('localizarCliente com cache frio: 1 chamada (era 28 a 56)', chamadas.length, 1);
+
+  chamadas.length = 0;
+  const c = await lib.getCarteira();
+  checar('getCarteira pagina de fato', c.linhas.length, 300);
+  checar('  e custa 1 lote de 4 por rodada', chamadas.length > 1, true);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[21] 429 vira mensagem acionavel com segundos (T3)');
+{
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false, status: 429,
+    headers: new Map([['retry-after', '37'], ['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '0']]),
+    json: async () => ({}),
+    text: async () => '',
+  });
+  const cu = await carregarCom('api/clickup.js', libClickupUnica('429-com-retry-after'));
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const r = res();
+  await cu({ method: 'GET', headers: cabecalhos({ cookie }), query: { action: 'carteira' } }, r);
+  checar('status 429 preservado', r.code, 429);
+  checar('code proprio', r.corpo.code, 'limite_clickup');
+  checar('esperaSegundos do Retry-After', r.corpo.esperaSegundos, 37);
+  checar('header Retry-After', r.headers['Retry-After'], '37');
+  checar('mensagem acionavel', /Limite de requisições do ClickUp atingido\. Aguarde 37 segundos/.test(r.corpo.error), true);
+  checar('nao diz "erro ao carregar"', /erro ao carregar/i.test(r.corpo.error), false);
+  checar('nao vaza detalhe do upstream', /clickup\.com|token|Authorization/i.test(r.corpo.error), false);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[22] 429 sem Retry-After cai para a janela padrao');
+{
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: false, status: 429,
+    headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '0']]),
+    json: async () => ({}), text: async () => '',
+  });
+  const cu = await carregarCom('api/clickup.js', libClickupUnica('429-sem-retry-after'));
+  const r = res();
+  await cu({ method: 'GET', headers: cabecalhos({ cookie }), query: { action: 'carteira' } }, r);
+  checar('esperaSegundos padrao', r.corpo.esperaSegundos, 60);
+  checar('mensagem com 60s', /Aguarde 60 segundos/.test(r.corpo.error), true);
+  globalThis.fetch = fetchOriginal;
 }
 
 console.log(`\n${total - falhas}/${total} passaram`);

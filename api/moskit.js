@@ -11,6 +11,7 @@
 import {
   aplicarCors,
   erro,
+  erroLimite,
   lerCorpo,
   opcaoPermitida,
   taskIdValido,
@@ -333,6 +334,10 @@ function tratarErro(res, e, acao) {
     return erro(res, 500, 'nao_configurado', 'Integração não configurada no servidor.');
   }
   if (e instanceof ErroUpstream) {
+    // Mesmo tratamento do clickup.js: 429 vira mensagem acionavel. Pode vir do
+    // ClickUp (localizarCliente) ou do proprio Moskit.
+    if (e.status === 429) return erroLimite(res, e.esperaSegundos);
+
     const status = e.status === 401 || e.status === 403 ? 502 : e.status;
     return erro(res, status, 'erro_moskit', `Falha na comunicação com o Moskit (${e.status}).`);
   }

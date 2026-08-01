@@ -102,6 +102,30 @@ export function erro(res, status, code, mensagem) {
   return res.status(status).json({ error: mensagem, code });
 }
 
+/** Espera padrão quando o upstream não informa: uma janela de cota inteira. */
+const ESPERA_PADRAO_S = 60;
+
+/**
+ * 429 de limite de requisições do upstream.
+ *
+ * Mensagem acionável e `esperaSegundos` no corpo, para o front bloquear o botão de
+ * recarregar durante o intervalo. O objetivo não é informar: é impedir que a
+ * pessoa recarregue, porque cada recarga custa ~28 chamadas de uma cota de 100/min
+ * compartilhada por todo o time — a reação ao erro é o que aprofunda o erro.
+ */
+export function erroLimite(res, esperaSegundos) {
+  const espera = Number.isFinite(esperaSegundos) && esperaSegundos > 0
+    ? Math.ceil(esperaSegundos)
+    : ESPERA_PADRAO_S;
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', String(espera));
+  return res.status(429).json({
+    error: `Limite de requisições do ClickUp atingido. Aguarde ${espera} segundos e tente novamente.`,
+    code: 'limite_clickup',
+    esperaSegundos: espera,
+  });
+}
+
 /** IP do cliente atrás do proxy da Vercel. */
 export function ipCliente(req) {
   const xff = req.headers['x-forwarded-for'];

@@ -11,7 +11,15 @@
 //   csm      -> apenas registros da propria carteira, leitura e escrita
 //   gestao   -> acesso completo
 
-import { aplicarCors, erro, lerCorpo, taskIdValido, uuidValido, ErroCorpo } from './_lib/http.js';
+import {
+  aplicarCors,
+  erro,
+  erroLimite,
+  lerCorpo,
+  taskIdValido,
+  uuidValido,
+  ErroCorpo,
+} from './_lib/http.js';
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
   CAMPOS_ESCRITA,
@@ -191,6 +199,11 @@ function tratarErro(res, e, acao) {
     return erro(res, 500, 'nao_configurado', 'Integração não configurada no servidor.');
   }
   if (e instanceof ErroUpstream) {
+    // 429 tem tratamento proprio: a cota e de 100/min por TOKEN, compartilhada por
+    // todo o time. Devolver "erro ao carregar" fazia a pessoa recarregar, e cada
+    // recarga custa ~28 chamadas — a propria reacao ao erro aprofundava o erro.
+    if (e.status === 429) return erroLimite(res, e.esperaSegundos);
+
     console.error(`[clickup] acao=${acao} upstream=${e.status}`);
     // 401/403 do ClickUp significam problema da credencial DO SERVIDOR, nao da
     // sessao do usuario. Repassar 401 faria o front derrubar a sessao sem motivo,

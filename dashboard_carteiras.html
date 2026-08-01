@@ -351,6 +351,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
   <div class="logo">Londrisoft <span>CSM</span></div>
   <div class="header-right">
     <span class="update-info" id="update-info">Carregando...</span>
+    <button class="logout-btn" id="btn-recarregar" onclick="loadAllData()" title="Recarregar dados">↻ Recarregar</button>
     <span class="user-badge" id="user-badge"></span>
     <button class="logout-btn" onclick="doLogout()">Sair</button>
   </div>
@@ -476,6 +477,8 @@ async function api(url,opts){
   if(!r.ok){
     const e=new Error(data.error||('Erro '+r.status));
     e.status=r.status;e.code=data.code;
+    // Segundos informados pelo servidor no 429 de cota (code limite_clickup).
+    e.espera=data.esperaSegundos;
     throw e;
   }
   return data;
@@ -564,11 +567,41 @@ async function loadAllData(){
   }catch(e){
     if(e.message==='sessao')return;
     lwrap.style.display='none';
-    document.getElementById('update-info').textContent='Erro ao carregar';
+    const limite = e.code==='limite_clickup';
+    document.getElementById('update-info').textContent = limite ? 'Limite de requisições atingido' : 'Erro ao carregar';
     const tb=document.getElementById('table-body');
     tb.innerHTML='<tr><td colspan="9" class="state-msg"></td></tr>';
-    tb.querySelector('td').textContent='Erro ao carregar dados: '+(e.message||'falha de conexão');
+    tb.querySelector('td').textContent = limite
+      ? e.message
+      : 'Erro ao carregar dados: '+(e.message||'falha de conexão');
+    // Cada recarga custa ~28 chamadas de uma cota de 100/min compartilhada pelo
+    // time. Deixar o botão clicável aqui transformaria o erro em tempestade.
+    if(limite) bloquearRecarga(e.espera);
   }
+}
+
+// ── Bloqueio de recarga durante limite de cota ────────────────────────────
+let recargaTimer=null;
+function bloquearRecarga(segundos){
+  const b=document.getElementById('btn-recarregar');
+  if(!b)return;
+  clearInterval(recargaTimer);
+  let resta=Math.max(1,Math.ceil(Number(segundos)||60));
+  b.disabled=true;
+  b.style.opacity='0.5';
+  b.style.cursor='not-allowed';
+  const tick=()=>{
+    if(resta<=0){
+      clearInterval(recargaTimer);
+      b.disabled=false;b.style.opacity='';b.style.cursor='pointer';
+      b.textContent='↻ Recarregar';
+      return;
+    }
+    b.textContent='⏳ '+resta+'s';
+    resta--;
+  };
+  tick();
+  recargaTimer=setInterval(tick,1000);
 }
 
 // ── TABS ──────────────────────────────────────────────────
