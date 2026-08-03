@@ -423,6 +423,11 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
         <option value="Inadimplência">Inadimplência</option>
         <option value="Não responde">Não responde</option>
       </select>
+      <!-- Opções montadas dos dados carregados, em preencherFiltroCidade(): é campo
+           de texto livre, então não há lista fixa a codificar aqui. -->
+      <select class="ctrl-select" id="filter-cidade" onchange="applyFilters()" title="Cidade">
+        <option value="">Todas as cidades</option>
+      </select>
       <select class="ctrl-select" id="filter-servico" onchange="applyFilters()" title="Outros Serviços">
         <option value="">Outros Serviços</option>
         <option value="Waipe">Waipe</option>
@@ -620,6 +625,9 @@ async function loadAllData(forcar){
     lbar.style.width='100%';
     setTimeout(()=>lwrap.style.display='none',400);
     filtered=[...allData];
+    // Antes de applyFilters: as opções saem dos dados que acabaram de chegar, e o
+    // filtro precisa achar o valor selecionado ainda no select.
+    preencherFiltroCidade();
     applyFilters();
     document.getElementById('update-info').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     // Só depois do SUCESSO: falha de rede no meio não pode deixar a pessoa presa
@@ -750,6 +758,63 @@ function switchTab(tabId,csm){
 }
 
 // ── FILTERS ───────────────────────────────────────────────
+// Sentinela da opção "Sem cidade". Não pode colidir com nenhuma cidade real: as
+// chaves de cidade são o texto normalizado (minúsculo, sem acento), então nenhum
+// nome de cidade produz esta chave.
+const CIDADE_VAZIA='__sem_cidade__';
+
+/**
+ * Cidade é TEXTO LIVRE no ClickUp, então "Londrina", "londrina " e "LONDRINA" são
+ * três valores distintos que precisam virar UMA opção. Agrupa pela forma
+ * normalizada e exibe a grafia mais frequente do grupo.
+ */
+function opcoesCidade(){
+  const grupos=new Map();   // chave normalizada -> Map(grafia -> ocorrências)
+  let semCidade=0;
+  allData.forEach(r=>{
+    const bruto=r.cidade==null?'':String(r.cidade);
+    const chave=normTxt(bruto);
+    if(!chave){semCidade++;return;}
+    const grafia=bruto.replace(/\s+/g,' ').trim();
+    if(!grupos.has(chave))grupos.set(chave,new Map());
+    const g=grupos.get(chave);
+    g.set(grafia,(g.get(grafia)||0)+1);
+  });
+  // Empate de frequência prefere capitalização de nome próprio — nem tudo
+  // minúsculo, nem tudo maiúsculo. Sem isso um empate 1×1×1 entre "Londrina",
+  // "londrina" e "LONDRINA" elegeria qualquer uma, e "LONDRINA" na tela parece
+  // defeito. Frequência ainda manda: só desempata.
+  const capNormal=s=>(s!==s.toLowerCase()&&s!==s.toUpperCase())?0:1;
+  const opts=[...grupos.entries()].map(([chave,grafias])=>{
+    // Grafia mais frequente; depois capitalização; depois ordem alfabética — a
+    // última garante que a opção não troque de nome entre recarregamentos por
+    // ordem de iteração.
+    const rotulo=[...grafias.entries()]
+      .sort((a,b)=>b[1]-a[1]||capNormal(a[0])-capNormal(b[0])||a[0].localeCompare(b[0],'pt-BR'))[0][0];
+    const total=[...grafias.values()].reduce((s,n)=>s+n,0);
+    return{chave,rotulo,total};
+  });
+  opts.sort((a,b)=>a.rotulo.localeCompare(b.rotulo,'pt-BR'));
+  return{opts,semCidade};
+}
+
+/**
+ * Monta o select de cidade a partir de allData — todos os dados carregados, não só
+ * a aba atual, para que a lista não mude de tamanho ao trocar de aba.
+ * Chamado depois de cada carga; preserva a escolha se ela ainda existir.
+ */
+function preencherFiltroCidade(){
+  const sel=document.getElementById('filter-cidade');
+  if(!sel)return;
+  const anterior=sel.value;
+  const {opts,semCidade}=opcoesCidade();
+  sel.innerHTML='<option value="">Todas as cidades</option>'
+    +opts.map(o=>`<option value="${esc(o.chave)}">${esc(o.rotulo)} (${o.total})</option>`).join('')
+    // Registros sem cidade não podem desaparecer atrás do filtro.
+    +(semCidade?`<option value="${CIDADE_VAZIA}">Sem cidade (${semCidade})</option>`:'');
+  if(anterior&&[...sel.options].some(o=>o.value===anterior))sel.value=anterior;
+}
+
 function applyFilters(){
   const q=currentSearch.toLowerCase();
   const csm=currentTab==='geral'?null:(currentTab==='minha'?session.csm:currentTab);
@@ -757,6 +822,7 @@ function applyFilters(){
   const fFin=document.getElementById('filter-financeiro')?.value||'';
   const fAl=document.getElementById('filter-alerta')?.value||'';
   const fSrv=document.getElementById('filter-servico')?.value||'';
+  const fCid=document.getElementById('filter-cidade')?.value||'';
 
   // Cancelados sempre incluídos (para consulta/reativação), mas excluídos dos cálculos
   filtered=allData.filter(r=>{
@@ -766,7 +832,10 @@ function applyFilters(){
     const finOk=!fFin||(r.finStatus||'')===fFin;
     const alOk=!fAl||r.alertas.some(a=>a.toLowerCase().includes(fAl.toLowerCase()));
     const srvOk=!fSrv||(r.outrosSrv||[]).some(s=>s.toLowerCase().includes(fSrv.toLowerCase()));
-    return csmOk&&qOk&&stOk&&finOk&&alOk&&srvOk;
+    // Compara pela forma normalizada, a mesma que agrupou as opções.
+    const cidNorm=normTxt(r.cidade);
+    const cidOk=!fCid||(fCid===CIDADE_VAZIA?!cidNorm:cidNorm===fCid);
+    return csmOk&&qOk&&stOk&&finOk&&alOk&&srvOk&&cidOk;
   });
   applySort();
 }
@@ -1287,6 +1356,27 @@ function drow(k,v){return`<div class="detail-row"><span class="detail-key">${k}<
 function fmt(v){return'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtc(v){if(v>=1000)return'R$ '+(v/1000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'k';return fmt(v);}
 
+// Normalização para COMPARAR texto: sem acento, espaço colapsado, minúsculas.
+// Mesma semântica de normalizarNome() em api/_lib/auth.js — que é server-side e não
+// pode ser importada aqui (esta página é HTML estático, sem bundler). Este é o
+// normalizador único do front: era uma lambda solta dentro de openMoskitModal, e
+// virou função para o filtro de cidade reusar em vez de nascer um segundo.
+function normTxt(v){
+  return String(v??'')
+    .normalize('NFD')
+    .replace(/\p{M}/gu,'')
+    .replace(/\s+/g,' ')
+    .trim()
+    .toLowerCase();
+}
+
+// Escapa texto do ClickUp antes de interpolar em HTML. Cidade é campo de TEXTO
+// LIVRE e vai para atributo e para conteúdo — o resto do arquivo interpola dado do
+// ClickUp direto, mas campo novo de texto livre não vai entrar por esse caminho.
+function esc(v){
+  return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 
 // ── MOSKIT CONFIG ─────────────────────────────────────────
 // Chave da API, funil, etapa, board, createdBy, IDs dos campos personalizados e
@@ -1367,9 +1457,8 @@ function openMoskitModal(r) {
   selecionarOpcao('msk-base', mesBase);
   // Plano — match normalizado por nome
   if (planoLabel) {
-    const normP = p => String(p||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
     const selP = document.getElementById('msk-plano');
-    const optP = [...selP.options].find(o => normP(o.text) === normP(planoLabel));
+    const optP = [...selP.options].find(o => normTxt(o.text) === normTxt(planoLabel));
     if (optP) selP.value = optP.value;
   }
   // Origem não pré-selecionada — usuário deve escolher

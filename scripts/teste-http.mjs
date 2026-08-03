@@ -772,6 +772,74 @@ console.log('\n[26] motivoPerdaId: id da opcao, nao rotulo');
   globalThis.fetch = fetchOriginal;
 }
 
+console.log('\n[27] filtro de cidade: agrupa variacoes de texto livre');
+{
+  /**
+   * O dashboard e HTML estatico, sem bundler nem export — para testar a regra de
+   * agrupamento sem duplicar o codigo aqui, as declaracoes sao extraidas do arquivo
+   * e carregadas como modulo. Se alguem renomear as funcoes, o teste falha em vez
+   * de silenciosamente testar outra coisa.
+   */
+  const front = ler('dashboard_carteiras.html');
+  const extrair = (nome) => {
+    const inicio = front.indexOf(`function ${nome}(`);
+    if (inicio < 0) return null;
+    let i = front.indexOf('{', inicio);
+    let profundidade = 0;
+    for (; i < front.length; i++) {
+      if (front[i] === '{') profundidade++;
+      else if (front[i] === '}' && --profundidade === 0) return front.slice(inicio, i + 1);
+    }
+    return null;
+  };
+
+  const normTxtSrc = extrair('normTxt');
+  const opcoesSrc = extrair('opcoesCidade');
+  const sentinela = front.match(/const CIDADE_VAZIA\s*=\s*'([^']+)'/);
+  checar('normTxt existe no front', Boolean(normTxtSrc), true);
+  checar('opcoesCidade existe no front', Boolean(opcoesSrc), true);
+  checar('CIDADE_VAZIA declarada', Boolean(sentinela), true);
+
+  const mod = await import(dataUrl(
+    `let allData = [];\nexport const setDados = (d) => { allData = d; };\n` +
+    `${normTxtSrc}\n${opcoesSrc}\nexport { normTxt, opcoesCidade };\n`
+  ));
+
+  // O normalizador tem de casar com normalizarNome() do auth.js.
+  checar('normTxt colapsa acento, caixa e espaco', mod.normTxt('  Lôndrína  Sul '), 'londrina sul');
+  checar('normTxt de vazio e string vazia', [mod.normTxt(null), mod.normTxt('   ')], ['', '']);
+
+  mod.setDados([
+    // Empate 1x1x1: quem decide e a capitalizacao de nome proprio.
+    { cidade: 'Londrina' }, { cidade: 'londrina ' }, { cidade: 'LONDRINA' },
+    // Empate 1x1, com acento em uma das grafias.
+    { cidade: 'Cambé' }, { cidade: 'cambe' },
+    // Maioria FEIA: 3 minusculas contra 1 bem escrita. Frequencia tem de vencer a
+    // capitalizacao, senao a regra deixou de ser "a grafia mais frequente".
+    { cidade: 'sao paulo' }, { cidade: 'sao  paulo' }, { cidade: 'sao paulo ' }, { cidade: 'São Paulo' },
+    { cidade: 'Apucarana' },
+    { cidade: '' }, { cidade: null }, { cidade: '   ' }, {},
+  ]);
+  const { opts, semCidade } = mod.opcoesCidade();
+  const grupo = (c) => opts.find((o) => o.chave === c);
+
+  checar('quatro grupos distintos', opts.length, 4);
+  checar('ordem alfabetica pelo rotulo', opts.map(o => o.rotulo),
+         ['Apucarana', 'Cambé', 'Londrina', 'sao paulo']);
+  checar('Londrina agrupou as 3 variacoes', grupo('londrina').total, 3);
+  checar('  empate elege a capitalizacao de nome proprio', grupo('londrina').rotulo, 'Londrina');
+  checar('acento nao separa grupo', grupo('cambe').total, 2);
+  checar('  e a grafia acentuada ganha o empate', grupo('cambe').rotulo, 'Cambé');
+  checar('espaco duplo cai no mesmo grupo', grupo('sao paulo').total, 4);
+  checar('  frequencia vence capitalizacao', grupo('sao paulo').rotulo, 'sao paulo');
+  checar('vazio, nulo, espacos e ausente viram Sem cidade', semCidade, 4);
+
+  // A sentinela nao pode ser produzida por nenhuma cidade real.
+  checar('nenhuma chave colide com a sentinela', opts.some(o => o.chave === sentinela[1]), false);
+
+  globalThis.fetch = globalThis.fetch;
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);
