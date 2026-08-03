@@ -143,13 +143,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--brand-bg);color:v
 .meta-mini-val{font-size:14px;font-weight:700;color:var(--brand-night)}
 .meta-mini-premio{font-size:11px;color:var(--neutral-500);margin-top:2px}
 
-/* ── BONUS ── */
-.bonus-card{background:#fff;border-radius:12px;border:1px solid var(--neutral-200);
-  padding:12px 18px;margin-bottom:1.25rem;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.bonus-title{font-size:13px;font-weight:600;color:var(--brand-night);flex:1}
-.bonus-item{text-align:center;min-width:90px}
-.bonus-item-label{font-size:10px;color:var(--neutral-400);text-transform:uppercase;letter-spacing:0.4px}
-.bonus-item-val{font-size:16px;font-weight:700;color:var(--brand-night)}
+/* O bloco de equipe reusa .meta-card, .metas-grid e .meta-mini do painel
+   individual — é o mesmo componente com outra escala. As classes .bonus-* do
+   cartão fino anterior saíram junto com ele. */
 
 /* ── GESTÃO CARDS ── */
 .gestao-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.25rem}
@@ -885,6 +881,11 @@ function renderAll(){
   if(csm&&showMRR){
     renderMeta(csm,accent,col);
   }
+  // Meta da equipe: na Visão Geral e nas abas de CSM. Fora para consulta, que não
+  // recebe valor financeiro — e o servidor manda metaEquipe null para esse perfil.
+  if(showMRR){
+    renderEquipe();
+  }
   if(session.nivel==='gestao'&&currentTab==='geral'){renderGestao();renderCancelados();}
 
   // Metrics
@@ -1004,6 +1005,30 @@ function limiaresEquipe(){
   };
 }
 
+/**
+ * Régua de progresso, compartilhada pelo painel individual e pelo bloco de equipe.
+ * A escala é sempre a ultrameta = 100%; os marcadores ficam na posição relativa.
+ *
+ * Os rótulos usam fmtc de propósito: aqui se lê POSIÇÃO, não valor, e o número
+ * exato aparece no cartão da faixa logo abaixo. São position:absolute com
+ * translateX(-50%), então valor mais longo sobreporia o marcador vizinho quando
+ * dois limiares ficam próximos — e sobreposição é pior que abreviação.
+ */
+function reguaHTML(atual,ultra,marcadores,barColor){
+  const pct=ultra?Math.min((atual/ultra)*100,130):0;
+  const mkr=(v,l)=>{
+    if(!v||!ultra)return'';
+    const p=Math.min((v/ultra)*100,99);
+    return`<div class="regua-marker" style="left:${p}%"><div class="regua-marker-line"></div><div class="regua-marker-label">${l}<br>${fmtc(v)}</div></div>`;
+  };
+  return`<div style="position:relative;margin-bottom:1rem">
+      <div class="regua-track">
+        <div class="regua-fill" style="width:${Math.min(pct,100)}%;background:${barColor}"></div>
+        <div class="regua-markers">${marcadores.map(([v,l])=>mkr(v,l)).join('')}</div>
+      </div>
+    </div>`;
+}
+
 function renderMeta(csm,accent,col){
   // Garantir col mesmo se não foi passado
   if(!col) col=getColor(csm)||{dot:'#3A86FF',bg:'#EBF4FB',text:'#1B5E8C',border:'#BDD9EE'};
@@ -1033,22 +1058,6 @@ function renderMeta(csm,accent,col){
   else if(mrrLiq>=meta.meta&&meta.meta>0)barColor='linear-gradient(90deg,#16A34A,#15803D)';
   else if(meta.meta>0&&mrrLiq>=meta.meta*0.7)barColor='linear-gradient(90deg,#CA8A04,#A16207)';
 
-  const mkr=(v,l)=>{
-    if(!v||!meta.ultraMeta)return'';
-    const p=Math.min((v/meta.ultraMeta)*100,99);
-    return`<div class="regua-marker" style="left:${p}%"><div class="regua-marker-line"></div><div class="regua-marker-label">${l}<br>${fmtc(v)}</div></div>`;
-  };
-
-  // Bônus equipe — o total líquido da equipe vem agregado do servidor, para que
-  // um CSM não precise receber a meta individual dos colegas. Os limiares agora
-  // saem da linha "⭐ Equipe" (ver limiaresEquipe), não de constante no código.
-  const mrrEq=mrrEquipe;
-  const LEq=limiaresEquipe();
-  let bEq=0,bEqLabel='';
-  if(mrrEq>=LEq.especial){bEq=0;bEqLabel='Bônus surpresa! 🎁';}
-  else if(mrrEq>=LEq.ultra){bEq=BONUS_EQ_VAL.ultra;bEqLabel='Ultrameta equipe! +'+fmt(BONUS_EQ_VAL.ultra);}
-  else if(mrrEq>=LEq.super){bEq=BONUS_EQ_VAL.super;bEqLabel='Supermeta equipe! +'+fmt(BONUS_EQ_VAL.super);}
-
   document.getElementById('meta-section').innerHTML=`
   <div class="meta-card" style="border-top:3px solid ${col.dot}">
     <div class="meta-header">
@@ -1063,12 +1072,7 @@ function renderMeta(csm,accent,col){
       <span>Atingido: <strong style="color:var(--brand-night)">${fmt(meta.mrrAt)}</strong>${meta.downsell>0?' · Downsell: <strong style="color:var(--red)">−'+fmt(meta.downsell)+'</strong>':''} · Líquido: <strong style="color:var(--brand-night)">${fmt(mrrLiq)}</strong></span>
       <span>${pctD}% da ultrameta</span>
     </div>
-    <div style="position:relative;margin-bottom:1rem">
-      <div class="regua-track">
-        <div class="regua-fill" style="width:${Math.min(pct,100)}%;background:${barColor}"></div>
-        <div class="regua-markers">${mkr(meta.meta,'Meta')}${mkr(meta.superMeta,'Super')}${mkr(meta.ultraMeta,'Ultra')}</div>
-      </div>
-    </div>
+    ${reguaHTML(mrrLiq,meta.ultraMeta,[[meta.meta,'Meta'],[meta.superMeta,'Super'],[meta.ultraMeta,'Ultra']],barColor)}
     <div class="fase-badge" style="background:${faseBg};color:${faseColor}"><span style="font-size:18px">${faseEmoji}</span><span style="font-weight:600">${fase}</span></div>
     ${meta.downsell>0?`
     <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--neutral-100)">
@@ -1088,14 +1092,8 @@ function renderMeta(csm,accent,col){
     </div>
   </div>`;
 
-  if(bEq>0){
-    document.getElementById('bonus-section').innerHTML=`
-    <div class="bonus-card" style="border-left:3px solid ${col.dot}">
-      <div class="bonus-title">🏅 Bônus Equipe — ${bEqLabel}</div>
-      <div class="bonus-item"><div class="bonus-item-label">Seu bônus</div><div class="bonus-item-val">${fmt(bEq)}</div></div>
-      <div class="bonus-item"><div class="bonus-item-label">MRR equipe</div><div class="bonus-item-val">${fmtc(mrrEq)}</div></div>
-    </div>`;
-  }
+  // O bloco de equipe não sai daqui: ele vale para a Visão Geral também, então
+  // renderAll o monta em renderEquipe().
 }
 function mMini(l,p,v,premio,taxa,ok,col){
   // O valor da faixa e um ALVO: precisa ser exato. Se a meta real e R$ 1.632,00 e a
@@ -1107,6 +1105,100 @@ function mMini(l,p,v,premio,taxa,ok,col){
     <div class="meta-mini-pct">${p} · ${fmt(v)}</div>
     <div class="meta-mini-val" style="color:${ok?col.text:'var(--brand-night)'}">${ok?'✅ Atingida':'—'}</div>
     <div class="meta-mini-premio">${taxa} = ${fmt(premio)}</div>
+  </div>`;
+}
+
+// ── EQUIPE ────────────────────────────────────────────────
+/**
+ * Bloco consolidado da meta de equipe: régua, os limiares com o bônus de cada
+ * faixa, e o bônus da faixa atingida. Sem simulador de comissão — comissão é
+ * individual e já vive no painel do gerente.
+ *
+ * Aparece na Visão Geral e nas abas de CSM, e SEMPRE que houver valor a mostrar,
+ * não só quando algum bônus foi conquistado: metade do valor disto é responder
+ * "qual era a meta da equipe mesmo", que hoje as pessoas procuram no Slack.
+ * (Antes o cartão só renderizava com bEq>0, o que também o escondia justamente
+ * quando a meta especial era batida — bônus surpresa não tem valor numérico.)
+ *
+ * Nada aqui roda para o perfil consulta: renderAll só chama com showMRR, e o
+ * servidor manda metaEquipe null para consulta. Duas barreiras, não uma.
+ */
+function renderEquipe(){
+  const alvo=document.getElementById('bonus-section');
+  if(!alvo)return;
+  const L=limiaresEquipe();
+  const mrrEq=mrrEquipe;
+
+  // Faixa atingida. Ladder inalterado: especial > ultra > super > meta.
+  let bonus=0,faixa='',faixaBg='#F1F5F9',faixaCor='#475569',faixaEmoji='🤝';
+  if(mrrEq>=L.especial){bonus=null;faixa='Meta especial da equipe! Bônus surpresa';faixaBg='#FEF9C3';faixaCor='#854D0E';faixaEmoji='🎁';}
+  else if(mrrEq>=L.ultra){bonus=BONUS_EQ_VAL.ultra;faixa='Ultrameta da equipe batida!';faixaBg='#EDE9FE';faixaCor='#5B21B6';faixaEmoji='⚡';}
+  else if(mrrEq>=L.super){bonus=BONUS_EQ_VAL.super;faixa='Supermeta da equipe batida!';faixaBg='#DBEAFE';faixaCor='#1E40AF';faixaEmoji='🔥';}
+  else if(mrrEq>=L.meta){bonus=0;faixa='Meta da equipe batida. Rumo à supermeta!';faixaBg='#D1FAE5';faixaCor='#065F46';faixaEmoji='✅';}
+  else{bonus=0;faixa='Meta da equipe em andamento.';}
+
+  let barColor='#94A3B8';
+  if(mrrEq>=L.especial)barColor='linear-gradient(90deg,#F59E0B,#EF4444)';
+  else if(mrrEq>=L.ultra)barColor='linear-gradient(90deg,#8B5CF6,#6D28D9)';
+  else if(mrrEq>=L.super)barColor='linear-gradient(90deg,#3A86FF,#0A41B4)';
+  else if(mrrEq>=L.meta)barColor='linear-gradient(90deg,#16A34A,#15803D)';
+
+  const pctD=L.ultra?Math.round((mrrEq/L.ultra)*100):0;
+  const bonusTexto=bonus===null?'Surpresa 🎁':(bonus>0?fmt(bonus):'—');
+
+  // Reconciliação: só a gestão recebe `soma` do servidor, então este bloco só
+  // aparece para ela. A diferença esperada é MRR órfão — ex-integrante da equipe.
+  // O objetivo é perceber erro de digitação agora, não no fechamento.
+  let divergencia='';
+  if(metaEquipe&&metaEquipe.declarado&&typeof metaEquipe.soma==='number'){
+    const dif=mrrEq-metaEquipe.soma;
+    if(Math.abs(dif)>=0.01){
+      divergencia=`<div style="margin-top:10px;padding:7px 10px;border-radius:8px;background:var(--warning-bg);
+        color:#92400E;font-size:11px;line-height:1.5">
+        ⚠️ declarado <strong>${fmt(mrrEq)}</strong> · soma dos gerentes <strong>${fmt(metaEquipe.soma)}</strong>
+        · diferença <strong>${dif>0?'+':'−'}${fmt(Math.abs(dif))}</strong>
+        <span style="color:#A16207">— confira se é MRR órfão ou erro de digitação.</span></div>`;
+    }
+  }
+
+  // Sem linha de equipe o total é a soma das individuais e os limiares vêm da
+  // reserva do código. Dizer isso é melhor que exibir um número sem procedência.
+  const origem=L.declarado
+    ? (L.mesRef?`<span style="font-size:11px;font-weight:400;color:var(--neutral-400)">${esc(L.mesRef)}</span>`:'')
+    : `<span style="font-size:10px;font-weight:400;color:var(--yellow)">· sem linha de equipe no período: somado dos gerentes</span>`;
+
+  alvo.innerHTML=`
+  <div class="meta-card" style="border-top:3px solid #64748B">
+    <div class="meta-header">
+      <div><div class="meta-title">🏅 Meta da Equipe ${origem}</div></div>
+      <div class="meta-prem">
+        <div class="meta-prem-label">Seu bônus</div>
+        <div class="meta-prem-val" style="color:${bonus?faixaCor:'var(--neutral-400)'}">${bonusTexto}</div>
+        <div style="font-size:10px;color:var(--neutral-400)">${bonus?'por CSM':'Nenhuma faixa com bônus'}</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--neutral-500);margin-bottom:5px">
+      <span>MRR líquido da equipe: <strong style="color:var(--brand-night)">${fmt(mrrEq)}</strong></span>
+      <span>${pctD}% da ultrameta</span>
+    </div>
+    ${reguaHTML(mrrEq,L.ultra,[[L.meta,'Meta'],[L.super,'Super'],[L.ultra,'Ultra']],barColor)}
+    <div class="fase-badge" style="background:${faixaBg};color:${faixaCor}"><span style="font-size:18px">${faixaEmoji}</span><span style="font-weight:600">${faixa}</span></div>
+    <div class="metas-grid">
+      ${eqMini('Meta equipe',L.meta,'sem bônus',mrrEq>=L.meta)}
+      ${eqMini('Supermeta',L.super,'+'+fmt(BONUS_EQ_VAL.super)+' por CSM',mrrEq>=L.super)}
+      ${eqMini('Ultrameta',L.ultra,'+'+fmt(BONUS_EQ_VAL.ultra)+' por CSM',mrrEq>=L.ultra)}
+      ${eqMini('Meta Especial',L.especial,'Bônus surpresa 🎁',mrrEq>=L.especial)}
+    </div>
+    ${divergencia}
+  </div>`;
+}
+// Limiar da equipe com valor EXATO: é ALVO, mesmo critério do painel individual.
+function eqMini(l,v,bonusTexto,ok){
+  return`<div class="meta-mini" style="${ok?'border-color:#0F766E;background:#F0FDFA':''}">
+    <div class="meta-mini-label">${l}</div>
+    <div class="meta-mini-pct">${fmt(v)}</div>
+    <div class="meta-mini-val" style="color:${ok?'#0F766E':'var(--brand-night)'}">${ok?'✅ Atingida':'—'}</div>
+    <div class="meta-mini-premio">${bonusTexto}</div>
   </div>`;
 }
 

@@ -959,6 +959,61 @@ console.log('\n[28] meta de equipe: declarada, nao somada');
   globalThis.fetch = fetchOriginal;
 }
 
+console.log('\n[29] bloco de equipe no front: regua compartilhada e limiares de reserva');
+{
+  const front = ler('dashboard_carteiras.html');
+  const extrair = (nome) => {
+    const inicio = front.indexOf(`function ${nome}(`);
+    if (inicio < 0) return null;
+    let i = front.indexOf('{', inicio);
+    let profundidade = 0;
+    for (; i < front.length; i++) {
+      if (front[i] === '{') profundidade++;
+      else if (front[i] === '}' && --profundidade === 0) return front.slice(inicio, i + 1);
+    }
+    return null;
+  };
+
+  // A regua tem de ser UMA funcao usada nos dois lugares, nao duas copias.
+  checar('reguaHTML existe', Boolean(extrair('reguaHTML')), true);
+  const usos = (front.match(/reguaHTML\(/g) || []).length;
+  checar('reguaHTML: 1 declaracao + 2 usos', usos, 3);
+  checar('nenhum mkr solto sobrou fora dela',
+         (front.match(/const mkr\s*=/g) || []).length, 1);
+
+  // renderEquipe roda para gestao e csm, nunca para consulta.
+  const renderAll = extrair('renderAll');
+  checar('renderEquipe chamado sob showMRR', /if\(showMRR\)\{\s*renderEquipe\(\);/.test(renderAll), true);
+  checar('  e nao dentro do bloco de gestao', /gestao'&&currentTab==='geral'\)\{renderEquipe/.test(renderAll), false);
+
+  // Limiares: declarado manda, reserva entra quando falta.
+  const mod = await import(dataUrl(
+    `let metaEquipe = null;\nexport const setEq = (v) => { metaEquipe = v; };\n` +
+    `const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};\n` +
+    `${extrair('limiaresEquipe')}\nexport { limiaresEquipe };\n`
+  ));
+
+  mod.setEq({ declarado: true, meta: 100, superMeta: 200, ultraMeta: 300, metaEsp: 400, mesRef: 'Julho' });
+  const dec = mod.limiaresEquipe();
+  checar('declarado vence a reserva', [dec.meta, dec.super, dec.ultra, dec.especial], [100, 200, 300, 400]);
+  checar('  e marca a origem', [dec.declarado, dec.mesRef], [true, 'Julho']);
+
+  mod.setEq(null);
+  const res0 = mod.limiaresEquipe();
+  checar('sem metaEquipe usa a reserva', [res0.meta, res0.ultra], [6918.07, 17295.18]);
+  checar('  e nao se declara declarado', res0.declarado, false);
+
+  mod.setEq({ declarado: false, meta: null, superMeta: null, ultraMeta: null, metaEsp: null, mesRef: null });
+  const fb = mod.limiaresEquipe();
+  checar('limiares nulos caem na reserva', [fb.meta, fb.super, fb.ultra, fb.especial],
+         [6918.07, 10377.11, 17295.18, 20000]);
+
+  // Limiar declarado como 0 nao pode virar "meta zero atingida".
+  mod.setEq({ declarado: true, meta: 0, superMeta: 0, ultraMeta: 0, metaEsp: 0, mesRef: 'Julho' });
+  const zero = mod.limiaresEquipe();
+  checar('limiar 0 tambem cai na reserva', [zero.meta, zero.ultra], [6918.07, 17295.18]);
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);
