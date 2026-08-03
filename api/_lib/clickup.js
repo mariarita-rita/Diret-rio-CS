@@ -47,6 +47,23 @@ const CF = {
  */
 export const MOTIVO_MIGRACAO_CNPJ = '00c64f34-41e0-4fb2-8f70-17a55b803507';
 
+/**
+ * Opcao "⭐ Equipe" do campo Gerente de Contas, na lista Metas.
+ *
+ * A linha de equipe DECLARA o total do time, em vez de ele ser somado das quatro
+ * individuais. Identificada por ID da opcao, nunca pelo rotulo:
+ *
+ * - o `value` desse campo chega como `orderindex` (a linha de equipe hoje vem como
+ *   `4`), entao comparar por texto dependeria de resolver orderindex -> nome, e o
+ *   nome carrega o emoji `⭐`, que se perde num copy-paste ou numa renomeacao;
+ * - `orderindex` NAO serve de chave: e posicao na lista, e arrastar a opcao no
+ *   ClickUp mudaria o `4` e quebraria a regra em silencio.
+ *
+ * Nenhum perfil de CSM casa com ela: pertenceAoCsm compara nome COMPLETO
+ * normalizado por igualdade exata, e "⭐ Equipe" nao e nome de ninguem.
+ */
+export const EQUIPE_OPCAO = 'a9832e95-4c6b-4b53-834f-cebb5000a188';
+
 // Campos da lista Metas
 const CM = {
   MRR_ATINGIDO: '3f9f68a3-58f8-4a3c-9e40-131e6e7b940e',
@@ -308,6 +325,9 @@ function mapMeta(t) {
     id: t.id,
     nome: t.name,
     gerente: cfVal(t, CM.GERENTE),
+    // Id da opcao ao lado do rotulo, pelo mesmo motivo de motivoPerdaId: a linha de
+    // equipe e identificada por ID, nunca pelo texto "⭐ Equipe". Ver EQUIPE_OPCAO.
+    gerenteId: cfOpcaoId(t, CM.GERENTE),
     mrrAt: Number(cfVal(t, CM.MRR_ATINGIDO)) || 0,
     downsell: Number(cfVal(t, CM.DOWNSELL)) || 0,
     meta: Number(cfVal(t, CM.META)) || 0,

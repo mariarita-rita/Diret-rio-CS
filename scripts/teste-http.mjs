@@ -52,6 +52,7 @@ const auth = await import(authUrl);
 
 const stubClickup = `
   export const CAMPOS_ESCRITA = {};
+  export const EQUIPE_OPCAO = 'a9832e95-4c6b-4b53-834f-cebb5000a188';
   export class ErroConfigClickUp extends Error {}
   export class ErroUpstream extends Error { constructor(s){ super('up'); this.status = s; } }
   export async function getCarteira() { return { linhas: [] }; }
@@ -838,6 +839,124 @@ console.log('\n[27] filtro de cidade: agrupa variacoes de texto livre');
   checar('nenhuma chave colide com a sentinela', opts.some(o => o.chave === sentinela[1]), false);
 
   globalThis.fetch = globalThis.fetch;
+}
+
+console.log('\n[28] meta de equipe: declarada, nao somada');
+{
+  const EQUIPE = 'a9832e95-4c6b-4b53-834f-cebb5000a188';
+  const CAMPO_GERENTE = '3898a8f4-bb21-46d7-88ee-79d164033fdf';
+  const F = {
+    mrrAt: '3f9f68a3-58f8-4a3c-9e40-131e6e7b940e', down: '099e8c77-5ea3-4ab2-81e4-0f12e18ea9f9',
+    meta: '66a8ff49-2a0e-4e6a-98db-7854e674a5cf', sup: '575f8269-a094-4ad5-8eaa-9806e128368a',
+    ultra: '659aaee9-d3e9-4f89-aa65-b10e40178ab1', esp: '28627910-6605-4389-bcca-5efccb2cc264',
+  };
+  // Os nomes e valores reais da lista, para o teste provar o caso de producao.
+  const OPCOES = [
+    { id: '7fe6407b-3c75-48b1-bfb5-d429be6d68d8', name: 'Gian Luca', orderindex: 0 },
+    { id: 'cbcf04f4-da02-4ff7-8515-c2e3ab53961e', name: 'Lucineia Felix', orderindex: 1 },
+    { id: 'e9e55de1-cf37-48c9-9760-c6d50c474dde', name: 'Guilherme Camargo', orderindex: 2 },
+    { id: 'c6e1ad22-ed55-42ea-9ea7-88ff3df65a18', name: 'Patricia Carvalho', orderindex: 3 },
+    { id: EQUIPE, name: '⭐ Equipe', orderindex: 4 },
+  ];
+  const linhaMeta = (id, gerenteIdx, mrrAt, down, extras = {}) => ({
+    id, name: `Meta ${id}`, list: { id: '901327940637' }, status: { status: 'pendente' },
+    custom_fields: [
+      { id: CAMPO_GERENTE, type: 'drop_down', value: gerenteIdx, type_config: { options: OPCOES } },
+      { id: F.mrrAt, type: 'currency', value: String(mrrAt) },
+      { id: F.down, type: 'currency', value: String(down) },
+      ...Object.entries(extras).map(([k, v]) => ({ id: F[k], type: 'currency', value: String(v) })),
+    ],
+  });
+
+  const INDIVIDUAIS = [
+    linhaMeta('g', 0, 2945.87, 0), linhaMeta('l', 1, 2671.54, 0),
+    linhaMeta('u', 2, 3550.45, 0), linhaMeta('p', 3, 2091.30, 191.40),
+  ];
+  const SOMA = 11067.76;          // 2945.87 + 2671.54 + 3550.45 + (2091.30 - 191.40)
+  const DECLARADO = 11028.76;     // 11259.16 - 230.40, da linha real
+  const LINHA_EQ = linhaMeta('eq', 4, 11259.16, 230.40,
+    { meta: 6918.07, sup: 10377.11, ultra: 17295.18, esp: 20000 });
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const arred = (n) => Math.round(n * 100) / 100;
+
+  /** Monta um /api/clickup com a lista de metas indicada. */
+  const comMetas = async (tag, tasks) => {
+    globalThis.fetch = async () => ({
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+      json: async () => ({ tasks, last_page: true }), text: async () => '',
+    });
+    const cu = await carregarCom('api/clickup.js', libClickupUnica(tag));
+    process.env.CLICKUP_API_KEY = 'pk_teste';
+    return async (perfil) => {
+      const r = res();
+      await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action: 'metas' } }, r);
+      return r;
+    };
+  };
+
+  const fetchOriginal = globalThis.fetch;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'G' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'C' };
+
+  // --- Caso de producao: 4 individuais + 1 equipe ---
+  {
+    const pedir = await comMetas('eq-declarada', [...INDIVIDUAIS, LINHA_EQ]);
+    const g = await pedir(GESTAO);
+    checar('gestao: 200', g.code, 200);
+    checar('mrrEquipe e o DECLARADO, nao a soma', arred(g.corpo.mrrEquipe), DECLARADO);
+    checar('  e nao a soma das 5 linhas (era o bug)', arred(g.corpo.mrrEquipe) === arred(SOMA + DECLARADO), false);
+    checar('marcado como declarado', g.corpo.metaEquipe.declarado, true);
+    checar('limiares vem da linha de equipe',
+           [g.corpo.metaEquipe.meta, g.corpo.metaEquipe.superMeta, g.corpo.metaEquipe.ultraMeta, g.corpo.metaEquipe.metaEsp],
+           [6918.07, 10377.11, 17295.18, 20000]);
+    checar('a soma das individuais vem junto, para reconciliar', arred(g.corpo.metaEquipe.soma), SOMA);
+    checar('  e a diferenca e os R$ 39,00 do downsell', arred(g.corpo.metaEquipe.diferenca), -39);
+
+    // A linha de equipe NAO pode virar um quinto gerente.
+    checar('tasks traz so as 4 individuais', g.corpo.tasks.length, 4);
+    checar('  nenhuma delas e a de equipe', g.corpo.tasks.some((t) => t.gerenteId === EQUIPE), false);
+    checar('  gerenteId resolvido de orderindex', g.corpo.tasks[0].gerenteId, OPCOES[0].id);
+
+    // CSM: recebe a propria linha e os limiares, mas nao a reconciliacao.
+    const c = await pedir(GIAN);
+    checar('csm ve so a propria meta', c.corpo.tasks.map((t) => t.gerente), ['Gian Luca']);
+    checar('  "⭐ Equipe" nao casa com nenhum CSM', c.corpo.tasks.some((t) => t.gerenteId === EQUIPE), false);
+    checar('  recebe o total declarado da equipe', arred(c.corpo.mrrEquipe), DECLARADO);
+    checar('  recebe os limiares', c.corpo.metaEquipe.ultraMeta, 17295.18);
+    checar('  NAO recebe a reconciliacao', [c.corpo.metaEquipe.soma, c.corpo.metaEquipe.diferenca], [undefined, undefined]);
+
+    // consulta: zero valor financeiro, inclusive aqui.
+    const q = await pedir(CONSULTA);
+    checar('consulta: tasks vazio', q.corpo.tasks, []);
+    checar('  mrrEquipe zerado', q.corpo.mrrEquipe, 0);
+    checar('  metaEquipe nulo', q.corpo.metaEquipe, null);
+  }
+
+  // --- Fallback: linha de equipe ausente ---
+  {
+    const pedir = await comMetas('eq-ausente', INDIVIDUAIS);
+    const g = await pedir(GESTAO);
+    checar('sem linha de equipe: cai na soma', arred(g.corpo.mrrEquipe), SOMA);
+    checar('  marcado como NAO declarado', g.corpo.metaEquipe.declarado, false);
+    checar('  limiares nulos, front usa a reserva', g.corpo.metaEquipe.ultraMeta, null);
+    checar('  diferenca zero (declarado = soma)', arred(g.corpo.metaEquipe.diferenca), 0);
+    checar('  as 4 individuais seguem intactas', g.corpo.tasks.length, 4);
+  }
+
+  // --- Periodo ambiguo: duas linhas de equipe abertas ---
+  {
+    const outra = linhaMeta('eq2', 4, 99999, 0, { ultra: 1 });
+    const pedir = await comMetas('eq-duplicada', [...INDIVIDUAIS, LINHA_EQ, outra]);
+    const g = await pedir(GESTAO);
+    checar('duas linhas de equipe: cai na soma, nao escolhe uma', arred(g.corpo.mrrEquipe), SOMA);
+    checar('  marcado como NAO declarado', g.corpo.metaEquipe.declarado, false);
+    checar('  nem uma nem outra vaza para tasks', g.corpo.tasks.length, 4);
+  }
+
+  globalThis.fetch = fetchOriginal;
 }
 
 console.log(`\n${total - falhas}/${total} passaram`);

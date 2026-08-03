@@ -23,6 +23,7 @@ import {
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
   CAMPOS_ESCRITA,
+  EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
   getCarteira,
@@ -121,33 +122,84 @@ async function lerCliente(req, res, sessao) {
 async function lerMetas(res, sessao) {
   const { linhas } = await getMetas();
 
-  // mrrEquipe acompanha `visiveis`: consulta nao recebe valor financeiro nenhum,
-  // nem individual (lerCarteira zera o mrr) nem agregado. Agregado nao identifica
-  // o resultado de ninguem, mas continua sendo numero financeiro — e o README
-  // define consulta como perfil sem acesso a valor financeiro.
+  // A linha de equipe sai de `individuais` ANTES de qualquer conta. Ela declara o
+  // total do time; somada junto, dobrava o resultado. Era exatamente o que
+  // acontecia: as 5 linhas somadas davam R$ 22.096,52 contra os R$ 11.067,76 reais,
+  // e o painel anunciava ultrameta de equipe a quem tinha batido a supermeta.
+  const individuais = linhas.filter((m) => m.gerenteId !== EQUIPE_OPCAO);
+  const equipe = resolverEquipe(linhas, individuais);
+
+  // consulta nao recebe valor financeiro nenhum, nem individual (lerCarteira zera o
+  // mrr) nem agregado. Agregado nao identifica o resultado de ninguem, mas continua
+  // sendo numero financeiro — e o README define consulta como perfil sem acesso a
+  // valor financeiro. Vale para metaEquipe tambem.
   let visiveis;
   let mrrEquipe = 0;
+  let metaEquipe = null;
   if (sessao.nivel === 'gestao') {
-    visiveis = linhas;
-    mrrEquipe = somarMrrEquipe(linhas);
+    visiveis = individuais;
+    mrrEquipe = equipe.mrr;
+    // A reconciliacao e so da gestao: um CSM nao precisa ver declarado x soma.
+    metaEquipe = { ...equipe.publico, soma: equipe.soma, diferenca: equipe.mrr - equipe.soma };
   } else if (sessao.nivel === 'csm') {
-    visiveis = linhas.filter((m) => pertenceAoCsm(m.gerente, sessao.csm));
-    mrrEquipe = somarMrrEquipe(linhas);
+    visiveis = individuais.filter((m) => pertenceAoCsm(m.gerente, sessao.csm));
+    mrrEquipe = equipe.mrr;
+    metaEquipe = equipe.publico;
   } else {
     visiveis = [];
   }
 
   res.setHeader('Cache-Control', CACHE_LEITURA);
-  return res.status(200).json({ tasks: visiveis, mrrEquipe });
+  return res.status(200).json({ tasks: visiveis, mrrEquipe, metaEquipe });
 }
 
 /**
- * MRR liquido da equipe, usado no bonus de equipe.
- * Somado sobre TODAS as metas mesmo para o CSM — de proposito: o numero do bonus
- * e da equipe inteira, e nao permite isolar o resultado de ninguem.
+ * MRR liquido da equipe e os limiares, preferindo a linha "⭐ Equipe" DECLARADA.
+ *
+ * Fallback para a soma das individuais quando a linha nao existe no periodo — nao
+ * pode quebrar por alguem esquecer de cria-la. Duas linhas de equipe abertas
+ * tambem caem no fallback: "declarado" fica ambiguo, e um numero definido e melhor
+ * que um escolhido por ordem de iteracao. Os dois casos logam.
+ *
+ * O periodo NAO e filtrado por mes: getMetas usa `include_closed=false` e quem
+ * define o periodo e o fechamento das tarefas no ClickUp. Filtrar por mes corrente
+ * seria pior — o campo Mes Referencia e um dropdown de Janeiro..Dezembro, SEM ano,
+ * e uma virada de mes antes de criar as linhas novas esvaziaria o painel.
+ *
+ * Os limiares acompanham a origem do total: declarados vem da linha de equipe;
+ * no fallback ficam null e o front usa as constantes dele.
  */
-function somarMrrEquipe(linhas) {
-  return linhas.reduce((s, m) => s + (m.mrrAt - m.downsell), 0);
+function resolverEquipe(linhas, individuais) {
+  const soma = individuais.reduce((s, m) => s + (m.mrrAt - m.downsell), 0);
+  const declaradas = linhas.filter((m) => m.gerenteId === EQUIPE_OPCAO);
+
+  const semDeclarado = (motivo) => {
+    console.warn(`[clickup] meta de equipe: ${motivo}. Usando a soma das ${individuais.length} individuais.`);
+    return {
+      mrr: soma,
+      soma,
+      publico: { mrr: soma, declarado: false, meta: null, superMeta: null, ultraMeta: null, metaEsp: null, mesRef: null },
+    };
+  };
+
+  if (declaradas.length === 0) return semDeclarado('nenhuma linha "⭐ Equipe" aberta no periodo');
+  if (declaradas.length > 1) return semDeclarado(`${declaradas.length} linhas "⭐ Equipe" abertas — periodo ambiguo`);
+
+  const eq = declaradas[0];
+  const mrr = eq.mrrAt - eq.downsell;
+  return {
+    mrr,
+    soma,
+    publico: {
+      mrr,
+      declarado: true,
+      meta: eq.meta,
+      superMeta: eq.superMeta,
+      ultraMeta: eq.ultraMeta,
+      metaEsp: eq.metaEsp,
+      mesRef: eq.mesRef,
+    },
+  };
 }
 
 // ── Escrita ───────────────────────────────────────────────────────────────

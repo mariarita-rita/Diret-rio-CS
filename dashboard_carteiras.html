@@ -470,6 +470,9 @@ const MESES_A_FRENTE   = 2;
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CSMS  = ['Gian Luca','Lucineia Felix','Guilherme Camargo','Patricia Carvalho'];
 
+// Limiares de equipe de RESERVA. A fonte da verdade é a linha "⭐ Equipe" da lista
+// Metas, que chega em metaEquipe; estes valores só entram quando ela não existe no
+// período. Batem com a linha atual — foram transcritos dela.
 const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};
 const BONUS_EQ_VAL = {super:100,ultra:200};
 
@@ -493,6 +496,9 @@ const CSM_COLORS = {
 
 let session=null,allData=[],metasData=[],filtered=[];
 let mrrEquipe=0;
+// Limiares e total da equipe, como o servidor resolveu: declarado pela linha
+// "⭐ Equipe" ou somado das individuais. null para o perfil consulta.
+let metaEquipe=null;
 let currentTab='geral',currentPage=1,currentSort='cliente-asc',currentSearch='';
 
 // ── API ───────────────────────────────────────────────────
@@ -576,7 +582,7 @@ async function doLogout(){
 }
 function sessaoExpirada(){encerrarSessao('Sua sessão expirou. Entre novamente.');}
 function encerrarSessao(msg){
-  session=null;allData=[];metasData=[];filtered=[];mrrEquipe=0;
+  session=null;allData=[];metasData=[];filtered=[];mrrEquipe=0;metaEquipe=null;
   document.getElementById('login-input').value='';
   document.getElementById('login-error').textContent=msg;
   document.getElementById('user-badge').textContent='';
@@ -622,6 +628,7 @@ async function loadAllData(forcar){
     const mr=await api('/api/clickup?action=metas',modo);
     metasData=mr.tasks||[];
     mrrEquipe=Number(mr.mrrEquipe)||0;
+    metaEquipe=mr.metaEquipe||null;
     lbar.style.width='100%';
     setTimeout(()=>lwrap.style.display='none',400);
     filtered=[...allData];
@@ -978,6 +985,25 @@ function calcNPS(data){
 }
 
 // ── META ──────────────────────────────────────────────────
+/**
+ * Limiares da equipe. Fonte da verdade é a linha "⭐ Equipe" da lista Metas, que o
+ * servidor resolve e manda em metaEquipe; META_EQ é reserva para quando ela não
+ * existe no período. Limiar declarado como 0 ou vazio também cai na reserva — meia
+ * régua é pior que a régua conhecida.
+ */
+function limiaresEquipe(){
+  const d=metaEquipe;
+  const num=v=>Number(v)>0?Number(v):null;
+  return{
+    meta:num(d?.meta)??META_EQ.meta,
+    super:num(d?.superMeta)??META_EQ.super,
+    ultra:num(d?.ultraMeta)??META_EQ.ultra,
+    especial:num(d?.metaEsp)??META_EQ.especial,
+    declarado:Boolean(d?.declarado),
+    mesRef:d?.mesRef||'',
+  };
+}
+
 function renderMeta(csm,accent,col){
   // Garantir col mesmo se não foi passado
   if(!col) col=getColor(csm)||{dot:'#3A86FF',bg:'#EBF4FB',text:'#1B5E8C',border:'#BDD9EE'};
@@ -1014,12 +1040,14 @@ function renderMeta(csm,accent,col){
   };
 
   // Bônus equipe — o total líquido da equipe vem agregado do servidor, para que
-  // um CSM não precise receber a meta individual dos colegas.
+  // um CSM não precise receber a meta individual dos colegas. Os limiares agora
+  // saem da linha "⭐ Equipe" (ver limiaresEquipe), não de constante no código.
   const mrrEq=mrrEquipe;
+  const LEq=limiaresEquipe();
   let bEq=0,bEqLabel='';
-  if(mrrEq>=META_EQ.especial){bEq=0;bEqLabel='Bônus surpresa! 🎁';}
-  else if(mrrEq>=META_EQ.ultra){bEq=BONUS_EQ_VAL.ultra;bEqLabel='Ultrameta equipe! +R$ 200';}
-  else if(mrrEq>=META_EQ.super){bEq=BONUS_EQ_VAL.super;bEqLabel='Supermeta equipe! +R$ 100';}
+  if(mrrEq>=LEq.especial){bEq=0;bEqLabel='Bônus surpresa! 🎁';}
+  else if(mrrEq>=LEq.ultra){bEq=BONUS_EQ_VAL.ultra;bEqLabel='Ultrameta equipe! +'+fmt(BONUS_EQ_VAL.ultra);}
+  else if(mrrEq>=LEq.super){bEq=BONUS_EQ_VAL.super;bEqLabel='Supermeta equipe! +'+fmt(BONUS_EQ_VAL.super);}
 
   document.getElementById('meta-section').innerHTML=`
   <div class="meta-card" style="border-top:3px solid ${col.dot}">
