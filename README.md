@@ -102,7 +102,8 @@ aumenta nem um pouco o acesso aos dados.
 | `gestao`   | completa                     | liberado               | liberado | sim |
 
 Para `consulta`, "não" em MRR vale para **todo** número financeiro: o `mrr` de cada
-linha sai zerado e o agregado `mrrEquipe` sai `0`.
+linha sai zerado, o agregado `mrrEquipe` sai `0` e `metaEquipe` sai `null` — nem os
+limiares da equipe, que também são valor financeiro.
 
 O filtro por CSM acontece antes da resposta sair do servidor: a carteira dos
 outros CSMs nunca chega ao navegador.
@@ -166,7 +167,7 @@ Sempre responde `Cache-Control: no-store`.
 | Método | `action`    | O que faz |
 | ------ | ----------- | --------- |
 | `GET`  | `carteira`  | lista `901327787926`, paginada inteira no servidor, `include_closed=true`, `include_custom_fields=true` |
-| `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais o campo agregado `mrrEquipe` (`0` para `consulta`) |
+| `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais os agregados `mrrEquipe` e `metaEquipe` (`0` e `null` para `consulta`) |
 | `GET`  | `cliente`   | `?taskId=...` → **uma** linha lida direto do ClickUp, sem cache, `no-store`. 1 chamada |
 | `POST` | `set-field` | `{ taskId, fieldId, value }` |
 
@@ -178,6 +179,55 @@ dos alertas no modal de acompanhamento, e essa pré-marcação alimenta uma escr
 envia o array **completo**.
 
 Não existe path livre. Os dois IDs de lista são constantes no servidor.
+
+#### A meta da equipe é declarada, não somada
+
+A lista Metas tem uma linha por CSM **e** uma linha de equipe, identificada pela
+opção `⭐ Equipe` do campo *Gerente de Contas* (`EQUIPE_OPCAO`,
+`a9832e95-…`). Ela **declara** o total do time.
+
+`mrrEquipe` lê essa linha. Antes somava **todas** as linhas, e com a linha de equipe
+presente o total entrava duas vezes — o painel chegou a anunciar ultrameta de equipe
+(+R$ 200) para os quatro CSMs quando o correto era supermeta (+R$ 100).
+
+A identificação é por **ID da opção**, nunca pelo rótulo. O `value` desse campo
+chega como `orderindex`, então comparar por texto dependeria de resolver
+orderindex → nome, e o nome carrega o emoji, que se perde num copy-paste ou numa
+renomeação. E `orderindex` não serve de chave: é posição na lista, e arrastar a
+opção no ClickUp mudaria o número em silêncio.
+
+A linha de equipe **não viaja dentro de `tasks`**. Isso impede estruturalmente que
+ela vire um quinto card de gerente, entre em contagem por gerente ou apareça em aba
+de CSM — não depende da constante `CSMS` do front. Ela também nunca casa com um
+perfil de CSM: `pertenceAoCsm` compara nome completo normalizado por igualdade
+exata, e `⭐ Equipe` não é nome de ninguém.
+
+**Fallback**, para não quebrar quando a linha não existir no período:
+
+| Linhas `⭐ Equipe` abertas | `mrrEquipe` | `metaEquipe.declarado` |
+| --- | --- | --- |
+| 1 | valor declarado pela linha | `true`, com os limiares dela |
+| 0 | soma das individuais, + `console.warn` | `false`, limiares `null` |
+| 2 ou mais | soma das individuais, + `console.warn` | `false`, limiares `null` |
+
+Duas linhas caem no fallback de propósito: "declarado" fica ambíguo, e um número
+definido é melhor que um escolhido por ordem de iteração. Com os limiares `null` o
+front usa `META_EQ`, a reserva dele.
+
+**O período não é filtrado por mês, e isso é deliberado.** O mecanismo é
+`include_closed=false`: quem define o período é o fechamento das tarefas no ClickUp.
+Filtrar pelo mês corrente seria pior — o campo *Mês Referência* é um dropdown de
+`Janeiro..Dezembro` **sem ano**, e uma virada de mês antes de criar as linhas novas
+esvaziaria o painel inteiro.
+
+> **Consequência operacional:** ao criar as linhas de um mês novo, **feche as do mês
+> anterior**. Duas linhas abertas do mesmo CSM fazem o painel individual escolher
+> uma por ordem de lista, com o `mesRef` certo ao lado, parecendo correto.
+
+`metaEquipe` traz `soma` e `diferenca` **somente para `gestao`**: é a reconciliação
+entre o declarado e a soma dos gerentes, e um CSM não precisa vê-la. A diferença
+esperada é MRR órfão (ex-integrante da equipe); o objetivo é perceber erro de
+digitação na hora, não no fechamento.
 
 `set-field` só aceita estes quatro campos, e só estes valores:
 
@@ -219,6 +269,79 @@ criado** com o `createdBy` como responsável, e a resposta vem com
 esse aviso e deixa o modal aberto, em vez de fechar sozinho. No log da função fica
 um `console.error` com o valor de *Gerente* que não casou. O fluxo não é bloqueado
 de propósito — mas a atribuição errada não passa mais em silêncio.
+
+---
+
+## Regras de cálculo e exibição no dashboard
+
+Estas vivem no `dashboard_carteiras.html`, mas mudam o que os números **significam**.
+
+### Migração de CNPJ fora do MRR perdido
+
+Contratar em outro CNPJ é troca de titularidade: administrativamente gera um
+cancelamento e um contrato novo, mas não é venda nova nem perda real. O card
+**❌ Perdido Churn** do resumo da gestão exclui esse valor, comparando
+`motivoPerdaId` com `MOTIVO_MIGRACAO_CNPJ` (`00c64f34-…`) — por **ID da opção**,
+porque renomear a opção no ClickUp quebraria a regra em silêncio.
+
+O escopo é estreito de propósito. Continuam contando esses registros:
+
+- a **lista de cancelamentos** (motivo, valor, plano, gerente);
+- o **total do cabeçalho** dela, "MRR perdido: R$ X", que precisa fechar com a soma
+  da coluna MRR visível logo abaixo;
+- o **top 3 de motivos**, que é contagem, não valor.
+
+O card tem um ⓘ explicando a exclusão. Sem isso o número fica inexplicável para
+quem confere contra a lista.
+
+`MOTIVO_MIGRACAO_CNPJ` existe nos **dois** lados — front e `api/_lib/clickup.js` — e
+a suíte prova que são o mesmo ID. É o único desses acoplamentos com teste.
+
+### Valor exato onde o número é ALVO
+
+`fmtc()` abrevia acima de mil ("R$ 1,7k"). Em valor de **alvo** isso engana: com a
+meta real em R$ 1.632,00 e a tela dizendo R$ 1,7k, dá para achar que bateu em
+R$ 1.700. Usam `fmt()` (exato): o card **MRR Incrementado**, o valor das quatro
+faixas do painel individual, os limiares da equipe e todos os valores de premiação.
+
+Seguem abreviados, de propósito: MRR Total, Ticket Médio, Em Risco, Perdido
+Downsell, Perdido Churn, os cards de gestão — agregados informativos em cards
+estreitos — e os **rótulos da régua**, onde se lê posição, não valor. Os rótulos da
+régua são `position:absolute` com `translateX(-50%)`: valor mais longo sobreporia o
+marcador vizinho quando dois limiares ficam próximos, e sobreposição é pior que
+abreviação.
+
+Não altere `fmtc()` para "arrumar" isso — vários lugares dependem dela como está.
+
+### Filtro de cidade
+
+*Cidade* (`beaef1da-…`) é **texto livre**, então "Londrina", "londrina " e
+"LONDRINA" chegam como três valores. O filtro agrupa pela forma normalizada
+(`normTxt`: NFD sem marcas combinantes, espaço colapsado, minúsculas — a mesma
+semântica de `normalizarNome` em `api/_lib/auth.js`) e exibe a **grafia mais
+frequente**, com a contagem ao lado.
+
+Empate de frequência prefere capitalização de nome próprio — nem tudo minúsculo nem
+tudo maiúsculo — e só depois ordem alfabética. Frequência continua mandando:
+capitalização apenas desempata.
+
+O `value` da opção é a chave normalizada, não o rótulo, então a seleção sobrevive a
+uma recarga em que a grafia vencedora mude. Registros sem cidade viram **Sem
+cidade**, com uma sentinela que nenhuma cidade real produz. As opções saem de
+`allData`, não da aba atual, para a lista não mudar de tamanho ao trocar de aba.
+
+### Meta da equipe no dashboard
+
+Um bloco consolidado — régua, os quatro limiares com o bônus de cada faixa, e o
+bônus da faixa atingida — na Visão Geral **e** nas abas de CSM. Sem simulador de
+comissão: comissão é individual e já vive no painel do gerente.
+
+Renderiza sempre que houver valor, não só quando algum bônus foi conquistado:
+metade do valor dele é responder "qual era a meta da equipe mesmo".
+
+`reguaHTML()` é **uma** função usada pelo painel individual e pelo bloco de equipe;
+a suíte falha se aparecer uma segunda cópia. Os limiares saem da linha `⭐ Equipe`;
+`META_EQ` é só reserva, e limiar declarado como `0` ou vazio também cai nela.
 
 ---
 
@@ -329,6 +452,17 @@ O harness monta `req.body` como **getter que lança**, reproduzindo o runtime da
 Vercel. Isso é essencial: entregar `body` já parseado como propriedade comum não
 exercita a camada onde o parse acontece, e foi o ponto cego que deixou passar um
 `ApiError: Invalid JSON` capaz de derrubar a função inteira.
+
+A suíte também cobre **regras de cálculo**, não só caminhos de falha: `motivoPerdaId`
+nas duas formas de `value` que o ClickUp usa, a meta de equipe declarada com os dois
+fallbacks e o isolamento dos três perfis, e o agrupamento do filtro de cidade.
+
+Três desses testes leem o **próprio `dashboard_carteiras.html`**, extraem funções
+dele (`normTxt`, `opcoesCidade`, `limiaresEquipe`) e as carregam como módulo. É como
+uma página estática sem bundler fica testável. Consequência: **renomear essas funções
+faz o teste falhar**, em vez de passar a testar outra coisa em silêncio. O mesmo
+mecanismo prova que `MOTIVO_MIGRACAO_CNPJ` é o mesmo ID nos dois lados e que
+`reguaHTML` é uma declaração com dois usos.
 
 ### O que validar manualmente
 

@@ -4,7 +4,11 @@ Documento de retomada. Escrito para que uma sessão sem histórico consiga conti
 trabalho sem reconstruir contexto.
 
 **Última atualização:** 2026-08-03
-**Branch:** `seguranca/api-proxy-e-auth` · **HEAD:** `c9c44f0` · em sincronia com o remoto
+**Branch:** `melhorias/filtros-metas-equipe` · **HEAD:** `7bc2fbf` · **não enviada ao remoto**
+
+> A `seguranca/api-proxy-e-auth` **já foi mesclada** na `main` (merge `20714b4`), então
+> a seção 6 deste documento é histórico. A branch atual sai da `main` e traz cinco
+> commits de funcionalidade — ver seção 11.
 
 ---
 
@@ -391,7 +395,8 @@ mensagem "Sua sessão expirou" **com a página aberta** e **após F5**.
 
 | Item | Onde | Risco |
 |---|---|---|
-| `getMetas` **não pagina** — 1 chamada, sem `page`. Acima de 100 metas as mais antigas somem do `mrrEquipe` silenciosamente | `_lib/clickup.js` | Latente: hoje são 4 |
+| `getMetas` **não pagina** — 1 chamada, sem `page`. Acima de 100 metas as mais antigas somem do `mrrEquipe` silenciosamente | `_lib/clickup.js` | Latente: hoje são 5 (4 CSMs + equipe) |
+| **Duas linhas abertas do mesmo CSM** fazem `metasData.find` escolher uma por ordem de lista, com o `mesRef` certo ao lado, parecendo correto. O período é definido só por `include_closed=false` | front, `:877` | Real ao virar o mês antes de fechar as linhas antigas. Para a linha de equipe já está tratado (cai no fallback e loga); para as individuais, **não** |
 | `opcaoPermitida` devolve `null` e o campo é **omitido em silêncio** do negócio: `plano`, `base` e `origem` inválidos não viram erro | `moskit.js` | Negócio criado incompleto sem ninguém saber. Contraste: `oportunidade` e o `tipo`/`origem` do projeto devolvem 400 |
 | `soNumero` → `0` quando não numérico | `moskit.js` | ID Núcleo ou CNPJ `0` no Moskit, em silêncio |
 | `cfVal` → `null` para campo ausente | `_lib/clickup.js` | Se um id de campo mudar no ClickUp, a coluna inteira vira `null` sem erro. Com o match exato de gerente, isso daria **carteira vazia para todos** |
@@ -416,20 +421,121 @@ um não está neste documento**; confirmar com a usuária antes de implementar.
 
 | # | Funcionalidade | O que se sabe |
 |---|---|---|
-| 1 | **Campo Evento Camp 2026 editável** | Novo campo editável no dashboard. Como toda escrita passa pela allowlist, exige acrescentar o `fieldId` (e os ids de opção, se for lista) em `CAMPOS_ESCRITA` — **sem isso a gravação volta 403, e é a allowlist funcionando, não bug** |
-| 2 | **Filtro de cidade** | A linha já traz `cidade` (`mapTask`), então é trabalho de front: mais um filtro junto dos existentes, e entrar em `applyFilters()` |
-| 3 | **Excluir do MRR perdido o churn por "Contratou em outro CNPJ"** | Regra de cálculo. O motivo de perda já vem na linha como `motivoPerda`; a exclusão precisa valer onde o MRR perdido é somado |
-| 4 | **Valor exato no card de MRR incrementado** | Hoje o card não mostra o valor exato. Definir se é o incremento do mês ou acumulado |
-| 5 | **Premiação total no painel do gerente** | Somar a premiação no painel de metas. Atenção: `mrrEquipe` é agregado da equipe **de propósito**, e `consulta` recebe `0` — não reintroduzir valor financeiro para esse perfil |
+| 1 | **Campo Evento Camp 2026 editável** | ❌ **aberta.** Novo campo editável no dashboard. Como toda escrita passa pela allowlist, exige acrescentar o `fieldId` (e os ids de opção, se for lista) em `CAMPOS_ESCRITA` — **sem isso a gravação volta 403, e é a allowlist funcionando, não bug** |
+| 2 | **Filtro de cidade** | ✅ **feita** em `4bb90c7` |
+| 3 | **Excluir do MRR perdido o churn por "Contratou em outro CNPJ"** | ✅ **feita** em `ebddcf6` |
+| 4 | **Valor exato no card de MRR incrementado** | ✅ **feita** em `d964b56`. A dúvida "incremento do mês ou acumulado" não existia: o card sempre foi a soma de *MRR Atingido* das linhas de meta, e só a formatação mudou |
+| 5 | **Premiação total no painel do gerente** | ✅ **feita** em `7bc2fbf`, como bloco consolidado de meta de equipe. `consulta` continua recebendo `0` e agora `metaEquipe: null` |
 
 ---
 
 ## 10. Ordem sugerida a partir daqui
 
-1. **Teste 8** — os dois fluxos com a task `86ajumrcc`, limpeza na ordem da seção 5.5.
-   Fecha as incógnitas 2 a 7. É o maior risco restante.
-2. **Merge** conforme a seção 6.
-3. **Deploy** e o checklist da seção 7, começando pelo item 2 (cache).
+1. **Deploy da branch atual.** O commit `2e32cbe` corrige número errado em tela — ver
+   seção 11.1. É o item mais urgente.
+2. **Teste 8** — os dois fluxos com a task `86ajumrcc`, limpeza na ordem da seção 5.5.
+   Fecha as incógnitas 2 a 7. É o maior risco técnico restante.
+3. **Checklist de produção** da seção 7, começando pelo item 2 (cache).
 4. **Fila de manutenção** — os itens 8 e 6 primeiro: o 8 é o único com risco de perda
    de dado, e o 6 substitui três remendos por uma solução só.
-5. **Funcionalidades da seção 9**, com especificação confirmada antes de codificar.
+5. **Funcionalidade 1 da seção 9**, a única que restou.
+
+---
+
+## 11. Branch `melhorias/filtros-metas-equipe`
+
+Cinco commits sobre a `main`, **sem push e sem merge**. Suíte em **184/184**.
+
+| Commit | Assunto |
+|---|---|
+| `ebddcf6` | Migração de CNPJ fora do MRR perdido do resumo |
+| `4bb90c7` | Filtro por cidade com normalização |
+| `d964b56` | Valores de meta sem abreviação |
+| `2e32cbe` | **`mrrEquipe` declarado pela linha de equipe, não somado** |
+| `7bc2fbf` | Régua de progresso da equipe com aviso de divergência |
+
+As regras que cada um implementa estão no README, seção *Regras de cálculo e exibição
+no dashboard* e *A meta da equipe é declarada, não somada*. Aqui fica só o que não
+cabe lá.
+
+### 11.1 Por que o deploy é urgente
+
+`somarMrrEquipe` somava **todas** as linhas da lista Metas. Com a linha
+`🎯 Meta — Equipe | Jul/2026` declarando o total, ele entrava duas vezes:
+
+| | |
+|---|---|
+| soma das 4 individuais | R$ 11.067,76 ← correto |
+| linha de equipe (declarado) | R$ 11.028,76 |
+| **`mrrEquipe` em produção** | **R$ 22.096,52** |
+| ultrameta de equipe | R$ 17.295,18 |
+
+Resultado: o painel anuncia **"Ultrameta equipe! +R$ 200"** para os quatro CSMs,
+quando o correto é supermeta, **+R$ 100**. Número errado em tela, afetando o bônus
+que quatro pessoas estão vendo.
+
+**Mitigação sem deploy:** fechar a tarefa `86ajvcgc7` no ClickUp. `include_closed=false`
+a remove da resposta e a soma volta ao valor correto. Não é instantâneo — `getMetas`
+tem cache de 5 min por instância e a resposta vai ao navegador com `max-age=300`, então
+pode oscilar por alguns minutos. Reversível e sem perda: os valores digitados
+permanecem. **Reabrir depois do deploy** para ativar a leitura declarada e o aviso de
+divergência.
+
+### 11.2 Pendências no ClickUp — ação da usuária
+
+| # | Item | Efeito no código |
+|---|---|---|
+| 1 | A linha `⭐ Equipe` (`86ajvcgc7`) está com *Mês Referência* = **Junho**, enquanto o nome diz `Jul/2026` e as quatro individuais dizem **Julho** | **Nenhum** — o período não é filtrado por mês. Mas é erro de digitação na linha que declara os totais |
+| 2 | Divergência de **R$ 39,00**, toda em downsell: declarado `230,40` contra `191,40` na soma das individuais. *MRR Atingido* bate exatamente (`11.259,16`) | Nenhum. O aviso de divergência (`7bc2fbf`) passa a exibi-la para a gestão. A origem é de conferência |
+| 3 | O campo `🤝 Bônus Equipe` da linha de equipe está em **200** | Nenhum — o código não lê esse campo, usa `BONUS_EQ_VAL`. Mas 200 é o valor da ultrameta, e o líquido real só alcança a supermeta: pode ter sido transcrito do painel já contaminado. Vale reconferir |
+
+### 11.3 Decisões tomadas, para não serem re-litigadas
+
+- **Cabeçalho de Cancelamentos continua somando tudo**, inclusive migração de CNPJ.
+  Ele precisa fechar com a soma da coluna MRR das linhas logo abaixo. Só o card do
+  resumo exclui.
+- **Rótulos da régua seguem abreviados** (`fmtc`). São alvos, mas ali se lê posição, e
+  são `position:absolute` — valor exato sobreporia o marcador vizinho.
+- **Quebra em duas linhas do card MRR Incrementado abaixo de ~420px** é aceita. Nada é
+  cortado; a linha de cards fica mais alta. Nenhuma fonte foi reduzida.
+- **Downsell não está contaminado por motivo de perda.** Investigado e **encerrado**:
+  downsell é negócio perdido com motivo próprio "Downsell", fluxo separado que não
+  entra em relatório de cancelamento e não se mistura com os outros motivos. `mrrLiq`,
+  `mrrEquipe` e o card *Perdido Downsell* saem da lista Metas, e nenhuma regra de
+  `motivoPerda` os alcança. **Não reabrir.**
+- **O bloco de equipe mostra as quatro faixas, não três.** A linha do ClickUp tem
+  *Meta Especial* preenchida (R$ 20.000) e a tabela na descrição das tarefas
+  individuais também a lista, com "bônus surpresa". Reverter para três é apagar uma
+  linha em `renderEquipe`.
+
+### 11.4 Investigação do campo "Solicitante" no Moskit — não encontrado
+
+Pedido: descobrir o `CF_` do campo *Solicitante*, para rastrear quem pediu a criação.
+**Ele não existe em nenhum lugar alcançável pela chave de API.** O que foi varrido:
+
+| Onde | Resultado |
+|---|---|
+| `GET /v2/customFields` | 10 campos. **Ignora todo filtro** (`module`, `limit`, `page`, `active`) e devolve sempre os mesmos 10 — não é inventário confiável |
+| Registros DEAL reais | 15 campos distintos, os 10 funis varridos |
+| Registros PROJECT reais | 10 campos distintos |
+| Registros COMPANY reais | 9 campos distintos |
+| Registros ACTIVITY reais | 1 campo |
+| `GET /v2/persons`, `/v2/tasks` | **404** — campos de PERSON são invisíveis por esta rota |
+
+Nenhum campo com `solicit` no nome (o regex também pegaria "Solicitado por" e "Quem
+solicitou"). Adjacentes que existem: `CF_A4wMWNiLiBoLXqB8` *Origem da Oportunidade*
+(DEAL, `MULTIPLE_OPTION`) e `CF_Pj3qYrUeC0GLbMQe` *Responsável (administrador)*
+(COMPANY, `TEXT`).
+
+Hipóteses, em ordem: o campo não foi salvo/publicado no Moskit; existe mas não está
+vinculado a nenhum funil e está vazio em todo registro (o `entityCustomFields` traz os
+campos aplicáveis ao funil mesmo vazios, então um campo solto não aparece); está em
+PERSON, invisível por aqui; ou tem outro nome ("Requerente", "Pedido por").
+
+**Caminho mais curto:** preencher o campo em **um** registro e me dizer o módulo
+(negócio, projeto ou empresa) e o funil. Aí sai numa chamada. Alternativa: o `CF_`
+aparece na URL do Moskit ao editar a definição do campo.
+
+Nota de rota: `/v2/deals?limit=100` devolve **10** registros — o `limit` não é
+respeitado. Qualquer varredura futura precisa paginar de verdade, não confiar no
+`limit`.
