@@ -932,7 +932,9 @@ function renderAll(){
     if(metricsEl2){
       metricsEl2.className='metrics c3';
       metricsEl2.innerHTML=
-        mHTML('📈 MRR Incrementado',fmtc(mrrIncrementado),'soma atingido dos gerentes','#16A34A')+
+        // Valor exato: fmtc() abrevia acima de mil, e "R$ 1,7k" num numero que se
+        // confere contra o fechamento e informacao pior que nenhuma.
+        mHTML('📈 MRR Incrementado',fmt(mrrIncrementado),'soma atingido dos gerentes','#16A34A')+
         mHTML('📉 Perdido Downsell',fmtc(mrrDownsell),'redução de contratos','#DC2626','danger')+
         mHTML('❌ Perdido Churn'+dica('Não considera clientes que contrataram em outro CNPJ: é troca de titularidade, não perda. Eles seguem na lista de cancelamentos e na contagem.'),fmtc(mrrChurn),'cancelamentos no mês','#DC2626','danger');
     }
@@ -1068,9 +1070,13 @@ function renderMeta(csm,accent,col){
   }
 }
 function mMini(l,p,v,premio,taxa,ok,col){
+  // O valor da faixa e um ALVO: precisa ser exato. Se a meta real e R$ 1.632,00 e a
+  // tela diz "R$ 1,6k", o gerente pode achar que bateu ao chegar em R$ 1.700, ou
+  // conferir o fechamento contra um numero que nao existe. A regua (mkr) segue
+  // abreviando de proposito — la o que se le e posicao, nao valor.
   return`<div class="meta-mini" style="${ok?'border-color:'+col.dot+';background:'+col.bg:''}">
     <div class="meta-mini-label">${l}</div>
-    <div class="meta-mini-pct">${p} · ${fmtc(v)}</div>
+    <div class="meta-mini-pct">${p} · ${fmt(v)}</div>
     <div class="meta-mini-val" style="color:${ok?col.text:'var(--brand-night)'}">${ok?'✅ Atingida':'—'}</div>
     <div class="meta-mini-premio">${taxa} = ${fmt(premio)}</div>
   </div>`;
