@@ -721,6 +721,57 @@ console.log('\n[25] refletirEscrita mantem alertas e alertasIds coerentes');
   globalThis.fetch = fetchOriginal;
 }
 
+console.log('\n[26] motivoPerdaId: id da opcao, nao rotulo');
+{
+  const MOTIVO_CAMPO = '57b588ce-81f5-4728-94e5-b22d1966862a';
+  const MIGRACAO = '00c64f34-41e0-4fb2-8f70-17a55b803507';
+  const OUTRO = 'aa11bb22-cc33-dd44-ee55-ff6677889900';
+  const OPCOES = [
+    { id: MIGRACAO, name: 'Contratou em outro CNPJ', orderindex: 0 },
+    { id: OUTRO, name: 'Preco', orderindex: 1 },
+  ];
+  const fetchOriginal = globalThis.fetch;
+  // Duas linhas: uma com value = orderindex (numero), outra com value = id
+  // (string). A API do ClickUp alterna entre os dois, e a regra tem de dar o mesmo
+  // id nos dois casos — foi por isso que cfOpcaoId nao pode devolver f.value cru.
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+    json: async () => ({
+      last_page: true,
+      tasks: [
+        { id: 'mA', name: 'Por orderindex', list: { id: '901327787926' }, status: { status: 'cancelado' },
+          custom_fields: [{ id: MOTIVO_CAMPO, type: 'drop_down', value: 0, type_config: { options: OPCOES } }] },
+        { id: 'mB', name: 'Por id', list: { id: '901327787926' }, status: { status: 'cancelado' },
+          custom_fields: [{ id: MOTIVO_CAMPO, type: 'drop_down', value: OUTRO, type_config: { options: OPCOES } }] },
+        { id: 'mC', name: 'Sem motivo', list: { id: '901327787926' }, status: { status: 'cancelado' },
+          custom_fields: [{ id: MOTIVO_CAMPO, type: 'drop_down', value: null, type_config: { options: OPCOES } }] },
+      ],
+    }),
+    text: async () => '',
+  });
+  const lib = await import(libClickupUnica('motivo-perda'));
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const { linhas } = await lib.getCarteira();
+  const [a, b, c] = linhas;
+  checar('value = orderindex resolve para o id', a.motivoPerdaId, MIGRACAO);
+  checar('  e o rotulo continua vindo junto', a.motivoPerda, 'Contratou em outro CNPJ');
+  checar('value = id da opcao devolve o mesmo id', b.motivoPerdaId, OUTRO);
+  checar('campo vazio devolve null', c.motivoPerdaId, null);
+  checar('  e nao inventa rotulo', c.motivoPerda, null);
+
+  // A regra do card vive no front; o id tem de ser o MESMO nos dois lados, senao a
+  // exclusao para de valer sem ninguem perceber.
+  checar('constante exportada bate com o id da opcao', lib.MOTIVO_MIGRACAO_CNPJ, MIGRACAO);
+  const front = ler('dashboard_carteiras.html');
+  const noFront = front.match(/const MOTIVO_MIGRACAO_CNPJ\s*=\s*'([0-9a-f-]+)'/);
+  checar('front declara a constante', Boolean(noFront), true);
+  checar('front e servidor usam o mesmo id', noFront?.[1], lib.MOTIVO_MIGRACAO_CNPJ);
+
+  globalThis.fetch = fetchOriginal;
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);

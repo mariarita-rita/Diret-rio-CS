@@ -91,6 +91,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--brand-bg);color:v
 .metric-sub.danger{color:var(--red)}
 .metric-sub.warn{color:var(--yellow)}
 
+/* ── DICA (ⓘ) ── */
+/* Explica no card por que um número difere da lista logo abaixo. Sem JS: o
+   tooltip é CSS puro, e o botão é focável para chegar pelo teclado. */
+.info-dica{position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:13px;height:13px;margin-left:5px;padding:0;border-radius:50%;
+  border:1px solid var(--neutral-200);background:none;color:var(--neutral-400);
+  font-size:9px;font-weight:700;line-height:1;cursor:help;vertical-align:middle;
+  text-transform:none;letter-spacing:0}
+.info-dica:hover{border-color:var(--neutral-500);color:var(--neutral-700)}
+.info-dica-texto{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);
+  width:232px;background:var(--brand-night);color:#fff;border-radius:8px;padding:8px 10px;
+  font-size:11px;font-weight:400;line-height:1.45;letter-spacing:0;text-transform:none;
+  text-align:left;opacity:0;visibility:hidden;transition:opacity 0.15s;z-index:60;
+  pointer-events:none;box-shadow:0 6px 20px rgba(0,0,53,0.18)}
+.info-dica-texto::after{content:'';position:absolute;top:100%;left:50%;
+  transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--brand-night)}
+.info-dica:hover .info-dica-texto,.info-dica:focus .info-dica-texto{opacity:1;visibility:visible}
+
 /* ── META CARD ── */
 .meta-card{background:#fff;border-radius:16px;border:1px solid var(--neutral-200);
   padding:1.5rem;margin-bottom:1.25rem}
@@ -449,6 +467,13 @@ const CSMS  = ['Gian Luca','Lucineia Felix','Guilherme Camargo','Patricia Carval
 
 const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};
 const BONUS_EQ_VAL = {super:100,ultra:200};
+
+// Opção "Contratou em outro CNPJ" do campo Motivo da perda. Troca de titularidade
+// gera um cancelamento administrativo, mas não é perda real — sai do MRR perdido do
+// resumo da gestão, e SÓ dele. Comparado por ID, nunca por rótulo: renomear a opção
+// no ClickUp não pode mudar a regra em silêncio.
+// Espelha MOTIVO_MIGRACAO_CNPJ em api/_lib/clickup.js — a suíte prova que batem.
+const MOTIVO_MIGRACAO_CNPJ = '00c64f34-41e0-4fb2-8f70-17a55b803507';
 
 const CSM_COLORS = {
   'Gian Luca':         {dot:'#5BA4D4',bg:'#EBF4FB',text:'#1B5E8C',border:'#BDD9EE'},
@@ -812,10 +837,16 @@ function renderAll(){
     const mrrIncrementado=metasData.reduce((s,m)=>s+m.mrrAt,0);
     // MRR perdido downsell = soma downsell dos cards de meta
     const mrrDownsell=metasData.reduce((s,m)=>s+m.downsell,0);
-    // MRR perdido churn = soma MRR dos cancelados no mês atual
+    // MRR perdido churn = soma MRR dos cancelados no mês atual, EXCETO quem
+    // contratou em outro CNPJ. Só o valor deste card muda: a lista de
+    // cancelamentos, o total do cabeçalho dela e o top 3 de motivos continuam
+    // contando esses registros, porque lá o cancelamento administrativo é o que se
+    // quer ver. Sem o ⓘ ao lado, o número ficaria inexplicável para quem confere
+    // o card contra a lista logo abaixo.
     const now2=new Date();
     const mrrChurn=allData.filter(r=>{
       if(r.status!=='cancelado'||!r.dataCancel)return false;
+      if(r.motivoPerdaId===MOTIVO_MIGRACAO_CNPJ)return false;
       const d=new Date(Number(r.dataCancel));
       return d.getMonth()===now2.getMonth()&&d.getFullYear()===now2.getFullYear();
     }).reduce((s,r)=>s+r.mrr,0);
@@ -834,7 +865,7 @@ function renderAll(){
       metricsEl2.innerHTML=
         mHTML('📈 MRR Incrementado',fmtc(mrrIncrementado),'soma atingido dos gerentes','#16A34A')+
         mHTML('📉 Perdido Downsell',fmtc(mrrDownsell),'redução de contratos','#DC2626','danger')+
-        mHTML('❌ Perdido Churn',fmtc(mrrChurn),'cancelamentos no mês','#DC2626','danger');
+        mHTML('❌ Perdido Churn'+dica('Não considera clientes que contrataram em outro CNPJ: é troca de titularidade, não perda. Eles seguem na lista de cancelamentos e na contagem.'),fmtc(mrrChurn),'cancelamentos no mês','#DC2626','danger');
     }
   }else{
     metricsEl.className='metrics c3';
@@ -851,6 +882,11 @@ function renderAll(){
   renderPagination();
 }
 
+// Ícone de informação com tooltip. `texto` é conteúdo nosso, não dado do ClickUp —
+// se algum dia vier de campo do usuário, escapar antes de interpolar.
+function dica(texto){
+  return`<button type="button" class="info-dica" aria-label="${texto}">ⓘ<span class="info-dica-texto">${texto}</span></button>`;
+}
 function mHTML(label,val,sub,accent,subClass=''){
   return`<div class="metric" style="border-top-color:${accent}">
     <div class="metric-label">${label}</div>

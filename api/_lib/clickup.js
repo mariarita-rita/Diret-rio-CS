@@ -32,6 +32,21 @@ const CF = {
   CSAT: '98acac2a-932b-4c60-8a16-bd2e211961d5',
 };
 
+/**
+ * Opcao "Contratou em outro CNPJ" do campo Motivo da perda.
+ *
+ * Contratar em outro CNPJ e troca de titularidade: administrativamente gera um
+ * cancelamento e um contrato novo, mas nao e venda nova nem perda real. Por isso o
+ * card de resumo da gestao tira esse valor do MRR perdido — e SO ele. A lista de
+ * cancelamentos, o total do cabecalho dela e o top 3 de motivos seguem contando
+ * normalmente, porque ali o registro administrativo e o que se quer ver.
+ *
+ * Exportado para que a suite prove que o front e o servidor usam o MESMO id: a
+ * regra vive no front (dashboard_carteiras.html, MOTIVO_MIGRACAO_CNPJ) e uma
+ * divergencia entre os dois seria silenciosa.
+ */
+export const MOTIVO_MIGRACAO_CNPJ = '00c64f34-41e0-4fb2-8f70-17a55b803507';
+
 // Campos da lista Metas
 const CM = {
   MRR_ATINGIDO: '3f9f68a3-58f8-4a3c-9e40-131e6e7b940e',
@@ -222,6 +237,26 @@ function cfVal(task, id) {
 }
 
 /**
+ * Id da opcao escolhida num drop_down — o UUID estavel, nunca o rotulo.
+ *
+ * Mesma motivacao de cfLabelIds, para o outro tipo de campo: cfVal() traduz
+ * drop_down para o NOME da opcao e descarta o id, e regra de negocio casada por
+ * rotulo quebra em silencio quando alguem renomeia a opcao no ClickUp.
+ *
+ * O `value` de um drop_down vem como `orderindex` (numero) OU como id da opcao
+ * (string) — a API alterna entre os dois. Por isso a busca replica a de cfVal e
+ * so entao devolve `opt.id`: `orderindex` NAO serve de chave, porque e posicao na
+ * lista e muda quando alguem reordena as opcoes.
+ */
+function cfOpcaoId(task, id) {
+  const f = task.custom_fields?.find((x) => x.id === id);
+  if (!f || f.type !== 'drop_down') return null;
+  if (f.value === null || f.value === undefined) return null;
+  const opt = f.type_config?.options?.find((o) => o.orderindex === f.value || o.id === f.value);
+  return opt?.id || null;
+}
+
+/**
  * Ids crus de um campo de labels.
  * mapTask traduz labels para NOMES e, ao fazer isso, perdia os ids — e sem eles o
  * front era obrigado a casar rotulo por texto para pre-marcar os alertas. Casamento
@@ -260,6 +295,9 @@ function mapTask(t) {
     nps: cfVal(t, CF.NPS),
     acomp: cfVal(t, CF.ACOMP),
     motivoPerda: cfVal(t, CF.MOTIVO_PERDA),
+    // Id da opcao ao lado do rotulo: o resumo da gestao exclui "Contratou em outro
+    // CNPJ" do MRR perdido, e essa regra compara por ID. Ver MOTIVO_MIGRACAO_CNPJ.
+    motivoPerdaId: cfOpcaoId(t, CF.MOTIVO_PERDA),
     dataCancel: cfVal(t, CF.DATA_CANCEL),
     csat: cfVal(t, CF.CSAT),
   };
