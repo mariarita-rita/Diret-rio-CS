@@ -28,6 +28,7 @@ import {
   getCarteira,
   getMetas,
   gravarCampo,
+  lerClienteFresco,
   localizarTask,
   refletirEscrita,
 } from './_lib/clickup.js';
@@ -59,9 +60,10 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET' && acao === 'carteira') return await lerCarteira(res, sessao);
     if (req.method === 'GET' && acao === 'metas') return await lerMetas(res, sessao);
+    if (req.method === 'GET' && acao === 'cliente') return await lerCliente(req, res, sessao);
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
 
-    if (!['carteira', 'metas', 'set-field'].includes(acao)) {
+    if (!['carteira', 'metas', 'cliente', 'set-field'].includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
     }
     return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido para esta ação.');
@@ -86,6 +88,34 @@ async function lerCarteira(res, sessao) {
 
   res.setHeader('Cache-Control', CACHE_LEITURA);
   return res.status(200).json({ tasks: visiveis, total: visiveis.length });
+}
+
+/**
+ * GET ?action=cliente&taskId=... — UMA linha, lida direto do ClickUp.
+ *
+ * Mesmo portao das outras leituras: sessao obrigatoria (ja exigida no handler),
+ * escopo por CSM e MRR zerado para consulta. Nada relaxado — a unica diferenca e
+ * que nao passa pelo cache e responde `no-store`, porque o motivo de existir e
+ * justamente entregar a verdade: e desta linha que sai a pre-marcacao dos alertas,
+ * que alimenta uma escrita de array completo.
+ */
+async function lerCliente(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+
+  const taskId = String(req.query?.taskId || '');
+  if (!taskIdValido(taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+
+  const linha = await lerClienteFresco(taskId);
+  if (!linha) {
+    return erro(res, 403, 'task_fora_do_escopo', 'Tarefa fora das listas permitidas.');
+  }
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(linha.gerente, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este cliente não está na sua carteira.');
+  }
+
+  return res.status(200).json({ task: sessao.nivel === 'consulta' ? { ...linha, mrr: 0 } : linha });
 }
 
 async function lerMetas(res, sessao) {

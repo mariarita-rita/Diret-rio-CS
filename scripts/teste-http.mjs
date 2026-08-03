@@ -61,6 +61,7 @@ const stubClickup = `
   export function refletirEscrita() {}
   export async function localizarTask() { return null; }
   export async function localizarCliente() { return null; }
+  export async function lerClienteFresco() { return null; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -598,6 +599,124 @@ console.log('\n[23] escrita reflete no cache em vez de derruba-lo (S3)');
   await lib.getCarteira();
   checar('Etapa nao invalida o cache', chamadas.length, 0);
   checar('  e a linha segue intacta', c4.linhas[0].id, 'tX');
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[24] action=cliente: allowlist, portao de sessao, escopo e frescor');
+{
+  const ALERTA_A = 'ddaddf7d-9ffa-49de-9b53-6e63acbbceb3';
+  const chamadas = [];
+  const fetchOriginal = globalThis.fetch;
+  const ok = (corpo) => ({
+    ok: true, status: 200,
+    headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+    json: async () => corpo, text: async () => '',
+  });
+  const taskDe = (gerente) => ({
+    id: 'tC', name: 'Cliente Z', list: { id: '901327787926' }, status: { status: 'ativo' },
+    custom_fields: [
+      { id: '59888807-a3f3-42f0-aebd-f63032011ed1', type: 'number', value: 4321 },
+      { id: '3898a8f4-bb21-46d7-88ee-79d164033fdf', type: 'drop_down', value: 0,
+        type_config: { options: [{ orderindex: 0, name: gerente }] } },
+      { id: '6ce5db54-1a1d-4dfa-944d-4b01b8832549', type: 'labels', value: [ALERTA_A],
+        type_config: { options: [{ id: ALERTA_A, label: 'Risco de Churn' }] } },
+    ],
+  });
+
+  let gerenteAtual = 'Gian Luca';
+  globalThis.fetch = async (url) => {
+    chamadas.push(String(url));
+    if (/\/task\//.test(String(url))) return ok(taskDe(gerenteAtual));
+    return ok({ tasks: [taskDe(gerenteAtual)], last_page: true });
+  };
+
+  const cu = await carregarCom('api/clickup.js', libClickupUnica('cliente'));
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  // Sessoes de teste
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const ckGestao = cookieDe({ nivel: 'gestao', csm: null, nome: 'G' });
+  const ckGian = cookieDe({ nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' });
+  const ckPatricia = cookieDe({ nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' });
+  const ckConsulta = cookieDe({ nivel: 'consulta', csm: null, nome: 'C' });
+
+  const pedir = async (ck, taskId = 'tC') => {
+    const r = res();
+    const headers = cabecalhos(ck ? { cookie: ck } : {});
+    await cu({ method: 'GET', headers, query: { action: 'cliente', taskId } }, r);
+    return r;
+  };
+
+  const semSessao = await pedir(null);
+  checar('sem cookie: 401 sessao_invalida', [semSessao.code, semSessao.corpo.code], [401, 'sessao_invalida']);
+
+  const gestao = await pedir(ckGestao);
+  checar('gestao: 200', gestao.code, 200);
+  checar('  devolve alertasIds', gestao.corpo.task.alertasIds, [ALERTA_A]);
+  checar('  e o rotulo tambem', gestao.corpo.task.alertas, ['Risco de Churn']);
+  checar('  no-store (o motivo de existir e frescor)', gestao.headers['Cache-Control'], 'no-store');
+
+  const gian = await pedir(ckGian);
+  checar('csm dono: 200', gian.code, 200);
+  checar('  mrr visivel', gian.corpo.task.mrr, 4321);
+
+  const patricia = await pedir(ckPatricia);
+  checar('csm de outra carteira: 403 fora_da_carteira', [patricia.code, patricia.corpo.code], [403, 'fora_da_carteira']);
+
+  const consulta = await pedir(ckConsulta);
+  checar('consulta: 200 com mrr zerado', [consulta.code, consulta.corpo.task.mrr], [200, 0]);
+
+  const invalido = await pedir(ckGestao, 'id com espaco!');
+  checar('taskId invalido: 400', [invalido.code, invalido.corpo.code], [400, 'task_invalida']);
+
+  // Custo e frescor: nao passa pelo cache mesmo com carteira quente
+  const rq = res();
+  await cu({ method: 'GET', headers: cabecalhos({ cookie: ckGestao }), query: { action: 'carteira' } }, rq);
+  chamadas.length = 0;
+  await pedir(ckGestao);
+  checar('com carteira quente, ainda le do ClickUp: 1 chamada', chamadas.length, 1);
+
+  // Metodo errado e acao desconhecida
+  const post = res();
+  await cu({ method: 'POST', headers: cabecalhos({ cookie: ckGestao, 'content-type': 'application/json' }),
+             query: { action: 'cliente' }, body: {} }, post);
+  checar('POST em action=cliente: 405', post.code, 405);
+  const nada = res();
+  await cu({ method: 'GET', headers: cabecalhos({ cookie: ckGestao }), query: { action: 'clientes' } }, nada);
+  checar('acao inexistente segue 400', [nada.code, nada.corpo.code], [400, 'acao_invalida']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[25] refletirEscrita mantem alertas e alertasIds coerentes');
+{
+  const ALERTA_A = 'ddaddf7d-9ffa-49de-9b53-6e63acbbceb3';
+  const ALERTA_B = '06759f74-83bb-427a-8ddd-77aa2f9f94c5';
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+    json: async () => ({
+      last_page: true,
+      tasks: [{
+        id: 'tD', name: 'C', list: { id: '901327787926' }, status: { status: 'ativo' },
+        custom_fields: [{ id: '6ce5db54-1a1d-4dfa-944d-4b01b8832549', type: 'labels', value: [ALERTA_A],
+          type_config: { options: [{ id: ALERTA_A, label: 'Risco de Churn' }, { id: ALERTA_B, label: 'Cliente Insatisfeito' }] } }],
+      }],
+    }),
+    text: async () => '',
+  });
+  const lib = await import(libClickupUnica('ids-coerentes'));
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const c1 = await lib.getCarteira();
+  checar('leitura traz ids e rotulos', [c1.linhas[0].alertasIds, c1.linhas[0].alertas], [[ALERTA_A], ['Risco de Churn']]);
+
+  lib.refletirEscrita('tD', '6ce5db54-1a1d-4dfa-944d-4b01b8832549', [ALERTA_A, ALERTA_B]);
+  const c2 = await lib.getCarteira();
+  checar('reflete rotulos', c2.linhas[0].alertas, ['Risco de Churn', 'Cliente Insatisfeito']);
+  checar('reflete ids junto', c2.linhas[0].alertasIds, [ALERTA_A, ALERTA_B]);
 
   globalThis.fetch = fetchOriginal;
 }

@@ -221,6 +221,21 @@ function cfVal(task, id) {
   return f.value;
 }
 
+/**
+ * Ids crus de um campo de labels.
+ * mapTask traduz labels para NOMES e, ao fazer isso, perdia os ids — e sem eles o
+ * front era obrigado a casar rotulo por texto para pre-marcar os alertas. Casamento
+ * por texto e a mesma fragilidade de substring que ja nos mordeu em pertenceAoCsm, e
+ * aqui alimenta uma escrita: marcar a tag errada GRAVA a tag errada.
+ */
+function cfLabelIds(task, id) {
+  const f = task.custom_fields?.find((x) => x.id === id);
+  if (!f || f.type !== 'labels' || !Array.isArray(f.value)) return [];
+  return f.value
+    .map((v) => (v && typeof v === 'object' ? v.id : v))
+    .filter((v) => typeof v === 'string' && v);
+}
+
 /** Linha da carteira enviada ao navegador — bem menor que a task crua. */
 function mapTask(t) {
   return {
@@ -236,6 +251,7 @@ function mapTask(t) {
     baseRenov: cfVal(t, CF.BASE_RENOV),
     criterio: cfVal(t, CF.CRITERIO),
     alertas: cfVal(t, CF.ALERTAS) || [],
+    alertasIds: cfLabelIds(t, CF.ALERTAS),
     cnpj: cfVal(t, CF.CNPJ),
     cidade: cfVal(t, CF.CIDADE),
     finStatus: cfVal(t, CF.FIN_STATUS),
@@ -376,6 +392,30 @@ export async function localizarCliente(taskId) {
   return mapTask(task);
 }
 
+/**
+ * Linha do cliente lida DIRETO do ClickUp, sem passar pelo cache. Custa 1 chamada.
+ *
+ * Existe porque a escrita de alertas envia o array COMPLETO dos selecionados, e a
+ * selecao inicial vem do que a tela mostra. Com dado velho, um alerta acrescentado
+ * por outra pessoa nao esta no array enviado e desaparece sem aviso. O dashboard
+ * antigo lia direto do ClickUp, entao essa janela era de segundos; o cache que
+ * introduzimos a esticou para minutos. Isto devolve a janela ao tamanho anterior.
+ *
+ * localizarCliente() continua preferindo o cache: no caminho do Moskit os dados de
+ * identificacao (ID Nucleo, CNPJ, razao social) nao mudam.
+ */
+export async function lerClienteFresco(taskId) {
+  const task = await buscarTaskUnica(taskId);
+  if (!task) return null;
+  if (String(task?.list?.id || '') !== LISTA_CARTEIRA) return null;
+
+  const linha = mapTask(task);
+  // Se o cache estiver quente, aproveita para alinha-lo com o que acabamos de ler.
+  const alvo = soSeQuente(cacheCarteira)?.porId.get(taskId);
+  if (alvo?.linha) Object.assign(alvo.linha, linha);
+  return linha;
+}
+
 /** Busca uma task por id. Devolve null quando o ClickUp diz que nao existe. */
 async function buscarTaskUnica(taskId) {
   try {
@@ -496,6 +536,7 @@ export function refletirEscrita(taskId, fieldId, valor) {
       return;
     }
     alvo.linha.alertas = rotulos;
+    alvo.linha.alertasIds = Array.isArray(valor) ? [...valor] : [];
     return;
   }
 

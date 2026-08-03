@@ -351,7 +351,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
   <div class="logo">Londrisoft <span>CSM</span></div>
   <div class="header-right">
     <span class="update-info" id="update-info">Carregando...</span>
-    <button class="logout-btn" id="btn-recarregar" onclick="loadAllData()" title="Recarregar dados">↻ Recarregar</button>
+    <button class="logout-btn" id="btn-recarregar" onclick="loadAllData(true)" title="Recarregar dados">↻ Recarregar</button>
     <span class="user-badge" id="user-badge"></span>
     <button class="logout-btn" onclick="doLogout()">Sair</button>
   </div>
@@ -469,6 +469,32 @@ let currentTab='geral',currentPage=1,currentSort='cliente-asc',currentSearch='';
 // Sem nenhum header de autorização: o cookie de sessão é httpOnly e viaja
 // sozinho. Quem decide o que este perfil pode ler e escrever é o servidor —
 // mexer em `session` aqui no console não muda nada do lado de lá.
+// ── Frescor após escrita ──────────────────────────────────────────────────
+// A leitura da carteira responde com `private, max-age=300`, então depois de uma
+// escrita o navegador servia a cópia antiga da PRÓPRIA cache — e após um F5, que
+// descarta a atualização em memória, o campo reaparecia como antes: parecia perda
+// de dado. A marca precisa sobreviver ao reload, logo sessionStorage e não variável.
+//
+// O modo é 'reload', não 'no-store': 'no-store' ignora a cache na ida mas NÃO grava
+// a resposta, então a entrada velha continua lá e a leitura seguinte volta a servi-la.
+// 'reload' busca da rede e SUBSTITUI a entrada guardada. Cache-buster teria o mesmo
+// defeito do 'no-store', em outra chave.
+const MARCA_ESCRITA='cs_escrita_recente';
+const JANELA_FRESCOR_MS=300000; // igual ao max-age da leitura
+
+function marcarEscrita(){
+  try{sessionStorage.setItem(MARCA_ESCRITA,String(Date.now()));}catch(_){}
+}
+function temEscritaRecente(){
+  try{
+    const t=Number(sessionStorage.getItem(MARCA_ESCRITA));
+    return Number.isFinite(t)&&t>0&&(Date.now()-t)<JANELA_FRESCOR_MS;
+  }catch(_){return false;}
+}
+function limparMarcaEscrita(){
+  try{sessionStorage.removeItem(MARCA_ESCRITA);}catch(_){}
+}
+
 async function api(url,opts){
   const r=await fetch(url,{credentials:'same-origin',...opts});
   let data={};
@@ -481,6 +507,9 @@ async function api(url,opts){
     e.espera=data.esperaSegundos;
     throw e;
   }
+  // Marca central: toda escrita bem-sucedida, de qualquer chamador, presente ou
+  // futuro. Ficar num só lugar é o que garante que ninguém esqueça.
+  if(/action=set-field/.test(url))marcarEscrita();
   return data;
 }
 function apiPost(url,body){
@@ -547,16 +576,20 @@ async function restaurarSessao(){
 // A paginação da carteira, a leitura dos campos personalizados e o filtro por
 // CSM acontecem todos no servidor. O que chega aqui já é só o que este perfil
 // tem direito de ver.
-async function loadAllData(){
+async function loadAllData(forcar){
   const lbar=document.getElementById('lbar');
   const lwrap=lbar.parentElement;
   lwrap.style.display='block';
   lbar.style.width='15%';
+  // `forcar` vem do botão Recarregar, que sempre tem de ir à rede — um botão de
+  // recarregar servido da cache mentiria, e ainda atualizaria o horário.
+  const fresco=forcar===true||temEscritaRecente();
+  const modo=fresco?{cache:'reload'}:undefined;
   try{
-    const r=await api('/api/clickup?action=carteira');
+    const r=await api('/api/clickup?action=carteira',modo);
     allData=r.tasks||[];
     lbar.style.width='75%';
-    const mr=await api('/api/clickup?action=metas');
+    const mr=await api('/api/clickup?action=metas',modo);
     metasData=mr.tasks||[];
     mrrEquipe=Number(mr.mrrEquipe)||0;
     lbar.style.width='100%';
@@ -564,6 +597,9 @@ async function loadAllData(){
     filtered=[...allData];
     applyFilters();
     document.getElementById('update-info').textContent='Atualizado '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    // Só depois do SUCESSO: falha de rede no meio não pode deixar a pessoa presa
+    // no valor antigo. E limpar aqui evita que toda leitura da janela vá à rede.
+    if(fresco)limparMarcaEscrita();
   }catch(e){
     if(e.message==='sessao')return;
     lwrap.style.display='none';
@@ -1399,7 +1435,27 @@ function closeMoskitModal(e) {
 // Board, etapa e responsável são travados em /api/moskit.js.
 let _acompCliente = null;
 
-function openAcompModal(r) {
+async function openAcompModal(rLocal) {
+  // A pré-marcação dos alertas alimenta uma escrita que envia o array COMPLETO:
+  // partir do que a tela mostra significa apagar, sem aviso, alerta acrescentado
+  // por outra pessoa. Uma leitura fresca daquela task custa 1 chamada ao ClickUp.
+  let r = rLocal;
+  let avisoFrescor = '';
+  try {
+    const resp = await api('/api/clickup?action=cliente&taskId=' + encodeURIComponent(rLocal.id));
+    if (resp && resp.task) {
+      r = resp.task;
+      // Mantém a tabela coerente com o que acabamos de ler.
+      const naTabela = allData.find(x => x.id === r.id);
+      if (naTabela) { Object.assign(naTabela, r); applyFilters(); }
+    }
+  } catch (e) {
+    if (e.message === 'sessao') return;
+    // Sem frescor não escondemos o risco: abre, mas avisa.
+    avisoFrescor = 'Não foi possível confirmar os alertas atuais deste cliente. '
+      + 'Confira no ClickUp antes de enviar, para não remover alerta de outra pessoa.';
+  }
+
   _acompCliente = r;
 
   // Reset formulário
@@ -1416,12 +1472,20 @@ function openAcompModal(r) {
   document.getElementById('acomp-submit-btn').disabled = false;
   document.getElementById('acomp-submit-btn').textContent = '📋 Abrir acompanhamento';
 
-  // Pré-marcar alertas existentes do cliente
-  if (r.alertas && r.alertas.length) {
+  // Pré-marcar alertas existentes — por ID, nunca por texto. Casar rótulo por
+  // substring é a mesma fragilidade que corrigimos em pertenceAoCsm, e aqui ela
+  // alimenta uma escrita: marcar a tag errada GRAVA a tag errada.
+  const marcados = new Set(r.alertasIds || []);
+  if (marcados.size) {
     document.querySelectorAll('#acomp-alertas-tags .label-tag').forEach(t => {
-      if (r.alertas.some(a => t.textContent.trim().toLowerCase().includes(a.toLowerCase().split(' ')[0])))
-        t.classList.add('selected');
+      if (marcados.has(t.dataset.id)) t.classList.add('selected');
     });
+  }
+
+  if (avisoFrescor) {
+    const el = document.getElementById('acomp-error');
+    el.textContent = '⚠️ ' + avisoFrescor;
+    el.style.display = 'block';
   }
 
   document.getElementById('acomp-modal-title').textContent = 'Acompanhamento — ' + r.nome.split(' ').slice(0,3).join(' ');
@@ -1502,7 +1566,10 @@ async function criarAcompanhamento() {
     const linhaLocal = allData.find(x => x.id === r.id);
     if (linhaLocal) {
       linhaLocal.acomp = true;
-      if (alertasRotulos.length) linhaLocal.alertas = alertasRotulos;
+      if (alertasSelecionados.length) {
+        linhaLocal.alertas = alertasRotulos;
+        linhaLocal.alertasIds = [...alertasSelecionados];
+      }
       applyFilters();
     }
 

@@ -167,7 +167,15 @@ Sempre responde `Cache-Control: no-store`.
 | ------ | ----------- | --------- |
 | `GET`  | `carteira`  | lista `901327787926`, paginada inteira no servidor, `include_closed=true`, `include_custom_fields=true` |
 | `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais o campo agregado `mrrEquipe` (`0` para `consulta`) |
+| `GET`  | `cliente`   | `?taskId=...` → **uma** linha lida direto do ClickUp, sem cache, `no-store`. 1 chamada |
 | `POST` | `set-field` | `{ taskId, fieldId, value }` |
+
+`action=cliente` passa pelo mesmo portão das outras leituras — sessão obrigatória,
+escopo por CSM (`fora_da_carteira`), `mrr` zerado para `consulta`, `taskId` validado,
+e só a lista Carteira. A única diferença é não usar cache e responder `no-store`,
+porque a razão de existir é entregar a verdade: é dessa linha que sai a pré-marcação
+dos alertas no modal de acompanhamento, e essa pré-marcação alimenta uma escrita que
+envia o array **completo**.
 
 Não existe path livre. Os dois IDs de lista são constantes no servidor.
 
@@ -225,6 +233,32 @@ de propósito — mas a atribuição errada não passa mais em silêncio.
 | `/api/login` (sempre) | `no-store` |
 | `/api/clickup` leitura | `private, max-age=300, stale-while-revalidate=600` |
 | `/api/clickup` escrita, `/api/moskit`, todo erro | `no-store` |
+
+### Frescor depois de escrever
+
+O `private, max-age=300` faz o navegador guardar cópia própria da carteira. Sem
+tratamento, depois de uma escrita a pessoa recarregava e via o valor **antigo** — o
+que parece perda de dado, e é pior que a tela simplesmente não atualizar.
+
+Três mecanismos, nenhum deles afrouxando o cache no uso normal:
+
+1. **Marca em `sessionStorage`** (`cs_escrita_recente`): toda escrita bem-sucedida a
+   grava, de forma centralizada em `api()`. Precisa ser `sessionStorage` e não
+   variável — o caso a corrigir é justamente o F5, que apaga memória.
+2. **`cache: 'reload'`** na leitura seguinte a uma escrita, e **sempre** no botão
+   ↻ Recarregar. Não use `no-store` nem cache-buster aqui: os dois ignoram a cache na
+   ida mas **não substituem** a entrada guardada, então a leitura seguinte volta a
+   servir o corpo velho. `reload` busca da rede e regrava.
+   A marca é apagada só **depois** do sucesso, para que falha de rede não deixe a
+   pessoa presa no valor antigo, e para que não seja toda leitura da janela a ir à rede.
+3. **`action=cliente`** ao abrir o modal de acompanhamento, para a pré-marcação dos
+   alertas partir do ClickUp e não da tela.
+
+A defasagem que **permanece**: instâncias diferentes têm cache próprio por até 5
+minutos, então quem não escreveu pode ver o estado anterior por esse tempo. Não há
+risco de perda em *Em acompanhamento*, *Etapa* e *Tipo*, que são escritas de valor
+absoluto. O botão ↻ Recarregar é a saída explícita, e o "Atualizado HH:MM" torna a
+defasagem visível.
 
 **Por que `private` e não `s-maxage` na leitura:** a resposta de `action=carteira`
 varia por sessão, porque o filtro de CSM é aplicado antes de responder. Num cache
