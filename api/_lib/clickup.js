@@ -74,7 +74,46 @@ const CM = {
   META_ESP: '28627910-6605-4389-bcca-5efccb2cc264',
   GERENTE: '3898a8f4-bb21-46d7-88ee-79d164033fdf',
   MES_REF: '6f335424-3dcc-4cf0-9df3-2cdb367efde3',
+  ANO_BASE: '5c06c44f-135e-4139-ae0b-3d21cb9d6040',
 };
+
+/**
+ * Status que marca o periodo corrente de trabalho na lista Metas.
+ *
+ * O periodo NAO vem do calendario, e sim deste status. O fechamento acontece depois
+ * do fim do mes: em 03/08 o mes corrente de trabalho ainda e julho. Quem decide a
+ * virada e a pessoa, movendo as linhas no ClickUp.
+ *
+ * ACOPLAMENTO: e o nome do status no ClickUp, em minusculas. Renomear la faz o
+ * painel nao achar periodo corrente — o que aparece como ERRO VISIVEL (ver os
+ * avisos de lerMetas), nunca como numero errado. A lista tem hoje quatro status:
+ * `mes atual` (open), `meses fechados` (custom), `concluido` (done) e `finalizado`
+ * (closed). Com include_closed=false os dois ultimos podem nao chegar.
+ */
+export const STATUS_MES_ATUAL = 'mês atual';
+
+/**
+ * Opcao de 📅 Mes Referencia -> numero do mes.
+ *
+ * Mapeado por ID da opcao, nao pelo rotulo nem pelo orderindex, pelo mesmo motivo de
+ * EQUIPE_OPCAO: rotulo quebra ao renomear, orderindex quebra ao reordenar. O numero
+ * serve para ORDENAR os periodos do mais recente para o mais antigo — o rotulo
+ * "Janeiro" nao se ordena sozinho, e o campo nao tem ano.
+ */
+const MESES_OPCAO = new Map([
+  ['862d5112-66ad-4143-8390-c2c6d9ca5793', 1],
+  ['40780596-e94a-4e6b-ac23-21b692f89b1f', 2],
+  ['45be10be-0492-4c5f-adff-315314a2a16f', 3],
+  ['497d656f-3964-4729-8884-9d7b7221f503', 4],
+  ['a88806dd-d478-4e13-a9d3-2e9d03fc37cf', 5],
+  ['68ab70d4-0288-49b4-8c82-45769ed6ee59', 6],
+  ['80ae72d6-3320-4066-bdb8-46a4ffdff41f', 7],
+  ['4d3e89aa-f3ab-4b99-b33c-07d1ea4b16d4', 8],
+  ['acca4e93-13a6-425c-aa05-c07d98a75fdb', 9],
+  ['8f577868-8d4b-452d-ab38-26616e3c7f06', 10],
+  ['6a5627f4-50a4-4276-8510-45a6e2ff3b05', 11],
+  ['337e7243-d78e-4881-90e0-35fe423e8ca3', 12],
+]);
 
 /**
  * ALLOWLIST de escrita — exatamente os 4 campos que o dashboard usa.
@@ -321,9 +360,14 @@ function mapTask(t) {
 }
 
 function mapMeta(t) {
+  const mesRefId = cfOpcaoId(t, CM.MES_REF);
+  const anoBruto = cfVal(t, CM.ANO_BASE);
+  const ano = Number(String(anoBruto ?? '').trim());
   return {
     id: t.id,
     nome: t.name,
+    // Status da propria task: e o que define o periodo corrente. Ver STATUS_MES_ATUAL.
+    statusMeta: (t.status?.status || '').toLowerCase(),
     gerente: cfVal(t, CM.GERENTE),
     // Id da opcao ao lado do rotulo, pelo mesmo motivo de motivoPerdaId: a linha de
     // equipe e identificada por ID, nunca pelo texto "⭐ Equipe". Ver EQUIPE_OPCAO.
@@ -335,6 +379,12 @@ function mapMeta(t) {
     ultraMeta: Number(cfVal(t, CM.ULTRA_META)) || 0,
     metaEsp: Number(cfVal(t, CM.META_ESP)) || 0,
     mesRef: cfVal(t, CM.MES_REF),
+    mesRefId,
+    // Numero do mes e ano, para ordenar periodos. null quando o campo esta vazio ou
+    // com opcao desconhecida — quem consome trata como "periodo indefinido" em vez
+    // de assumir um mes qualquer.
+    mesNum: MESES_OPCAO.get(mesRefId) ?? null,
+    anoBase: Number.isInteger(ano) && ano >= 2000 && ano <= 2100 ? ano : null,
   };
 }
 
@@ -374,9 +424,15 @@ async function comCache(slot, produzir) {
  * funcao serverless, que tem limite de tempo. Buscar LOTE paginas por vez corta o
  * tempo de parede sem chegar perto do limite de requisicoes do ClickUp.
  * Promise.all preserva a ordem, então a ordem das tasks nao muda.
+ *
+ * `lote` e parametro porque as duas listas tem escalas opostas. A Carteira tem 2797
+ * tasks (28 paginas) e o lote de 4 corta o tempo de parede. A lista Metas tem 5
+ * linhas por mes: com lote 4 ela custaria 4 chamadas para buscar 5 registros, contra
+ * 1 antes de paginar. Com lote 1 e o `last_page` do ClickUp, volta a 1 chamada
+ * enquanto couber numa pagina, e 2 quando passar de 100 linhas.
  */
-async function buscarPaginado(listaId, extra) {
-  const LOTE = 4;
+async function buscarPaginado(listaId, extra, lote = 4) {
+  const LOTE = Math.max(1, lote);
   const out = [];
   let fim = false;
 
@@ -484,10 +540,23 @@ async function buscarTaskUnica(taskId) {
   }
 }
 
+/**
+ * Lista Metas inteira, paginada.
+ *
+ * Antes era UMA chamada sem `page`: acima de 100 linhas as mais antigas
+ * desapareciam em silencio. Com 5 linhas por mes sao 60 no primeiro ano e 120 no
+ * segundo, entao o teto seria batido em 2027 sem nenhum sinal.
+ *
+ * `include_closed=false` de proposito: FINALIZADO e arquivo, e o seletor de periodo
+ * so oferece o que ainda esta em jogo. O efeito colateral aceito e nao dar para
+ * abrir um mes finalizado no painel.
+ *
+ * Lote 1 para nao trocar 1 chamada por 4 numa lista pequena — ver buscarPaginado.
+ */
 export async function getMetas() {
   return comCache(cacheMetas, async () => {
-    const r = await cu(`/list/${LISTA_METAS}/task?include_closed=false`);
-    const linhas = (r.tasks || []).map(mapMeta);
+    const tasks = await buscarPaginado(LISTA_METAS, 'include_closed=false', 1);
+    const linhas = tasks.map(mapMeta);
     const porId = new Map();
     for (const l of linhas) porId.set(l.id, { listId: LISTA_METAS, gerente: l.gerente });
     return { linhas, porId };

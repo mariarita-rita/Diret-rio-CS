@@ -376,6 +376,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
 
 <div id="iframe-section" style="display:none;padding:1.5rem 2rem;max-width:1440px;margin:0 auto"></div>
 <main class="main" id="main-content">
+  <div id="periodo-bar"></div>
   <div id="meta-section"></div>
   <div id="bonus-section"></div>
   <div class="metrics" id="metrics"></div>
@@ -467,8 +468,8 @@ const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov'
 const CSMS  = ['Gian Luca','Lucineia Felix','Guilherme Camargo','Patricia Carvalho'];
 
 // Limiares de equipe de RESERVA. A fonte da verdade é a linha "⭐ Equipe" da lista
-// Metas, que chega em metaEquipe; estes valores só entram quando ela não existe no
-// período. Batem com a linha atual — foram transcritos dela.
+// Metas, que chega no `equipe` de cada período; estes valores só entram quando ela
+// não existe no período. Batem com a linha de Jul/2026 — foram transcritos dela.
 const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};
 const BONUS_EQ_VAL = {super:100,ultra:200};
 
@@ -491,10 +492,10 @@ const CSM_COLORS = {
 // gestao: tudo
 
 let session=null,allData=[],metasData=[],filtered=[];
-let mrrEquipe=0;
-// Limiares e total da equipe, como o servidor resolveu: declarado pela linha
-// "⭐ Equipe" ou somado das individuais. null para o perfil consulta.
-let metaEquipe=null;
+// Períodos das metas (Ano Base + Mês Referência), do mais recente para o mais antigo.
+// Cada um traz os limiares e o total da equipe daquele mês, e os avisos de dado.
+// Vazio para o perfil consulta, que não recebe valor financeiro.
+let periodos=[],periodoSel=null,avisosGerais=[];
 let currentTab='geral',currentPage=1,currentSort='cliente-asc',currentSearch='';
 
 // ── API ───────────────────────────────────────────────────
@@ -578,7 +579,7 @@ async function doLogout(){
 }
 function sessaoExpirada(){encerrarSessao('Sua sessão expirou. Entre novamente.');}
 function encerrarSessao(msg){
-  session=null;allData=[];metasData=[];filtered=[];mrrEquipe=0;metaEquipe=null;
+  session=null;allData=[];metasData=[];filtered=[];periodos=[];periodoSel=null;avisosGerais=[];
   document.getElementById('login-input').value='';
   document.getElementById('login-error').textContent=msg;
   document.getElementById('user-badge').textContent='';
@@ -623,8 +624,13 @@ async function loadAllData(forcar){
     lbar.style.width='75%';
     const mr=await api('/api/clickup?action=metas',modo);
     metasData=mr.tasks||[];
-    mrrEquipe=Number(mr.mrrEquipe)||0;
-    metaEquipe=mr.metaEquipe||null;
+    periodos=mr.periodos||[];
+    avisosGerais=mr.avisosGerais||[];
+    // Padrão: o período marcado como MÊS ATUAL. Se a seleção anterior não existir
+    // mais (mês fechado entre dois carregamentos), volta para o corrente.
+    if(!periodoSel||!periodos.some(p=>p.chave===periodoSel)){
+      periodoSel=mr.periodoAtual||periodos[0]?.chave||null;
+    }
     lbar.style.width='100%';
     setTimeout(()=>lwrap.style.display='none',400);
     filtered=[...allData];
@@ -872,17 +878,23 @@ function renderAll(){
   const faint=col?col.bg:'#A8C5FF';
 
   // Seções condicionais
+  document.getElementById('periodo-bar').innerHTML='';
   document.getElementById('meta-section').innerHTML='';
   document.getElementById('bonus-section').innerHTML='';
   document.getElementById('gestao-section').innerHTML='';
   document.getElementById('cancelados-section').innerHTML='';
   const m2=document.getElementById('metrics2');if(m2)m2.innerHTML='';
 
+  // Barra de período antes de tudo que consome metas: ela é o que define o recorte,
+  // e é onde os avisos de dado ambíguo aparecem. Fora para consulta.
+  if(showMRR){
+    renderPeriodo();
+  }
   if(csm&&showMRR){
     renderMeta(csm,accent,col);
   }
   // Meta da equipe: na Visão Geral e nas abas de CSM. Fora para consulta, que não
-  // recebe valor financeiro — e o servidor manda metaEquipe null para esse perfil.
+  // recebe valor financeiro — o servidor manda `periodos` vazio para esse perfil.
   if(showMRR){
     renderEquipe();
   }
@@ -910,10 +922,12 @@ function renderAll(){
       mHTML('Ticket Médio',fmtc(ticket),'por cliente',accent)+
       mHTML('Em Risco 🔴',emRisco+'',''+fmtc(mrrRisco)+' em risco',accent,'danger');
   }else if(!csm){
-    // MRR incrementado = soma MRR Atingido dos cards de meta
-    const mrrIncrementado=metasData.reduce((s,m)=>s+m.mrrAt,0);
-    // MRR perdido downsell = soma downsell dos cards de meta
-    const mrrDownsell=metasData.reduce((s,m)=>s+m.downsell,0);
+    // MRR incrementado e downsell = soma das linhas de meta DO PERÍODO selecionado.
+    // Sem o filtro, trocar de mês deixaria estes dois cards somando todos os meses
+    // ao lado de uma régua de um mês só.
+    const metasPer=metasDoPeriodo();
+    const mrrIncrementado=metasPer.reduce((s,m)=>s+m.mrrAt,0);
+    const mrrDownsell=metasPer.reduce((s,m)=>s+m.downsell,0);
     // MRR perdido churn = soma MRR dos cancelados no mês atual, EXCETO quem
     // contratou em outro CNPJ. Só o valor deste card muda: a lista de
     // cancelamentos, o total do cabeçalho dela e o top 3 de motivos continuam
@@ -986,14 +1000,31 @@ function calcNPS(data){
 }
 
 // ── META ──────────────────────────────────────────────────
+// ── PERÍODO DAS METAS ─────────────────────────────────────
+// Tudo que consome metas passa por aqui: régua individual, bloco de equipe, cards de
+// gestão por gerente e os limiares. Um número de julho nunca aparece ao lado de um
+// de agosto, porque nenhum consumidor lê `metasData` direto.
+function periodoAtivo(){return periodos.find(p=>p.chave===periodoSel)||null;}
+function metasDoPeriodo(){return metasData.filter(m=>m.periodo===periodoSel);}
+
+/** Meta de um CSM no período, ou null quando ambígua. Nunca escolhe uma das duas. */
+function metaDoCsm(csm){
+  const p=periodoAtivo();
+  const primeiro=csm.split(' ')[0];
+  if(p&&(p.gerentesAmbiguos||[]).some(g=>(g||'').includes(primeiro)))return null;
+  return metasDoPeriodo().find(m=>(m.gerente||'').includes(primeiro))||null;
+}
+
+/** MRR líquido da equipe no período selecionado. */
+function mrrEquipeSel(){return Number(periodoAtivo()?.equipe?.mrr)||0;}
+
 /**
- * Limiares da equipe. Fonte da verdade é a linha "⭐ Equipe" da lista Metas, que o
- * servidor resolve e manda em metaEquipe; META_EQ é reserva para quando ela não
- * existe no período. Limiar declarado como 0 ou vazio também cai na reserva — meia
- * régua é pior que a régua conhecida.
+ * Limiares da equipe. Fonte da verdade é a linha "⭐ Equipe" do período; META_EQ é
+ * reserva para quando ela não existe. Limiar declarado como 0 ou vazio também cai na
+ * reserva — meia régua é pior que a régua conhecida.
  */
 function limiaresEquipe(){
-  const d=metaEquipe;
+  const d=periodoAtivo()?.equipe;
   const num=v=>Number(v)>0?Number(v):null;
   return{
     meta:num(d?.meta)??META_EQ.meta,
@@ -1001,8 +1032,58 @@ function limiaresEquipe(){
     ultra:num(d?.ultraMeta)??META_EQ.ultra,
     especial:num(d?.metaEsp)??META_EQ.especial,
     declarado:Boolean(d?.declarado),
-    mesRef:d?.mesRef||'',
+    mesRef:periodoAtivo()?.rotulo||'',
   };
+}
+
+/** Faixa de avisos. Vermelho porque estes números alimentam comissão e bônus. */
+function avisoHTML(linhas){
+  if(!linhas.length)return'';
+  return`<div style="background:var(--error-bg);border:1px solid #FCA5A5;border-radius:10px;
+    padding:10px 12px;margin-bottom:1.25rem;font-size:12px;color:#991B1B;line-height:1.55">
+    ${linhas.map(l=>`<div style="display:flex;gap:7px"><span>⚠️</span><span>${esc(l)}</span></div>`).join('')}
+  </div>`;
+}
+
+/**
+ * Barra de período: rótulo, seletor e os avisos do período selecionado.
+ * Mesmo padrão visual do seletor de mês da seção de Cancelamentos.
+ */
+function renderPeriodo(){
+  const bar=document.getElementById('periodo-bar');
+  if(!bar)return;
+  const p=periodoAtivo();
+  const avisos=[...avisosGerais,...(p?.avisos||[])];
+
+  if(!periodos.length){
+    bar.innerHTML=avisoHTML(avisos.length?avisos:['Nenhum período de metas encontrado na lista Metas do ClickUp.']);
+    return;
+  }
+
+  const opcoes=periodos.map(o=>
+    `<option value="${esc(o.chave)}"${o.chave===periodoSel?' selected':''}>${esc(o.rotulo)}${o.atual?' · mês atual':''}</option>`
+  ).join('');
+
+  // Fora do mês atual o painel está mostrando histórico: dizer isso evita ler número
+  // antigo como se fosse o de hoje.
+  const fora=p&&!p.atual
+    ? `<span style="font-size:11px;color:var(--yellow);font-weight:500">histórico — não é o mês atual</span>`
+    : '';
+
+  bar.innerHTML=`
+  <div class="cancelados-header" style="margin-bottom:${avisos.length?'10px':'1.25rem'}">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="cancelados-title">🗓️ Período das metas</div>
+      ${fora}
+    </div>
+    <select class="ctrl-select" onchange="trocarPeriodo(this.value)">${opcoes}</select>
+  </div>
+  ${avisoHTML(avisos)}`;
+}
+
+function trocarPeriodo(chave){
+  periodoSel=chave;
+  renderAll();
 }
 
 /**
@@ -1032,9 +1113,18 @@ function reguaHTML(atual,ultra,marcadores,barColor){
 function renderMeta(csm,accent,col){
   // Garantir col mesmo se não foi passado
   if(!col) col=getColor(csm)||{dot:'#3A86FF',bg:'#EBF4FB',text:'#1B5E8C',border:'#BDD9EE'};
-  const meta=metasData.find(m=>(m.gerente||'').includes(csm.split(' ')[0]));
+  const p=periodoAtivo();
+  const primeiro=csm.split(' ')[0];
+  // Linha duplicada no período: não escolhe uma. O aviso da barra de período explica
+  // o que fazer; aqui o card diz por que o número não está sendo mostrado.
+  if(p&&(p.gerentesAmbiguos||[]).some(g=>(g||'').includes(primeiro))){
+    document.getElementById('meta-section').innerHTML='<div class="meta-card" style="border-top:3px solid var(--red)"><div style="padding:1rem;text-align:center;color:#991B1B;font-size:13px">⚠️ Há mais de uma linha de meta de '+esc(primeiro)+' em '+esc(p.rotulo)+'. O número não é exibido até sobrar uma — escolher por conta própria daria comissão errada.</div></div>';
+    return;
+  }
+  const meta=metaDoCsm(csm);
   if(!meta){
-    document.getElementById('meta-section').innerHTML='<div class="meta-card" style="border-top:3px solid '+col.dot+'"><div style="padding:1rem;text-align:center;color:var(--neutral-400);font-size:13px">Nenhum card de meta encontrado para '+csm.split(' ')[0]+'. Verifique a lista Metas CSM no ClickUp.</div></div>';
+    const onde=p?' em '+esc(p.rotulo):'';
+    document.getElementById('meta-section').innerHTML='<div class="meta-card" style="border-top:3px solid '+col.dot+'"><div style="padding:1rem;text-align:center;color:var(--neutral-400);font-size:13px">Nenhum card de meta encontrado para '+esc(primeiro)+onde+'. Verifique a lista Metas CSM no ClickUp.</div></div>';
     return;
   }
   const mrrLiq=meta.mrrAt-meta.downsell;
@@ -1061,7 +1151,7 @@ function renderMeta(csm,accent,col){
   document.getElementById('meta-section').innerHTML=`
   <div class="meta-card" style="border-top:3px solid ${col.dot}">
     <div class="meta-header">
-      <div><div class="meta-title">🎯 Meta — ${csm.split(' ')[0]} <span style="font-size:11px;font-weight:400;color:var(--neutral-400)">${meta.mesRef||''}</span></div></div>
+      <div><div class="meta-title">🎯 Meta — ${csm.split(' ')[0]} <span style="font-size:11px;font-weight:400;color:var(--neutral-400)">${esc(periodoAtivo()?.rotulo||meta.mesRef||'')}</span></div></div>
       <div class="meta-prem">
         <div class="meta-prem-label">Premiação estimada</div>
         <div class="meta-prem-val" style="color:${premPct>0?col.text:'var(--neutral-400)'}">${premPct>0?fmt(prem):'—'}</div>
@@ -1121,13 +1211,16 @@ function mMini(l,p,v,premio,taxa,ok,col){
  * quando a meta especial era batida — bônus surpresa não tem valor numérico.)
  *
  * Nada aqui roda para o perfil consulta: renderAll só chama com showMRR, e o
- * servidor manda metaEquipe null para consulta. Duas barreiras, não uma.
+ * servidor manda `periodos` vazio para consulta. Duas barreiras, não uma.
  */
 function renderEquipe(){
   const alvo=document.getElementById('bonus-section');
   if(!alvo)return;
+  // Sem período resolvido não há número em que confiar. A barra de período já
+  // explicou o motivo; melhor não desenhar régua nenhuma que desenhar uma de zeros.
+  if(!periodoAtivo()){alvo.innerHTML='';return;}
   const L=limiaresEquipe();
-  const mrrEq=mrrEquipe;
+  const mrrEq=mrrEquipeSel();
 
   // Faixa atingida. Ladder inalterado: especial > ultra > super > meta.
   let bonus=0,faixa='',faixaBg='#F1F5F9',faixaCor='#475569',faixaEmoji='🤝';
@@ -1150,12 +1243,13 @@ function renderEquipe(){
   // aparece para ela. A diferença esperada é MRR órfão — ex-integrante da equipe.
   // O objetivo é perceber erro de digitação agora, não no fechamento.
   let divergencia='';
-  if(metaEquipe&&metaEquipe.declarado&&typeof metaEquipe.soma==='number'){
-    const dif=mrrEq-metaEquipe.soma;
+  const eq=periodoAtivo()?.equipe;
+  if(eq&&eq.declarado&&typeof eq.soma==='number'){
+    const dif=mrrEq-eq.soma;
     if(Math.abs(dif)>=0.01){
       divergencia=`<div style="margin-top:10px;padding:7px 10px;border-radius:8px;background:var(--warning-bg);
         color:#92400E;font-size:11px;line-height:1.5">
-        ⚠️ declarado <strong>${fmt(mrrEq)}</strong> · soma dos gerentes <strong>${fmt(metaEquipe.soma)}</strong>
+        ⚠️ declarado <strong>${fmt(mrrEq)}</strong> · soma dos gerentes <strong>${fmt(eq.soma)}</strong>
         · diferença <strong>${dif>0?'+':'−'}${fmt(Math.abs(dif))}</strong>
         <span style="color:#A16207">— confira se é MRR órfão ou erro de digitação.</span></div>`;
     }
@@ -1215,7 +1309,10 @@ function renderGestao(){
     const acomp=cl.filter(r=>r.acomp===true).length;
     const statusCounts={};
     cl.forEach(r=>{const s=r.status||'ativo';statusCounts[s]=(statusCounts[s]||0)+1;});
-    const meta=metasData.find(m=>(m.gerente||'').includes(csm.split(' ')[0]));
+    // Meta do período selecionado, e null quando ambígua — o card mostra ⚠️ em vez
+    // de uma porcentagem escolhida a esmo.
+    const ambiguo=(periodoAtivo()?.gerentesAmbiguos||[]).some(g=>(g||'').includes(csm.split(' ')[0]));
+    const meta=ambiguo?null:metaDoCsm(csm);
     const mrrLiq=meta?(meta.mrrAt-meta.downsell):0;
     const pct=meta&&meta.ultraMeta?Math.round((mrrLiq/meta.ultraMeta)*100):0;
     const {score:nps}=calcNPS(cl);
@@ -1228,7 +1325,9 @@ function renderGestao(){
       <div class="gestao-stat"><span class="gestao-stat-label">Em acompanhamento</span><span class="gestao-stat-val">${acomp}</span></div>
       <div class="gestao-stat"><span class="gestao-stat-label">Inadimplentes</span><span class="gestao-stat-val ${inadim?'yellow':''}">${inadim}</span></div>
       <div class="gestao-stat"><span class="gestao-stat-label">NPS</span><span class="gestao-stat-val ${nps!==null?(nps>=50?'green':nps>=0?'':'red'):''}">${nps!==null?nps:'—'}</span></div>
-      ${meta?`<div class="gestao-stat"><span class="gestao-stat-label">Meta ${meta.mesRef||''}</span><span class="gestao-stat-val ${pct>=100?'green':pct>=60?'yellow':''}">${pct}%</span></div>`:''}
+      ${ambiguo
+        ?`<div class="gestao-stat"><span class="gestao-stat-label">Meta ${esc(periodoAtivo()?.rotulo||'')}</span><span class="gestao-stat-val red" title="Mais de uma linha de meta neste período">⚠️ duplicada</span></div>`
+        :meta?`<div class="gestao-stat"><span class="gestao-stat-label">Meta ${esc(periodoAtivo()?.rotulo||meta.mesRef||'')}</span><span class="gestao-stat-val ${pct>=100?'green':pct>=60?'yellow':''}">${pct}%</span></div>`:''}
     </div>`;
   }).join('');
   document.getElementById('gestao-section').innerHTML=`<div class="gestao-grid">${cards}</div>`;

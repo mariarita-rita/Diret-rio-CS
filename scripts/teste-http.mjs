@@ -53,6 +53,7 @@ const auth = await import(authUrl);
 const stubClickup = `
   export const CAMPOS_ESCRITA = {};
   export const EQUIPE_OPCAO = 'a9832e95-4c6b-4b53-834f-cebb5000a188';
+  export const STATUS_MES_ATUAL = 'mês atual';
   export class ErroConfigClickUp extends Error {}
   export class ErroUpstream extends Error { constructor(s){ super('up'); this.status = s; } }
   export async function getCarteira() { return { linhas: [] }; }
@@ -858,102 +859,278 @@ console.log('\n[28] meta de equipe: declarada, nao somada');
     { id: 'c6e1ad22-ed55-42ea-9ea7-88ff3df65a18', name: 'Patricia Carvalho', orderindex: 3 },
     { id: EQUIPE, name: '⭐ Equipe', orderindex: 4 },
   ];
-  const linhaMeta = (id, gerenteIdx, mrrAt, down, extras = {}) => ({
-    id, name: `Meta ${id}`, list: { id: '901327940637' }, status: { status: 'pendente' },
-    custom_fields: [
-      { id: CAMPO_GERENTE, type: 'drop_down', value: gerenteIdx, type_config: { options: OPCOES } },
-      { id: F.mrrAt, type: 'currency', value: String(mrrAt) },
-      { id: F.down, type: 'currency', value: String(down) },
-      ...Object.entries(extras).map(([k, v]) => ({ id: F[k], type: 'currency', value: String(v) })),
-    ],
-  });
+  const ANO = '5c06c44f-135e-4139-ae0b-3d21cb9d6040';
+  const MES = '6f335424-3dcc-4cf0-9df3-2cdb367efde3';
+  const MES_OPC = [
+    { id: '68ab70d4-0288-49b4-8c82-45769ed6ee59', name: 'Junho', orderindex: 5 },
+    { id: '80ae72d6-3320-4066-bdb8-46a4ffdff41f', name: 'Julho', orderindex: 6 },
+    { id: '4d3e89aa-f3ab-4b99-b33c-07d1ea4b16d4', name: 'Agosto', orderindex: 7 },
+  ];
+  const MES_ID = { 6: MES_OPC[0].id, 7: MES_OPC[1].id, 8: MES_OPC[2].id };
+  const ATUAL = 'mês atual';
+  const FECHADO = 'meses fechados';
 
-  const INDIVIDUAIS = [
-    linhaMeta('g', 0, 2945.87, 0), linhaMeta('l', 1, 2671.54, 0),
-    linhaMeta('u', 2, 3550.45, 0), linhaMeta('p', 3, 2091.30, 191.40),
+  /** Linha de meta com periodo e status. `mes` numerico, `ano` string como no ClickUp. */
+  const linhaMeta = (id, gerenteIdx, mrrAt, down, opc = {}) => {
+    const { mes = 7, ano = '2026', status = ATUAL, ...extras } = opc;
+    return {
+      id, name: `Meta ${id}`, list: { id: '901327940637' }, status: { status },
+      custom_fields: [
+        { id: CAMPO_GERENTE, type: 'drop_down', value: gerenteIdx, type_config: { options: OPCOES } },
+        { id: F.mrrAt, type: 'currency', value: String(mrrAt) },
+        { id: F.down, type: 'currency', value: String(down) },
+        ...(mes === null ? [] : [{ id: MES, type: 'drop_down', value: MES_ID[mes], type_config: { options: MES_OPC } }]),
+        ...(ano === null ? [] : [{ id: ANO, type: 'short_text', value: ano }]),
+        ...Object.entries(extras).map(([k, v]) => ({ id: F[k], type: 'currency', value: String(v) })),
+      ],
+    };
+  };
+
+  const quatro = (opc) => [
+    linhaMeta('g' + (opc?.mes ?? 7), 0, 2945.87, 0, opc), linhaMeta('l' + (opc?.mes ?? 7), 1, 2671.54, 0, opc),
+    linhaMeta('u' + (opc?.mes ?? 7), 2, 3550.45, 0, opc), linhaMeta('p' + (opc?.mes ?? 7), 3, 2091.30, 191.40, opc),
   ];
   const SOMA = 11067.76;          // 2945.87 + 2671.54 + 3550.45 + (2091.30 - 191.40)
   const DECLARADO = 11028.76;     // 11259.16 - 230.40, da linha real
-  const LINHA_EQ = linhaMeta('eq', 4, 11259.16, 230.40,
-    { meta: 6918.07, sup: 10377.11, ultra: 17295.18, esp: 20000 });
+  const eqDe = (id, opc) => linhaMeta(id, 4, 11259.16, 230.40,
+    { meta: 6918.07, sup: 10377.11, ultra: 17295.18, esp: 20000, ...opc });
+
+  const JUL = quatro({ mes: 7 });
+  const LINHA_EQ = eqDe('eq', { mes: 7 });
 
   const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
   const arred = (n) => Math.round(n * 100) / 100;
 
-  /** Monta um /api/clickup com a lista de metas indicada. */
+  /** Monta um /api/clickup com a lista de metas indicada. Conta as chamadas. */
   const comMetas = async (tag, tasks) => {
-    globalThis.fetch = async () => ({
-      ok: true, status: 200,
-      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
-      json: async () => ({ tasks, last_page: true }), text: async () => '',
-    });
+    const chamadas = [];
+    globalThis.fetch = async (url) => {
+      chamadas.push(String(url));
+      // Pagina de verdade: pagina 0 devolve tudo e marca last_page.
+      const pag = Number((String(url).match(/[?&]page=(\d+)/) || [])[1] ?? 0);
+      return {
+        ok: true, status: 200,
+        headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+        json: async () => (pag === 0 ? { tasks, last_page: true } : { tasks: [], last_page: true }),
+        text: async () => '',
+      };
+    };
     const cu = await carregarCom('api/clickup.js', libClickupUnica(tag));
     process.env.CLICKUP_API_KEY = 'pk_teste';
-    return async (perfil) => {
+    const pedir = async (perfil) => {
       const r = res();
       await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action: 'metas' } }, r);
       return r;
     };
+    pedir.chamadas = chamadas;
+    return pedir;
   };
 
   const fetchOriginal = globalThis.fetch;
   const GESTAO = { nivel: 'gestao', csm: null, nome: 'G' };
   const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
   const CONSULTA = { nivel: 'consulta', csm: null, nome: 'C' };
+  const per = (corpo, chave) => corpo.periodos.find((p) => p.chave === chave);
 
-  // --- Caso de producao: 4 individuais + 1 equipe ---
+  // --- Caso de producao: 4 individuais + 1 equipe, tudo em Jul/2026 ---
   {
-    const pedir = await comMetas('eq-declarada', [...INDIVIDUAIS, LINHA_EQ]);
+    const pedir = await comMetas('eq-declarada', [...JUL, LINHA_EQ]);
     const g = await pedir(GESTAO);
     checar('gestao: 200', g.code, 200);
-    checar('mrrEquipe e o DECLARADO, nao a soma', arred(g.corpo.mrrEquipe), DECLARADO);
-    checar('  e nao a soma das 5 linhas (era o bug)', arred(g.corpo.mrrEquipe) === arred(SOMA + DECLARADO), false);
-    checar('marcado como declarado', g.corpo.metaEquipe.declarado, true);
+    checar('E.6 custo: 1 chamada para a lista Metas', pedir.chamadas.length, 1);
+
+    checar('um periodo so', g.corpo.periodos.map((p) => p.chave), ['2026-07']);
+    checar('periodo corrente vem do status MES ATUAL', g.corpo.periodoAtual, '2026-07');
+    checar('rotulo montado de Ano Base + Mes Referencia', per(g.corpo, '2026-07').rotulo, 'Julho/2026');
+    checar('sem avisos gerais', g.corpo.avisosGerais, []);
+    checar('sem avisos no periodo', per(g.corpo, '2026-07').avisos, []);
+
+    const eq = per(g.corpo, '2026-07').equipe;
+    checar('equipe do periodo e o DECLARADO, nao a soma', arred(eq.mrr), DECLARADO);
+    checar('  e nao a soma das 5 linhas (era o bug)', arred(eq.mrr) === arred(SOMA + DECLARADO), false);
+    checar('marcado como declarado', eq.declarado, true);
     checar('limiares vem da linha de equipe',
-           [g.corpo.metaEquipe.meta, g.corpo.metaEquipe.superMeta, g.corpo.metaEquipe.ultraMeta, g.corpo.metaEquipe.metaEsp],
-           [6918.07, 10377.11, 17295.18, 20000]);
-    checar('a soma das individuais vem junto, para reconciliar', arred(g.corpo.metaEquipe.soma), SOMA);
-    checar('  e a diferenca e os R$ 39,00 do downsell', arred(g.corpo.metaEquipe.diferenca), -39);
+           [eq.meta, eq.superMeta, eq.ultraMeta, eq.metaEsp], [6918.07, 10377.11, 17295.18, 20000]);
+    checar('a soma das individuais vem junto, para reconciliar', arred(eq.soma), SOMA);
+    checar('  e a diferenca e os R$ 39,00 do downsell', arred(eq.diferenca), -39);
 
     // A linha de equipe NAO pode virar um quinto gerente.
     checar('tasks traz so as 4 individuais', g.corpo.tasks.length, 4);
     checar('  nenhuma delas e a de equipe', g.corpo.tasks.some((t) => t.gerenteId === EQUIPE), false);
     checar('  gerenteId resolvido de orderindex', g.corpo.tasks[0].gerenteId, OPCOES[0].id);
+    checar('  cada linha carrega a chave do periodo', g.corpo.tasks[0].periodo, '2026-07');
 
     // CSM: recebe a propria linha e os limiares, mas nao a reconciliacao.
     const c = await pedir(GIAN);
     checar('csm ve so a propria meta', c.corpo.tasks.map((t) => t.gerente), ['Gian Luca']);
     checar('  "⭐ Equipe" nao casa com nenhum CSM', c.corpo.tasks.some((t) => t.gerenteId === EQUIPE), false);
-    checar('  recebe o total declarado da equipe', arred(c.corpo.mrrEquipe), DECLARADO);
-    checar('  recebe os limiares', c.corpo.metaEquipe.ultraMeta, 17295.18);
-    checar('  NAO recebe a reconciliacao', [c.corpo.metaEquipe.soma, c.corpo.metaEquipe.diferenca], [undefined, undefined]);
+    checar('  recebe o total declarado da equipe', arred(per(c.corpo, '2026-07').equipe.mrr), DECLARADO);
+    checar('  recebe os limiares', per(c.corpo, '2026-07').equipe.ultraMeta, 17295.18);
+    checar('  NAO recebe a reconciliacao',
+           [per(c.corpo, '2026-07').equipe.soma, per(c.corpo, '2026-07').equipe.diferenca], [undefined, undefined]);
 
     // consulta: zero valor financeiro, inclusive aqui.
     const q = await pedir(CONSULTA);
     checar('consulta: tasks vazio', q.corpo.tasks, []);
-    checar('  mrrEquipe zerado', q.corpo.mrrEquipe, 0);
-    checar('  metaEquipe nulo', q.corpo.metaEquipe, null);
+    checar('  periodos vazio (carregam limiares)', q.corpo.periodos, []);
+    checar('  periodoAtual nulo', q.corpo.periodoAtual, null);
   }
 
-  // --- Fallback: linha de equipe ausente ---
+  // --- Dois meses na lista: o corrente e o do status, nao o mais recente ---
   {
-    const pedir = await comMetas('eq-ausente', INDIVIDUAIS);
+    // Agosto existe mas esta em "meses fechados"; julho e o MES ATUAL. Prova que o
+    // periodo vem do STATUS e nao do calendario nem da ordem.
+    const pedir = await comMetas('dois-meses', [
+      ...JUL, LINHA_EQ,
+      ...quatro({ mes: 8, status: FECHADO }), eqDe('eq8', { mes: 8, status: FECHADO }),
+    ]);
     const g = await pedir(GESTAO);
-    checar('sem linha de equipe: cai na soma', arred(g.corpo.mrrEquipe), SOMA);
-    checar('  marcado como NAO declarado', g.corpo.metaEquipe.declarado, false);
-    checar('  limiares nulos, front usa a reserva', g.corpo.metaEquipe.ultraMeta, null);
-    checar('  diferenca zero (declarado = soma)', arred(g.corpo.metaEquipe.diferenca), 0);
+    checar('dois periodos, mais recente primeiro', g.corpo.periodos.map((p) => p.chave), ['2026-08', '2026-07']);
+    checar('corrente e o do status MES ATUAL, nao o mais recente', g.corpo.periodoAtual, '2026-07');
+    checar('  so um marcado como atual', g.corpo.periodos.filter((p) => p.atual).map((p) => p.chave), ['2026-07']);
+    checar('cada periodo tem a sua equipe', arred(per(g.corpo, '2026-08').equipe.mrr), DECLARADO);
+    checar('tasks traz as 8 individuais, com periodo em cada', g.corpo.tasks.length, 8);
+    checar('  4 sao de julho', g.corpo.tasks.filter((t) => t.periodo === '2026-07').length, 4);
+    checar('  4 sao de agosto', g.corpo.tasks.filter((t) => t.periodo === '2026-08').length, 4);
+    checar('sem aviso: dois meses e o estado normal', g.corpo.avisosGerais, []);
+  }
+
+  // --- E.3 caso 1: nenhuma linha MES ATUAL ---
+  {
+    const pedir = await comMetas('sem-atual', [...quatro({ mes: 7, status: FECHADO }), eqDe('eq', { mes: 7, status: FECHADO })]);
+    const g = await pedir(GESTAO);
+    checar('E.3.1 sem MES ATUAL: periodoAtual nulo', g.corpo.periodoAtual, null);
+    checar('  avisa na tela', g.corpo.avisosGerais.length, 1);
+    checar('  e diz o que fazer', /marque as linhas do mês em andamento/i.test(g.corpo.avisosGerais[0]), true);
+    checar('  o periodo continua na lista, para poder ser escolhido', g.corpo.periodos.map((p) => p.chave), ['2026-07']);
+  }
+
+  // --- E.3 caso 2: dois periodos distintos marcados MES ATUAL ---
+  {
+    const pedir = await comMetas('atual-ambiguo', [
+      ...JUL, LINHA_EQ, ...quatro({ mes: 8 }), eqDe('eq8', { mes: 8 }),
+    ]);
+    const g = await pedir(GESTAO);
+    checar('E.3.2 dois MES ATUAL: nao escolhe nenhum', g.corpo.periodoAtual, null);
+    checar('  avisa na tela', g.corpo.avisosGerais.length, 1);
+    checar('  nomeia os dois periodos', /Julho\/2026|Agosto\/2026/.test(g.corpo.avisosGerais[0]), true);
+    checar('  nenhum periodo se declara atual', g.corpo.periodos.some((p) => p.atual), false);
+  }
+
+  // --- E.3 caso 3: dois registros do mesmo CSM no periodo ---
+  {
+    const pedir = await comMetas('csm-duplicado', [...JUL, linhaMeta('g2', 0, 999, 0, { mes: 7 }), LINHA_EQ]);
+    const g = await pedir(GESTAO);
+    const p = per(g.corpo, '2026-07');
+    checar('E.3.3 CSM duplicado: aponta quem', p.gerentesAmbiguos, ['Gian Luca']);
+    checar('  avisa na tela', p.avisos.length, 1);
+    checar('  e diz que o numero nao sera exibido', /não pode ser exibida/i.test(p.avisos[0]), true);
+    checar('  as duas linhas continuam em tasks, o front e que esconde', g.corpo.tasks.filter((t) => t.gerente === 'Gian Luca').length, 2);
+  }
+
+  // --- E.3 caso 4: duas linhas de equipe no periodo ---
+  {
+    const pedir = await comMetas('eq-duplicada', [...JUL, LINHA_EQ, linhaMeta('eq2', 4, 99999, 0, { mes: 7, ultra: 1 })]);
+    const g = await pedir(GESTAO);
+    const p = per(g.corpo, '2026-07');
+    checar('E.3.4 duas linhas de equipe: cai na soma, nao escolhe uma', arred(p.equipe.mrr), SOMA);
+    checar('  marcado como NAO declarado', p.equipe.declarado, false);
+    checar('  limiares nulos, front usa a reserva', p.equipe.ultraMeta, null);
+    checar('  avisa na tela', p.avisos.length, 1);
+    checar('  nem uma nem outra vaza para tasks', g.corpo.tasks.length, 4);
+  }
+
+  // --- Fallback: linha de equipe ausente no periodo corrente ---
+  {
+    const pedir = await comMetas('eq-ausente', JUL);
+    const g = await pedir(GESTAO);
+    const p = per(g.corpo, '2026-07');
+    checar('sem linha de equipe: cai na soma', arred(p.equipe.mrr), SOMA);
+    checar('  marcado como NAO declarado', p.equipe.declarado, false);
+    checar('  sem aviso na tela: o bloco ja se rotula "somado dos gerentes"', p.avisos, []);
     checar('  as 4 individuais seguem intactas', g.corpo.tasks.length, 4);
   }
 
-  // --- Periodo ambiguo: duas linhas de equipe abertas ---
+  // --- Linha sem periodo: nao pode entrar em conta de mes nenhum ---
   {
-    const outra = linhaMeta('eq2', 4, 99999, 0, { ultra: 1 });
-    const pedir = await comMetas('eq-duplicada', [...INDIVIDUAIS, LINHA_EQ, outra]);
+    const pedir = await comMetas('sem-periodo', [...JUL, LINHA_EQ, linhaMeta('orfa', 1, 5000, 0, { mes: null, ano: null })]);
     const g = await pedir(GESTAO);
-    checar('duas linhas de equipe: cai na soma, nao escolhe uma', arred(g.corpo.mrrEquipe), SOMA);
-    checar('  marcado como NAO declarado', g.corpo.metaEquipe.declarado, false);
-    checar('  nem uma nem outra vaza para tasks', g.corpo.tasks.length, 4);
+    checar('linha sem Ano/Mes fica fora dos periodos', g.corpo.periodos.map((p) => p.chave), ['2026-07']);
+    checar('  avisa e nomeia a linha', /Meta orfa/.test(g.corpo.avisosGerais.join(' ')), true);
+    checar('  nao contamina a soma de julho', arred(per(g.corpo, '2026-07').equipe.soma), SOMA);
+    checar('  e vem com periodo null em tasks', g.corpo.tasks.find((t) => t.id === 'orfa').periodo, null);
+  }
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[28b] getMetas pagina, e o custo continua 1 chamada abaixo de 100 linhas');
+{
+  const fetchOriginal = globalThis.fetch;
+  const linha = (i) => ({
+    id: `m${i}`, name: `Meta ${i}`, list: { id: '901327940637' }, status: { status: 'mês atual' },
+    custom_fields: [],
+  });
+
+  // 250 linhas em 3 paginas: prova que nada desaparece acima de 100.
+  {
+    const chamadas = [];
+    globalThis.fetch = async (url) => {
+      chamadas.push(String(url));
+      const pag = Number((String(url).match(/[?&]page=(\d+)/) || [])[1] ?? 0);
+      const inicio = pag * 100;
+      const tasks = inicio >= 250 ? [] : Array.from({ length: Math.min(100, 250 - inicio) }, (_, k) => linha(inicio + k));
+      return {
+        ok: true, status: 200,
+        headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+        json: async () => ({ tasks, last_page: tasks.length < 100 }), text: async () => '',
+      };
+    };
+    const lib = await import(libClickupUnica('metas-pagina'));
+    process.env.CLICKUP_API_KEY = 'pk_teste';
+    const { linhas } = await lib.getMetas();
+    checar('250 linhas chegam inteiras (antes parava em 100)', linhas.length, 250);
+    checar('  em 3 chamadas sequenciais', chamadas.length, 3);
+    checar('  todas na lista Metas', chamadas.every((u) => u.includes('/list/901327940637/task')), true);
+    checar('  com include_closed=false', chamadas.every((u) => u.includes('include_closed=false')), true);
+  }
+
+  // 5 linhas: 1 chamada, nao 4. Lote 1 existe para isso.
+  {
+    const chamadas = [];
+    globalThis.fetch = async (url) => {
+      chamadas.push(String(url));
+      const pag = Number((String(url).match(/[?&]page=(\d+)/) || [])[1] ?? 0);
+      const tasks = pag === 0 ? Array.from({ length: 5 }, (_, k) => linha(k)) : [];
+      return {
+        ok: true, status: 200,
+        headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+        json: async () => ({ tasks, last_page: true }), text: async () => '',
+      };
+    };
+    const lib = await import(libClickupUnica('metas-1-chamada'));
+    process.env.CLICKUP_API_KEY = 'pk_teste';
+    const { linhas } = await lib.getMetas();
+    checar('5 linhas em 1 chamada (lote 4 custaria 4)', [linhas.length, chamadas.length], [5, 1]);
+  }
+
+  // A carteira continua em lote 4: o ganho de tempo la depende disso.
+  {
+    const chamadas = [];
+    globalThis.fetch = async (url) => {
+      chamadas.push(String(url));
+      const pag = Number((String(url).match(/[?&]page=(\d+)/) || [])[1] ?? 0);
+      const tasks = pag === 0 ? [{ id: 'c1', name: 'C', list: { id: '901327787926' }, status: { status: 'ativo' }, custom_fields: [] }] : [];
+      return {
+        ok: true, status: 200,
+        headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+        json: async () => ({ tasks, last_page: pag === 0 }), text: async () => '',
+      };
+    };
+    const lib = await import(libClickupUnica('carteira-lote'));
+    process.env.CLICKUP_API_KEY = 'pk_teste';
+    await lib.getCarteira();
+    checar('carteira mantem o lote de 4 paginas concorrentes', chamadas.length, 4);
   }
 
   globalThis.fetch = fetchOriginal;
@@ -986,30 +1163,66 @@ console.log('\n[29] bloco de equipe no front: regua compartilhada e limiares de 
   checar('renderEquipe chamado sob showMRR', /if\(showMRR\)\{\s*renderEquipe\(\);/.test(renderAll), true);
   checar('  e nao dentro do bloco de gestao', /gestao'&&currentTab==='geral'\)\{renderEquipe/.test(renderAll), false);
 
-  // Limiares: declarado manda, reserva entra quando falta.
+  // Limiares e recorte por periodo. Os limiares saem do periodo ATIVO, entao o teste
+  // carrega periodoAtivo/metasDoPeriodo junto — e o que prova que nenhum consumidor
+  // le metasData direto.
+  checar('periodoAtivo existe', Boolean(extrair('periodoAtivo')), true);
+  checar('metasDoPeriodo existe', Boolean(extrair('metasDoPeriodo')), true);
+  checar('metaDoCsm existe', Boolean(extrair('metaDoCsm')), true);
+
   const mod = await import(dataUrl(
-    `let metaEquipe = null;\nexport const setEq = (v) => { metaEquipe = v; };\n` +
+    `let periodos = [], periodoSel = null, metasData = [];\n` +
+    `export const setEstado = (p, sel, m) => { periodos = p; periodoSel = sel; metasData = m || []; };\n` +
     `const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};\n` +
-    `${extrair('limiaresEquipe')}\nexport { limiaresEquipe };\n`
+    `${extrair('periodoAtivo')}\n${extrair('metasDoPeriodo')}\n${extrair('metaDoCsm')}\n` +
+    `${extrair('mrrEquipeSel')}\n${extrair('limiaresEquipe')}\n` +
+    `export { periodoAtivo, metasDoPeriodo, metaDoCsm, mrrEquipeSel, limiaresEquipe };\n`
   ));
 
-  mod.setEq({ declarado: true, meta: 100, superMeta: 200, ultraMeta: 300, metaEsp: 400, mesRef: 'Julho' });
+  const pJul = {
+    chave: '2026-07', rotulo: 'Julho/2026', atual: true, gerentesAmbiguos: [],
+    equipe: { mrr: 11028.76, declarado: true, meta: 100, superMeta: 200, ultraMeta: 300, metaEsp: 400 },
+  };
+  const pAgo = {
+    chave: '2026-08', rotulo: 'Agosto/2026', atual: false, gerentesAmbiguos: ['Gian Luca'],
+    equipe: { mrr: 5000, declarado: false, meta: null, superMeta: null, ultraMeta: null, metaEsp: null },
+  };
+  const METAS = [
+    { gerente: 'Gian Luca', periodo: '2026-07', mrrAt: 1 },
+    { gerente: 'Lucineia Felix', periodo: '2026-07', mrrAt: 2 },
+    { gerente: 'Gian Luca', periodo: '2026-08', mrrAt: 3 },
+    { gerente: 'Gian Luca', periodo: '2026-08', mrrAt: 4 },
+  ];
+
+  mod.setEstado([pAgo, pJul], '2026-07', METAS);
   const dec = mod.limiaresEquipe();
   checar('declarado vence a reserva', [dec.meta, dec.super, dec.ultra, dec.especial], [100, 200, 300, 400]);
-  checar('  e marca a origem', [dec.declarado, dec.mesRef], [true, 'Julho']);
+  checar('  e marca a origem com o rotulo do periodo', [dec.declarado, dec.mesRef], [true, 'Julho/2026']);
+  checar('mrrEquipeSel sai do periodo ativo', mod.mrrEquipeSel(), 11028.76);
+  checar('metasDoPeriodo filtra pelo periodo', mod.metasDoPeriodo().map((m) => m.mrrAt), [1, 2]);
+  checar('metaDoCsm acha a do periodo', mod.metaDoCsm('Gian Luca').mrrAt, 1);
 
-  mod.setEq(null);
-  const res0 = mod.limiaresEquipe();
-  checar('sem metaEquipe usa a reserva', [res0.meta, res0.ultra], [6918.07, 17295.18]);
-  checar('  e nao se declara declarado', res0.declarado, false);
-
-  mod.setEq({ declarado: false, meta: null, superMeta: null, ultraMeta: null, metaEsp: null, mesRef: null });
+  // Trocar de periodo troca TUDO junto: limiares, total e linhas.
+  mod.setEstado([pAgo, pJul], '2026-08', METAS);
   const fb = mod.limiaresEquipe();
-  checar('limiares nulos caem na reserva', [fb.meta, fb.super, fb.ultra, fb.especial],
-         [6918.07, 10377.11, 17295.18, 20000]);
+  checar('trocar de periodo troca os limiares', [fb.meta, fb.ultra], [6918.07, 17295.18]);
+  checar('  e o total da equipe', mod.mrrEquipeSel(), 5000);
+  checar('  e as linhas', mod.metasDoPeriodo().map((m) => m.mrrAt), [3, 4]);
+  checar('  limiares nulos caem na reserva', [fb.super, fb.especial], [10377.11, 20000]);
+  checar('  e nao se declara declarado', fb.declarado, false);
+  // E.3.3 no front: CSM com duas linhas no periodo devolve null, nao a primeira.
+  checar('CSM ambiguo no periodo devolve null, nao escolhe', mod.metaDoCsm('Gian Luca'), null);
+  checar('  outro CSM sem duplicata segue normal', mod.metaDoCsm('Lucineia Felix'), null);
+
+  // Sem periodo selecionado: nada de numero inventado.
+  mod.setEstado([], null, METAS);
+  const vazio = mod.limiaresEquipe();
+  checar('sem periodo: total zero e reserva nos limiares', [mod.mrrEquipeSel(), vazio.ultra], [0, 17295.18]);
+  checar('  periodoAtivo nulo', mod.periodoAtivo(), null);
+  checar('  e nenhuma linha selecionada', mod.metasDoPeriodo(), []);
 
   // Limiar declarado como 0 nao pode virar "meta zero atingida".
-  mod.setEq({ declarado: true, meta: 0, superMeta: 0, ultraMeta: 0, metaEsp: 0, mesRef: 'Julho' });
+  mod.setEstado([{ ...pJul, equipe: { ...pJul.equipe, meta: 0, ultraMeta: 0 } }], '2026-07', METAS);
   const zero = mod.limiaresEquipe();
   checar('limiar 0 tambem cai na reserva', [zero.meta, zero.ultra], [6918.07, 17295.18]);
 }

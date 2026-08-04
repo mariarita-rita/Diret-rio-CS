@@ -32,6 +32,7 @@ import {
   lerClienteFresco,
   localizarTask,
   refletirEscrita,
+  STATUS_MES_ATUAL,
 } from './_lib/clickup.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -119,6 +120,17 @@ async function lerCliente(req, res, sessao) {
   return res.status(200).json({ task: sessao.nivel === 'consulta' ? { ...linha, mrr: 0 } : linha });
 }
 
+const MESES_ROTULO = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+/** Chave estavel do periodo. Ordena como texto porque o mes tem dois digitos. */
+function chavePeriodo(m) {
+  if (!m.anoBase || !m.mesNum) return null;
+  return `${m.anoBase}-${String(m.mesNum).padStart(2, '0')}`;
+}
+
 async function lerMetas(res, sessao) {
   const { linhas } = await getMetas();
 
@@ -127,78 +139,170 @@ async function lerMetas(res, sessao) {
   // acontecia: as 5 linhas somadas davam R$ 22.096,52 contra os R$ 11.067,76 reais,
   // e o painel anunciava ultrameta de equipe a quem tinha batido a supermeta.
   const individuais = linhas.filter((m) => m.gerenteId !== EQUIPE_OPCAO);
-  const equipe = resolverEquipe(linhas, individuais);
+
+  const { periodos, periodoAtual, avisosGerais } = resolverPeriodos(linhas, individuais);
 
   // consulta nao recebe valor financeiro nenhum, nem individual (lerCarteira zera o
   // mrr) nem agregado. Agregado nao identifica o resultado de ninguem, mas continua
   // sendo numero financeiro — e o README define consulta como perfil sem acesso a
-  // valor financeiro. Vale para metaEquipe tambem.
-  let visiveis;
-  let mrrEquipe = 0;
-  let metaEquipe = null;
-  if (sessao.nivel === 'gestao') {
-    visiveis = individuais;
-    mrrEquipe = equipe.mrr;
-    // A reconciliacao e so da gestao: um CSM nao precisa ver declarado x soma.
-    metaEquipe = { ...equipe.publico, soma: equipe.soma, diferenca: equipe.mrr - equipe.soma };
-  } else if (sessao.nivel === 'csm') {
-    visiveis = individuais.filter((m) => pertenceAoCsm(m.gerente, sessao.csm));
-    mrrEquipe = equipe.mrr;
-    metaEquipe = equipe.publico;
-  } else {
-    visiveis = [];
+  // valor financeiro. Vale para os periodos, que carregam os limiares da equipe.
+  if (sessao.nivel === 'consulta') {
+    res.setHeader('Cache-Control', CACHE_LEITURA);
+    return res.status(200).json({
+      tasks: [], periodos: [], periodoAtual: null, avisosGerais: [],
+    });
   }
 
+  const daGestao = sessao.nivel === 'gestao';
+  const visiveis = (daGestao ? individuais : individuais.filter((m) => pertenceAoCsm(m.gerente, sessao.csm)))
+    .map((m) => ({ ...m, periodo: chavePeriodo(m) }));
+
+  // A reconciliacao declarado x soma e so da gestao: um CSM nao precisa dela.
+  const periodosVisiveis = periodos.map((p) => ({
+    ...p,
+    equipe: daGestao ? p.equipe : { ...p.equipe, soma: undefined, diferenca: undefined },
+  }));
+
   res.setHeader('Cache-Control', CACHE_LEITURA);
-  return res.status(200).json({ tasks: visiveis, mrrEquipe, metaEquipe });
+  return res.status(200).json({
+    tasks: visiveis,
+    periodos: periodosVisiveis,
+    periodoAtual,
+    avisosGerais,
+  });
 }
 
 /**
- * MRR liquido da equipe e os limiares, preferindo a linha "⭐ Equipe" DECLARADA.
+ * Agrupa as linhas por periodo (Ano Base + Mes Referencia) e resolve, para cada um,
+ * o total da equipe e os problemas de dado.
  *
- * Fallback para a soma das individuais quando a linha nao existe no periodo — nao
- * pode quebrar por alguem esquecer de cria-la. Duas linhas de equipe abertas
- * tambem caem no fallback: "declarado" fica ambiguo, e um numero definido e melhor
- * que um escolhido por ordem de iteracao. Os dois casos logam.
+ * O periodo corrente vem do STATUS `mês atual`, nao do calendario: o fechamento
+ * acontece depois do fim do mes, entao em 03/08 o mes corrente de trabalho ainda e
+ * julho. Quem decide a virada e a pessoa, movendo as linhas no ClickUp.
  *
- * O periodo NAO e filtrado por mes: getMetas usa `include_closed=false` e quem
- * define o periodo e o fechamento das tarefas no ClickUp. Filtrar por mes corrente
- * seria pior — o campo Mes Referencia e um dropdown de Janeiro..Dezembro, SEM ano,
- * e uma virada de mes antes de criar as linhas novas esvaziaria o painel.
- *
- * Os limiares acompanham a origem do total: declarados vem da linha de equipe;
- * no fallback ficam null e o front usa as constantes dele.
+ * REGRA DE OURO daqui: nunca devolver 0 nem escolha arbitraria como se fosse
+ * resultado. Estes numeros alimentam comissao e bonus. Todo caso ambiguo vira aviso
+ * na tela E console.error no log da funcao.
  */
-function resolverEquipe(linhas, individuais) {
-  const soma = individuais.reduce((s, m) => s + (m.mrrAt - m.downsell), 0);
-  const declaradas = linhas.filter((m) => m.gerenteId === EQUIPE_OPCAO);
+function resolverPeriodos(linhas, individuais) {
+  const avisosGerais = [];
+  const grupos = new Map(); // chave -> { linhas:[], individuais:[], equipes:[] }
 
-  const semDeclarado = (motivo) => {
-    console.warn(`[clickup] meta de equipe: ${motivo}. Usando a soma das ${individuais.length} individuais.`);
-    return {
-      mrr: soma,
-      soma,
-      publico: { mrr: soma, declarado: false, meta: null, superMeta: null, ultraMeta: null, metaEsp: null, mesRef: null },
+  const semPeriodo = [];
+  for (const m of linhas) {
+    const chave = chavePeriodo(m);
+    if (!chave) { semPeriodo.push(m); continue; }
+    if (!grupos.has(chave)) grupos.set(chave, { linhas: [], individuais: [], equipes: [] });
+    const g = grupos.get(chave);
+    g.linhas.push(m);
+    if (m.gerenteId === EQUIPE_OPCAO) g.equipes.push(m);
+    else g.individuais.push(m);
+  }
+
+  if (semPeriodo.length) {
+    const quais = semPeriodo.map((m) => m.nome || m.id).join(', ');
+    avisosGerais.push(
+      `${semPeriodo.length} linha(s) sem Ano Base ou Mês Referência preenchidos, fora de qualquer período: ${quais}`
+    );
+    console.error(`[clickup] metas sem periodo (Ano Base/Mes Referencia vazios): ${quais}`);
+  }
+
+  // Periodo corrente = os que tem alguma linha em `mês atual`. Mais de um periodo
+  // assim e erro de operacao, nao empate a resolver.
+  const chavesAtuais = [...grupos.entries()]
+    .filter(([, g]) => g.linhas.some((m) => m.statusMeta === STATUS_MES_ATUAL))
+    .map(([chave]) => chave);
+
+  let periodoAtual = null;
+  if (chavesAtuais.length === 1) {
+    periodoAtual = chavesAtuais[0];
+  } else if (chavesAtuais.length === 0) {
+    avisosGerais.push(
+      `Nenhuma linha com status "${STATUS_MES_ATUAL}" na lista Metas. Sem período corrente definido — marque as linhas do mês em andamento.`
+    );
+    console.error(`[clickup] metas: nenhuma linha com status "${STATUS_MES_ATUAL}". Periodo corrente indefinido.`);
+  } else {
+    const rotulos = chavesAtuais.map(rotuloPeriodo).join(' e ');
+    avisosGerais.push(
+      `${chavesAtuais.length} períodos diferentes marcados como "${STATUS_MES_ATUAL}": ${rotulos}. Deixe apenas o mês em andamento.`
+    );
+    console.error(`[clickup] metas: ${chavesAtuais.length} periodos em "${STATUS_MES_ATUAL}" (${chavesAtuais.join(', ')}). Periodo corrente ambiguo.`);
+  }
+
+  const periodos = [...grupos.entries()]
+    .map(([chave, g]) => montarPeriodo(chave, g, chave === periodoAtual))
+    // Mais recente primeiro. A chave `AAAA-MM` ordena corretamente como texto.
+    .sort((a, b) => b.chave.localeCompare(a.chave));
+
+  return { periodos, periodoAtual, avisosGerais };
+}
+
+function rotuloPeriodo(chave) {
+  const [ano, mes] = chave.split('-');
+  return `${MESES_ROTULO[Number(mes) - 1] || mes}/${ano}`;
+}
+
+/**
+ * Um periodo: total da equipe, limiares e os problemas de dado que impedem confiar
+ * nos numeros dele.
+ *
+ * `equipe.declarado` distingue o total DECLARADO pela linha "⭐ Equipe" da soma das
+ * individuais. O fallback para a soma existe para nao quebrar quando a linha nao foi
+ * criada; duas linhas de equipe tambem caem nele, porque "declarado" fica ambiguo e
+ * um numero definido e melhor que um escolhido por ordem de iteracao.
+ */
+function montarPeriodo(chave, g, atual) {
+  const avisos = [];
+  const soma = g.individuais.reduce((s, m) => s + (m.mrrAt - m.downsell), 0);
+
+  // Mais de uma linha do mesmo CSM no periodo: nao ha como escolher.
+  const porGerente = new Map();
+  for (const m of g.individuais) {
+    const k = m.gerente || '(sem gerente)';
+    porGerente.set(k, (porGerente.get(k) || 0) + 1);
+  }
+  const duplicados = [...porGerente.entries()].filter(([, n]) => n > 1);
+  for (const [nome, n] of duplicados) {
+    avisos.push(`${nome} tem ${n} linhas em ${rotuloPeriodo(chave)}. A meta individual dele não pode ser exibida até sobrar uma.`);
+    console.error(`[clickup] metas: ${n} linhas de "${nome}" no periodo ${chave}.`);
+  }
+
+  let equipe;
+  if (g.equipes.length === 1) {
+    const eq = g.equipes[0];
+    const mrr = eq.mrrAt - eq.downsell;
+    equipe = {
+      mrr, declarado: true,
+      meta: eq.meta, superMeta: eq.superMeta, ultraMeta: eq.ultraMeta, metaEsp: eq.metaEsp,
+      soma, diferenca: mrr - soma,
     };
-  };
+  } else {
+    if (g.equipes.length > 1) {
+      avisos.push(`${g.equipes.length} linhas "⭐ Equipe" em ${rotuloPeriodo(chave)}. Usando a soma dos gerentes até sobrar uma.`);
+      console.error(`[clickup] metas: ${g.equipes.length} linhas "⭐ Equipe" no periodo ${chave}.`);
+    } else if (atual) {
+      // Só alarma no periodo corrente: mes antigo sem linha de equipe e historico,
+      // nao problema a resolver agora.
+      console.warn(`[clickup] metas: periodo corrente ${chave} sem linha "⭐ Equipe". Usando a soma de ${g.individuais.length} individuais.`);
+    }
+    equipe = {
+      mrr: soma, declarado: false,
+      meta: null, superMeta: null, ultraMeta: null, metaEsp: null,
+      soma, diferenca: 0,
+    };
+  }
 
-  if (declaradas.length === 0) return semDeclarado('nenhuma linha "⭐ Equipe" aberta no periodo');
-  if (declaradas.length > 1) return semDeclarado(`${declaradas.length} linhas "⭐ Equipe" abertas — periodo ambiguo`);
-
-  const eq = declaradas[0];
-  const mrr = eq.mrrAt - eq.downsell;
   return {
-    mrr,
-    soma,
-    publico: {
-      mrr,
-      declarado: true,
-      meta: eq.meta,
-      superMeta: eq.superMeta,
-      ultraMeta: eq.ultraMeta,
-      metaEsp: eq.metaEsp,
-      mesRef: eq.mesRef,
-    },
+    chave,
+    ano: Number(chave.split('-')[0]),
+    mes: Number(chave.split('-')[1]),
+    rotulo: rotuloPeriodo(chave),
+    atual,
+    // Gerentes com linha duplicada: o front esconde o numero deles em vez de mostrar
+    // um dos dois.
+    gerentesAmbiguos: duplicados.map(([nome]) => nome),
+    equipe,
+    avisos,
   };
 }
 
