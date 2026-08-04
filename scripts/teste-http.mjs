@@ -59,6 +59,7 @@ const stubClickup = `
   export async function getCarteira() { return { linhas: [] }; }
   export async function getMetas() { return { linhas: [] }; }
   export async function gravarCampo() {}
+  export async function limparCampo() {}
   export function invalidarCarteira() {}
   export function refletirEscrita() {}
   export async function localizarTask() { return null; }
@@ -1325,12 +1326,144 @@ console.log('\n[30] Evento: Camp 2026 — allowlist explicita, escopo e reflexo'
   checar('consulta: 403 somente_leitura', [soLeitura.code, soLeitura.corpo.code], [403, 'somente_leitura']);
   const idFalso = await gravar(GESTAO, '11111111-2222-3333-4444-555555555555');
   checar('opcao fora da allowlist: 403', [idFalso.code, idFalso.corpo.code], [403, 'valor_nao_permitido']);
-  const vazio = await gravar(GESTAO, null);
-  checar('limpar (null) e recusado, nao gravado em silencio', [vazio.code, vazio.corpo.code], [403, 'valor_nao_permitido']);
   const arr = await gravar(GESTAO, [CONVIDADO]);
   checar('array num campo de opcao: 403', [arr.code, arr.corpo.code], [403, 'valor_nao_permitido']);
   const rotulo = await gravar(GESTAO, 'Convidado 💠');
   checar('rotulo em vez de id: 403', [rotulo.code, rotulo.corpo.code], [403, 'valor_nao_permitido']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[31] limpar campo: DELETE, so no Camp 2026, mesmo portao de escrita');
+{
+  const CAMP = '54ee7ad4-4689-4d79-bec7-5ac1373d96e9';
+  const CONVIDADO = '52fbe800-c9cf-4aca-b75e-fdbbb4ea7e07';
+  const ETAPA = 'd15028f2-40c6-44da-a5dc-3d608eef6f48';
+  const TIPO = 'a4acad54-a6da-477f-b1fc-b3cbf56bbd08';
+  const ALERTAS = '6ce5db54-1a1d-4dfa-944d-4b01b8832549';
+  const ACOMP = '94b85690-3d47-4edf-9209-0a671cfb570b';
+  const GERENTE = '3898a8f4-bb21-46d7-88ee-79d164033fdf';
+  const OPCOES = [{ id: CONVIDADO, name: 'Convidado 💠', orderindex: 0 }];
+
+  const fetchOriginal = globalThis.fetch;
+  const chamadas = [];
+  const task = () => ({
+    id: 'tLimpa', name: 'Cliente Limpa', list: { id: '901327787926' }, status: { status: 'ativo' },
+    custom_fields: [
+      { id: GERENTE, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Gian Luca' }] } },
+      { id: CAMP, type: 'drop_down', value: CONVIDADO, type_config: { options: OPCOES } },
+    ],
+  });
+
+  globalThis.fetch = async (url, init) => {
+    const metodo = init?.method || 'GET';
+    chamadas.push({ url: String(url), metodo });
+    const cabecalhos = new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]);
+    // O DELETE de campo personalizado responde 200 com CORPO VAZIO. `json()` que
+    // lanca reproduz isso: sem o tratamento em cu(), a escrita seria aplicada e a
+    // funcao devolveria 500 — o pior dos mundos, porque o front reverteria a tela.
+    if (metodo === 'DELETE') {
+      return {
+        ok: true, status: 200, headers: cabecalhos,
+        json: async () => { throw new SyntaxError('Unexpected end of JSON input'); },
+        text: async () => '',
+      };
+    }
+    return {
+      ok: true, status: 200, headers: cabecalhos,
+      json: async () => (/\/list\//.test(String(url)) ? { tasks: [task()], last_page: true } : task()),
+      text: async () => '',
+    };
+  };
+
+  const libUrl = libClickupUnica('limpar-campo');
+  const lib = await import(libUrl);
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  // A permissao e marcada campo a campo, e SO o Camp a tem.
+  checar('Camp 2026 e limpavel', lib.CAMPOS_ESCRITA[CAMP].limpavel, true);
+  const naoLimpaveis = [['Etapa', ETAPA], ['Tipo de solicitacao', TIPO], ['Alertas', ALERTAS], ['Em acompanhamento', ACOMP]];
+  for (const [nome, id] of naoLimpaveis) {
+    checar(`${nome} NAO e limpavel`, Boolean(lib.CAMPOS_ESCRITA[id].limpavel), false);
+  }
+  checar('so 1 campo limpavel na allowlist inteira',
+         Object.values(lib.CAMPOS_ESCRITA).filter((c) => c.limpavel).length, 1);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const enviar = async (perfil, fieldId, value) => {
+    const r = res();
+    await cu({
+      method: 'POST',
+      headers: cabecalhos({ cookie: cookieDe(perfil), 'content-type': 'application/json' }),
+      query: { action: 'set-field' },
+      body: { taskId: 'tLimpa', fieldId, value },
+    }, r);
+    return r;
+  };
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'G' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'C' };
+
+  // Aquece o cache da carteira para poder conferir o reflexo.
+  await lib.getCarteira();
+
+  chamadas.length = 0;
+  const limpou = await enviar(GESTAO, CAMP, null);
+  checar('limpar Camp: 200', [limpou.code, limpou.corpo.ok], [200, true]);
+  checar('  resposta marca que foi limpeza', limpou.corpo.limpo, true);
+  const escrita = chamadas.find((c) => c.url.includes(`/field/${CAMP}`));
+  checar('  usou DELETE, nao POST', escrita?.metodo, 'DELETE');
+  checar('  no endpoint do campo', escrita?.url.includes('/task/tLimpa/field/'), true);
+  checar('  corpo vazio nao derrubou (era o risco do DELETE)', limpou.code, 200);
+
+  // O reflexo no cache tem de APAGAR os dois, nao so um.
+  const depois = await lib.getCarteira();
+  checar('refletirEscrita zera o id', depois.linhas[0].eventoCampId, null);
+  checar('  e o rotulo', depois.linhas[0].eventoCamp, null);
+
+  // Gravar normal continua POST.
+  chamadas.length = 0;
+  await enviar(GESTAO, CAMP, CONVIDADO);
+  checar('gravar opcao continua POST', chamadas.find((c) => c.url.includes(`/field/${CAMP}`))?.metodo, 'POST');
+
+  // Os outros campos NAO podem ser limpos — e a recusa e nossa, sem tocar o ClickUp.
+  for (const [nome, id] of naoLimpaveis) {
+    chamadas.length = 0;
+    const r = await enviar(GESTAO, id, null);
+    checar(`limpar ${nome}: 403 valor_nao_permitido`, [r.code, r.corpo.code], [403, 'valor_nao_permitido']);
+    checar(`  e nenhum DELETE saiu para o ClickUp`, chamadas.some((c) => c.metodo === 'DELETE'), false);
+  }
+
+  // O portao de escrita vale para o DELETE tambem.
+  const csmDono = await enviar(GIAN, CAMP, null);
+  checar('csm dono limpa: 200', csmDono.code, 200);
+  const csmOutro = await enviar(PATRICIA, CAMP, null);
+  checar('csm de outra carteira: 403 fora_da_carteira no DELETE', [csmOutro.code, csmOutro.corpo.code], [403, 'fora_da_carteira']);
+  const consulta = await enviar(CONSULTA, CAMP, null);
+  checar('consulta: 403 somente_leitura no DELETE', [consulta.code, consulta.corpo.code], [403, 'somente_leitura']);
+
+  // Campo fora da allowlist nao ganha limpeza por tabela.
+  const forinha = await enviar(GESTAO, '99999999-8888-7777-6666-555555555555', null);
+  checar('campo fora da allowlist: 403 campo_nao_permitido', [forinha.code, forinha.corpo.code], [403, 'campo_nao_permitido']);
+
+  // `value` AUSENTE nao pode virar limpeza: corpo incompleto nao apaga dado.
+  {
+    const r = res();
+    await cu({
+      method: 'POST',
+      headers: cabecalhos({ cookie: cookieDe(GESTAO), 'content-type': 'application/json' }),
+      query: { action: 'set-field' },
+      body: { taskId: 'tLimpa', fieldId: CAMP },
+    }, r);
+    checar('value ausente NAO limpa: 403', [r.code, r.corpo.code], [403, 'valor_nao_permitido']);
+  }
+
+  // O front tem de mandar null, nao string vazia.
+  const front = ler('dashboard_carteiras.html');
+  checar('front manda null ao limpar', /value:\s*limpando\s*\?\s*null\s*:/.test(front), true);
+  checar('  e o seletor tem a opcao de limpar', front.includes('— sem marcação —'), true);
 
   globalThis.fetch = fetchOriginal;
 }

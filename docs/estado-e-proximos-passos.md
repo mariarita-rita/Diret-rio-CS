@@ -421,7 +421,7 @@ um não está neste documento**; confirmar com a usuária antes de implementar.
 
 | # | Funcionalidade | O que se sabe |
 |---|---|---|
-| 1 | **Campo Evento Camp 2026 editável** | ✅ **feita** na branch `melhorias/periodo-metas-evento-camp`. Uma ressalva: **não dá para limpar** o campo pelo painel — ver 12.2 |
+| 1 | **Campo Evento Camp 2026 editável** | ✅ **feita** na branch `melhorias/periodo-metas-evento-camp`, com limpeza do campo inclusa. O `DELETE` ainda não foi exercitado contra o ClickUp real — roteiro em 12.3 |
 | 2 | **Filtro de cidade** | ✅ **feita** em `4bb90c7` |
 | 3 | **Excluir do MRR perdido o churn por "Contratou em outro CNPJ"** | ✅ **feita** em `ebddcf6` |
 | 4 | **Valor exato no card de MRR incrementado** | ✅ **feita** em `d964b56`. A dúvida "incremento do mês ou acumulado" não existia: o card sempre foi a soma de *MRR Atingido* das linhas de meta, e só a formatação mudou |
@@ -575,24 +575,41 @@ se ela continua aparecendo no seletor de período.
 O desenho não depende da resposta — o seletor é montado do que chegou, então um período
 que desapareça **falta visivelmente** — mas o status é ruído com risco anexado.
 
-#### 12.2 Decisão pendente: permitir limpar o Evento: Camp 2026?
+#### 12.2 Limpar o Evento: Camp 2026 — implementado
 
-Hoje o campo pode ser **trocado** entre as quatro opções, mas não **esvaziado**.
-`value: null` volta 403 e o seletor reverte com "não dá p/ limpar".
+Decidido e feito. `limparCampo()` com `DELETE`, marcador `limpavel: true` só na entrada
+do Camp, e `value: null` aceito apenas nos campos marcados. Detalhes no README.
 
-**Por que exigiu tratamento especial:** `gravarCampo` faz `POST
-/task/{id}/field/{id}` com `{value}`. Apagar um campo personalizado no ClickUp é
-`DELETE` no mesmo endpoint — **verbo novo no proxy**, que hoje só faz GET e POST.
+**O `DELETE` nunca falou com o ClickUp de verdade.** A suíte prova a nossa metade —
+método, endpoint, allowlist, escopo por perfil e o corpo vazio — mas que o ClickUp
+aceite `DELETE` nesse endpoint segue sendo suposição baseada na documentação. É a
+mesma classe de incógnita da 5.6, e o roteiro de verificação está em 12.3.
 
-Para habilitar seria preciso: um `limparCampo()` com `DELETE`, um marcador
-`limpavel: true` na entrada da allowlist (para não virar "qualquer campo pode ser
-apagado"), e aceitar `value: null` só nos campos marcados. A allowlist continuaria
-fechada. Não implementei porque abre um verbo de escrita novo, e isso merece decisão
-explícita — e porque não consigo confirmar que o `DELETE` funciona sem uma escrita
-real no ClickUp.
+#### 12.3 Verificação do DELETE — reversível, sem sujar dado
 
-**Contexto para decidir:** "Não Vai 🚫" cobre "o cliente não vai", mas não cobre
-"marquei o cliente errado". Se marcar errado for comum, limpar tem valor real.
+Escolher um cliente com o *Evento: Camp 2026* **vazio**, marcar uma opção e limpar
+devolve exatamente o estado inicial. Nada a desfazer se der certo, nada perdido se
+der errado.
+
+1. No painel, filtre um cliente cujo Camp esteja `—` na coluna **Camp 2026**. Anote o
+   ID Núcleo — é o estado a restaurar.
+2. Abra o cliente, escolha **Convidado 💠**. Esperar `✓ salvo` e o badge azul na
+   tabela.
+3. No ClickUp, abra a task: o campo deve estar em *Convidado 💠*, e o **histórico de
+   atividade** deve registrar a mudança. O histórico é a confirmação mais forte de que
+   a escrita partiu do proxy com a credencial do servidor.
+4. Volte ao painel e escolha **— sem marcação —**. Esperar `✓ limpo` e a coluna voltar
+   a `—`.
+5. No ClickUp, confirme o campo **vazio** e uma **segunda entrada** no histórico. Essa
+   é a prova de que o `DELETE` funcionou.
+
+Se o passo 4 mostrar `✕ não limpou`: o `DELETE` foi recusado. O seletor reverte
+sozinho, o dado no ClickUp continua em *Convidado 💠*, e aí basta limpar pelo ClickUp
+para voltar ao estado inicial. No log da função vai aparecer
+`[clickup] acao=set-field upstream=<status>` — **405** significaria que o ClickUp não
+aceita `DELETE` ali, e o caminho passaria a ser `POST` com um valor sentinela.
+
+Custo: 4 chamadas no total (2 por gravação).
 
 ### 11.4 Campo "Solicitante" no Moskit — encontrado
 

@@ -1591,12 +1591,12 @@ function openDetail(rStr,showMRR){
     <div class="detail-section-title">📅 Evento: Camp 2026</div>
     <div style="display:flex;align-items:center;gap:8px">
       <select id="camp-select" class="ctrl-select" style="flex:1" onchange="salvarEventoCamp(this)">
-        <option value="">Selecione...</option>
+        <option value=""${r.eventoCampId?'':' selected'}>— sem marcação —</option>
         ${EVENTO_CAMP.map(o=>`<option value="${o.id}"${o.id===r.eventoCampId?' selected':''}>${o.rotulo}</option>`).join('')}
       </select>
-      <span id="camp-estado" style="font-size:11px;min-width:74px"></span>
+      <span id="camp-estado" style="font-size:11px;min-width:80px"></span>
     </div>
-    <div style="font-size:10px;color:var(--neutral-400);margin-top:5px">Grava direto no ClickUp, sem sair do painel.</div>`}
+    <div style="font-size:10px;color:var(--neutral-400);margin-top:5px">Grava direto no ClickUp, sem sair do painel. "— sem marcação —" apaga o campo.</div>`}
     ${r.outrosSrv?.length?`
       <div class="detail-section-title">🛠️ Outros serviços</div>
       <div class="detail-tags">${r.outrosSrv.map(s=>`<span class="badge badge-outro" style="font-size:11px;padding:3px 9px">${s}</span>`).join('')}</div>`:''}
@@ -1606,11 +1606,14 @@ function openDetail(rStr,showMRR){
   document.getElementById('detail-overlay').classList.add('open');
 }
 /**
- * Grava o Evento: Camp 2026 do cliente aberto no modal.
+ * Grava — ou limpa — o Evento: Camp 2026 do cliente aberto no modal.
  *
  * Custo: 2 chamadas ao ClickUp (escopo + escrita), graças ao T2. Passa pelo
  * escreverCampo existente — consulta segue 403, csm só na própria carteira — e não
  * abre caminho novo de escrita.
+ *
+ * "Selecione…" manda `value: null`, que o servidor traduz em DELETE. Só campos
+ * marcados `limpavel` na allowlist aceitam isso; hoje só este.
  *
  * Em erro REVERTE o seletor para o valor anterior. Deixar o valor novo na tela depois
  * de uma falha faria a pessoa acreditar que gravou, e é o tipo de mentira que só
@@ -1624,36 +1627,31 @@ async function salvarEventoCamp(sel){
   const anterior=r.eventoCampId||'';
   const novo=sel.value;
   if(novo===anterior)return;
-
-  // Limpar exigiria DELETE no ClickUp, que o proxy não expõe — ver README.
-  if(!novo){
-    sel.value=anterior;
-    estado.style.color='var(--yellow)';
-    estado.textContent='não dá p/ limpar';
-    return;
-  }
+  const limpando=!novo;
 
   sel.disabled=true;
   estado.style.color='var(--neutral-500)';
-  estado.textContent='salvando…';
+  estado.title='';
+  estado.textContent=limpando?'limpando…':'salvando…';
   try{
-    await apiPost('/api/clickup?action=set-field',{taskId:r.id,fieldId:CAMPO_EVENTO_CAMP,value:novo});
+    await apiPost('/api/clickup?action=set-field',
+      {taskId:r.id,fieldId:CAMPO_EVENTO_CAMP,value:limpando?null:novo});
     // Estado local, sem recarregar a carteira: cada recarga custa ~28 chamadas de uma
     // cota de 100/min compartilhada pelo time. `200` significa escrita aplicada.
-    const rotulo=EVENTO_CAMP.find(o=>o.id===novo)?.rotulo||null;
-    r.eventoCampId=novo;r.eventoCamp=rotulo;
+    const rotulo=limpando?null:(EVENTO_CAMP.find(o=>o.id===novo)?.rotulo||null);
+    r.eventoCampId=limpando?null:novo;r.eventoCamp=rotulo;
     const naTabela=allData.find(x=>x.id===r.id);
-    if(naTabela){naTabela.eventoCampId=novo;naTabela.eventoCamp=rotulo;}
+    if(naTabela){naTabela.eventoCampId=r.eventoCampId;naTabela.eventoCamp=rotulo;}
     const cel=document.querySelector('#detail-body .detail-row:last-child .detail-val');
     if(cel)cel.innerHTML=campBadge(r);
     estado.style.color='var(--green)';
-    estado.textContent='✓ salvo';
+    estado.textContent=limpando?'✓ limpo':'✓ salvo';
     applyFilters();
   }catch(e){
     if(e.message==='sessao')return;
     sel.value=anterior;
     estado.style.color='var(--red)';
-    estado.textContent='✕ não salvou';
+    estado.textContent=limpando?'✕ não limpou':'✕ não salvou';
     estado.title=e.message||'Falha ao gravar';
   }finally{
     sel.disabled=false;

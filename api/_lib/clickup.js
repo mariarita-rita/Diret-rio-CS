@@ -160,6 +160,18 @@ export const CAMPOS_ESCRITA = {
     nome: 'Evento: Camp 2026',
     tipo: 'opcao',
     opcoes: new Set(EVENTO_CAMP_OPCOES.map((o) => o.id)),
+    /**
+     * UNICO campo limpavel, de proposito. O campo existe para o gerente sinalizar sem
+     * precisar de acesso ao ClickUp; se corrigir um clique errado exigisse abrir o
+     * ClickUp, ele funcionaria pela metade. "Nao Vai 🚫" cobre "o cliente nao vai",
+     * nao cobre "marquei a linha errada".
+     *
+     * Etapa, Tipo de solicitacao, Alertas e Em acompanhamento NAO sao limpaveis:
+     * fazem parte do fluxo de acompanhamento, onde apagar nao e desfazer — Etapa
+     * vazia deixaria a task fora do fluxo, e Alertas tem `[]` como limpeza legitima
+     * via POST, que ja funciona.
+     */
+    limpavel: true,
   },
   [CF.ALERTAS]: {
     nome: 'Alertas',
@@ -248,8 +260,16 @@ function esperaDe(r) {
   return null;
 }
 
-/** Chamada bruta ao ClickUp. O token nunca aparece em retorno, erro ou log. */
-async function cu(path, init = {}) {
+/**
+ * Chamada bruta ao ClickUp. O token nunca aparece em retorno, erro ou log.
+ *
+ * `semCorpo` existe para o DELETE de campo personalizado, que responde 200 com corpo
+ * VAZIO. Sem isso o `r.json()` lançaria DEPOIS de a escrita ter sido aplicada, e a
+ * funcao devolveria 500 para uma operacao bem-sucedida — o front reverteria o seletor
+ * e a pessoa acharia que nao limpou, quando limpou. E a mentira que a reversao em erro
+ * existe para evitar, ao contrario.
+ */
+async function cu(path, init = {}, { semCorpo = false } = {}) {
   const r = await fetch(BASE + path, {
     ...init,
     headers: {
@@ -272,6 +292,10 @@ async function cu(path, init = {}) {
       );
     }
     throw new ErroUpstream(r.status, espera);
+  }
+  if (semCorpo) {
+    await r.text().catch(() => '');
+    return {};
   }
   return r.json();
 }
@@ -656,6 +680,19 @@ export async function gravarCampo(taskId, fieldId, value) {
 }
 
 /**
+ * Apaga o valor de um campo personalizado.
+ *
+ * No ClickUp isso e DELETE no mesmo endpoint — nao existe "POST com value null".
+ * E o UNICO caminho de escrita do proxy que nao e POST, e chega aqui somente para os
+ * campos marcados `limpavel` em CAMPOS_ESCRITA. Hoje so o Evento: Camp 2026.
+ *
+ * Responde 200 com corpo vazio, por isso `semCorpo`.
+ */
+export async function limparCampo(taskId, fieldId) {
+  return cu(`/task/${taskId}/field/${fieldId}`, { method: 'DELETE' }, { semCorpo: true });
+}
+
+/**
  * Invalida o cache da carteira. Ultimo recurso: a proxima leitura paga ~28 chamadas.
  *
  * `cacheTasks` NAO e limpo: ele guarda listId e gerente, e nenhum campo da allowlist
@@ -699,6 +736,12 @@ export function refletirEscrita(taskId, fieldId, valor) {
   }
 
   if (fieldId === CF.EVENTO_CAMP) {
+    // null = campo limpo (DELETE). Nada a aprender, nada a invalidar.
+    if (valor === null) {
+      alvo.linha.eventoCamp = null;
+      alvo.linha.eventoCampId = null;
+      return;
+    }
     const rotulo = rotulosAprendidos.get(valor);
     if (!rotulo) {
       // Rotulo desconhecido: preferir custo a divergencia, como nos alertas.

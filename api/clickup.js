@@ -30,6 +30,7 @@ import {
   getMetas,
   gravarCampo,
   lerClienteFresco,
+  limparCampo,
   localizarTask,
   refletirEscrita,
   STATUS_MES_ATUAL,
@@ -349,18 +350,30 @@ async function escreverCampo(req, res, sessao) {
     return erro(res, 403, 'fora_da_carteira', 'Este cliente não está na sua carteira.');
   }
 
-  await gravarCampo(taskId, fieldId, valor);
+  // `null` significa limpar, e no ClickUp isso e DELETE — nao existe POST com value
+  // null. Chega aqui somente para campos `limpavel`, ja filtrado em validarValor.
+  if (valor === null) {
+    await limparCampo(taskId, fieldId);
+  } else {
+    await gravarCampo(taskId, fieldId, valor);
+  }
   // Reflete no cache em vez de derruba-lo: derrubar custaria ~28 chamadas na leitura
   // seguinte, de uma cota de 100/min compartilhada por todo o time.
   refletirEscrita(taskId, fieldId, valor);
-  return res.status(200).json({ ok: true, campo: campo.nome });
+  return res.status(200).json({ ok: true, campo: campo.nome, limpo: valor === null });
 }
 
 /**
  * Valida o valor de acordo com o tipo do campo.
- * @returns o valor saneado, ou undefined se for recusado.
+ * @returns o valor saneado, `null` para limpar, ou undefined se for recusado.
  */
 function validarValor(campo, value) {
+  // Limpar o campo. So nos campos marcados `limpavel` na allowlist, e so com null
+  // EXPLICITO — `value` ausente continua sendo recusado, para que um corpo
+  // incompleto nunca apague dado por acidente.
+  if (value === null) {
+    return campo.limpavel ? null : undefined;
+  }
   if (campo.tipo === 'checkbox') {
     if (value === true || value === false) return value;
     return undefined;

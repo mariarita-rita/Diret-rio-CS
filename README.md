@@ -306,16 +306,36 @@ campo a campo e opção a opção, e a suíte falha se ela deixar de ser enumer�
 > o ID dela em `CAMPOS_ESCRITA`, em `api/_lib/clickup.js`. Sem isso a gravação da
 > opção nova volta 403 — é a allowlist funcionando, não um bug.
 
-#### Limpar um campo não é possível pelo proxy
+#### Limpar um campo: só o Camp 2026
 
-O `set-field` só faz `POST /task/{id}/field/{id}` com `{value}`. Apagar o valor de um
-campo personalizado no ClickUp exige `DELETE` no mesmo endpoint — **verbo que o proxy
-não expõe**. Então o *Evento: Camp 2026* pode ser trocado entre as quatro opções, mas
-não esvaziado: `value: null` volta **403 `valor_nao_permitido`**, e o seletor no modal
-reverte com a mensagem "não dá p/ limpar".
+`value: null` **apaga** o campo. No ClickUp isso não é "POST com value null" — é
+`DELETE /task/{id}/field/{id}`, e `limparCampo()` é o **único caminho de escrita do
+proxy que não é POST**.
 
-Para desmarcar de vez, é pelo ClickUp. Habilitar isso aqui é uma decisão em aberto —
-ver `docs/estado-e-proximos-passos.md`.
+A permissão é marcada campo a campo, com `limpavel: true` na entrada da allowlist, e
+**só o Evento: Camp 2026 a tem**:
+
+| Campo | Limpável | Por quê |
+| --- | --- | --- |
+| **Evento: Camp 2026** | **sim** | existe para o gerente sinalizar sem abrir o ClickUp; se corrigir clique errado exigisse o ClickUp, funcionaria pela metade. *Não Vai 🚫* cobre "o cliente não vai", não "marquei a linha errada" |
+| Etapa | não | vazia deixaria a task fora do fluxo de acompanhamento |
+| Tipo de solicitação | não | idem |
+| Alertas | não | `[]` via POST já é a limpeza legítima, e funciona |
+| Em acompanhamento | não | `false` já é o estado "não" |
+
+Limpar qualquer outro → **403 `valor_nao_permitido`**, e a recusa é nossa: **nenhum
+`DELETE` chega ao ClickUp**. Coberto por teste, campo por campo.
+
+`value` **ausente** também é 403: só `null` explícito apaga, para que corpo incompleto
+nunca destrua dado por acidente.
+
+O `DELETE` responde **200 com corpo vazio**, por isso `cu()` tem a opção `semCorpo`.
+Sem ela o `r.json()` lançaria *depois* de a escrita ter sido aplicada, a função
+devolveria 500, e o front reverteria o seletor — a pessoa acharia que não limpou
+quando limpou. É a mentira que a reversão em erro existe para evitar, ao contrário.
+
+O portão de escrita vale igual no `DELETE`: `consulta` → 403 `somente_leitura`, CSM
+fora da carteira → 403 `fora_da_carteira`.
 
 ### `/api/moskit`
 
