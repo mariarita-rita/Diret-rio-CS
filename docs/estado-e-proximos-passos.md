@@ -262,7 +262,7 @@ ações) — os itens 1 e 2 são necessariamente manuais na interface.
 |---|---|---|
 | 1 | A escrita no ClickUp realmente grava (`gravarCampo`) | ✅ **fechada** na fatia 1 |
 | 2 | Os `fieldId` e ids de opção de `CAMPOS_ESCRITA` são os reais | ⚠️ **parcial** — só o checkbox *Em acompanhamento* foi exercitado. *Etapa*, *Tipo* e *Alertas* seguem não verificados |
-| 3 | **O Moskit aceita o corpo remontado** — pipeline, stage, board, step, createdBy, os 14 `CF_*` e o formato de `entityCustomFields` | ❌ **aberta. Maior risco do refactor.** A Tarefa 2 reconstruiu o corpo no servidor e ele **nunca falou com o Moskit**; os 14 `CF_*` foram transcritos do HTML antigo sem verificação |
+| 3 | **O Moskit aceita o corpo remontado** — pipeline, stage, board, step, createdBy, os 14 `CF_*` e o formato de `entityCustomFields` | ⚠️ **parcial.** Os 14 `CF_*`, o formato de `entityCustomFields` e os IDs de opção foram **confirmados contra o Moskit real** — ver seção 11.5. Continua aberto se o POST de criação é **aceito** (pipeline, stage, board, step, createdBy, responsible) |
 | 4 | `localizarCliente` extrai ID Núcleo, CNPJ, razão social e mensalidade; `responsavelDe` mapeia o responsável | ⚠️ **parcial** — a extração foi confirmada na pré-checagem da fatia 1; o mapeamento de responsável **não** foi exercitado |
 | 5 | O aviso `responsavel_nao_identificado` **não** dispara com gerente válido | ❌ aberta |
 | 6 | Mudanças de front do `bb7d366`: mensagem de sucesso, `white-space:pre-line`, modal não fechar quando há aviso | ❌ aberta |
@@ -474,6 +474,23 @@ Resultado: o painel anuncia **"Ultrameta equipe! +R$ 200"** para os quatro CSMs,
 quando o correto é supermeta, **+R$ 100**. Número errado em tela, afetando o bônus
 que quatro pessoas estão vendo.
 
+**Eram três números errados, não um** — confirmado em produção pela usuária. Os cards
+**📈 MRR Incrementado** e **📉 Perdido Downsell** saem de `metasData.reduce(...)` no
+front, e `metasData` era `tasks`, que trazia a quinta linha:
+
+| Card | Antes | Correto |
+|---|---|---|
+| 📈 MRR Incrementado | R$ 22.518,32 | R$ 11.259,16 |
+| 📉 Perdido Downsell | R$ 421,80 | R$ 191,40 |
+| Bônus equipe | ultrameta, +R$ 200 | supermeta, +R$ 100 |
+
+`2e32cbe` corrige os três de uma vez, porque a raiz é a mesma: a linha de equipe deixa
+de viajar dentro de `tasks`. Nenhuma conta do front precisou mudar — o que mostra que
+tirar a linha do array foi a correção certa, e não filtrar em cada `reduce`.
+
+Os cards de gestão por gerente **não** eram afetados: usam `metasData.find(...)` por
+nome de gerente, e `⭐ Equipe` não casa com nenhum.
+
 **Mitigação sem deploy:** fechar a tarefa `86ajvcgc7` no ClickUp. `include_closed=false`
 a remove da resposta e a soma volta ao valor correto. Não é instantâneo — `getMetas`
 tem cache de 5 min por instância e a resposta vai ao navegador com `max-age=300`, então
@@ -487,7 +504,28 @@ divergência.
 |---|---|---|
 | 1 | A linha `⭐ Equipe` (`86ajvcgc7`) está com *Mês Referência* = **Junho**, enquanto o nome diz `Jul/2026` e as quatro individuais dizem **Julho** | **Nenhum** — o período não é filtrado por mês. Mas é erro de digitação na linha que declara os totais |
 | 2 | Divergência de **R$ 39,00**, toda em downsell: declarado `230,40` contra `191,40` na soma das individuais. *MRR Atingido* bate exatamente (`11.259,16`) | Nenhum. O aviso de divergência (`7bc2fbf`) passa a exibi-la para a gestão. A origem é de conferência |
-| 3 | O campo `🤝 Bônus Equipe` da linha de equipe está em **200** | Nenhum — o código não lê esse campo, usa `BONUS_EQ_VAL`. Mas 200 é o valor da ultrameta, e o líquido real só alcança a supermeta: pode ter sido transcrito do painel já contaminado. Vale reconferir |
+| 3 | O campo `🤝 Bônus Equipe` estava em **200** — erro de digitação, **corrigido para 100** pela usuária | Nenhum: o código não lê esse campo, usa `BONUS_EQ_VAL`. Virou decisão pendente — ver abaixo |
+
+### 11.2.1 Decisão pendente: `🤝 Bônus Equipe` como fonte da verdade?
+
+Hoje o valor do bônus vem de `BONUS_EQ_VAL` (`{super:100, ultra:200}`), **constante no
+front**. O campo `🤝 Bônus Equipe` (`c6585dcb-c590-411d-9213-517b7f3c119c`, currency) da
+linha de equipe existe e é preenchido à mão, mas **o código o ignora**.
+
+A pergunta: ele deve virar a fonte da verdade do bônus, como fizemos com os limiares em
+`2e32cbe`? **Não implementado — decidir antes.**
+
+O que pesa a favor: mesma direção dos limiares, e mudar o bônus deixaria de exigir
+deploy. O que pesa contra, e é a diferença real em relação aos limiares: os limiares são
+**um por faixa** e cada linha declara os quatro, enquanto este campo é **um valor só**.
+Ele não diz de qual faixa é — o `200` de agora era o bônus da ultrameta enquanto o
+líquido só alcançava a supermeta, e foi justamente esse descasamento que produziu o erro
+de digitação. Usá-lo como fonte exigiria decidir se ele é "o bônus da faixa atingida
+hoje" (derivável, portanto redundante e sujeito a divergir) ou "o bônus desta faixa"
+(precisaria de quatro campos, um por faixa, como os limiares).
+
+Recomendação, para quando for decidir: **quatro campos, um por faixa**, ou manter a
+constante. Um campo único com semântica ambígua é a pior das três.
 
 ### 11.3 Decisões tomadas, para não serem re-litigadas
 
@@ -508,34 +546,58 @@ divergência.
   individuais também a lista, com "bônus surpresa". Reverter para três é apagar uma
   linha em `renderEquipe`.
 
-### 11.4 Investigação do campo "Solicitante" no Moskit — não encontrado
+### 11.4 Campo "Solicitante" no Moskit — encontrado
 
-Pedido: descobrir o `CF_` do campo *Solicitante*, para rastrear quem pediu a criação.
-**Ele não existe em nenhum lugar alcançável pela chave de API.** O que foi varrido:
+Para trabalho futuro (rastrear quem pediu a criação). **Nada implementado.**
 
-| Onde | Resultado |
-|---|---|
-| `GET /v2/customFields` | 10 campos. **Ignora todo filtro** (`module`, `limit`, `page`, `active`) e devolve sempre os mesmos 10 — não é inventário confiável |
-| Registros DEAL reais | 15 campos distintos, os 10 funis varridos |
-| Registros PROJECT reais | 10 campos distintos |
-| Registros COMPANY reais | 9 campos distintos |
-| Registros ACTIVITY reais | 1 campo |
-| `GET /v2/persons`, `/v2/tasks` | **404** — campos de PERSON são invisíveis por esta rota |
+| Módulo | `CF_` | Tipo | Vínculo |
+|---|---|---|---|
+| **DEAL** | `CF_POEMywieC56n7Ddk` | `TEXT` | funil **91432** (Base de clientes) |
+| **PROJECT** | `CF_x1kq69HnC6WL3DzY` | `TEXT` | sem funil (projetos não têm) |
 
-Nenhum campo com `solicit` no nome (o regex também pegaria "Solicitado por" e "Quem
-solicitou"). Adjacentes que existem: `CF_A4wMWNiLiBoLXqB8` *Origem da Oportunidade*
-(DEAL, `MULTIPLE_OPTION`) e `CF_Pj3qYrUeC0GLbMQe` *Responsável (administrador)*
-(COMPANY, `TEXT`).
+**IDs distintos por módulo** — não dá para reusar um só. **`TEXT` nos dois, então não
+há opções a mapear**: é texto livre, e vale a mesma lição da *Cidade* (agrupar exige
+normalizar). Lidos dos registros `48104129` (negócio) e `1689954` (projeto), ambos
+devolvendo `"Anderson"`.
 
-Hipóteses, em ordem: o campo não foi salvo/publicado no Moskit; existe mas não está
-vinculado a nenhum funil e está vazio em todo registro (o `entityCustomFields` traz os
-campos aplicáveis ao funil mesmo vazios, então um campo solto não aparece); está em
-PERSON, invisível por aqui; ou tem outro nome ("Requerente", "Pedido por").
+**Pegadinha da leitura:** o valor **não** vem em `value`. O `entityCustomFields` usa
+`textValue`, `numericValue` ou `options` conforme o tipo:
 
-**Caminho mais curto:** preencher o campo em **um** registro e me dizer o módulo
-(negócio, projeto ou empresa) e o funil. Aí sai numa chamada. Alternativa: o `CF_`
-aparece na URL do Moskit ao editar a definição do campo.
+```json
+{ "id": "CF_POEMywieC56n7Ddk", "textValue": "Anderson" }
+{ "id": "CF_g40MLBiYSjOzYD29", "numericValue": 10748 }
+{ "id": "CF_Lo1qjyiPiaYQNDer", "options": [569294] }
+```
 
-Nota de rota: `/v2/deals?limit=100` devolve **10** registros — o `limit` não é
-respeitado. Qualquer varredura futura precisa paginar de verdade, não confiar no
-`limit`.
+Um leitor que procure `.value` acha o campo e reporta vazio — foi o que aconteceu na
+primeira varredura desta investigação.
+
+**Duas armadilhas da API, para a próxima varredura:**
+
+- `GET /v2/customFields` devolve **10** campos e **ignora todo filtro** (`module`,
+  `limit`, `page`, `active`). Não é inventário: o *Solicitante* não estava lá, e vários
+  campos que o `moskit.js` já usa também não. O caminho confiável é ler registros reais.
+- `GET /v2/deals?limit=100` devolve **10**. O `limit` não é respeitado — pagine de
+  verdade.
+- `GET /v2/persons` e `/v2/tasks` dão **404**: campos de PERSON são invisíveis por aqui.
+
+### 11.5 Incógnita 3 quase fechada, de graça
+
+A varredura acima validou o que a seção 5.6 listava como **maior risco do refactor** —
+os 14 `CF_*` transcritos do HTML antigo sem verificação. Contra o Moskit real:
+
+- **Os 10 `CF_DEAL` batem exatamente**, todos presentes no negócio `48104129` do funil
+  91432, com os nomes esperados.
+- **Os 4 `CF_PROJ` existem e têm os nomes certos** (`Tipo de solicitação`,
+  `💠 Origem da solicitação`, `O que você gostaria de conversar…`, `Observação`).
+- **O formato de `entityCustomFields` que o `moskit.js` monta está correto**: ele já usa
+  `numericValue` / `textValue` / `options`, que é exatamente o que a API devolve.
+- **Os IDs de opção são numéricos e estão nas allowlists.** O negócio real trazia
+  `569294` (Plano atual), `569448` (Base do mês), `608597` (Oportunidade) e `695069`
+  (Origem) — todos dentro de `OPC_PLANO`, `OPC_BASE_MES`, `OPC_OPORTUNIDADE` e
+  `OPC_ORIGEM_DEAL`, e com o mesmo tipo (número, não string).
+
+**O que continua aberto:** se o Moskit **aceita o POST** com `pipeline`, `stage`,
+`board`, `step`, `createdBy` e `responsible` como o servidor os monta. Os campos e o
+formato deixaram de ser incógnita; o corpo da criação, não. O teste 8 fica menor, mas
+não desnecessário.
