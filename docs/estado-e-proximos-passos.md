@@ -554,7 +554,38 @@ Suíte em **261/261**.
 | Commit | Assunto |
 |---|---|
 | `2d34a93` | Filtro de período por Ano Base e Mês Referência |
-| *este* | Campo Evento: Camp 2026 editável |
+| `0242812` | Campo Evento: Camp 2026 editável |
+| `0d6d361` | Limpar o Evento Camp 2026 pelo painel |
+| *este* | Aba de busca de clientes, e o perfil consulta ganha tela |
+
+#### 12.4 O perfil `consulta` não tinha tela — e o problema real era outro
+
+Reportado pela usuária: CSMs precisaram perguntar a ela em qual carteira estava um
+cliente. Diagnóstico:
+
+1. **`consulta` nunca teve tela.** `buildTabs()` só criava abas de carteira para `csm` e
+   `gestao`; para `consulta` a lista ficava vazia e a primeira aba acabava sendo o
+   iframe de Monitoramento. O servidor **já mandava** as 2797 linhas com `mrr: 0`, então
+   o perfil pagava ~28 chamadas de cota por login e não exibia nada.
+2. **O problema dos CSMs era de servidor, não de aba.** `action=carteira` filtra por
+   CSM (`pertenceAoCsm`), que é o invariante em que o refactor de segurança foi
+   construído. Nenhuma aba nova resolveria isso sem mexer na regra.
+
+**A solução não afrouxou `action=carteira`.** Ela continua filtrada, byte a byte igual.
+Em vez disso, `action=busca` nova, com projeção fechada de 7 campos e nenhum financeiro
+— detalhes no README. A fronteira passou a ser a **forma da resposta**, não uma flag de
+nível: não há caminho em que a ação devolva valor financeiro, para nenhum perfil.
+
+**Disclosure criada, para registro:** um CSM agora sabe que o cliente X é atendido pela
+Patricia. Era o pedido. Reverter é remover uma aba e uma ação — um commit.
+
+**Achado colateral:** o servidor zerava o `mrr` para `consulta` mas mandava `finStatus`
+(inadimplência), `nps`, `csat`, `obs` e `descricao`. Não aparecia em tela por não haver
+tela; se a aba de consulta tivesse sido construída reusando o caminho de
+`action=carteira`, o modal de detalhe mostraria *"Financeiro: Pendente"*. Com a projeção
+da busca isso deixou de ser alcançável, e `consulta` parou de chamar `action=carteira`.
+**O `mrr: 0` do servidor foi mantido** — checagem de servidor não se remove porque o
+cliente parou de chamar.
 
 As regras estão no README, em *Período das metas* e na tabela de `set-field`.
 

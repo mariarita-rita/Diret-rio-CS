@@ -375,6 +375,41 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
 <div class="csm-banner" id="csm-banner"></div>
 
 <div id="iframe-section" style="display:none;padding:1.5rem 2rem;max-width:1440px;margin:0 auto"></div>
+
+<!-- Busca de clientes: diretório, sem valor financeiro. A única aba de dados que
+     todos os perfis têm, e a primeira tela do perfil consulta. -->
+<div id="busca-section" style="display:none;padding:1.5rem 2rem;max-width:1440px;margin:0 auto">
+  <div class="search-bar">
+    <span class="search-icon-inline">🔎</span>
+    <input type="text" id="busca-input" placeholder="Nome do cliente, ID Núcleo ou CNPJ..." autocomplete="off">
+    <div class="table-controls">
+      <select class="ctrl-select" id="busca-gerente" title="Gerente"></select>
+      <select class="ctrl-select" id="busca-status" title="Status">
+        <option value="">Todos status</option>
+        <option value="ativo">Ativo</option>
+        <option value="em risco">Em Risco</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+    </div>
+  </div>
+  <div class="table-card">
+    <div class="table-header">
+      <div>
+        <div class="table-header-title">Todos os clientes</div>
+        <div class="table-count" id="busca-count"></div>
+      </div>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>ID Núcleo</th><th>Cliente</th><th>CNPJ</th><th>Cidade</th><th>Gerente</th><th>Status</th></tr></thead>
+      <tbody id="busca-body"></tbody>
+    </table></div>
+    <div class="pagination" id="busca-pagination"></div>
+  </div>
+  <div style="font-size:11px;color:var(--neutral-400);margin-top:10px;line-height:1.5">
+    Consulta de roteamento: mostra quem atende cada cliente. Não traz MRR, plano,
+    situação financeira, alertas nem NPS — para isso, use a aba da carteira.
+  </div>
+</div>
 <main class="main" id="main-content">
   <div id="periodo-bar"></div>
   <div id="meta-section"></div>
@@ -591,6 +626,7 @@ async function doLogout(){
 function sessaoExpirada(){encerrarSessao('Sua sessão expirou. Entre novamente.');}
 function encerrarSessao(msg){
   session=null;allData=[];metasData=[];filtered=[];periodos=[];periodoSel=null;avisosGerais=[];
+  buscaData=[];buscaFiltrada=[];buscaPagina=1;buscaCarregada=false;
   document.getElementById('login-input').value='';
   document.getElementById('login-error').textContent=msg;
   document.getElementById('user-badge').textContent='';
@@ -621,6 +657,18 @@ async function restaurarSessao(){
 // CSM acontecem todos no servidor. O que chega aqui já é só o que este perfil
 // tem direito de ver.
 async function loadAllData(forcar){
+  // O perfil consulta não tem aba de carteira nem de metas: a tela dele é a busca,
+  // que carrega sozinha. Carregar as duas aqui gastava ~29 chamadas de uma cota de
+  // 100/min compartilhada, por login, para não exibir nada.
+  //
+  // O servidor NÃO foi relaxado por isso: `action=carteira` continua zerando o `mrr`
+  // para consulta. Checagem de servidor não se remove porque o cliente parou de
+  // chamar — quem decide é o servidor.
+  if(session?.nivel==='consulta'){
+    document.getElementById('update-info').textContent='Consulta — sem valores financeiros';
+    if(forcar===true)carregarBusca(true);
+    return;
+  }
   const lbar=document.getElementById('lbar');
   const lwrap=lbar.parentElement;
   lwrap.style.display='block';
@@ -693,6 +741,132 @@ function bloquearRecarga(segundos){
   recargaTimer=setInterval(tick,1000);
 }
 
+// ── BUSCA DE CLIENTES ─────────────────────────────────────
+// Estado próprio, separado de `filtered`/`currentPage`: as duas telas coexistem e
+// misturar o estado faria a paginação de uma mexer na outra.
+let buscaData=[],buscaFiltrada=[],buscaPagina=1,buscaCarregada=false;
+
+/**
+ * Carrega o diretório uma vez por sessão. Custo ZERO de cota quando a carteira já
+ * está quente: `action=busca` reusa o mesmo getCarteira() e o mesmo cache de 5 min.
+ */
+async function carregarBusca(forcar){
+  if(buscaCarregada&&!forcar){renderBusca();return;}
+  const corpo=document.getElementById('busca-body');
+  corpo.innerHTML='<tr><td colspan="6" class="state-msg"><span class="loading-spinner"></span> Carregando clientes...</td></tr>';
+  try{
+    const r=await api('/api/clickup?action=busca');
+    buscaData=r.tasks||[];
+    buscaCarregada=true;
+    preencherFiltroGerenteBusca();
+    filtrarBusca();
+  }catch(e){
+    if(e.message==='sessao')return;
+    corpo.innerHTML='<tr><td colspan="6" class="state-msg"></td></tr>';
+    corpo.querySelector('td').textContent=e.code==='limite_clickup'
+      ? e.message
+      : 'Erro ao carregar clientes: '+(e.message||'falha de conexão');
+  }
+}
+
+// Sentinela do filtro "Sem gerente", no mesmo padrão de CIDADE_VAZIA: nenhum nome de
+// gerente normalizado produz esta chave.
+const GERENTE_VAZIO='__sem_gerente__';
+
+/** Gerentes existentes nos dados, em ordem alfabética. Inclui "Sem gerente". */
+function preencherFiltroGerenteBusca(){
+  const sel=document.getElementById('busca-gerente');
+  if(!sel)return;
+  const anterior=sel.value;
+  const grupos=new Map();
+  let sem=0;
+  buscaData.forEach(r=>{
+    const chave=normTxt(r.gerente);
+    if(!chave){sem++;return;}
+    if(!grupos.has(chave))grupos.set(chave,{rotulo:String(r.gerente).trim(),n:0});
+    grupos.get(chave).n++;
+  });
+  const opts=[...grupos.entries()].map(([chave,v])=>({chave,...v}))
+    .sort((a,b)=>a.rotulo.localeCompare(b.rotulo,'pt-BR'));
+  sel.innerHTML='<option value="">Todos os gerentes</option>'
+    +opts.map(o=>`<option value="${esc(o.chave)}">${esc(o.rotulo)} (${o.n})</option>`).join('')
+    +(sem?`<option value="${GERENTE_VAZIO}">Sem gerente (${sem})</option>`:'');
+  if(anterior&&[...sel.options].some(o=>o.value===anterior))sel.value=anterior;
+}
+
+function filtrarBusca(){
+  const q=normTxt(document.getElementById('busca-input')?.value||'');
+  const fGer=document.getElementById('busca-gerente')?.value||'';
+  const fSt=document.getElementById('busca-status')?.value||'';
+  // Dígitos soltos da busca casam com ID Núcleo e CNPJ, que a pessoa digita com ou
+  // sem pontuação.
+  const qNum=q.replace(/\D/g,'');
+  buscaFiltrada=buscaData.filter(r=>{
+    const gerNorm=normTxt(r.gerente);
+    const gerOk=!fGer||(fGer===GERENTE_VAZIO?!gerNorm:gerNorm===fGer);
+    const stOk=!fSt||(r.status||'')===fSt;
+    if(!q)return gerOk&&stOk;
+    const qOk=normTxt(r.nome).includes(q)
+      ||(qNum&&String(r.idNucleo||'').replace(/\D/g,'').includes(qNum))
+      ||(qNum&&String(r.cnpj||'').replace(/\D/g,'').includes(qNum));
+    return gerOk&&stOk&&qOk;
+  });
+  buscaPagina=1;
+  renderBusca();
+}
+
+function renderBusca(){
+  const corpo=document.getElementById('busca-body');
+  const conta=document.getElementById('busca-count');
+  if(!corpo)return;
+
+  conta.textContent=`${buscaFiltrada.length.toLocaleString('pt-BR')} de ${buscaData.length.toLocaleString('pt-BR')} clientes`;
+
+  if(!buscaFiltrada.length){
+    corpo.innerHTML='<tr><td colspan="6" class="state-msg">Nenhum cliente encontrado.</td></tr>';
+    document.getElementById('busca-pagination').innerHTML='';
+    return;
+  }
+
+  const inicio=(buscaPagina-1)*PAGE_SIZE;
+  const pag=buscaFiltrada.slice(inicio,inicio+PAGE_SIZE);
+  corpo.innerHTML=pag.map(r=>{
+    const col=r.gerente?Object.entries(CSM_COLORS).find(([k])=>r.gerente.includes(k.split(' ')[0]))?.[1]:null;
+    const cancel=r.status==='cancelado';
+    const stColor=cancel||r.status==='em risco'?'var(--red)':'var(--green)';
+    return`<tr>
+      <td style="font-size:10px;color:var(--neutral-400)">${esc(r.idNucleo||'—')}</td>
+      <td style="font-weight:500;${cancel?'color:var(--red)':''}">${esc(r.nome||'—')}</td>
+      <td style="font-size:11px;color:var(--neutral-500)">${esc(r.cnpj||'—')}</td>
+      <td style="font-size:11px;color:var(--neutral-500)">${esc(r.cidade||'—')}</td>
+      <td><span class="gerente-dot" style="${col?'background:'+col.dot:'background:#CBD5E1'}"></span><span style="font-size:11px">${esc(r.gerente||'—')}</span></td>
+      <td style="font-size:11px;color:${stColor};font-weight:500">${esc(r.status||'—')}</td>
+    </tr>`;
+  }).join('');
+
+  const totalPag=Math.ceil(buscaFiltrada.length/PAGE_SIZE);
+  const alvo=document.getElementById('busca-pagination');
+  if(totalPag<=1){alvo.innerHTML='';return;}
+  const de=inicio+1,ate=Math.min(inicio+PAGE_SIZE,buscaFiltrada.length);
+  let botoes='';
+  for(let i=1;i<=totalPag;i++){
+    if(totalPag>7&&i>2&&i<totalPag-1&&Math.abs(i-buscaPagina)>1){
+      if(i===3||i===totalPag-2)botoes+='<span style="padding:4px 6px;color:var(--neutral-400);font-size:12px">…</span>';
+      continue;
+    }
+    botoes+=`<button class="page-btn${i===buscaPagina?' active':''}" onclick="irBusca(${i})">${i}</button>`;
+  }
+  alvo.innerHTML=`<span class="page-info">Mostrando ${de}–${ate} de ${buscaFiltrada.length}</span>
+    <div class="page-btns"><button class="page-btn" onclick="irBusca(${buscaPagina-1})" ${buscaPagina===1?'disabled':''}>‹</button>${botoes}<button class="page-btn" onclick="irBusca(${buscaPagina+1})" ${buscaPagina===totalPag?'disabled':''}>›</button></div>`;
+}
+
+function irBusca(p){
+  const t=Math.ceil(buscaFiltrada.length/PAGE_SIZE);
+  if(p<1||p>t)return;
+  buscaPagina=p;renderBusca();
+  document.getElementById('busca-section').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 // ── TABS ──────────────────────────────────────────────────
 function buildTabs(){
   const bar=document.getElementById('tab-bar');
@@ -700,6 +874,9 @@ function buildTabs(){
 
   // Abas estáticas sempre visíveis (todos os níveis)
   const tabsEstaticas = [
+    // Busca antes das outras: é a única aba de dados que TODOS os perfis têm, e para
+    // o perfil consulta é a primeira tela que abre.
+    {id:'busca',       label:'🔎 Buscar cliente'},
     {id:'monitoramento',label:'📊 Monitoramento'},
     {id:'processos',   label:'📋 Processos CSM'},
     {id:'tabela',      label:'💰 Tabela de Preços'},
@@ -742,6 +919,7 @@ function switchTab(tabId,csm){
   const banner=document.getElementById('csm-banner');
   const mainContent=document.getElementById('main-content');
   const iframeSection=document.getElementById('iframe-section');
+  const buscaSection=document.getElementById('busca-section');
 
   // Abas estáticas — mostrar iframe, esconder main
   const ABAS_IFRAME={
@@ -752,6 +930,7 @@ function switchTab(tabId,csm){
 
   if(tabId in ABAS_IFRAME){
     mainContent.style.display='none';
+    buscaSection.style.display='none';
     iframeSection.style.display='block';
     banner.className='csm-banner';banner.innerHTML='';
 
@@ -760,8 +939,19 @@ function switchTab(tabId,csm){
     return;
   }
 
+  // Busca — tela própria, sem nada de carteira e sem nada financeiro.
+  if(tabId==='busca'){
+    mainContent.style.display='none';
+    iframeSection.style.display='none';
+    buscaSection.style.display='block';
+    banner.className='csm-banner';banner.innerHTML='';
+    carregarBusca();
+    return;
+  }
+
   // Abas de carteira — mostrar main, esconder iframe
   mainContent.style.display='block';
+  buscaSection.style.display='none';
   iframeSection.style.display='none';
 
   if(csm){
@@ -2035,6 +2225,9 @@ function closeAcompModal(e) {
 
 // ── EVENTS ────────────────────────────────────────────────
 document.getElementById('search-inline').addEventListener('input',e=>{currentSearch=e.target.value;currentPage=1;applyFilters();});
+document.getElementById('busca-input').addEventListener('input',filtrarBusca);
+document.getElementById('busca-gerente').addEventListener('change',filtrarBusca);
+document.getElementById('busca-status').addEventListener('change',filtrarBusca);
 restaurarSessao();
 </script>
 

@@ -1468,6 +1468,140 @@ console.log('\n[31] limpar campo: DELETE, so no Camp 2026, mesmo portao de escri
   globalThis.fetch = fetchOriginal;
 }
 
+console.log('\n[32] action=busca: diretorio sem valor financeiro, sem filtro de CSM');
+{
+  const CF = {
+    mrr: '59888807-a3f3-42f0-aebd-f63032011ed1',
+    gerente: '3898a8f4-bb21-46d7-88ee-79d164033fdf',
+    idNucleo: '6126a50b-7afb-40fd-8654-26a687f34258',
+    cnpj: '1e819aec-0121-44c2-8a92-302c2f0e4450',
+    cidade: 'beaef1da-fffa-419f-9827-093b5452f8fc',
+    finStatus: 'c290f699-8d56-437c-9319-1cf282430d12',
+    alertas: '6ce5db54-1a1d-4dfa-944d-4b01b8832549',
+    nps: '49b335f4-98b9-40b6-acf6-f06ca3061621',
+    obs: '114a9169-2a63-42b6-b9d3-8596232d0401',
+    planoGestor: '806ccb6e-5368-43de-8fca-bcb7ba25d918',
+    evento: '54ee7ad4-4689-4d79-bec7-5ac1373d96e9',
+  };
+  const ALERTA = 'ddaddf7d-9ffa-49de-9b53-6e63acbbceb3';
+  const fetchOriginal = globalThis.fetch;
+  const chamadas = [];
+
+  // Cliente de OUTRA carteira, com todo campo sensivel preenchido: e o caso que
+  // prova a projecao.
+  const cliente = (id, gerente, extras = {}) => ({
+    id, name: extras.nome || `Cliente ${id}`, list: { id: '901327787926' },
+    status: { status: extras.status || 'ativo' },
+    description: 'descricao interna',
+    custom_fields: [
+      { id: CF.gerente, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: gerente }] } },
+      { id: CF.mrr, type: 'number', value: 4321 },
+      { id: CF.idNucleo, type: 'short_text', value: '10748' },
+      { id: CF.cnpj, type: 'short_text', value: '44.586.393/0001-10' },
+      // `in` e nao `??`: o caso do c3 e cidade EXPLICITAMENTE nula.
+      { id: CF.cidade, type: 'short_text', value: 'cidade' in extras ? extras.cidade : 'Londrina' },
+      { id: CF.finStatus, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Pendente' }] } },
+      { id: CF.alertas, type: 'labels', value: [ALERTA], type_config: { options: [{ id: ALERTA, label: 'Risco de Churn' }] } },
+      { id: CF.nps, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Detrator' }] } },
+      { id: CF.obs, type: 'short_text', value: 'observacao interna sigilosa' },
+      { id: CF.planoGestor, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Gestor Ouro' }] } },
+      { id: CF.evento, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Convidado 💠' }] } },
+    ],
+  });
+
+  const TASKS = [
+    cliente('c1', 'Gian Luca', { nome: 'Alfa Comercio' }),
+    cliente('c2', 'Patricia Carvalho', { nome: 'Beta Servicos', status: 'cancelado' }),
+    cliente('c3', 'Guilherme Camargo', { nome: 'Gama Ltda', cidade: null }),
+  ];
+
+  globalThis.fetch = async (url) => {
+    chamadas.push(String(url));
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+      json: async () => {
+        const pag = Number((String(url).match(/[?&]page=(\d+)/) || [])[1] ?? 0);
+        return pag === 0 ? { tasks: TASKS, last_page: true } : { tasks: [], last_page: true };
+      },
+      text: async () => '',
+    };
+  };
+
+  const libUrl = libClickupUnica('busca');
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const pedir = async (perfil, acao = 'busca') => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action: acao } }, r);
+    return r;
+  };
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'G' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'C' };
+
+  const semSessao = res();
+  await cu({ method: 'GET', headers: cabecalhos(), query: { action: 'busca' } }, semSessao);
+  checar('sem cookie: 401 sessao_invalida', [semSessao.code, semSessao.corpo.code], [401, 'sessao_invalida']);
+
+  // A projecao e uma lista FECHADA. Este e o teste que importa.
+  const PERMITIDOS = ['id', 'idNucleo', 'cnpj', 'nome', 'cidade', 'gerente', 'status'];
+  const PROIBIDOS = ['mrr', 'finStatus', 'alertas', 'alertasIds', 'nps', 'csat', 'obs',
+                     'descricao', 'planoGestor', 'planoUnique', 'baseRenov', 'criterio',
+                     'motivoPerda', 'motivoPerdaId', 'eventoCamp', 'eventoCampId',
+                     'outrosSrv', 'acomp', 'dataCancel'];
+
+  for (const perfil of [GESTAO, GIAN, CONSULTA]) {
+    const r = await pedir(perfil);
+    const rotulo = perfil.nivel;
+    checar(`${rotulo}: 200`, r.code, 200);
+    checar(`${rotulo}: ve os 3 clientes, sem filtro de CSM`, r.corpo.tasks.length, 3);
+    const chaves = Object.keys(r.corpo.tasks[0]).sort();
+    checar(`${rotulo}: exatamente os campos permitidos`, chaves, [...PERMITIDOS].sort());
+    const vazou = PROIBIDOS.filter((k) => r.corpo.tasks.some((t) => k in t));
+    checar(`${rotulo}: nenhum campo sensivel vazou`, vazou, []);
+  }
+
+  // O CSM ve o cliente de OUTRA carteira — e o objetivo da acao.
+  const gian = await pedir(GIAN);
+  checar('csm ve cliente de outra carteira', gian.corpo.tasks.map((t) => t.gerente).sort(),
+         ['Gian Luca', 'Guilherme Camargo', 'Patricia Carvalho']);
+  checar('  com o nome e o gerente, que e a resposta que ele queria',
+         [gian.corpo.tasks[1].nome, gian.corpo.tasks[1].gerente], ['Beta Servicos', 'Patricia Carvalho']);
+  checar('  status vem junto', gian.corpo.tasks[1].status, 'cancelado');
+  checar('  cidade ausente vira null, nao undefined', gian.corpo.tasks[2].cidade, null);
+  checar('  e o campos declarado na resposta bate', gian.corpo.campos, PERMITIDOS);
+
+  // action=carteira NAO foi afrouxada: o CSM continua vendo so a propria.
+  const carteiraGian = await pedir(GIAN, 'carteira');
+  checar('action=carteira segue filtrada por CSM', carteiraGian.corpo.tasks.map((t) => t.gerente), ['Gian Luca']);
+  checar('  e continua trazendo o mrr para o dono', carteiraGian.corpo.tasks[0].mrr, 4321);
+  const carteiraConsulta = await pedir(CONSULTA, 'carteira');
+  checar('action=carteira segue zerando mrr para consulta',
+         carteiraConsulta.corpo.tasks.every((t) => t.mrr === 0), true);
+
+  // Custo: a busca reusa o cache da carteira, sem leitura nova.
+  chamadas.length = 0;
+  await pedir(GESTAO);
+  checar('E.6 custo: cache quente, 0 chamadas ao ClickUp', chamadas.length, 0);
+
+  // Metodo errado e acao desconhecida.
+  const post = res();
+  await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(GESTAO), 'content-type': 'application/json' }),
+             query: { action: 'busca' }, body: {} }, post);
+  checar('POST em action=busca: 405', post.code, 405);
+
+  // O front precisa ter a aba e nao pode carregar carteira no perfil consulta.
+  const front = ler('dashboard_carteiras.html');
+  checar('front tem a aba de busca', /id:'busca'/.test(front), true);
+  checar('front chama action=busca', front.includes("action=busca"), true);
+  checar('consulta nao carrega a carteira no front', /nivel==='consulta'\)\{[\s\S]{0,400}?return;/.test(front), true);
+
+  globalThis.fetch = fetchOriginal;
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);

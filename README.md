@@ -95,18 +95,30 @@ As regras são aplicadas **no servidor**, em toda requisição. Mexer no objeto
 `session` pelo console do navegador muda no máximo o que a tela desenha; não
 aumenta nem um pouco o acesso aos dados.
 
-| Nível      | Carteira                     | `set-field` no ClickUp | Moskit | MRR |
-| ---------- | ---------------------------- | ---------------------- | ------ | --- |
-| `consulta` | sem valores financeiros      | 403                    | 403    | não |
-| `csm`      | somente a própria            | somente a própria      | somente a própria | sim |
-| `gestao`   | completa                     | liberado               | liberado | sim |
+| Nível      | Carteira                     | Busca (diretório) | `set-field` | Moskit | MRR |
+| ---------- | ---------------------------- | ----------------- | ----------- | ------ | --- |
+| `consulta` | sem tela (só a busca)        | completa          | 403         | 403    | não |
+| `csm`      | somente a própria            | completa          | somente a própria | somente a própria | sim |
+| `gestao`   | completa                     | completa          | liberado    | liberado | sim |
 
 Para `consulta`, "não" em MRR vale para **todo** número financeiro: o `mrr` de cada
-linha sai zerado, o agregado `mrrEquipe` sai `0` e `metaEquipe` sai `null` — nem os
+linha sai zerado, e `periodos`/`periodoAtual` de `action=metas` vêm vazios — nem os
 limiares da equipe, que também são valor financeiro.
 
 O filtro por CSM acontece antes da resposta sair do servidor: a carteira dos
 outros CSMs nunca chega ao navegador.
+
+**A coluna "Busca" é a única disclosure cruzada, e é deliberada.** `action=busca`
+devolve o diretório inteiro a qualquer perfil, porque sem isso um CSM tinha de
+perguntar à gestão quem atende um cliente. Ela **não** afrouxa a coluna "Carteira": são
+ações distintas, e a busca não copia campo financeiro nenhum. Detalhes na seção de
+`/api/clickup`.
+
+**O perfil `consulta` não carrega a carteira nem as metas.** Não tem tela para nenhuma
+das duas, e carregá-las gastava ~29 chamadas de cota por login para não exibir nada. As
+checagens de servidor continuam de pé — `action=carteira` ainda zera o `mrr` para
+`consulta`, porque checagem de servidor não se remove só porque o cliente parou de
+chamar.
 
 O critério do filtro é **igualdade de nome completo**, normalizado (sem acentos,
 sem espaço repetido, sem diferença de caixa), entre o campo *Gerente* da task e o
@@ -117,6 +129,9 @@ olhar é a grafia do campo *Gerente* no ClickUp.
 
 O perfil `csm` não tem mais a aba **Visão Geral**. Como o backend passou a
 devolver somente a carteira dele, a aba seria uma cópia idêntica da aba própria.
+
+Todos os perfis têm a aba **🔎 Buscar cliente**, que é o diretório. Ela é a primeira
+aba de dados e, para `consulta`, a única.
 
 ---
 
@@ -167,7 +182,8 @@ Sempre responde `Cache-Control: no-store`.
 | Método | `action`    | O que faz |
 | ------ | ----------- | --------- |
 | `GET`  | `carteira`  | lista `901327787926`, paginada inteira no servidor, `include_closed=true`, `include_custom_fields=true` |
-| `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais os agregados `mrrEquipe` e `metaEquipe` (`0` e `null` para `consulta`) |
+| `GET`  | `busca`     | diretório de clientes: **7 campos, nenhum financeiro, sem filtro de CSM** — ver abaixo |
+| `GET`  | `metas`     | lista `901327940637`, `include_closed=false`, mais `periodos`, `periodoAtual` e `avisosGerais` (vazios para `consulta`) |
 | `GET`  | `cliente`   | `?taskId=...` → **uma** linha lida direto do ClickUp, sem cache, `no-store`. 1 chamada |
 | `POST` | `set-field` | `{ taskId, fieldId, value }` |
 
@@ -179,6 +195,39 @@ dos alertas no modal de acompanhamento, e essa pré-marcação alimenta uma escr
 envia o array **completo**.
 
 Não existe path livre. Os dois IDs de lista são constantes no servidor.
+
+#### `action=busca` — o diretório, e por que ele existe separado
+
+**O problema:** um CSM precisava perguntar à gestão em qual carteira estava um cliente,
+porque `action=carteira` filtra por CSM — de propósito, e **continua filtrando**.
+
+**A solução não foi afrouxar aquela regra.** É uma ação separada com uma projeção
+propositalmente pobre, definida pela constante `CAMPOS_BUSCA`:
+
+```
+id · idNucleo · cnpj · nome · cidade · gerente · status
+```
+
+E nada mais. Fora da lista, e sem entrar sem decisão explícita: `mrr`, `planoGestor`,
+`planoUnique`, `finStatus`, `alertas`, `nps`, `csat`, `obs`, `descricao`, `motivoPerda`,
+`baseRenov`, `criterio`, `eventoCamp`, `outrosSrv`, `acomp`, `dataCancel`.
+
+**A fronteira é a forma da resposta, não uma flag de nível.** Não existe caminho em que
+esta ação devolva valor financeiro, para nenhum perfil, porque o valor financeiro não é
+copiado. A projeção copia **campo a campo a partir da lista**, e não `{...linha}` menos
+alguns — assim um campo novo em `mapTask` não aparece aqui por acidente. A suíte falha
+se qualquer campo proibido aparecer, nos três perfis.
+
+**A disclosure que isso cria, declarada:** um CSM passa a saber que o cliente X é
+atendido pela Patricia. É informação de **roteamento interno**. O que ele continua não
+podendo é ver MRR, inadimplência, alertas ou qualquer coisa que permita reconstruir o
+valor da carteira de outro.
+
+**Custo: zero chamada** quando a carteira está quente — reusa o mesmo `getCarteira()` e
+o mesmo cache de 5 min. Fria, custa as mesmas ~28, e uma ação aquece a outra.
+
+Disponível para os três perfis. Para `consulta` é a **única** tela de dados, e a
+primeira que abre.
 
 #### Período das metas: vem do status, não do calendário
 

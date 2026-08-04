@@ -62,11 +62,12 @@ export default async function handler(req, res) {
     if (!sessao) return undefined;
 
     if (req.method === 'GET' && acao === 'carteira') return await lerCarteira(res, sessao);
+    if (req.method === 'GET' && acao === 'busca') return await lerBusca(res, sessao);
     if (req.method === 'GET' && acao === 'metas') return await lerMetas(res, sessao);
     if (req.method === 'GET' && acao === 'cliente') return await lerCliente(req, res, sessao);
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
 
-    if (!['carteira', 'metas', 'cliente', 'set-field'].includes(acao)) {
+    if (!['carteira', 'busca', 'metas', 'cliente', 'set-field'].includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
     }
     return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido para esta ação.');
@@ -91,6 +92,45 @@ async function lerCarteira(res, sessao) {
 
   res.setHeader('Cache-Control', CACHE_LEITURA);
   return res.status(200).json({ tasks: visiveis, total: visiveis.length });
+}
+
+/**
+ * Campos que a busca devolve. Lista FECHADA, e a fronteira e a forma da resposta.
+ *
+ * Existe porque um CSM precisava perguntar a gestao em qual carteira um cliente
+ * estava: `action=carteira` filtra por CSM, de proposito, e continua filtrando. Em
+ * vez de afrouxar aquela regra, esta acao devolve uma projecao propositalmente pobre.
+ *
+ * O que NAO esta aqui, e nao pode entrar sem decisao explicita: mrr, planoGestor,
+ * planoUnique, finStatus, alertas, nps, csat, obs, descricao, motivoPerda, baseRenov,
+ * eventoCamp. "Quem atende o cliente X" e informacao de roteamento interno; valor de
+ * contrato e inadimplencia nao sao.
+ *
+ * Nao ha flag de nivel aqui: nenhum perfil consegue tirar valor financeiro desta
+ * acao, porque o valor financeiro nao e copiado.
+ */
+const CAMPOS_BUSCA = ['id', 'idNucleo', 'cnpj', 'nome', 'cidade', 'gerente', 'status'];
+
+/**
+ * GET ?action=busca — diretorio de clientes, sem valor financeiro, sem filtro de CSM.
+ *
+ * CUSTO ZERO de cota quando a carteira esta quente: reusa o mesmo getCarteira() e o
+ * mesmo cache de 5 min de `action=carteira`. Frio, custa as mesmas ~28 chamadas —
+ * nao ha leitura nova, e uma chamada aquece a outra.
+ */
+async function lerBusca(res, sessao) {
+  const { linhas } = await getCarteira();
+
+  // Projecao por lista fechada. Copiar campo a campo, e nao `{...l}` menos alguns, e
+  // o que garante que um campo novo em mapTask nao apareca aqui por acidente.
+  const visiveis = linhas.map((l) => {
+    const fora = {};
+    for (const k of CAMPOS_BUSCA) fora[k] = l[k] ?? null;
+    return fora;
+  });
+
+  res.setHeader('Cache-Control', CACHE_LEITURA);
+  return res.status(200).json({ tasks: visiveis, total: visiveis.length, campos: CAMPOS_BUSCA });
 }
 
 /**
