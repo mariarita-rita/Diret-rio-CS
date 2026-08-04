@@ -395,8 +395,8 @@ mensagem "Sua sessão expirou" **com a página aberta** e **após F5**.
 
 | Item | Onde | Risco |
 |---|---|---|
-| `getMetas` **não pagina** — 1 chamada, sem `page`. Acima de 100 metas as mais antigas somem do `mrrEquipe` silenciosamente | `_lib/clickup.js` | Latente: hoje são 5 (4 CSMs + equipe) |
-| **Duas linhas abertas do mesmo CSM** fazem `metasData.find` escolher uma por ordem de lista, com o `mesRef` certo ao lado, parecendo correto. O período é definido só por `include_closed=false` | front, `:877` | Real ao virar o mês antes de fechar as linhas antigas. Para a linha de equipe já está tratado (cai no fallback e loga); para as individuais, **não** |
+| ~~`getMetas` não pagina~~ | `_lib/clickup.js` | ✅ **resolvido** — pagina com lote 1, mantendo 1 chamada até 100 linhas |
+| ~~Duas linhas abertas do mesmo CSM~~ | front | ✅ **resolvido** pelo filtro de período: CSM duplicado no período tem o número escondido, com aviso |
 | `opcaoPermitida` devolve `null` e o campo é **omitido em silêncio** do negócio: `plano`, `base` e `origem` inválidos não viram erro | `moskit.js` | Negócio criado incompleto sem ninguém saber. Contraste: `oportunidade` e o `tipo`/`origem` do projeto devolvem 400 |
 | `soNumero` → `0` quando não numérico | `moskit.js` | ID Núcleo ou CNPJ `0` no Moskit, em silêncio |
 | `cfVal` → `null` para campo ausente | `_lib/clickup.js` | Se um id de campo mudar no ClickUp, a coluna inteira vira `null` sem erro. Com o match exato de gerente, isso daria **carteira vazia para todos** |
@@ -421,7 +421,7 @@ um não está neste documento**; confirmar com a usuária antes de implementar.
 
 | # | Funcionalidade | O que se sabe |
 |---|---|---|
-| 1 | **Campo Evento Camp 2026 editável** | ❌ **aberta.** Novo campo editável no dashboard. Como toda escrita passa pela allowlist, exige acrescentar o `fieldId` (e os ids de opção, se for lista) em `CAMPOS_ESCRITA` — **sem isso a gravação volta 403, e é a allowlist funcionando, não bug** |
+| 1 | **Campo Evento Camp 2026 editável** | ✅ **feita** na branch `melhorias/periodo-metas-evento-camp`. Uma ressalva: **não dá para limpar** o campo pelo painel — ver 12.2 |
 | 2 | **Filtro de cidade** | ✅ **feita** em `4bb90c7` |
 | 3 | **Excluir do MRR perdido o churn por "Contratou em outro CNPJ"** | ✅ **feita** em `ebddcf6` |
 | 4 | **Valor exato no card de MRR incrementado** | ✅ **feita** em `d964b56`. A dúvida "incremento do mês ou acumulado" não existia: o card sempre foi a soma de *MRR Atingido* das linhas de meta, e só a formatação mudou |
@@ -545,6 +545,54 @@ constante. Um campo único com semântica ambígua é a pior das três.
   *Meta Especial* preenchida (R$ 20.000) e a tabela na descrição das tarefas
   individuais também a lista, com "bônus surpresa". Reverter para três é apagar uma
   linha em `renderEquipe`.
+
+### 11.6 Branch seguinte: `melhorias/periodo-metas-evento-camp`
+
+Sai da `main` em `f0ce524` (já mesclada e no ar). **Sem push e sem merge.**
+Suíte em **261/261**.
+
+| Commit | Assunto |
+|---|---|
+| `2d34a93` | Filtro de período por Ano Base e Mês Referência |
+| *este* | Campo Evento: Camp 2026 editável |
+
+As regras estão no README, em *Período das metas* e na tabela de `set-field`.
+
+#### 12.1 Ação sua no ClickUp: apague o status `concluído`
+
+A lista Metas tem **quatro** status, não três. Além de `mês atual` (`open`),
+`meses fechados` (`custom`) e `finalizado` (`closed`), existe **`concluído`, tipo
+`done`** — quase certamente resto do template.
+
+O que `include_closed=false` faz com `done` (em oposição a `closed`) não é documentado
+de forma confiável, e **não deu para verificar**: as cinco linhas estão todas em
+`mês atual`. Enquanto esse status existir, há um caminho para uma linha ficar invisível
+no painel.
+
+Para verificar em vez de apagar: marque uma linha descartável como `concluído` e veja
+se ela continua aparecendo no seletor de período.
+
+O desenho não depende da resposta — o seletor é montado do que chegou, então um período
+que desapareça **falta visivelmente** — mas o status é ruído com risco anexado.
+
+#### 12.2 Decisão pendente: permitir limpar o Evento: Camp 2026?
+
+Hoje o campo pode ser **trocado** entre as quatro opções, mas não **esvaziado**.
+`value: null` volta 403 e o seletor reverte com "não dá p/ limpar".
+
+**Por que exigiu tratamento especial:** `gravarCampo` faz `POST
+/task/{id}/field/{id}` com `{value}`. Apagar um campo personalizado no ClickUp é
+`DELETE` no mesmo endpoint — **verbo novo no proxy**, que hoje só faz GET e POST.
+
+Para habilitar seria preciso: um `limparCampo()` com `DELETE`, um marcador
+`limpavel: true` na entrada da allowlist (para não virar "qualquer campo pode ser
+apagado"), e aceitar `value: null` só nos campos marcados. A allowlist continuaria
+fechada. Não implementei porque abre um verbo de escrita novo, e isso merece decisão
+explícita — e porque não consigo confirmar que o `DELETE` funciona sem uma escrita
+real no ClickUp.
+
+**Contexto para decidir:** "Não Vai 🚫" cobre "o cliente não vai", mas não cobre
+"marquei o cliente errado". Se marcar errado for comum, limpar tem valor real.
 
 ### 11.4 Campo "Solicitante" no Moskit — encontrado
 

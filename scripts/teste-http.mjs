@@ -1227,6 +1227,114 @@ console.log('\n[29] bloco de equipe no front: regua compartilhada e limiares de 
   checar('limiar 0 tambem cai na reserva', [zero.meta, zero.ultra], [6918.07, 17295.18]);
 }
 
+console.log('\n[30] Evento: Camp 2026 — allowlist explicita, escopo e reflexo');
+{
+  const CAMPO = '54ee7ad4-4689-4d79-bec7-5ac1373d96e9';
+  const CONVIDADO = '52fbe800-c9cf-4aca-b75e-fdbbb4ea7e07';
+  const PARTICIPOU = '8ceeca28-bc44-4f86-b3ff-f6205c316dda';
+  const OPCOES = [
+    { id: CONVIDADO, name: 'Convidado 💠', orderindex: 0 },
+    { id: '69d511be-83fd-48e0-96ce-c4567a9c1e3f', name: 'Inscrito ✅', orderindex: 1 },
+    { id: '0a08b436-5e35-458b-a05d-93f816e81488', name: 'Não Vai 🚫', orderindex: 2 },
+    { id: PARTICIPOU, name: 'Participou ✨', orderindex: 3 },
+  ];
+  const GERENTE = '3898a8f4-bb21-46d7-88ee-79d164033fdf';
+  const fetchOriginal = globalThis.fetch;
+  const escritas = [];
+
+  const task = () => ({
+    id: 'tCamp', name: 'Cliente Camp', list: { id: '901327787926' }, status: { status: 'ativo' },
+    custom_fields: [
+      { id: GERENTE, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Gian Luca' }] } },
+      { id: CAMPO, type: 'drop_down', value: CONVIDADO, type_config: { options: OPCOES } },
+    ],
+  });
+
+  globalThis.fetch = async (url, init) => {
+    if (init?.method === 'POST') escritas.push({ url: String(url), body: JSON.parse(init.body) });
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+      json: async () => (/\/list\//.test(String(url)) ? { tasks: [task()], last_page: true } : task()),
+      text: async () => '',
+    };
+  };
+
+  const libUrl = libClickupUnica('evento-camp');
+  const lib = await import(libUrl);
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  // A allowlist e explicita: o campo entrou com os 4 ids, e nada mais.
+  checar('campo esta em CAMPOS_ESCRITA', Object.hasOwn(lib.CAMPOS_ESCRITA, CAMPO), true);
+  checar('  como tipo opcao', lib.CAMPOS_ESCRITA[CAMPO].tipo, 'opcao');
+  checar('  com exatamente 4 opcoes', lib.CAMPOS_ESCRITA[CAMPO].opcoes.size, 4);
+  checar('  e os ids sao os da lista exportada',
+         lib.EVENTO_CAMP_OPCOES.map((o) => o.id).every((id) => lib.CAMPOS_ESCRITA[CAMPO].opcoes.has(id)), true);
+  // Nenhuma regra generica de "qualquer drop_down": a allowlist segue fechada.
+  checar('total de campos na allowlist continua enumeravel', Object.keys(lib.CAMPOS_ESCRITA).length, 5);
+
+  // Front e servidor tem de usar os MESMOS ids.
+  const front = ler('dashboard_carteiras.html');
+  const campoFront = front.match(/const CAMPO_EVENTO_CAMP\s*=\s*'([0-9a-f-]+)'/);
+  checar('front declara o fieldId', campoFront?.[1], CAMPO);
+  for (const o of lib.EVENTO_CAMP_OPCOES) {
+    checar(`front tem a opcao ${o.rotulo}`, front.includes(o.id), true);
+  }
+
+  // Leitura: rotulo e id na linha.
+  const { linhas } = await lib.getCarteira();
+  checar('mapTask expoe o rotulo', linhas[0].eventoCamp, 'Convidado 💠');
+  checar('  e o id da opcao', linhas[0].eventoCampId, CONVIDADO);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const gravar = async (perfil, value) => {
+    const r = res();
+    await cu({
+      method: 'POST',
+      headers: cabecalhos({ cookie: cookieDe(perfil), 'content-type': 'application/json' }),
+      query: { action: 'set-field' },
+      body: { taskId: 'tCamp', fieldId: CAMPO, value },
+    }, r);
+    return r;
+  };
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'G' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'C' };
+
+  escritas.length = 0;
+  const ok = await gravar(GESTAO, PARTICIPOU);
+  checar('gestao grava: 200', [ok.code, ok.corpo.ok], [200, true]);
+  checar('  nome do campo na resposta', ok.corpo.campo, 'Evento: Camp 2026');
+  checar('  manda o ID da opcao, nao o rotulo', escritas.at(-1).body.value, PARTICIPOU);
+  checar('  no endpoint do campo certo', escritas.at(-1).url.includes(`/field/${CAMPO}`), true);
+  checar('  E.6 custo: 1 POST por gravacao', escritas.filter((e) => e.url.includes('/field/')).length, 1);
+
+  // refletirEscrita atualiza a linha em cache, sem reler a carteira.
+  const depois = await lib.getCarteira();
+  checar('refletirEscrita atualiza o id', depois.linhas[0].eventoCampId, PARTICIPOU);
+  checar('  e o rotulo aprendido do ClickUp', depois.linhas[0].eventoCamp, 'Participou ✨');
+
+  // Validacao nao afrouxou.
+  const csmDono = await gravar(GIAN, CONVIDADO);
+  checar('csm dono grava: 200', csmDono.code, 200);
+  const csmOutro = await gravar(PATRICIA, CONVIDADO);
+  checar('csm de outra carteira: 403 fora_da_carteira', [csmOutro.code, csmOutro.corpo.code], [403, 'fora_da_carteira']);
+  const soLeitura = await gravar(CONSULTA, CONVIDADO);
+  checar('consulta: 403 somente_leitura', [soLeitura.code, soLeitura.corpo.code], [403, 'somente_leitura']);
+  const idFalso = await gravar(GESTAO, '11111111-2222-3333-4444-555555555555');
+  checar('opcao fora da allowlist: 403', [idFalso.code, idFalso.corpo.code], [403, 'valor_nao_permitido']);
+  const vazio = await gravar(GESTAO, null);
+  checar('limpar (null) e recusado, nao gravado em silencio', [vazio.code, vazio.corpo.code], [403, 'valor_nao_permitido']);
+  const arr = await gravar(GESTAO, [CONVIDADO]);
+  checar('array num campo de opcao: 403', [arr.code, arr.corpo.code], [403, 'valor_nao_permitido']);
+  const rotulo = await gravar(GESTAO, 'Convidado 💠');
+  checar('rotulo em vez de id: 403', [rotulo.code, rotulo.corpo.code], [403, 'valor_nao_permitido']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);

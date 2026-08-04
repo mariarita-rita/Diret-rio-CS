@@ -30,7 +30,20 @@ const CF = {
   MOTIVO_PERDA: '57b588ce-81f5-4728-94e5-b22d1966862a',
   DATA_CANCEL: '7a36a0b2-6de0-4f9b-8278-d7338e42b325',
   CSAT: '98acac2a-932b-4c60-8a16-bd2e211961d5',
+  EVENTO_CAMP: '54ee7ad4-4689-4d79-bec7-5ac1373d96e9',
 };
+
+/**
+ * Opcoes do campo 📅 Evento: Camp 2026. Ficam aqui porque o front precisa dos
+ * rotulos para montar o seletor, e a allowlist de escrita precisa dos ids.
+ * Um id fora desta lista volta 403 — e a allowlist funcionando, nao bug.
+ */
+export const EVENTO_CAMP_OPCOES = [
+  { id: '52fbe800-c9cf-4aca-b75e-fdbbb4ea7e07', rotulo: 'Convidado 💠' },
+  { id: '69d511be-83fd-48e0-96ce-c4567a9c1e3f', rotulo: 'Inscrito ✅' },
+  { id: '0a08b436-5e35-458b-a05d-93f816e81488', rotulo: 'Não Vai 🚫' },
+  { id: '8ceeca28-bc44-4f86-b3ff-f6205c316dda', rotulo: 'Participou ✨' },
+];
 
 /**
  * Opcao "Contratou em outro CNPJ" do campo Motivo da perda.
@@ -140,6 +153,13 @@ export const CAMPOS_ESCRITA = {
       '489f815d-7155-415d-af04-c4f03688d785', // Risco de Churn
       '52dcd948-9d90-4cd1-9254-536c1c2fbb0d', // Oportunidade de up e cross
     ]),
+  },
+  // Acrescentado explicitamente, campo a campo e opcao a opcao. NAO existe regra
+  // generica de "qualquer drop_down": a allowlist continua sendo uma lista fechada.
+  [CF.EVENTO_CAMP]: {
+    nome: 'Evento: Camp 2026',
+    tipo: 'opcao',
+    opcoes: new Set(EVENTO_CAMP_OPCOES.map((o) => o.id)),
   },
   [CF.ALERTAS]: {
     nome: 'Alertas',
@@ -285,6 +305,12 @@ function cfVal(task, id) {
   if (f.value === null || f.value === undefined) return null;
 
   if (f.type === 'drop_down') {
+    // Aprende id -> rotulo tambem para drop_down, pelo mesmo motivo dos labels:
+    // refletirEscrita precisa do rotulo da opcao gravada para atualizar a linha em
+    // cache sem reler a lista inteira, e sem hardcodar acentuacao nem emoji.
+    for (const o of f.type_config?.options || []) {
+      if (o?.id) rotulosAprendidos.set(o.id, o.name || o.label || null);
+    }
     const opt = f.type_config?.options?.find((o) => o.orderindex === f.value || o.id === f.value);
     return opt?.name || null;
   }
@@ -356,6 +382,11 @@ function mapTask(t) {
     motivoPerdaId: cfOpcaoId(t, CF.MOTIVO_PERDA),
     dataCancel: cfVal(t, CF.DATA_CANCEL),
     csat: cfVal(t, CF.CSAT),
+    // Rotulo para exibir e id para pre-selecionar o seletor. Mesmo padrao de
+    // motivoPerdaId: o id e o que alimenta a escrita, e casar por texto para gravar
+    // significaria gravar a opcao errada quando alguem renomear no ClickUp.
+    eventoCamp: cfVal(t, CF.EVENTO_CAMP),
+    eventoCampId: cfOpcaoId(t, CF.EVENTO_CAMP),
   };
 }
 
@@ -664,6 +695,18 @@ export function refletirEscrita(taskId, fieldId, valor) {
     }
     alvo.linha.alertas = rotulos;
     alvo.linha.alertasIds = Array.isArray(valor) ? [...valor] : [];
+    return;
+  }
+
+  if (fieldId === CF.EVENTO_CAMP) {
+    const rotulo = rotulosAprendidos.get(valor);
+    if (!rotulo) {
+      // Rotulo desconhecido: preferir custo a divergencia, como nos alertas.
+      invalidarCarteira();
+      return;
+    }
+    alvo.linha.eventoCamp = rotulo;
+    alvo.linha.eventoCampId = valor;
     return;
   }
 

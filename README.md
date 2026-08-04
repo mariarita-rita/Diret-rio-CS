@@ -180,6 +180,54 @@ envia o array **completo**.
 
 Não existe path livre. Os dois IDs de lista são constantes no servidor.
 
+#### Período das metas: vem do status, não do calendário
+
+A lista Metas acumula uma linha por CSM **por mês**, mais a de equipe. O recorte é
+dado por **`🗓️ Ano Base`** (`5c06c44f-…`, `short_text`) + **`📅 Mês Referência`**
+(`6f335424-…`, dropdown sem ano), e o **período corrente é o das linhas com status
+`mês atual`**.
+
+Por que o status e não a data: o fechamento acontece depois do fim do mês, então em
+03/08 o mês corrente de trabalho ainda é julho. Filtrar pelo calendário mostraria
+agosto vazio no dia 1º. Quem decide a virada é a pessoa, movendo as linhas.
+
+Os quatro status da lista e o que o ClickUp diz deles:
+
+| Status | `type` | Chega com `include_closed=false`? |
+| --- | --- | --- |
+| `mês atual` | `open` | sim |
+| `meses fechados` | `custom` | sim |
+| `concluído` | `done` | **incerto** |
+| `finalizado` | `closed` | não |
+
+> **O `concluído` é uma armadilha.** O que `include_closed=false` faz com statuses de
+> tipo `done` (em oposição a `closed`) não é documentado de forma confiável. Enquanto
+> esse status existir na lista, há um caminho para uma linha ficar invisível no
+> painel. Recomendado: apagá-lo, ou passar a usá-lo de propósito.
+
+A blindagem contra isso não depende da resposta: o seletor de período é montado a
+partir das linhas que chegaram, então um período que desapareça **falta visivelmente**
+no dropdown, e a ausência de `mês atual` vira erro na tela.
+
+**Os quatro casos que falham visível** — `console.error` no log da função **e** faixa
+vermelha na tela, porque estes números alimentam comissão e bônus:
+
+| Caso | O que o painel faz |
+| --- | --- |
+| Nenhuma linha `mês atual` | `periodoAtual: null` + aviso dizendo o que fazer |
+| Dois períodos em `mês atual` | nenhum vira corrente; o aviso nomeia os dois |
+| Um CSM com 2 linhas no período | o card dele explica por que o número não aparece; o card de gestão mostra `⚠️ duplicada` |
+| 2 linhas `⭐ Equipe` no período | cai na soma, marcado como não declarado |
+
+Uma linha sem *Ano Base* ou sem *Mês Referência* fica fora de todos os períodos, é
+nomeada no aviso, e **não entra na soma de mês nenhum**.
+
+**O recorte rege tudo que consome metas** — régua individual, bloco de equipe, cards
+de gestão por gerente, *MRR Incrementado*, *Perdido Downsell*, total e limiares da
+equipe. Nenhum consumidor lê `metasData` direto: todos passam por
+`metasDoPeriodo()`, `metaDoCsm()` ou `periodoAtivo()`, e a suíte falha se alguém
+voltar a ler o array cru. Trocar de mês é **100% client-side**, sem leitura nova.
+
 #### A meta da equipe é declarada, não somada
 
 A lista Metas tem uma linha por CSM **e** uma linha de equipe, identificada pela
@@ -202,34 +250,43 @@ de CSM — não depende da constante `CSMS` do front. Ela também nunca casa com
 perfil de CSM: `pertenceAoCsm` compara nome completo normalizado por igualdade
 exata, e `⭐ Equipe` não é nome de ninguém.
 
-**Fallback**, para não quebrar quando a linha não existir no período:
+**Fallback por período**, para não quebrar quando a linha não existir:
 
 | Linhas `⭐ Equipe` abertas | `mrrEquipe` | `metaEquipe.declarado` |
 | --- | --- | --- |
 | 1 | valor declarado pela linha | `true`, com os limiares dela |
 | 0 | soma das individuais, + `console.warn` | `false`, limiares `null` |
-| 2 ou mais | soma das individuais, + `console.warn` | `false`, limiares `null` |
+| 2 ou mais | soma das individuais, + `console.error` e aviso na tela | `false`, limiares `null` |
 
 Duas linhas caem no fallback de propósito: "declarado" fica ambíguo, e um número
 definido é melhor que um escolhido por ordem de iteração. Com os limiares `null` o
-front usa `META_EQ`, a reserva dele.
+front usa `META_EQ`, a reserva dele — e limiar declarado como `0` também cai nela,
+porque meia régua é pior que a régua conhecida.
 
-**O período não é filtrado por mês, e isso é deliberado.** O mecanismo é
-`include_closed=false`: quem define o período é o fechamento das tarefas no ClickUp.
-Filtrar pelo mês corrente seria pior — o campo *Mês Referência* é um dropdown de
-`Janeiro..Dezembro` **sem ano**, e uma virada de mês antes de criar as linhas novas
-esvaziaria o painel inteiro.
+Tudo isso é **por período**: cada entrada de `periodos[]` traz o seu próprio
+`equipe`, então trocar de mês troca total, limiares e faixa de bônus juntos.
 
-> **Consequência operacional:** ao criar as linhas de um mês novo, **feche as do mês
-> anterior**. Duas linhas abertas do mesmo CSM fazem o painel individual escolher
-> uma por ordem de lista, com o `mesRef` certo ao lado, parecendo correto.
-
-`metaEquipe` traz `soma` e `diferenca` **somente para `gestao`**: é a reconciliação
+`equipe.soma` e `equipe.diferenca` vêm **somente para `gestao`**: é a reconciliação
 entre o declarado e a soma dos gerentes, e um CSM não precisa vê-la. A diferença
 esperada é MRR órfão (ex-integrante da equipe); o objetivo é perceber erro de
 digitação na hora, não no fechamento.
 
-`set-field` só aceita estes quatro campos, e só estes valores:
+#### Paginação e custo da lista Metas
+
+`getMetas` **pagina**. Antes era uma chamada sem `page`: acima de 100 linhas as mais
+antigas desapareciam em silêncio, e com 5 linhas por mês o teto cairia em 2027.
+
+`buscarPaginado` tem parâmetro de **lote** porque as duas listas têm escalas opostas:
+
+| Lista | Volume | Lote | Custo |
+| --- | --- | --- | --- |
+| Carteira | 2797 tasks | 4 páginas concorrentes | ~28 chamadas |
+| Metas | 5 linhas/mês | 1 | **1 chamada** até 100 linhas, 2 acima |
+
+Com lote 4 a lista Metas gastaria 4 chamadas para buscar 5 registros — trocaria uma
+correção de paginação por uma regressão de cota.
+
+`set-field` só aceita estes cinco campos, e só estes valores:
 
 | Campo | ID | Valores aceitos |
 | ----- | -- | --------------- |
@@ -237,13 +294,28 @@ digitação na hora, não no fechamento.
 | Etapa             | `d15028f2-…` | 1 ID de opção |
 | Tipo de solicitação | `a4acad54-…` | 4 IDs de opção |
 | Alertas           | `6ce5db54-…` | até 10 dos 5 IDs de label |
+| Evento: Camp 2026 | `54ee7ad4-…` | 4 IDs de opção |
 
 Qualquer outro `fieldId` → 403. Qualquer valor fora dessas listas → 403. A task
 também é conferida contra as duas listas permitidas antes de qualquer escrita.
 
-> **Se você criar uma nova opção de alerta ou de tipo no ClickUp**, adicione o ID
-> dela em `CAMPOS_ESCRITA`, em `api/_lib/clickup.js`. Sem isso a gravação da opção
-> nova volta 403 — é a allowlist funcionando, não um bug.
+**Não existe regra genérica de "qualquer dropdown".** A allowlist é uma lista fechada,
+campo a campo e opção a opção, e a suíte falha se ela deixar de ser enumerável.
+
+> **Se você criar uma nova opção de alerta, de tipo ou do Camp no ClickUp**, adicione
+> o ID dela em `CAMPOS_ESCRITA`, em `api/_lib/clickup.js`. Sem isso a gravação da
+> opção nova volta 403 — é a allowlist funcionando, não um bug.
+
+#### Limpar um campo não é possível pelo proxy
+
+O `set-field` só faz `POST /task/{id}/field/{id}` com `{value}`. Apagar o valor de um
+campo personalizado no ClickUp exige `DELETE` no mesmo endpoint — **verbo que o proxy
+não expõe**. Então o *Evento: Camp 2026* pode ser trocado entre as quatro opções, mas
+não esvaziado: `value: null` volta **403 `valor_nao_permitido`**, e o seletor no modal
+reverte com a mensagem "não dá p/ limpar".
+
+Para desmarcar de vez, é pelo ClickUp. Habilitar isso aqui é uma decisão em aberto —
+ver `docs/estado-e-proximos-passos.md`.
 
 ### `/api/moskit`
 

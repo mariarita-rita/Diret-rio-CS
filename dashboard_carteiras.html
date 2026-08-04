@@ -473,6 +473,17 @@ const CSMS  = ['Gian Luca','Lucineia Felix','Guilherme Camargo','Patricia Carval
 const META_EQ = {meta:6918.07,super:10377.11,ultra:17295.18,especial:20000};
 const BONUS_EQ_VAL = {super:100,ultra:200};
 
+// Opções do campo 📅 Evento: Camp 2026. Os ids são os mesmos de CAMPOS_ESCRITA em
+// api/_lib/clickup.js — a suíte prova que os dois lados batem. Gravar manda o ID da
+// opção, nunca o rótulo: renomear no ClickUp não pode gravar a opção errada.
+const EVENTO_CAMP=[
+  {id:'52fbe800-c9cf-4aca-b75e-fdbbb4ea7e07',rotulo:'Convidado 💠',cor:'#1E40AF',bg:'#DBEAFE'},
+  {id:'69d511be-83fd-48e0-96ce-c4567a9c1e3f',rotulo:'Inscrito ✅',cor:'#065F46',bg:'#D1FAE5'},
+  {id:'0a08b436-5e35-458b-a05d-93f816e81488',rotulo:'Não Vai 🚫',cor:'#991B1B',bg:'#FEE2E2'},
+  {id:'8ceeca28-bc44-4f86-b3ff-f6205c316dda',rotulo:'Participou ✨',cor:'#854D0E',bg:'#FEF9C3'},
+];
+const CAMPO_EVENTO_CAMP='54ee7ad4-4689-4d79-bec7-5ac1373d96e9';
+
 // Opção "Contratou em outro CNPJ" do campo Motivo da perda. Troca de titularidade
 // gera um cancelamento administrativo, mas não é perda real — sai do MRR perdido do
 // resumo da gestão, e SÓ dele. Comparado por ID, nunca por rótulo: renomear a opção
@@ -1452,8 +1463,8 @@ function renderCharts(accent,faint){
 // ── TABLE ─────────────────────────────────────────────────
 function renderTableHead(showMRR){
   const cols=showMRR
-    ?['ID','Cliente','Plano','MRR','Renovação','Gerente','Status Fin.','Alertas','Acomp.']
-    :['ID','Cliente','Plano','Renovação','Gerente','Status'];
+    ?['ID','Cliente','Plano','MRR','Renovação','Gerente','Status Fin.','Alertas','Acomp.','Camp 2026']
+    :['ID','Cliente','Plano','Renovação','Gerente','Status','Camp 2026'];
   document.getElementById('table-head').innerHTML=cols.map(c=>`<th>${c}</th>`).join('');
 }
 function renderTable(showMRR){
@@ -1464,7 +1475,7 @@ function renderTable(showMRR){
   document.getElementById('table-count').textContent=`${filtered.length.toLocaleString('pt-BR')} clientes`;
 
   if(!filtered.length){
-    document.getElementById('table-body').innerHTML='<tr><td colspan="9" class="state-msg">Nenhum cliente encontrado.</td></tr>';
+    document.getElementById('table-body').innerHTML='<tr><td colspan="10" class="state-msg">Nenhum cliente encontrado.</td></tr>';
     return;
   }
   document.getElementById('table-body').innerHTML=page.map(r=>{
@@ -1491,6 +1502,7 @@ function renderTable(showMRR){
         <td>${r.finStatus==='Pendente'?'<span class="fin-badge fin-pendente">💰 Inadim.</span>':r.finStatus||'—'}</td>
         <td>${alertasH||'—'}</td>
         <td>${r.acomp===true?'<span class="acomp-badge">✓ Sim</span>':'—'}</td>
+        <td>${campBadge(r)}</td>
       </tr>`;
     }else{
       return`<tr class="${cancel?'row-cancelado':''}" onclick="openDetail(decodeURIComponent('${rd}'),false)">
@@ -1500,10 +1512,18 @@ function renderTable(showMRR){
         <td style="font-size:11px;color:var(--neutral-500)">${r.baseRenov||'—'}</td>
         <td><span class="gerente-dot" style="${dotS}"></span><span style="font-size:11px">${fn}</span></td>
         <td style="font-size:11px;color:${stColor};font-weight:500">${r.status||'—'}</td>
+        <td>${campBadge(r)}</td>
       </tr>`;
     }
   }).join('');
 }
+/** Badge do Camp 2026 na tabela. Cor por opção, no padrão dos outros badges. */
+function campBadge(r){
+  const o=EVENTO_CAMP.find(x=>x.id===r.eventoCampId);
+  if(!o)return'<span style="color:var(--neutral-400);font-size:11px">—</span>';
+  return`<span class="badge" style="background:${o.bg};color:${o.cor};font-size:10px;white-space:nowrap">${o.rotulo}</span>`;
+}
+
 function renderPagination(){
   const tot=Math.ceil(filtered.length/PAGE_SIZE);
   if(tot<=1){document.getElementById('pagination').innerHTML='';return;}
@@ -1565,7 +1585,18 @@ function openDetail(rStr,showMRR){
       ${r.csat?drow('CSAT',r.csat):''}
       ${drow('Critério',r.criterio||'—')}
       ${r.motivoPerda?drow('Motivo cancelamento',r.motivoPerda):''}
+      ${drow('Camp 2026',campBadge(r))}
     </div>
+    ${session.nivel==='consulta'?'':`
+    <div class="detail-section-title">📅 Evento: Camp 2026</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="camp-select" class="ctrl-select" style="flex:1" onchange="salvarEventoCamp(this)">
+        <option value="">Selecione...</option>
+        ${EVENTO_CAMP.map(o=>`<option value="${o.id}"${o.id===r.eventoCampId?' selected':''}>${o.rotulo}</option>`).join('')}
+      </select>
+      <span id="camp-estado" style="font-size:11px;min-width:74px"></span>
+    </div>
+    <div style="font-size:10px;color:var(--neutral-400);margin-top:5px">Grava direto no ClickUp, sem sair do painel.</div>`}
     ${r.outrosSrv?.length?`
       <div class="detail-section-title">🛠️ Outros serviços</div>
       <div class="detail-tags">${r.outrosSrv.map(s=>`<span class="badge badge-outro" style="font-size:11px;padding:3px 9px">${s}</span>`).join('')}</div>`:''}
@@ -1574,6 +1605,61 @@ function openDetail(rStr,showMRR){
       <div style="background:var(--neutral-50);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--neutral-700);line-height:1.6;border:1px solid var(--neutral-200)">${r.obs||r.descricao}</div>`:''}`;
   document.getElementById('detail-overlay').classList.add('open');
 }
+/**
+ * Grava o Evento: Camp 2026 do cliente aberto no modal.
+ *
+ * Custo: 2 chamadas ao ClickUp (escopo + escrita), graças ao T2. Passa pelo
+ * escreverCampo existente — consulta segue 403, csm só na própria carteira — e não
+ * abre caminho novo de escrita.
+ *
+ * Em erro REVERTE o seletor para o valor anterior. Deixar o valor novo na tela depois
+ * de uma falha faria a pessoa acreditar que gravou, e é o tipo de mentira que só
+ * aparece no fechamento.
+ */
+async function salvarEventoCamp(sel){
+  const r=_currentDetailCliente;
+  const estado=document.getElementById('camp-estado');
+  if(!r||!estado)return;
+
+  const anterior=r.eventoCampId||'';
+  const novo=sel.value;
+  if(novo===anterior)return;
+
+  // Limpar exigiria DELETE no ClickUp, que o proxy não expõe — ver README.
+  if(!novo){
+    sel.value=anterior;
+    estado.style.color='var(--yellow)';
+    estado.textContent='não dá p/ limpar';
+    return;
+  }
+
+  sel.disabled=true;
+  estado.style.color='var(--neutral-500)';
+  estado.textContent='salvando…';
+  try{
+    await apiPost('/api/clickup?action=set-field',{taskId:r.id,fieldId:CAMPO_EVENTO_CAMP,value:novo});
+    // Estado local, sem recarregar a carteira: cada recarga custa ~28 chamadas de uma
+    // cota de 100/min compartilhada pelo time. `200` significa escrita aplicada.
+    const rotulo=EVENTO_CAMP.find(o=>o.id===novo)?.rotulo||null;
+    r.eventoCampId=novo;r.eventoCamp=rotulo;
+    const naTabela=allData.find(x=>x.id===r.id);
+    if(naTabela){naTabela.eventoCampId=novo;naTabela.eventoCamp=rotulo;}
+    const cel=document.querySelector('#detail-body .detail-row:last-child .detail-val');
+    if(cel)cel.innerHTML=campBadge(r);
+    estado.style.color='var(--green)';
+    estado.textContent='✓ salvo';
+    applyFilters();
+  }catch(e){
+    if(e.message==='sessao')return;
+    sel.value=anterior;
+    estado.style.color='var(--red)';
+    estado.textContent='✕ não salvou';
+    estado.title=e.message||'Falha ao gravar';
+  }finally{
+    sel.disabled=false;
+  }
+}
+
 function closeDetail(e){if(e.target===document.getElementById('detail-overlay'))document.getElementById('detail-overlay').classList.remove('open');}
 function drow(k,v){return`<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`;}
 
