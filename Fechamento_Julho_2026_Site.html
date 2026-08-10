@@ -54,6 +54,10 @@
   .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); }
   .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
 
+  .sub-titulo { font-size:14px; font-weight:700; color:var(--preto); margin:24px 0 10px; }
+  .graf-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0; }
+  .graf-box { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px; }
+  .graf-titulo { font-size:12px; font-weight:600; color:var(--cinza); margin-bottom:10px; }
   .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
@@ -117,6 +121,7 @@
     .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
     .secao-header { grid-template-columns:1fr; }
     .motivos-grid { grid-template-columns:1fr; }
+    .graf-grid { grid-template-columns:1fr; }
     .hist-row { grid-template-columns:70px repeat(5,1fr); font-size:10px; }
     .hist-cell { padding:7px 5px; }
     .conteudo { padding:32px 20px 48px; }
@@ -303,6 +308,72 @@
       <div class="alerta alerta-verm"><strong>Concorrência soma 16 casos (40% dos perdidos)</strong> — maior concentração do trimestre. "Oferta melhor na concorrência" está fortemente concentrado em Guilherme (6 de 8 casos).</div>
       <div class="alerta alerta-laranja"><strong>"Preço alto" surge como novo motivo relevante (6 casos)</strong> — não aparecia com esse peso em meses anteriores. Pode indicar necessidade de revisão de argumentação de valor nas renovações.</div>
     </div>
+
+    <p class="sub-titulo">Motivos de perda por CSM</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Motivo</th>
+            <th class="td-c">Guilherme</th>
+            <th class="td-c">Gian</th>
+            <th class="td-c">Lucineia</th>
+            <th class="td-c">Patrícia</th>
+            <th class="td-c">Deyvide</th>
+            <th class="td-c">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Contratou outro software</td><td class="td-c">2</td><td class="td-c">1</td><td class="td-c">3</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">8</td></tr>
+          <tr><td>Oferta melhor na concorrência</td><td class="td-c negrito" style="color:var(--verm);">6</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">8</td></tr>
+          <tr><td>Preço alto</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c">1</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">6</td></tr>
+          <tr><td>CNPJ será baixado</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">3</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">4</td></tr>
+          <tr><td>Interesse futuro</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Não quis especificar o motivo</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Não há mais demanda</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Sem retorno</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Contratou em outro CNPJ</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Cliente cancelado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Insatisfação com atendimento</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total de perdidos</td><td class="td-c negrito">9</td><td class="td-c negrito">13</td><td class="td-c negrito">8</td><td class="td-c negrito">7</td><td class="td-c negrito">2</td><td class="td-c negrito">40</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Ticket médio × perda por preço/concorrência</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead>
+          <tr><th>CSM</th><th class="td-c">Ticket médio (ganhos)</th><th class="td-c">Ganhos</th><th class="td-c">Perdidos</th><th class="td-c">% perda por preço/concorrência</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="negrito">Guilherme</td><td class="td-r">R$ 86,60</td><td class="td-c">41</td><td class="td-c">9</td><td class="td-c negrito" style="color:var(--verm);">88,9%</td></tr>
+          <tr><td class="negrito">Gian</td><td class="td-r">R$ 68,51</td><td class="td-c">43</td><td class="td-c">13</td><td class="td-c">30,8%</td></tr>
+          <tr><td class="negrito">Patrícia</td><td class="td-r">R$ 58,09</td><td class="td-c">36</td><td class="td-c">7</td><td class="td-c negrito" style="color:var(--laranja);">85,7%</td></tr>
+          <tr><td class="negrito">Lucineia</td><td class="td-r">R$ 49,47</td><td class="td-c">54</td><td class="td-c">8</td><td class="td-c">50,0%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="graf-grid">
+      <div class="graf-box">
+        <p class="graf-titulo">Ticket médio dos ganhos (R$)</p>
+        <div style="position:relative;height:200px;">
+          <canvas id="chartTicket" role="img" aria-label="Ticket médio por CSM: Guilherme 86,60; Gian 68,51; Patrícia 58,09; Lucineia 49,47">Guilherme R$86,60; Gian R$68,51; Patrícia R$58,09; Lucineia R$49,47</canvas>
+        </div>
+      </div>
+      <div class="graf-box">
+        <p class="graf-titulo">% dos perdidos por preço/concorrência</p>
+        <div style="position:relative;height:200px;">
+          <canvas id="chartPct" role="img" aria-label="Percentual de perdas por preço ou concorrência por CSM: Guilherme 89%; Patrícia 86%; Lucineia 50%; Gian 31%">Guilherme 89%; Patrícia 86%; Lucineia 50%; Gian 31%</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="alerta alerta-verm"><strong>Guilherme tem o maior ticket médio (R$ 86,60) e também a maior concentração de perdas por preço (88,9%)</strong> — quase todas as suas perdas vêm desse motivo. Patrícia segue padrão semelhante (3º maior ticket, 2º maior % de perda por preço).</div>
+      <div class="alerta alerta-azul"><strong>Gian é o contraponto:</strong> 2º maior ticket médio, mas a menor taxa de perda por preço (30,8%) — a maioria de suas perdas vem de motivos mais brandos (interesse futuro, sem retorno).</div>
+    </div>
   </section>
 
   <!-- HISTÓRICO -->
@@ -334,5 +405,45 @@
 
 </div>
 <div class="rodape">Londrisoft Customer Success · Fechamento Mensal CSM · Julho 2026 · Uso interno</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  const gridColor = '#E2E8F0';
+  const tickColor = '#64748B';
+
+  new Chart(document.getElementById('chartTicket'), {
+    type: 'bar',
+    data: {
+      labels: ['Guilherme', 'Gian', 'Patrícia', 'Lucineia'],
+      datasets: [{ data: [86.60, 68.51, 58.09, 49.47], backgroundColor: '#0033CC', borderRadius: 4, maxBarThickness: 26 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'R$ ' + c.raw.toFixed(2) } } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, callback: v => 'R$' + v } },
+        y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 12 } } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartPct'), {
+    type: 'bar',
+    data: {
+      labels: ['Guilherme', 'Patrícia', 'Lucineia', 'Gian'],
+      datasets: [{ data: [88.9, 85.7, 50.0, 30.8], backgroundColor: '#B45309', borderRadius: 4, maxBarThickness: 26 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw.toFixed(1) + '%' } } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, callback: v => v + '%' }, max: 100 },
+        y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 12 } } }
+      }
+    }
+  });
+</script>
 </body>
 </html>
