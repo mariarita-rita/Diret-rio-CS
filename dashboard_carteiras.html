@@ -890,6 +890,7 @@ function buildTabs(){
     tabsCarteira.push({id:'minha',label:session.csm,csm:session.csm});
   } else if(session.nivel==='gestao'){
     tabsCarteira.push({id:'geral',label:'Visão Geral',csm:null});
+    tabsCarteira.push({id:'fechamentos',label:'📁 Fechamentos',csm:null});
     CSMS.forEach(c=>tabsCarteira.push({id:c,label:c,csm:c}));
   }
 
@@ -926,6 +927,7 @@ function switchTab(tabId,csm){
     monitoramento:'https://painel-de-analises.vercel.app',
     processos:    'https://diretoriocs.vercel.app/csm_processos.html',
     tabela:       'https://diretoriocs.vercel.app/tabela-precos-cs.html',
+    fechamentos:  'https://diretoriocs.vercel.app/fechamentos.html',
   };
 
   if(tabId in ABAS_IFRAME){
