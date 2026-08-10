@@ -247,6 +247,20 @@ body::after{
   color:#3A86FF;
 }
 
+/* Card mais recente de cada setor — aplicado por JS, regra posicional */
+.tool-btn-latest{
+  border-color: rgba(58,134,255,.55);
+  background: rgba(58,134,255,.1);
+}
+.tool-btn-latest::before{ opacity: 1; }
+.tool-badge-latest{
+  position:absolute; top:12px; right:14px;
+  font-size:9px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  color:#3A86FF; background:rgba(58,134,255,.15);
+  border:1px solid rgba(58,134,255,.3);
+  padding:2px 7px; border-radius:8px;
+}
+
 /* FOOTER */
 .footer{
   margin-top:1.5rem;
@@ -428,6 +442,19 @@ details.setor-block[open] > summary.setor-label .setor-chevron{
   </div>
 
 </div>
+
+<script>
+document.querySelectorAll('.setor-block').forEach(function(setor){
+  var cards = setor.querySelectorAll('.tools-grid > a.tool-btn');
+  if(!cards.length) return;
+  var ultimo = cards[cards.length - 1];
+  ultimo.classList.add('tool-btn-latest');
+  var badge = document.createElement('span');
+  badge.className = 'tool-badge-latest';
+  badge.textContent = 'Mais recente';
+  ultimo.appendChild(badge);
+});
+</script>
 
 </body>
 </html>
