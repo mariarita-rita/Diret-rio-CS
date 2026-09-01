@@ -377,6 +377,16 @@
     color:var(--ink-2); font-size:12.5px; font-weight:600; cursor:pointer; margin-top:2px;
   }
   .btn-add-small:hover{border-color:var(--ink); color:var(--ink);}
+
+  /* Tempo Devolvido à Gestão */
+  .horas-row{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border);}
+  .horas-row:last-child{border-bottom:none;}
+  .horas-row .htxt{flex:1; min-width:0;}
+  .horas-row .htxt strong{display:block; font-size:13px; font-weight:600;}
+  .horas-row .htxt span{display:block; font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.4;}
+  .horas-row .hval{flex:0 0 auto; display:flex; align-items:center; gap:6px;}
+  .horas-row .hval input{width:64px; padding:7px 8px; border-radius:8px; border:1px solid var(--border-strong); background:var(--bg); color:var(--ink); font-family:inherit; font-size:13px; text-align:right;}
+  .horas-row .hval .unit{font-size:12px; color:var(--muted);}
   .toast-copy{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; pointer-events:none;
     background:var(--ink); color:var(--brand-ink); font-size:13px; font-weight:600; padding:10px 18px; border-radius:999px;
@@ -1018,6 +1028,15 @@
       <div class="divider"></div>
       <div id="priceSimTotal"></div>
     </div>
+
+    <!-- TEMPO DEVOLVIDO À GESTÃO -->
+    <div class="card" id="horasSimCard" style="margin-top:22px;">
+      <h2>Tempo Devolvido à Gestão</h2>
+      <div class="sub">Para cada agente selecionado, estime quantas horas/mês da tarefa manual ele elimina para este cliente — sai na proposta como uma tabela de horas devolvidas.</div>
+      <div id="horasSimRows"></div>
+      <div class="divider"></div>
+      <div id="horasSimTotal"></div>
+    </div>
   </section>
 
   <footer class="page-footer">
@@ -1077,6 +1096,11 @@
       <div class="field">
         <label for="na-substitui">O que ele substitui</label>
         <textarea id="na-substitui" class="ta" placeholder="A tarefa manual que deixa de existir."></textarea>
+      </div>
+      <div class="field">
+        <label for="na-horas">Horas/mês economizadas (estimativa padrão)</label>
+        <input type="number" id="na-horas" class="num-input tabular" min="0" step="1" value="6">
+        <div class="hint">Ponto de partida — ajustável por cliente na simulação de "Tempo Devolvido".</div>
       </div>
       <div class="field">
         <label for="na-msg">Mensagem de exemplo (WhatsApp)</label>
@@ -1296,126 +1320,126 @@
   // =====================================================================
 
   var AGENTS = [
-    { id:"bom-dia-empresa", area:"Diretoria", nome:"Bom Dia Empresa", turno:"Todo dia · 08:00", gatilho:"Horário fixo diário",
+    { id:"bom-dia-empresa", area:"Diretoria", nome:"Bom Dia Empresa", turno:"Todo dia · 08:00", gatilho:"Horário fixo diário", horasMes:6,
       oque:"Um resumo executivo diário que chega antes de qualquer pergunta ser feita.",
       faz:"Lê no ERP as vendas de ontem, o saldo de caixa, as contas do dia e pendências relevantes, e consolida tudo em um boletim curto.",
       entrega:"Para a diretoria: um resumo diário no WhatsApp com vendas, caixa e pontos de atenção do dia.",
       substitui:"A rotina de abrir o sistema toda manhã só para saber \"como está a empresa\".",
       msg:"Bom dia! ☀️ Vendas de ontem: R$ 24.500 (108% da meta). Caixa atual: R$ 84.200. 2 títulos relevantes vencem hoje.",
       keywords:["visibilidade","nao sei como esta","relatorio diario","resumo executivo","falta de controle","painel"] },
-    { id:"reporter-manha", area:"Diretoria", nome:"Repórter da Manhã", turno:"Todo dia · 08:00", gatilho:"Horário fixo diário",
+    { id:"reporter-manha", area:"Diretoria", nome:"Repórter da Manhã", turno:"Todo dia · 08:00", gatilho:"Horário fixo diário", horasMes:6,
       oque:"O briefing matinal comparado — não só o número de ontem, mas o contexto dele.",
       faz:"Compara o fechamento de ontem com o mesmo dia da semana anterior e identifica o que fugiu do padrão.",
       entrega:"Para a gestão: o resumo de ontem com contexto e o alerta do dia, todo dia, inclusive quando está tudo bem.",
       substitui:"A pergunta constante de \"como fechamos ontem\" sem ninguém preparado para responder.",
       msg:"Resumo de ontem: R$ 62.400 em vendas (+18% vs. a mesma terça). Caixa positivo. 2 contas vencem hoje.",
       keywords:["comparar semana","contexto","o que mudou","sem visibilidade do dia"] },
-    { id:"guardiao-meta", area:"Diretoria", nome:"Guardião da Meta do Mês", turno:"Contínuo", gatilho:"Ritmo de vendas do mês",
+    { id:"guardiao-meta", area:"Diretoria", nome:"Guardião da Meta do Mês", turno:"Contínuo", gatilho:"Ritmo de vendas do mês", horasMes:5,
       oque:"A projeção contínua da meta — responde todo dia \"nesse ritmo, a gente chega?\".",
       faz:"Acompanha o ritmo de vendas contra a meta do mês e projeta o resultado final, apontando o desvio quando ele aparece.",
       entrega:"Para a gestão: o alerta de desvio dentro do mês, com tempo de corrigir a rota.",
       substitui:"Descobrir que a meta não vai bater só no fechamento do mês.",
       msg:"No ritmo atual, a meta do mês fecha em 88%. Maior desvio: canal Televendas, 20% abaixo do esperado.",
       keywords:["meta","nao bate a meta","vendedores sem acompanhamento","ritmo de vendas"] },
-    { id:"placar-canais", area:"Diretoria", nome:"Placar dos Canais", turno:"Semanal", gatilho:"Toda semana",
+    { id:"placar-canais", area:"Diretoria", nome:"Placar dos Canais", turno:"Semanal", gatilho:"Toda semana", horasMes:8,
       oque:"A visão executiva semanal de todos os canais de venda, consolidada sem planilha.",
       faz:"Consolida toda semana o desempenho de cada canal (televendas, prospecção, venda externa, etc.) contra a meta declarada.",
       entrega:"Para a gestão: o placar semanal, canal a canal, meta x realizado.",
       substitui:"A consolidação manual entre canais que ninguém tem tempo de montar.",
       msg:"Placar da semana: Televendas 92% da meta · Externa 78% · Prospecção 110%. Canal de atenção: Externa.",
       keywords:["canais","televendas","prospeccao","varios canais de venda"] },
-    { id:"analista-vendas-diario", area:"Diretoria", nome:"Analista de Vendas Diário", turno:"Todo dia · fim do expediente", gatilho:"Fim do expediente",
+    { id:"analista-vendas-diario", area:"Diretoria", nome:"Analista de Vendas Diário", turno:"Todo dia · fim do expediente", gatilho:"Fim do expediente", horasMes:15,
       oque:"O fechamento do dia feito por um analista que nunca falta.",
       faz:"Consolida as vendas do dia por vendedor, produto e canal, e compara com o ritmo necessário para a meta do mês.",
       entrega:"Para a gestão: o resumo executivo do dia, com quem está fora do ritmo.",
       substitui:"De 30 a 60 minutos diários de montagem manual de resumo — ou a ausência dele.",
       msg:"Fechamento de hoje: R$ 58.900 (96% do ritmo da meta). 2 vendedores abaixo do ritmo — ver o detalhe?",
       keywords:["fechamento diario","relatorio de vendas manual"] },
-    { id:"coach-representantes", area:"Comercial", nome:"Coach dos Representantes", turno:"Semanal · segunda de manhã", gatilho:"Toda segunda",
+    { id:"coach-representantes", area:"Comercial", nome:"Coach dos Representantes", turno:"Semanal · segunda de manhã", gatilho:"Toda segunda", horasMes:16,
       oque:"Um analista comercial dedicado ao acompanhamento semanal de cada vendedor.",
       faz:"Lê as vendas da semana e a carteira de cada representante, compara com a meta e a semana anterior, e identifica oportunidades na carteira individual.",
       entrega:"Para cada vendedor: desempenho e clientes que precisam de ação. Para a gestão: o consolidado da equipe.",
       substitui:"A extração e cobrança manual de carteira, vendedor por vendedor.",
       msg:"Bom dia! Fechei o balanço da sua semana: R$ 38.200 vendidos, 82% da meta. 3 oportunidades na sua carteira.",
       keywords:["vendedores sem acompanhamento","carteira","equipe comercial","representantes","time de vendas"] },
-    { id:"vendedor-ciclo", area:"Comercial", nome:"Vendedor do Ciclo (Recompra)", turno:"Todo dia", gatilho:"Ciclo de recompra do cliente",
+    { id:"vendedor-ciclo", area:"Comercial", nome:"Vendedor do Ciclo (Recompra)", turno:"Todo dia", gatilho:"Ciclo de recompra do cliente", horasMes:18,
       oque:"Um assistente de recompra que conhece o ritmo de cada cliente.",
       faz:"Aprende o ciclo de compra de cada cliente e, quando ele passa do próprio ciclo sem comprar, monta uma oferta personalizada com os produtos habituais.",
       entrega:"Para o vendedor ou gestor: as ofertas do dia, prontas, aguardando aprovação antes de seguir ao cliente.",
       substitui:"O acompanhamento cliente a cliente do ciclo de recompra, inviável manualmente em bases grandes.",
       msg:"Cliente X está no dia 19 sem pedido (ciclo: 15 dias). Oferta pronta com os itens habituais. Aprovar?",
       keywords:["recompra","recorrencia","ticket medio","frequencia de compra","clientes recorrentes"] },
-    { id:"reativacao-clientes", area:"Comercial", nome:"Sentinela de Clientes Inativos & Reativação", turno:"Todo dia", gatilho:"Diário",
+    { id:"reativacao-clientes", area:"Comercial", nome:"Sentinela de Clientes Inativos & Reativação", turno:"Todo dia", gatilho:"Diário", horasMes:8,
       oque:"O responsável em tempo integral pela carteira parada.",
       faz:"Identifica diariamente clientes que pararam de comprar, cruza com o histórico de cada um e prioriza quem tem retorno real, com abordagem sugerida.",
       entrega:"Para o vendedor ou televendas: os clientes do dia que valem contato, com histórico e abordagem sugerida.",
       substitui:"A extração manual de listas de inativos e o esquecimento que transforma cliente frio em cliente perdido.",
       msg:"Cliente Y não compra há 45 dias (padrão: a cada 20). Abordagem sugerida já preparada. Revisar?",
       keywords:["clientes inativos","carteira parada","churn","reativacao","cliente parado"] },
-    { id:"guardiao-margem", area:"Comercial", nome:"Guardião de Margem, Descontos & Crédito", turno:"Por evento de venda", gatilho:"A cada pedido lançado",
+    { id:"guardiao-margem", area:"Comercial", nome:"Guardião de Margem, Descontos & Crédito", turno:"Por evento de venda", gatilho:"A cada pedido lançado", horasMes:6,
       oque:"Um supervisor digital das políticas comerciais.",
       faz:"Monitora pedidos lançados em tempo real e dispara alertas quando um desconto estoura a margem mínima ou um cliente com saldo em aberto tenta comprar sem aprovação.",
       entrega:"Para a gestão: notificação imediata com botão de aprovação ou recusa da exceção.",
       substitui:"A auditoria manual de descontos e crédito, feita depois que o problema já aconteceu.",
       msg:"Alerta: desconto de 14% (limite: 8%) no pedido 8.492. Margem caiu para 4,2%. Aprovar exceção?",
       keywords:["desconto","margem","credito","inadimplencia na venda","alcada"] },
-    { id:"apurador-premiacoes", area:"Comercial", nome:"Apurador de Premiações", turno:"Mensal · fechamento", gatilho:"Fechamento do período",
+    { id:"apurador-premiacoes", area:"Comercial", nome:"Apurador de Premiações", turno:"Mensal · fechamento", gatilho:"Fechamento do período", horasMes:6,
       oque:"O departamento de apuração de campanhas comerciais.",
       faz:"Aplica as regras de uma campanha (por volume, por SKU, por cliente novo) sobre as vendas registradas, venda a venda, no fechamento do período.",
       entrega:"Para a gestão: o demonstrativo de cada vendedor, pronto para conferência.",
       substitui:"A disputa de planilha para apurar premiação no fechamento do mês.",
       msg:"Apuração da campanha fechada: 12 representantes pontuados, demonstrativo pronto para aprovação.",
       keywords:["premiacao","campanha comercial","comissao"] },
-    { id:"posvenda", area:"Comercial", nome:"Pós-venda & Satisfação", turno:"Por evento · a cada venda", gatilho:"A cada venda registrada",
+    { id:"posvenda", area:"Comercial", nome:"Pós-venda & Satisfação", turno:"Por evento · a cada venda", gatilho:"A cada venda registrada", horasMes:5,
       oque:"O agradecimento e a pesquisa de satisfação que nunca são esquecidos.",
       faz:"É disparado a cada venda registrada, agradece o cliente e mede a satisfação de forma simples pelo WhatsApp.",
       entrega:"Para o cliente: o agradecimento e a pesquisa. Para a gestão: as respostas consolidadas e o alerta imediato de insatisfação.",
       substitui:"O pós-venda que só acontece quando alguém lembra — ou seja, quase nunca.",
       msg:"Pesquisa enviada ao Cliente Z. Resultado: nota 9/10. Nenhuma insatisfação pendente esta semana.",
       keywords:["pos-venda","satisfacao","nps","experiencia do cliente"] },
-    { id:"analista-variacao", area:"Comercial", nome:"Analista de Vendas por Cor & Variação", turno:"Todo dia", gatilho:"Diário",
+    { id:"analista-variacao", area:"Comercial", nome:"Analista de Vendas por Cor & Variação", turno:"Todo dia", gatilho:"Diário", horasMes:10,
       oque:"Um especialista em interpretar vendas de produtos com muitas variações (cor, tamanho, modelo).",
       faz:"Lê as vendas diárias e usa IA para interpretar descrições e códigos, consolidando o giro por variação sem exigir cadastro manual complexo.",
       entrega:"Para compras e gestão: um painel diário do giro por variação, pronto para decisão.",
       substitui:"As planilhas paralelas de controle de cor/variação.",
       msg:"Giro de hoje: Preto/Grafite 52% das vendas (estoque em alerta). Azul Marinho 28%. Demais cores 20%.",
       keywords:["variacao","cor","modelo","planilha paralela","sku","tamanho"] },
-    { id:"vigia-caixa", area:"Financeiro", nome:"Vigia de Caixa (Radar de Caixa)", turno:"Todo dia · manhã", gatilho:"Diário",
+    { id:"vigia-caixa", area:"Financeiro", nome:"Vigia de Caixa (Radar de Caixa)", turno:"Todo dia · manhã", gatilho:"Diário", horasMes:5,
       oque:"Um tesoureiro digital de plantão.",
       faz:"Cruza contas a pagar e a receber e projeta o saldo dos próximos dias; quando a projeção tende ao negativo, investiga a causa e sugere alternativas.",
       entrega:"Para o financeiro: aviso antecipado com a causa identificada e sugestão de solução — silêncio quando está tudo bem.",
       substitui:"O susto de descobrir o aperto de caixa quando ele já chegou.",
       msg:"Projeção: o caixa aperta na sexta (-R$ 12.400). Causa: concentração de fornecedores. Antecipar recebíveis cobre a diferença.",
       keywords:["caixa","fluxo de caixa","liquidez","capital de giro","aperto financeiro","sem visibilidade do caixa"] },
-    { id:"cobrador-cordial", area:"Financeiro", nome:"Cobrador Cordial (Régua de Cobrança)", turno:"Todo dia", gatilho:"Diário",
+    { id:"cobrador-cordial", area:"Financeiro", nome:"Cobrador Cordial (Régua de Cobrança)", turno:"Todo dia", gatilho:"Diário", horasMes:10,
       oque:"A rotina de cobrança que ninguém gosta de fazer, feita todo dia com educação.",
       faz:"Localiza os títulos vencidos do dia e redige, para cada cliente, uma mensagem cordial e personalizada.",
       entrega:"Para a gestão: o lote do dia pronto para revisão. Para o cliente: a mensagem, só depois da aprovação.",
       substitui:"A cobrança cliente a cliente que depende de alguém lembrar.",
       msg:"4 títulos vencidos hoje (R$ 9.850). Mensagens cordiais preparadas para cada cliente. Aprovar o lote?",
       keywords:["inadimplencia","cobranca","titulos vencidos","atraso","boleto vencido"] },
-    { id:"auditor-despesas", area:"Financeiro", nome:"Auditor de Despesas", turno:"Todo dia", gatilho:"Diário",
+    { id:"auditor-despesas", area:"Financeiro", nome:"Auditor de Despesas", turno:"Todo dia", gatilho:"Diário", horasMes:4,
       oque:"Uma auditoria diária de gastos contra o padrão histórico da própria empresa.",
       faz:"Compara as despesas lançadas com o histórico, conta por conta, e desce ao detalhe quando uma conta foge do padrão.",
       entrega:"Para o financeiro: o apontamento do desvio antes do fechamento, com tempo de questionar.",
       substitui:"A conferência manual de lançamentos que ninguém tem tempo de fazer.",
       msg:"Conta \"Manutenção\" 40% acima do padrão histórico este mês. 3 lançamentos concentram o desvio.",
       keywords:["despesas","gastos","sangria financeira","custos fora do padrao"] },
-    { id:"sentinela-estoque", area:"Estoque", nome:"Sentinela de Estoque", turno:"Todo dia", gatilho:"Diário",
+    { id:"sentinela-estoque", area:"Estoque", nome:"Sentinela de Estoque", turno:"Todo dia", gatilho:"Diário", horasMes:6,
       oque:"A vigilância diária contra ruptura.",
       faz:"Confere os saldos contra os estoques mínimos definidos e identifica o que furou ou está prestes a furar, priorizando pelos itens de maior giro.",
       entrega:"Para compras: a lista de reposição do dia, organizada por fornecedor.",
       substitui:"A conferência manual de saldos e a montagem de pedido item a item.",
       msg:"3 peças no vermelho hoje: Pistão classe 4 (8 un), Rodízio PU (22 un). Pedido separado por fornecedor pronto.",
       keywords:["estoque parado","ruptura","falta de produto","reposicao","sem peca"] },
-    { id:"analista-giro", area:"Estoque", nome:"Analista de Giro (Curva ABC)", turno:"Semanal", gatilho:"Toda semana",
+    { id:"analista-giro", area:"Estoque", nome:"Analista de Giro (Curva ABC)", turno:"Semanal", gatilho:"Toda semana", horasMes:6,
       oque:"Um analista que mostra o que está vendendo bem e o que está encalhado.",
       faz:"Cruza vendas e estoque e monta a curva ABC: o que gira, o que está parado, o que tem estoque alto sem saída.",
       entrega:"Para a gestão: o ranking do que gira e a lista do que está parado, para decidir o que empurrar ou deixar de comprar.",
       substitui:"A conferência manual para saber o que está parado, e o dinheiro imobilizado nisso.",
       msg:"Mais vendida: cadeira executiva PU. Parada há 60+ dias: cadeira fixa preta (14 un, R$4.200 imobilizados).",
       keywords:["curva abc","giro de estoque","produto parado","mix de produtos","estoque encalhado"] },
-    { id:"sugestao-compra", area:"Estoque", nome:"Agente de Sugestão de Compra", turno:"Semanal", gatilho:"Toda semana",
+    { id:"sugestao-compra", area:"Estoque", nome:"Agente de Sugestão de Compra", turno:"Semanal", gatilho:"Toda semana", horasMes:6,
       oque:"O planejador de reposição que cruza giro, sazonalidade e prazo de entrega.",
       faz:"Analisa o histórico de vendas e o lead time de cada fornecedor para sugerir quanto e quando comprar de cada item.",
       entrega:"Para compras: a sugestão de pedido por fornecedor, pronta para ajuste e envio.",
@@ -1427,6 +1451,7 @@
   var AREA_ORDER = ["Diretoria", "Comercial", "Financeiro", "Estoque"];
   var selectedAgentIds = {};       // id -> true
   var manuallyToggled = {};        // id -> true (user explicitly clicked; don't auto-toggle again)
+  var horasProposta = {};          // id -> horas/mês economizadas nesta simulação (editável por cliente)
 
   // ---------- Agentes personalizados (compartilhados via Artifact db, quando disponível) ----------
   var customAgents = [];           // agentes cadastrados pelo time, no mesmo formato de AGENTS + {custom:true}
@@ -1488,12 +1513,14 @@
     delete selectedAgentIds[id];
     delete suggestedIds[id];
     delete manuallyToggled[id];
+    delete horasProposta[id];
     if (customAgentsCol && id.indexOf("local-") !== 0){
       customAgentsCol.doc(id).delete().catch(function(){ /* ignore */ });
     } else {
       customAgents = customAgents.filter(function(a){ return a.id !== id; });
       renderAgentCatalog();
     }
+    if (typeof renderHorasSim === "function") renderHorasSim();
     refreshPropSummary();
   }
 
@@ -1604,6 +1631,49 @@
     totalWrap.innerHTML = rowsHtml;
   }
 
+  function computeHoras(){
+    var all = allAgentsList();
+    var rows = Object.keys(horasProposta).map(function(id){
+      var ag = all.filter(function(a){ return a.id === id; })[0];
+      if (!ag) return null;
+      return { id: id, nome: ag.nome, substitui: ag.substitui || "", horas: parseFloat(horasProposta[id]) || 0 };
+    }).filter(Boolean);
+    var total = rows.reduce(function(s, r){ return s + r.horas; }, 0);
+    return { rows: rows, total: total };
+  }
+
+  function renderHorasTotal(){
+    var totalWrap = document.getElementById("horasSimTotal");
+    if (!totalWrap) return;
+    var h = computeHoras();
+    var dias = (h.total / 8).toFixed(1).replace(/\.0$/, "");
+    totalWrap.innerHTML = '<div class="pricesim-row total"><span class="lbl">Total devolvido / mês</span><span class="val tabular">' + h.total + 'h</span></div>' +
+      (h.total > 0 ? '<div class="hint" style="margin-top:6px;">Equivale a aproximadamente ' + dias + ' dia(s) de trabalho de 8h por mês.</div>' : "");
+  }
+
+  function renderHorasSim(){
+    var rowsWrap = document.getElementById("horasSimRows");
+    var totalWrap = document.getElementById("horasSimTotal");
+    if (!rowsWrap || !totalWrap) return;
+    var h = computeHoras();
+    if (!h.rows.length){
+      rowsWrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Selecione ao menos um agente no catálogo abaixo para estimar horas devolvidas.</span></div>';
+      totalWrap.innerHTML = "";
+      return;
+    }
+    rowsWrap.innerHTML = h.rows.map(function(r){
+      return '<div class="horas-row"><div class="htxt"><strong>' + escapeHtml(r.nome) + '</strong><span>' + escapeHtml(r.substitui) + '</span></div>' +
+        '<div class="hval"><input type="number" min="0" step="0.5" class="tabular" data-horas-id="' + r.id + '" value="' + r.horas + '"><span class="unit">h/mês</span></div></div>';
+    }).join("");
+    rowsWrap.querySelectorAll("[data-horas-id]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        horasProposta[inp.getAttribute("data-horas-id")] = parseFloat(inp.value) || 0;
+        renderHorasTotal();
+      });
+    });
+    renderHorasTotal();
+  }
+
   function normalize(str){
     return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   }
@@ -1632,8 +1702,17 @@
       cb.addEventListener("change", function(){
         var id = cb.getAttribute("data-agent-cb");
         manuallyToggled[id] = true;
-        if (cb.checked){ selectedAgentIds[id] = true; } else { delete selectedAgentIds[id]; delete suggestedIds[id]; }
+        if (cb.checked){
+          selectedAgentIds[id] = true;
+          if (horasProposta[id] === undefined){
+            var ag = allAgentsList().filter(function(a){ return a.id === id; })[0];
+            horasProposta[id] = ag && ag.horasMes != null ? ag.horasMes : 0;
+          }
+        } else {
+          delete selectedAgentIds[id]; delete suggestedIds[id]; delete horasProposta[id];
+        }
         cb.closest(".agent-item").classList.toggle("on", cb.checked);
+        if (typeof renderHorasSim === "function") renderHorasSim();
         refreshPropSummary();
       });
     });
@@ -1658,10 +1737,11 @@
       if (matches && !selectedAgentIds[a.id]){
         selectedAgentIds[a.id] = true;
         suggestedIds[a.id] = true;
+        if (horasProposta[a.id] === undefined) horasProposta[a.id] = a.horasMes != null ? a.horasMes : 0;
         changed = true;
       }
     });
-    if (changed){ renderAgentCatalog(); refreshPropSummary(); }
+    if (changed){ renderAgentCatalog(); if (typeof renderHorasSim === "function") renderHorasSim(); refreshPropSummary(); }
   }
 
   var doresDebounce = null;
@@ -1704,6 +1784,7 @@
       document.getElementById(id).value = "";
     });
     document.getElementById("na-area").value = "Comercial";
+    document.getElementById("na-horas").value = "6";
     document.getElementById("newAgentModalOverlay").classList.add("show");
     document.getElementById("na-nome").focus();
   }
@@ -1733,6 +1814,7 @@
       faz: document.getElementById("na-faz").value.trim(),
       entrega: document.getElementById("na-entrega").value.trim(),
       substitui: document.getElementById("na-substitui").value.trim(),
+      horasMes: parseFloat(document.getElementById("na-horas").value) || 0,
       msg: document.getElementById("na-msg").value.trim(),
       keywords: keywords
     };
@@ -1754,6 +1836,7 @@
   renderAgentCatalog();
   renderAddlItems();
   renderPriceSim();
+  renderHorasSim();
   refreshPropSummary();
 
   // ---------- Proposal HTML builder ----------
@@ -1861,6 +1944,22 @@
     return html;
   }
 
+  function buildHorasSection(horas){
+    if (!horas.rows.length){
+      return '<p class="muted">Nenhum agente selecionado nesta simulação — volte à aba Gerar Proposta para estimar as horas devolvidas.</p>';
+    }
+    var rows = horas.rows.map(function(r){
+      return '<tr><td>' + escapeHtml(r.substitui || r.nome) + '</td><td>' + escapeHtml(r.nome) + '</td><td class="num">' + r.horas + 'h</td></tr>';
+    }).join("");
+    var dias = (horas.total / 8).toFixed(1).replace(/\.0$/, "");
+    return '<table><tr><th>Trabalho que hoje é manual</th><th style="width:26%">Quem assume</th><th style="text-align:right; width:14%">Horas/mês</th></tr>' +
+      rows +
+      '<tr class="total"><td colspan="2"><strong>Tempo devolvido à gestão, por mês</strong></td><td class="num"><strong>' + horas.total + 'h</strong></td></tr>' +
+      '</table>' +
+      '<div class="callout green"><span class="lbl">O que isso representa</span>' +
+      '<strong>' + horas.total + ' horas por mês' + (horas.total >= 8 ? " equivalem a aproximadamente " + dias + " dia(s) de trabalho." : ".") + '</strong> Tempo que hoje é consumido em tarefas manuais e repetitivas, e passa a ser aplicado onde a gestão realmente agrega valor: decidir, priorizar e atender o cliente.</div>';
+  }
+
   function buildProposalHTML(){
     var ctx = getProposalContext();
     var diag = lastDiagnostic;
@@ -1877,6 +1976,9 @@
     var fichasHtml = ctx.agents.length
       ? ctx.agents.map(buildAgentFicha).join("")
       : '<p class="muted">Nenhum agente selecionado na simulação. Volte à aba Gerar Proposta e marque os agentes relevantes para este cliente.</p>';
+
+    var horas = computeHoras();
+    var horasHtml = buildHorasSection(horas);
 
     var commercialHtml = buildCommercialSection(pricing, diag, ctx);
     var docHeader = '<div class="doc-header"><div class="brand">' + brandNodeSvg("#000035", 18) + 'LONDRISOFT</div><div class="docname">Proposta comercial · ' + escapeHtml(ctx.cliente) + '<br>Confidencial · ' + anoAtual + '</div></div>';
@@ -2009,6 +2111,13 @@
 
     '<div class="page">' + watermark +
       '<p class="section-num">03</p>' +
+      '<h2>Tempo Devolvido à Gestão</h2>' +
+      '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' +
+      horasHtml +
+    '</div>' +
+
+    '<div class="page">' + watermark +
+      '<p class="section-num">04</p>' +
       '<h2>Plano Recomendado e Investimento</h2>' +
       (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
       commercialHtml +
@@ -2016,7 +2125,7 @@
     '</div>' +
 
     '<div class="page">' + watermark +
-      '<p class="section-num">04</p>' +
+      '<p class="section-num">05</p>' +
       '<h2>Próximos Passos</h2>' +
       '<ul class="clean"><li>Validar com o cliente as dores mapeadas e os agentes propostos.</li><li>Ajustar turnos, destinatários e regras de cada agente ao processo real do cliente.</li><li>Confirmar plano, usuários e empresas para fechar a proposta comercial.</li></ul>' +
       '<div class="footer">Londrisoft © ' + anoAtual + ' — Documento confidencial, preparado para ' + escapeHtml(ctx.cliente) + '.<br>Nomes de cargo dos agentes são denominações comerciais desta proposta; o desenho final de cada agente é definido em conjunto na implantação.</div>' +
