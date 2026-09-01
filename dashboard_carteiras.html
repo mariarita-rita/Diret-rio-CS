@@ -880,6 +880,7 @@ function buildTabs(){
     {id:'monitoramento',label:'📊 Monitoramento'},
     {id:'processos',   label:'📋 Processos CSM'},
     {id:'tabela',      label:'💰 Tabela de Preços'},
+    {id:'waipe',       label:'🧭 Diagnóstico Waipe'},
   ];
 
   // Abas de carteira (csm e gestão)
@@ -928,6 +929,7 @@ function switchTab(tabId,csm){
     processos:    'https://diretoriocs.vercel.app/csm_processos.html',
     tabela:       'https://diretoriocs.vercel.app/tabela-precos-cs.html',
     fechamentos:  'https://diretoriocs.vercel.app/fechamentos.html',
+    waipe:        'https://diretoriocs.vercel.app/waipe-diagnostico.html',
   };
 
   if(tabId in ABAS_IFRAME){

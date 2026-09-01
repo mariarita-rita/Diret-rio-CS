@@ -1,0 +1,2131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico de Planos Waipe</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  :root{
+    --bg:#ffffff;
+    --surface:#faf9f7;
+    --surface-2:#f5f5f4;
+    --border:#e7e5e4;
+    --border-strong:#d6d3d1;
+    --ink:#1c1917;
+    --ink-2:#44403c;
+    --muted:#78716c;
+    --muted-2:#a8a29e;
+    --brand:#1c1917;
+    --brand-ink:#ffffff;
+    --focus-ring:#3a86ff;
+    --success:#15803d;
+    --success-bg:#f0fdf4;
+    --danger:#b91c1c;
+    --danger-bg:#fef2f2;
+    --warning:#b45309;
+    --warning-bg:#fffbeb;
+    --plan-individual:#0f766e;
+    --plan-individual-bg:#f0fdfa;
+    --plan-time:#1c1917;
+    --plan-time-bg:#f5f5f4;
+    --plan-enterprise:#92400e;
+    --plan-enterprise-bg:#fffbeb;
+    --shadow:0 1px 2px rgba(28,25,23,.06), 0 8px 24px rgba(28,25,23,.07);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#16140f;
+      --surface:#1f1c17;
+      --surface-2:#2a2621;
+      --border:#3a352d;
+      --border-strong:#4a4437;
+      --ink:#f3efe8;
+      --ink-2:#d6d0c4;
+      --muted:#a89e8e;
+      --muted-2:#7d7566;
+      --brand:#f3efe8;
+      --brand-ink:#1c1917;
+      --success:#4ade80;
+      --success-bg:#132318;
+      --danger:#f87171;
+      --danger-bg:#2a1515;
+      --warning:#fbbf24;
+      --warning-bg:#2a2112;
+      --plan-individual:#2dd4bf;
+      --plan-individual-bg:#0f2624;
+      --plan-time:#f3efe8;
+      --plan-time-bg:#2a2621;
+      --plan-enterprise:#fbbf24;
+      --plan-enterprise-bg:#2a2112;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#16140f;
+    --surface:#1f1c17;
+    --surface-2:#2a2621;
+    --border:#3a352d;
+    --border-strong:#4a4437;
+    --ink:#f3efe8;
+    --ink-2:#d6d0c4;
+    --muted:#a89e8e;
+    --muted-2:#7d7566;
+    --brand:#f3efe8;
+    --brand-ink:#1c1917;
+    --success:#4ade80;
+    --success-bg:#132318;
+    --danger:#f87171;
+    --danger-bg:#2a1515;
+    --warning:#fbbf24;
+    --warning-bg:#2a2112;
+    --plan-individual:#2dd4bf;
+    --plan-individual-bg:#0f2624;
+    --plan-time:#f3efe8;
+    --plan-time-bg:#2a2621;
+    --plan-enterprise:#fbbf24;
+    --plan-enterprise-bg:#2a2112;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+  table{border-collapse:collapse;}
+  h1,h2,h3,h4{text-wrap:balance; margin:0;}
+  .tabular{font-variant-numeric:tabular-nums;}
+
+  .page{max-width:1120px; margin:0 auto; padding:28px 20px 80px;}
+
+  /* Header */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding-bottom:22px; margin-bottom:22px; border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand svg{display:block;}
+  .brand-name{font-weight:800; font-size:15px; letter-spacing:.01em;}
+  .header-title{display:flex; flex-direction:column; gap:4px;}
+  .header-title h1{font-size:22px; font-weight:800; letter-spacing:-.01em;}
+  .header-title p{margin:0; font-size:13.5px; color:var(--muted);}
+  .header-meta{font-size:12px; color:var(--muted-2); text-align:right;}
+
+  /* Tabs */
+  .tabs{
+    display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:12px; padding:4px; margin-bottom:26px; width:fit-content;
+  }
+  .tab-btn{
+    appearance:none; border:none; background:transparent; cursor:pointer;
+    font-family:inherit; font-size:13.5px; font-weight:600; color:var(--muted);
+    padding:9px 16px; border-radius:9px; transition:background .15s,color .15s;
+  }
+  .tab-btn:hover{color:var(--ink);}
+  .tab-btn.active{background:var(--bg); color:var(--ink); box-shadow:var(--shadow);}
+  .tab-btn:focus-visible{outline:2px solid var(--focus-ring); outline-offset:2px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* Callouts */
+  .callout{
+    display:flex; gap:12px; padding:14px 16px; border-radius:12px; border:1px solid var(--border);
+    background:var(--surface); font-size:13.5px; line-height:1.55; margin-bottom:22px;
+  }
+  .callout b{font-weight:700;}
+  .callout.warn{background:var(--warning-bg); border-color:color-mix(in srgb, var(--warning) 30%, var(--border));}
+  .callout .dot{
+    flex-shrink:0; width:8px; height:8px; border-radius:50%; margin-top:6px; background:var(--ink);
+  }
+  .callout.warn .dot{background:var(--warning);}
+
+  /* Diagnostic layout */
+  .diag-grid{display:grid; grid-template-columns:minmax(0,420px) minmax(0,1fr); gap:22px; align-items:start;}
+  @media (max-width:860px){ .diag-grid{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px;
+  }
+  .card h2{font-size:15px; font-weight:700; margin-bottom:4px;}
+  .card .sub{font-size:12.5px; color:var(--muted); margin-bottom:18px;}
+
+  .field{margin-bottom:18px;}
+  .field label{display:block; font-size:13px; font-weight:600; margin-bottom:7px;}
+  .field .hint{font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4;}
+  .num-input{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border-strong);
+    background:var(--bg); color:var(--ink); font-family:inherit; font-size:14px;
+  }
+  .num-input:focus-visible{outline:2px solid var(--focus-ring); outline-offset:1px;}
+
+  .seg{display:flex; border:1px solid var(--border-strong); border-radius:9px; overflow:hidden;}
+  .seg button{
+    flex:1; appearance:none; border:none; background:var(--bg); color:var(--ink-2); cursor:pointer;
+    font-family:inherit; font-size:13px; font-weight:600; padding:9px 10px; transition:background .15s,color .15s;
+    border-right:1px solid var(--border-strong);
+  }
+  .seg button:last-child{border-right:none;}
+  .seg button.on{background:var(--ink); color:var(--brand-ink);}
+  :root[data-theme="dark"] .seg button.on, @media (prefers-color-scheme:dark){ .seg button.on{ } }
+  .seg button:focus-visible{outline:2px solid var(--focus-ring); outline-offset:-2px;}
+
+  .radio-list{display:flex; flex-direction:column; gap:8px;}
+  .radio-opt{
+    display:flex; gap:10px; align-items:flex-start; border:1px solid var(--border-strong); border-radius:10px;
+    padding:11px 12px; cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .radio-opt:hover{border-color:var(--muted-2);}
+  .radio-opt.on{border-color:var(--ink); background:var(--surface-2);}
+  .radio-opt input{margin-top:3px; accent-color:var(--ink); flex-shrink:0;}
+  .radio-opt .txt strong{display:block; font-size:13px; font-weight:600;}
+  .radio-opt .txt span{display:block; font-size:12px; color:var(--muted); margin-top:2px; line-height:1.4;}
+
+  fieldset{border:none; padding:0; margin:0;}
+  legend{padding:0; font-size:13px; font-weight:600; margin-bottom:9px;}
+
+  .divider{height:1px; background:var(--border); margin:22px 0;}
+
+  details.opt-block{border:1px dashed var(--border-strong); border-radius:12px; padding:12px 14px; margin-top:4px;}
+  details.opt-block summary{cursor:pointer; font-size:12.5px; font-weight:600; color:var(--muted); list-style:none;}
+  details.opt-block summary::-webkit-details-marker{display:none;}
+  details.opt-block summary::before{content:"+ "; }
+  details.opt-block[open] summary::before{content:"– ";}
+  details.opt-block .opt-fields{margin-top:14px; display:flex; flex-direction:column; gap:14px;}
+
+  .btn-primary{
+    width:100%; padding:12px 16px; border-radius:10px; border:none; background:var(--ink); color:var(--brand-ink);
+    font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; margin-top:6px;
+  }
+  .btn-primary:hover{opacity:.9;}
+  .btn-primary:focus-visible{outline:2px solid var(--focus-ring); outline-offset:2px;}
+
+  /* Result */
+  .result-card{
+    border-radius:16px; border:1px solid var(--border); overflow:hidden; background:var(--surface);
+  }
+  .result-head{padding:22px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+  .result-empty{padding:60px 30px; text-align:center; color:var(--muted); font-size:13.5px;}
+  .result-empty svg{margin:0 auto 14px; display:block; opacity:.5;}
+  .plan-chip{
+    display:inline-flex; align-items:center; gap:8px; padding:6px 13px; border-radius:999px;
+    font-size:12.5px; font-weight:700; letter-spacing:.02em; text-transform:uppercase;
+  }
+  .plan-chip.individual{background:var(--plan-individual-bg); color:var(--plan-individual);}
+  .plan-chip.time{background:var(--plan-time-bg); color:var(--plan-time);}
+  .plan-chip.enterprise{background:var(--plan-enterprise-bg); color:var(--plan-enterprise);}
+  .result-price{font-size:28px; font-weight:800; letter-spacing:-.02em;}
+  .result-price small{font-size:13px; font-weight:600; color:var(--muted);}
+  .result-body{padding:0 22px 22px;}
+  .reasons{list-style:none; margin:0 0 18px; padding:0; display:flex; flex-direction:column; gap:10px;}
+  .reasons li{display:flex; gap:10px; font-size:13.5px; line-height:1.5;}
+  .reasons li svg{flex-shrink:0; margin-top:3px;}
+  .price-breakdown{background:var(--surface-2); border-radius:12px; padding:14px 16px; margin-bottom:18px;}
+  .price-breakdown .row{display:flex; justify-content:space-between; font-size:13px; padding:4px 0;}
+  .price-breakdown .row.total{border-top:1px solid var(--border-strong); margin-top:6px; padding-top:9px; font-weight:700;}
+  .volume-note{display:flex; gap:10px; font-size:13px; padding:10px 12px; border-radius:10px; margin-bottom:10px; line-height:1.5;}
+  .volume-note.ok{background:var(--success-bg); color:var(--success);}
+  .volume-note.warn{background:var(--warning-bg); color:var(--warning);}
+  .pitch-box{background:var(--surface-2); border-left:3px solid var(--ink); border-radius:0 10px 10px 0; padding:14px 16px; font-size:13.5px; line-height:1.6; font-style:italic; margin-top:6px;}
+  .alert-box{
+    display:flex; gap:10px; background:var(--warning-bg); border:1px solid color-mix(in srgb, var(--warning) 35%, var(--border));
+    border-radius:12px; padding:13px 15px; font-size:13px; line-height:1.5; margin-top:16px; color:var(--ink);
+  }
+
+  /* Comparativo tab */
+  .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:14px; margin-bottom:18px; background:var(--surface);}
+  table.cmp{width:100%; min-width:640px; font-size:13.5px;}
+  table.cmp caption{text-align:left; padding:16px 18px 4px; font-size:14px; font-weight:700; caption-side:top;}
+  table.cmp th, table.cmp td{padding:11px 16px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+  table.cmp thead th{
+    font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+    background:var(--surface-2); position:sticky; top:0;
+  }
+  table.cmp tbody th{font-weight:600; color:var(--ink-2); width:26%;}
+  table.cmp tbody tr:last-child td, table.cmp tbody tr:last-child th{border-bottom:none;}
+  table.cmp td.col-individual, table.cmp th.col-individual{border-left:2px solid transparent;}
+  table.cmp .planhead{display:flex; flex-direction:column; gap:2px;}
+  table.cmp .planhead .price{font-weight:800; font-size:13.5px; color:var(--ink);}
+  .yes{color:var(--success); font-weight:700;}
+  .no{color:var(--muted-2);}
+  .tag-mini{display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; background:var(--surface-2); color:var(--muted);}
+
+  .accordion{border:1px solid var(--border); border-radius:14px; margin-bottom:12px; overflow:hidden; background:var(--surface);}
+  .accordion summary{
+    cursor:pointer; list-style:none; padding:15px 18px; font-size:14px; font-weight:700; display:flex; align-items:center;
+    justify-content:space-between; gap:10px;
+  }
+  .accordion summary::-webkit-details-marker{display:none;}
+  .accordion summary .chev{transition:transform .18s; flex-shrink:0; color:var(--muted);}
+  .accordion[open] summary .chev{transform:rotate(90deg);}
+  .accordion .acc-body{padding:0 0 6px;}
+  .accordion .acc-note{padding:0 18px 16px; font-size:12.5px; color:var(--muted); line-height:1.5;}
+
+  .section-title{font-size:17px; font-weight:800; margin:34px 0 4px; letter-spacing:-.01em;}
+  .section-sub{font-size:13px; color:var(--muted); margin-bottom:16px;}
+  .section-title:first-child{margin-top:0;}
+
+  .limits-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; margin-bottom:10px;}
+  .limit-card{border:1px solid var(--border); background:var(--surface); border-radius:12px; padding:15px 16px;}
+  .limit-card h4{font-size:13px; font-weight:700; margin-bottom:6px;}
+  .limit-card p{margin:0; font-size:12.5px; color:var(--muted); line-height:1.55;}
+
+  /* Vendas tab */
+  .pitch-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-bottom:8px;}
+  .pitch-card{border:1px solid var(--border); border-radius:14px; padding:17px; background:var(--surface);}
+  .pitch-card .plan-chip{margin-bottom:11px;}
+  .pitch-card p{font-size:13.5px; line-height:1.6; font-style:italic; margin:0; color:var(--ink-2);}
+
+  .faq-item, .obj-item{border-bottom:1px solid var(--border); padding:14px 2px;}
+  .faq-item:last-child, .obj-item:last-child{border-bottom:none;}
+  .faq-item summary, .obj-item summary{
+    cursor:pointer; list-style:none; font-size:13.5px; font-weight:600; display:flex; gap:10px; align-items:flex-start;
+  }
+  .faq-item summary::-webkit-details-marker, .obj-item summary::-webkit-details-marker{display:none;}
+  .faq-item summary::before, .obj-item summary::before{content:"+"; flex-shrink:0; font-weight:700; color:var(--muted);}
+  .faq-item[open] summary::before, .obj-item[open] summary::before{content:"–";}
+  .faq-item .a, .obj-item .a{font-size:13px; color:var(--muted); line-height:1.6; margin:9px 0 0 20px;}
+
+  footer.page-footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--border); font-size:12px; color:var(--muted-2); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+
+  /* Gerar Proposta tab */
+  .prop-grid{display:grid; grid-template-columns:minmax(0,460px) minmax(0,1fr); gap:22px; align-items:start;}
+  @media (max-width:900px){ .prop-grid{grid-template-columns:1fr;} }
+  textarea.ta{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border-strong);
+    background:var(--bg); color:var(--ink); font-family:inherit; font-size:13.5px; resize:vertical; min-height:84px; line-height:1.5;
+  }
+  textarea.ta:focus-visible, select.sel:focus-visible{outline:2px solid var(--focus-ring); outline-offset:1px;}
+  select.sel{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border-strong);
+    background:var(--bg); color:var(--ink); font-family:inherit; font-size:14px;
+  }
+  .field-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  @media (max-width:520px){ .field-row{grid-template-columns:1fr;} }
+
+  .agent-area{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:16px 0 8px;}
+  .agent-area:first-child{margin-top:0;}
+  .agent-item{
+    display:flex; gap:10px; align-items:flex-start; border:1px solid var(--border-strong); border-radius:10px;
+    padding:10px 12px; margin-bottom:7px; cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .agent-item:hover{border-color:var(--muted-2);}
+  .agent-item.on{border-color:var(--ink); background:var(--surface-2);}
+  .agent-item input{margin-top:3px; accent-color:var(--ink); flex-shrink:0;}
+  .agent-item .atxt strong{font-size:13px; font-weight:600; display:flex; align-items:center; gap:7px; flex-wrap:wrap;}
+  .agent-item .atxt span{display:block; font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.4;}
+  .sug-tag{
+    display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+    padding:1px 6px; border-radius:5px; background:var(--success-bg); color:var(--success);
+  }
+  .tag-custom{
+    display:inline-block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+    padding:1px 6px; border-radius:5px; background:var(--surface-2); color:var(--muted); margin-left:6px;
+  }
+  .btn-del-agent{
+    margin-left:auto; align-self:center; flex-shrink:0; width:26px; height:26px; border-radius:7px;
+    border:1px solid var(--border-strong); background:var(--bg); color:var(--danger); cursor:pointer; font-size:12px; line-height:1;
+  }
+  .btn-del-agent:hover{border-color:var(--danger);}
+
+  .prop-summary{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px;}
+  .prop-summary h2{font-size:15px; font-weight:700; margin-bottom:14px;}
+  .prop-stat-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px;}
+  .prop-stat{background:var(--surface-2); border-radius:10px; padding:10px 14px; flex:1; min-width:120px;}
+  .prop-stat .k{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:3px;}
+  .prop-stat .v{font-size:15px; font-weight:700;}
+  .prop-actions{display:flex; flex-direction:column; gap:9px; margin-top:6px;}
+  .btn-secondary{
+    width:100%; padding:11px 16px; border-radius:10px; border:1px solid var(--border-strong); background:var(--bg); color:var(--ink);
+    font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-secondary:hover{border-color:var(--ink);}
+  .btn-secondary:focus-visible, .btn-primary:focus-visible{outline:2px solid var(--focus-ring); outline-offset:2px;}
+  .prop-note{font-size:12px; color:var(--muted); line-height:1.55; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);}
+  .prop-warn{
+    display:flex; gap:10px; background:var(--warning-bg); border:1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+    border-radius:12px; padding:12px 14px; font-size:12.5px; line-height:1.5; margin-bottom:16px;
+  }
+
+  /* Simulador de Preço */
+  .pricesim-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;}
+  .pricesim-row:last-child{border-bottom:none;}
+  .pricesim-row .lbl{color:var(--ink-2);}
+  .pricesim-row .val{font-weight:700; white-space:nowrap;}
+  .pricesim-row.discount .val{color:var(--success);}
+  .pricesim-row.total{border-top:2px solid var(--border-strong); margin-top:6px; padding-top:12px; font-size:14.5px;}
+  .pricesim-row.total .val{font-size:18px; font-weight:800;}
+  .discount-row{display:flex; gap:10px;}
+  .discount-row select{flex:0 0 84px;}
+  .discount-row input{flex:1;}
+  .addl-item{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+  .addl-item input[type="text"]{flex:2;}
+  .addl-item input[type="number"]{flex:1;}
+  .btn-remove{
+    flex-shrink:0; width:34px; height:34px; border-radius:8px; border:1px solid var(--border-strong);
+    background:var(--bg); color:var(--danger); cursor:pointer; font-size:14px; line-height:1;
+  }
+  .btn-remove:hover{border-color:var(--danger);}
+  .btn-add-small{
+    width:100%; padding:9px 14px; border-radius:8px; border:1px dashed var(--border-strong); background:transparent;
+    color:var(--ink-2); font-size:12.5px; font-weight:600; cursor:pointer; margin-top:2px;
+  }
+  .btn-add-small:hover{border-color:var(--ink); color:var(--ink);}
+  .toast-copy{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; pointer-events:none;
+    background:var(--ink); color:var(--brand-ink); font-size:13px; font-weight:600; padding:10px 18px; border-radius:999px;
+    box-shadow:var(--shadow); transition:opacity .2s, transform .2s; z-index:60;
+  }
+  .toast-copy.show{opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto;}
+
+  /* Preview modal */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(20,18,16,.55); z-index:50; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--bg); border-radius:16px; width:100%; max-width:980px; height:88vh; display:flex; flex-direction:column;
+    overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.35);
+  }
+  .modal-head{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid var(--border); flex-shrink:0;}
+  .modal-head strong{font-size:14px;}
+  .modal-close{
+    appearance:none; border:none; background:var(--surface-2); color:var(--ink); width:30px; height:30px; border-radius:8px;
+    cursor:pointer; font-size:16px; line-height:1;
+  }
+  .modal-box iframe{flex:1; width:100%; border:none; background:#fff;}
+
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="topbar">
+    <div class="brand">
+      <svg width="26" height="17" viewBox="0 0 54 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.4174 11.5937L19.1623 5.85231C18.142 4.05915 16.2634 2.97339 14.2391 2.97339H5.76938C1.33207 2.97339 -1.4372 7.84288 0.781456 11.7418L12.5225 32.4042C14.7412 36.3031 20.2797 36.3031 22.4983 32.4042L28.377 22.073L22.4174 11.5937Z" fill="currentColor"/>
+        <path d="M43.7455 9.17639H37.9317C36.5551 9.17639 35.2919 9.91668 34.6118 11.1341L32.3607 15.0987L28.3931 22.074L32.4093 29.1479C33.883 31.7307 37.5592 31.7307 39.0329 29.1479L47.0654 15C48.5391 12.4172 46.6929 9.17639 43.7617 9.17639H43.7455Z" fill="currentColor"/>
+        <path d="M44.5875 0.0277107C35.6481 0.19222 28.3767 5.0617 28.3767 11.2802C28.3767 17.4986 29.3484 15.8535 31.2431 17.038L32.3444 15.1132L34.5954 11.1486C35.2756 9.94764 36.555 9.1909 37.9153 9.1909H43.7291C46.6766 9.1909 48.5065 12.4317 47.0328 15.0145L45.9154 16.9887C50.6604 15.2449 53.8345 11.856 53.8345 7.08517C53.8345 2.31439 50.6928 -0.301309 44.5713 0.0277107H44.5875Z" fill="var(--muted-2)"/>
+      </svg>
+      <span class="brand-name" style="color:var(--ink)">waipe</span>
+    </div>
+    <div class="header-title">
+      <h1>Diagnóstico de Planos</h1>
+      <p>Ferramenta interna do time de CS — indique o plano certo e consulte a precificação completa</p>
+    </div>
+    <div class="header-meta">Baseado em<br>Planos e Precificação — Waipe 2026</div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Seções">
+    <button class="tab-btn active" data-tab="diag" role="tab" aria-selected="true">Diagnóstico do Cliente</button>
+    <button class="tab-btn" data-tab="cmp" role="tab" aria-selected="false">Comparativo de Planos</button>
+    <button class="tab-btn" data-tab="vendas" role="tab" aria-selected="false">Vendas &amp; FAQ</button>
+    <button class="tab-btn" data-tab="prop" role="tab" aria-selected="false">Gerar Proposta</button>
+  </nav>
+
+  <!-- ===================== DIAGNÓSTICO ===================== -->
+  <section class="panel active" id="panel-diag">
+
+    <div class="callout">
+      <div class="dot"></div>
+      <div><b>Regra comercial central:</b> o Individual não expande em usuário nem empresa. Quando o cliente precisa de segundo usuário, segunda empresa, controle de acesso ou relatório por pessoa, o caminho correto é migrar para o Time. O Enterprise não é plano de volume — é indicado apenas quando existe necessidade real de integrar sistemas externos ou construir automação personalizada.</div>
+    </div>
+
+    <div class="diag-grid">
+      <!-- FORM -->
+      <form class="card" id="diagForm">
+        <h2>Especificações do cliente</h2>
+        <div class="sub">Responda com base na conversa de diagnóstico com o cliente.</div>
+
+        <div class="field">
+          <label for="f-usuarios">Quantas pessoas vão usar a plataforma?</label>
+          <input type="number" id="f-usuarios" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
+          <div class="hint">Inclua todos os usuários que precisam de acesso individual ao Waipe.</div>
+        </div>
+
+        <div class="field">
+          <label for="f-empresas">Quantas empresas do grupo econômico precisam consultar dados?</label>
+          <input type="number" id="f-empresas" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
+        </div>
+
+        <div class="field">
+          <label>Precisam controlar quem acessa o quê (permissões por usuário)?</label>
+          <div class="seg" data-group="governanca">
+            <button type="button" data-val="nao" class="on">Não</button>
+            <button type="button" data-val="sim">Sim</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Precisam auditar o uso da ferramenta ou ter relatório por pessoa?</label>
+          <div class="seg" data-group="auditoria">
+            <button type="button" data-val="nao" class="on">Não</button>
+            <button type="button" data-val="sim">Sim</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <fieldset>
+            <legend>O que o cliente precisa fazer com o Waipe Flow (automações)?</legend>
+            <div class="radio-list" data-group="automacao">
+              <label class="radio-opt on">
+                <input type="radio" name="automacao" value="pronta" checked>
+                <span class="txt"><strong>Apenas ativar modelos prontos e ajustar parâmetros</strong><span>Horário, relatório usado, texto da instrução — sem tocar sistemas externos.</span></span>
+              </label>
+              <label class="radio-opt">
+                <input type="radio" name="automacao" value="personalizada">
+                <span class="txt"><strong>Mudar a estrutura da automação ou integrar sistemas externos</strong><span>Construção personalizada pelo Waipe Flow, tocando sistemas do cliente.</span></span>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="field">
+          <label>O cliente está pedindo Enterprise só por volume, usuários ou empresas?</label>
+          <div class="seg" data-group="enterprisePorVolume">
+            <button type="button" data-val="nao" class="on">Não</button>
+            <button type="button" data-val="sim">Sim</button>
+          </div>
+          <div class="hint">Se sim, isso não justifica Enterprise sozinho — tudo isso escala dentro do Time.</div>
+        </div>
+
+        <details class="opt-block">
+          <summary>Volume estimado de uso (opcional)</summary>
+          <div class="opt-fields">
+            <div class="field" style="margin-bottom:0">
+              <label for="f-conversas">Conversas com IA estimadas / mês</label>
+              <input type="number" id="f-conversas" class="num-input tabular" min="0" step="10" placeholder="ex: 400">
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label for="f-execucoes">Execuções de Waipe Flow estimadas / mês</label>
+              <input type="number" id="f-execucoes" class="num-input tabular" min="0" step="10" placeholder="ex: 80">
+            </div>
+          </div>
+        </details>
+
+        <button type="button" class="btn-primary" id="btnCalcular">Indicar plano ideal</button>
+      </form>
+
+      <!-- RESULT -->
+      <div id="resultWrap">
+        <div class="result-card">
+          <div class="result-empty" id="resultEmpty">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            Preencha as especificações ao lado e clique em <b>“Indicar plano ideal”</b> para ver a recomendação, o preço estimado e o argumento de venda.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== COMPARATIVO ===================== -->
+  <section class="panel" id="panel-cmp">
+
+    <p class="section-sub" style="margin-top:0">Três planos para diferentes estágios de maturidade, governança e automação. Valores de referência — agosto/2026.</p>
+
+    <div class="table-wrap">
+      <table class="cmp">
+        <caption>Resumo de volumetria e cobrança</caption>
+        <thead>
+          <tr>
+            <th style="width:26%">Recurso / métrica</th>
+            <th class="col-individual">
+              <div class="planhead"><span class="plan-chip individual">Individual</span><span class="price tabular">R$99 / mês</span></div>
+            </th>
+            <th>
+              <div class="planhead"><span class="plan-chip time">Time</span><span class="price tabular">R$249 / mês</span></div>
+            </th>
+            <th>
+              <div class="planhead"><span class="plan-chip enterprise">Enterprise</span><span class="price">sob negociação</span></div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th>Usuários inclusos</th><td>1 usuário fixo</td><td>3 usuários</td><td>Personalizado</td></tr>
+          <tr><th>Usuário adicional</th><td class="no">Não existe</td><td>4–10: R$79 cada · 11–25: R$55 cada · 26+: R$35 cada</td><td>Personalizado</td></tr>
+          <tr><th>Empresas inclusas</th><td>1 empresa fixa</td><td>1 empresa</td><td>Personalizado</td></tr>
+          <tr><th>Empresa adicional</th><td class="no">Não existe</td><td>R$149 por empresa do grupo econômico</td><td>Personalizado</td></tr>
+          <tr><th>Conversas com IA / mês</th><td>500 conversas (≈10 milhões de tokens)</td><td>1.500 conversas (≈30 milhões de tokens)</td><td>Personalizada — ponto de partida de 50 milhões de tokens</td></tr>
+          <tr><th>Créditos de Execução / mês</th><td>1 milhão de tokens</td><td>3 milhões de tokens</td><td>10 milhões de tokens, ponto de partida ajustável</td></tr>
+          <tr><th>Modelos de Waipe Flow</th><td>1 modelo pronto</td><td>Até 3 modelos prontos</td><td>Ilimitado, com construção personalizada</td></tr>
+          <tr><th>Execuções Waipe Flow / mês</th><td>100 execuções</td><td>500 execuções</td><td>2.000 execuções</td></tr>
+          <tr><th>Excedente de execuções</th><td colspan="3">Bloco adicional de 1.000 execuções por R$49 — igual nos três planos</td></tr>
+          <tr><th>Datalab — relatórios dedicados</th><td>5 relatórios</td><td>Ilimitado</td><td>Ilimitado</td></tr>
+          <tr><th>Implantação assistida</th><td>Autoativação pelo cliente</td><td>Autoativação pelo cliente</td><td>Cobrada à parte, conforme guia de implantação Enterprise</td></tr>
+          <tr><th>Objetivo</th><td>Entrada simples, sem expansão de usuário ou empresa</td><td>Penetração e adoção em massa, com governança e expansão controlada</td><td>Automação personalizada, integração com sistemas externos e operação recorrente</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <details class="accordion">
+      <summary>1. Núcleo da plataforma <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Funcionalidade</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Acesso ao portal Waipe</th><td class="yes">Incluso</td><td class="yes">Incluso</td><td class="yes">Incluso</td></tr>
+              <tr><th>Assistente generalista com IA</th><td class="yes">Incluso</td><td class="yes">Incluso</td><td class="yes">Incluso</td></tr>
+              <tr><th>Modelos de IA disponíveis</th><td>Ilimitados, dentro da capacidade técnica de cada modelo</td><td>Mesma regra</td><td>Ilimitados, sem personalização de modelo</td></tr>
+              <tr><th>Histórico de conversas</th><td>Ilimitado</td><td>Ilimitado</td><td>Ilimitado</td></tr>
+              <tr><th>Conectores de dados nativos</th><td class="yes">Ilimitados</td><td class="yes">Ilimitados</td><td class="yes">Ilimitados</td></tr>
+              <tr><th>Atualização automática dos dados</th><td>Conforme frequência do conector</td><td>Conforme frequência do conector</td><td>Conforme frequência do conector</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="acc-note">Cada modelo de IA possui capacidade técnica definida pela Waipe conforme consumo, tipo de uso e modelo utilizado.</p>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>2. Criação e gestão de assistentes <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Funcionalidade</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Criação de assistentes personalizados</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Personalização de comportamento</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Compartilhamento interno de assistentes</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Governança para distribuição de assistentes</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Políticas de acesso por usuário</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Entrega de documentos pelos assistentes</th><td>Com consumo de Créditos de Execução</td><td>Com consumo de Créditos de Execução</td><td>Com consumo de Créditos de Execução</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="acc-note">Os assistentes podem finalizar uma conversa entregando página web interativa, documento de texto, planilha ou imagem. Consome Créditos de Execução, não o pool de conversas com IA.</p>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>3. Conectividade, empresas e fontes de dados <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Funcionalidade</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Conectores nativos</th><td class="yes">Ilimitados</td><td class="yes">Ilimitados</td><td class="yes">Ilimitados</td></tr>
+              <tr><th>Empresas inclusas</th><td>1 fixa</td><td>1 inclusa</td><td>Personalizado</td></tr>
+              <tr><th>Empresa adicional no grupo econômico</th><td class="no">Não existe</td><td class="yes">R$149 por empresa</td><td>Personalizado</td></tr>
+              <tr><th>Governança de conectores</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Integração com sistemas externos via Waipe Flow</th><td class="no">Não</td><td class="no">Não</td><td class="yes">Sim</td></tr>
+              <tr><th>Construção de automação personalizada</th><td class="no">Não</td><td class="no">Não</td><td>Conforme escopo de implantação assistida</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="acc-note">Adicionar empresa do grupo econômico é extensão da mesma assinatura no Time, não uma assinatura nova. No Individual, pedir uma segunda empresa é sinal de migração para o Time.</p>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>4. Waipe Flow e automações <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Funcionalidade</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Modelos disponíveis</th><td>1</td><td>Até 3</td><td>Ilimitado</td></tr>
+              <tr><th>Execuções / mês</th><td>100</td><td>500</td><td>2.000</td></tr>
+              <tr><th>Excedente de execuções</th><td colspan="3">Bloco adicional de 1.000 execuções por R$49</td></tr>
+              <tr><th>Alcance dos modelos</th><td>Apenas dentro do ecossistema Waipe</td><td>Mesma regra</td><td>Inclui automações que integram sistemas externos do cliente</td></tr>
+              <tr><th>O que o cliente pode fazer</th><td>Ativar modelos e ajustar parâmetros (horário, relatório, texto)</td><td>Mesma regra</td><td>Ativar modelos prontos + solicitar construção personalizada</td></tr>
+              <tr><th>Pode alterar a estrutura da automação</th><td class="no">Não — só parâmetros</td><td class="no">Não — só parâmetros</td><td class="yes">Sim, por projeto de implantação assistida</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="acc-note"><b>Limite importante:</b> o Waipe Flow não substitui a conversa com o assistente — é disparado por evento/horário, executa do início ao fim e termina, sem esperar resposta humana. Cada disparo (agenda, evento, webhook, ação manual ou integração) consome uma execução, mesmo sem uso de IA; fluxos com nós de IA também consomem Créditos de Execução.</p>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>5. Conversas com IA e Créditos de Execução <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Métrica</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Conversas com IA</th><td>500 / mês (≈10M tokens)</td><td>1.500 / mês (≈30M tokens)</td><td>Personalizada — ponto de partida 50M tokens</td></tr>
+              <tr><th>Créditos de Execução</th><td>1M tokens / mês</td><td>3M tokens / mês</td><td>10M tokens / mês, ajustável</td></tr>
+              <tr><th>Tolerância de uso</th><td colspan="3">20% acima da franquia, sem cobrança</td></tr>
+              <tr><th>Excedente</th><td colspan="3">R$19,90 por milhão de tokens adicionais</td></tr>
+              <tr><th>Ajuste automático</th><td colspan="3">Após 2 meses consecutivos acima da tolerância, o plano é ajustado ou um pacote recorrente é adicionado</td></tr>
+              <tr><th>Compra de capacidade extra</th><td class="no">Não disponível</td><td class="yes">Disponível, sem mudar de plano</td><td class="yes">Disponível</td></tr>
+              <tr><th>Governança por usuário</th><td>Não se aplica</td><td>Perfis Padrão e Avançado para alocar capacidade</td><td>Mesma estrutura, com total maior</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="acc-note">Conversas com IA e Créditos de Execução são pools separados — cada um com sua própria tolerância de 20% e excedente a R$19,90/milhão de tokens.</p>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>6. Análise e relatórios <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Funcionalidade</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Relatórios gerais da corporação</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Relatórios padrão do Datalab</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Criação de relatórios dedicados</th><td>5 relatórios</td><td>Ilimitado</td><td>Ilimitado</td></tr>
+              <tr><th>Compartilhamento de relatórios</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Governança de dados e relatórios</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Relatórios por usuário</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Dashboards e visão analítica</th><td>Básico</td><td>Avançado</td><td>Avançado / personalizado</td></tr>
+              <tr><th>Exportação</th><td colspan="3">PDF, Excel ou Sheets</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>7. Governança, usuários e expansão <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Funcionalidade</th><th>Individual</th><th>Time</th><th>Enterprise</th></tr></thead>
+            <tbody>
+              <tr><th>Acessos inclusos</th><td>1 usuário fixo</td><td>3 usuários</td><td>Personalizado</td></tr>
+              <tr><th>Usuário adicional</th><td class="no">Não existe</td><td>4–10: R$79 · 11–25: R$55 · 26+: R$35</td><td>Personalizado</td></tr>
+              <tr><th>Empresas inclusas</th><td>1 fixa</td><td>1 inclusa</td><td>Personalizado</td></tr>
+              <tr><th>Empresa adicional</th><td class="no">Não existe</td><td>R$149 por empresa</td><td>Personalizado</td></tr>
+              <tr><th>Controle de acesso e permissões</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Perfis Padrão/Avançado (Créditos de Execução)</th><td>Não se aplica</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Governança de dados e conectores</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Distribuição de assistentes</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Registro de uso e auditoria</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+              <tr><th>Múltiplas empresas no grupo econômico</th><td class="no">Não</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </details>
+
+    <details class="accordion">
+      <summary>8. Enterprise: tecnologia, implantação e escopo <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></summary>
+      <div class="acc-body">
+        <div class="table-wrap" style="border:none; border-radius:0; margin-bottom:0;">
+          <table class="cmp">
+            <thead><tr><th>Item</th><th colspan="3">Regra</th></tr></thead>
+            <tbody>
+              <tr><th>Mensalidade Enterprise</th><td colspan="3">Sob negociação, com piso interno de R$990</td></tr>
+              <tr><th>O que a mensalidade cobre</th><td colspan="3">Acesso, suporte, operação contínua da tecnologia, conectores nativos, Datalab, conversas com IA, Créditos de Execução e uso do Waipe Flow conforme limites contratados</td></tr>
+              <tr><th>Quando há implantação assistida</th><td colspan="3">Quando o cliente precisa de automações personalizadas, integração com sistemas externos, alteração estrutural de fluxos ou desenho assistido de processos no Waipe Flow</td></tr>
+              <tr><th>Setup, pacotes e adicionais</th><td colspan="3">Seguem o guia próprio — <i>Como Funciona a Precificação de Implantação Enterprise</i> — desacoplado desta página</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="acc-note">O Enterprise <b>não</b> inclui conector personalizado fora do Waipe Flow, infraestrutura dedicada, compliance contratual com penalidade de SLA, nem modelo de IA personalizado.</p>
+      </div>
+    </details>
+
+    <h2 class="section-title">Limites importantes para vendas</h2>
+    <div class="limits-grid">
+      <div class="limit-card">
+        <h4>Individual não tem adicionais</h4>
+        <p>1 usuário e 1 empresa, fechado. A partir do segundo usuário ou segunda empresa, é sinal de migração para o Time.</p>
+      </div>
+      <div class="limit-card">
+        <h4>Enterprise não é plano de volume</h4>
+        <p>Tamanho de time, número de empresas ou consumo escalam dentro do Time. Enterprise só quando há necessidade real de sistema externo ou automação que os 3 modelos do Time não cobrem.</p>
+      </div>
+      <div class="limit-card">
+        <h4>Implantação é assunto separado</h4>
+        <p>Esta página não define preço/pacote de implantação Enterprise — consulte o guia próprio quando houver setup, integração externa ou ampliação de escopo.</p>
+      </div>
+      <div class="limit-card">
+        <h4>Enterprise não inclui tudo</h4>
+        <p>Sem conector fora do Waipe Flow, sem infraestrutura dedicada, sem SLA com penalidade contratual, sem modelo de IA personalizado.</p>
+      </div>
+      <div class="limit-card">
+        <h4>IA não decide ações críticas</h4>
+        <p>Aprovar venda ou liberar crédito continua sendo regra determinística configurada pelo cliente no sistema de gestão.</p>
+      </div>
+      <div class="limit-card">
+        <h4>Precificação por resultado</h4>
+        <p>Não existe como mecanismo padrão. Só como cláusula comercial negociada caso a caso, exclusivamente no Enterprise.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== VENDAS & FAQ ===================== -->
+  <section class="panel" id="panel-vendas">
+
+    <h2 class="section-title" style="margin-top:0">Abordagem diagnóstica</h2>
+    <p class="section-sub">As mesmas perguntas usadas na aba Diagnóstico, para consulta rápida durante a call.</p>
+    <div class="limits-grid">
+      <div class="limit-card"><h4>1 — Quantas pessoas vão usar?</h4><p>1 pessoa → Individual. 2 ou mais → Time.</p></div>
+      <div class="limit-card"><h4>2 — Quantas empresas do grupo consultam dados?</h4><p>1 empresa → Individual atende. 2 ou mais → Time.</p></div>
+      <div class="limit-card"><h4>3 — Precisam controlar quem acessa o quê?</h4><p>Não → Individual. Sim, com permissões e níveis de acesso → Time ou Enterprise.</p></div>
+      <div class="limit-card"><h4>4 — Precisam auditar uso ou relatório por pessoa?</h4><p>Não → Individual. Logs, uso individual ou compliance → Time ou Enterprise.</p></div>
+      <div class="limit-card"><h4>5 — Automação pronta ou personalizada?</h4><p>Ativar modelos prontos → Individual ou Time. Mudar estrutura / conectar sistemas externos → Enterprise.</p></div>
+      <div class="limit-card"><h4>6 — Enterprise por volume, usuários ou empresas?</h4><p>Sim → redirecionar para o Time. Precisa integrar sistemas externos ou automação personalizada → Enterprise.</p></div>
+    </div>
+
+    <h2 class="section-title">Pitch de fechamento</h2>
+    <div class="pitch-grid">
+      <div class="pitch-card">
+        <span class="plan-chip individual">Individual</span>
+        <p>"Pelo que entendi, vocês precisam de uma entrada simples: 1 usuário, 1 empresa e uso direto da IA. O Waipe Individual por R$99/mês resolve isso com 500 conversas, 1 milhão de Créditos de Execução, conectores nativos, Datalab e 1 modelo de automação pronto."</p>
+      </div>
+      <div class="pitch-card">
+        <span class="plan-chip time">Time</span>
+        <p>"Vocês querem levar o Waipe para mais pessoas ou mais empresas do grupo. O Waipe Time por R$249/mês já inclui 3 usuários, permite adicionar usuários com preço decrescente, adicionar empresas por R$149, além de trazer governança, auditoria, relatórios compartilhados e até 3 modelos de Waipe Flow."</p>
+      </div>
+      <div class="pitch-card">
+        <span class="plan-chip enterprise">Enterprise</span>
+        <p>"Esse caso exige mais do que ativar modelos prontos. Quando o processo precisa tocar sistemas externos ou exige automação personalizada, o caminho é o Waipe Enterprise: mensalidade recorrente para operação da tecnologia e, quando aplicável, um projeto de implantação assistida tratado conforme o guia próprio."</p>
+      </div>
+    </div>
+
+    <h2 class="section-title">Objeções comuns</h2>
+    <div>
+      <details class="obj-item">
+        <summary>"Mas somos só 2 pessoas..."</summary>
+        <div class="a">Exatamente por isso o caminho é o Time. O Individual foi desenhado para 1 usuário fixo. A partir do segundo usuário, entra governança, controle de acesso e segurança operacional.</div>
+      </details>
+      <details class="obj-item">
+        <summary>"Quero só adicionar mais uma empresa no Individual."</summary>
+        <div class="a">No Individual não existe empresa adicional. Se mais de uma empresa do grupo precisa entrar na análise, o caminho correto é o Time, com empresa adicional por R$149.</div>
+      </details>
+      <details class="obj-item">
+        <summary>"Não quero pagar Enterprise, só preciso de mais usuários."</summary>
+        <div class="a">Então provavelmente não precisa de Enterprise. Usuários adicionais, empresas adicionais e aumento de consumo escalam dentro do Time. Enterprise é para automação personalizada com sistemas externos.</div>
+      </details>
+      <details class="obj-item">
+        <summary>"O Enterprise inclui infraestrutura dedicada ou modelo personalizado?"</summary>
+        <div class="a">Não. O Enterprise não deve ser vendido como infraestrutura dedicada, SLA com penalidade, conector fora do Waipe Flow ou modelo de IA personalizado. O diferencial é a construção assistida de automações pelo Waipe Flow.</div>
+      </details>
+      <details class="obj-item">
+        <summary>"A IA pode aprovar venda ou liberar crédito automaticamente?"</summary>
+        <div class="a">A IA pode apoiar a análise, resumir dados e redigir recomendações. Mas decisões críticas devem permanecer baseadas em regras determinísticas configuradas pelo cliente no sistema de gestão.</div>
+      </details>
+    </div>
+
+    <h2 class="section-title">FAQ de vendas</h2>
+    <div>
+      <details class="faq-item">
+        <summary>Qual a diferença principal entre Individual e Time?</summary>
+        <div class="a">Individual é uma entrada simples: 1 usuário, 1 empresa, sem adicionais e sem governança. Time é para adoção por equipe: 3 usuários inclusos, usuários adicionais com preço decrescente, empresa adicional, governança, auditoria e compartilhamento.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quantos usuários vêm inclusos em cada plano?</summary>
+        <div class="a">Individual: 1 usuário fixo. Time: 3 usuários. Enterprise: personalizado.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quanto custa adicionar mais usuários?</summary>
+        <div class="a">Individual: não existe usuário adicional. Time: 4 a 10 usuários, R$79 cada; 11 a 25, R$55 cada; a partir de 26, R$35 cada. Enterprise: personalizado.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quantas empresas vêm inclusas?</summary>
+        <div class="a">Individual: 1 empresa fixa. Time: 1 empresa. Enterprise: personalizado.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quanto custa adicionar empresa no grupo econômico?</summary>
+        <div class="a">Individual: não existe empresa adicional. Time: R$149 por empresa adicional. Enterprise: personalizado.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quantas conversas com IA estão incluídas?</summary>
+        <div class="a">Individual: 500 conversas/mês (≈10 milhões de tokens). Time: 1.500 conversas/mês (≈30 milhões de tokens). Enterprise: personalizado, com ponto de partida de 50 milhões de tokens.</div>
+      </details>
+      <details class="faq-item">
+        <summary>O que são Créditos de Execução?</summary>
+        <div class="a">Um pool separado das conversas com IA. Cobrem automações do Waipe Flow e entrega de documentos pelos assistentes (página web, documento de texto, planilha ou imagem).</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quais são as franquias de Créditos de Execução?</summary>
+        <div class="a">Individual: 1 milhão de tokens/mês. Time: 3 milhões de tokens/mês. Enterprise: 10 milhões de tokens/mês, ponto de partida ajustável.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Como funciona excedente?</summary>
+        <div class="a">Todo plano tem 20% de tolerância acima da franquia. Acima disso, R$19,90 por milhão de tokens adicionais. Após dois meses consecutivos acima da tolerância, o plano é ajustado ou um pacote recorrente é adicionado.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Posso comprar capacidade extra de Créditos de Execução?</summary>
+        <div class="a">Individual: não. Time: sim, sem necessidade de mudar de plano. Enterprise: sim.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Como funciona o Waipe Flow em cada plano?</summary>
+        <div class="a">Individual: 1 modelo pronto, apenas ativação e ajuste de parâmetros. Time: até 3 modelos prontos, mesma regra. Enterprise: modelos ilimitados e construção personalizada conforme escopo. Franquias mensais de execuções: 100 (Individual), 500 (Time), 2.000 (Enterprise) — excedente em blocos de 1.000 execuções por R$49.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Quando devo considerar o Enterprise?</summary>
+        <div class="a">Somente quando existe necessidade real de conectar o Waipe a um sistema externo do cliente, construir automações personalizadas, ou quando os até três modelos do Time não cobrem o processo desejado.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Enterprise inclui implantação?</summary>
+        <div class="a">Não automaticamente. A mensalidade cobre acesso, suporte e operação contínua. Projetos de automação personalizada, integração externa ou setup assistido são tratados à parte, conforme o guia próprio de implantação Enterprise.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Posso vender precificação por resultado?</summary>
+        <div class="a">Não como regra padrão. Só como cláusula comercial negociada caso a caso, exclusivamente no plano Enterprise.</div>
+      </details>
+      <details class="faq-item">
+        <summary>A IA toma decisões críticas de negócio?</summary>
+        <div class="a">Não. A IA apoia análises, redações e resumos — decisões críticas de negócio permanecem em regras determinísticas configuradas pelo cliente, usando dados reais do sistema de gestão.</div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ===================== GERAR PROPOSTA ===================== -->
+  <section class="panel" id="panel-prop">
+
+    <div class="prop-warn">
+      <div>
+        <b>Sobre esta aba:</b> ainda não existe uma conexão que faça uma IA escrever a proposta inteira dentro desta página. O que este gerador faz agora: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação (no visual que vocês já usam), e monta um <b>prompt pronto</b> para colar no Gem do Waipe que os CSMs já usam no Gemini — sem precisar redigitar o contexto do cliente.
+      </div>
+    </div>
+
+    <div class="prop-grid">
+      <!-- FORM -->
+      <div class="card">
+        <h2>Contexto do cliente para a proposta</h2>
+        <div class="sub">Estas informações + o plano calculado na aba Diagnóstico alimentam o modelo de proposta e o prompt do Gemini.</div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="p-cliente">Nome do cliente</label>
+            <input type="text" id="p-cliente" class="num-input" placeholder="ex: Móveis Alternativa">
+          </div>
+          <div class="field">
+            <label for="p-segmento">Segmento / ramo</label>
+            <input type="text" id="p-segmento" class="num-input" placeholder="ex: Indústria moveleira">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="p-contato">Contato (A/C)</label>
+            <input type="text" id="p-contato" class="num-input" placeholder="ex: Mateus">
+          </div>
+          <div class="field">
+            <label for="p-csm">CSM / gerente de contas</label>
+            <input type="text" id="p-csm" class="num-input" placeholder="Seu nome">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="p-erp">ERP utilizado pelo cliente</label>
+          <select id="p-erp" class="sel">
+            <option value="Gestor">Gestor</option>
+            <option value="Bime">Bime</option>
+            <option value="Unique">Unique</option>
+            <option value="Simplaz">Simplaz</option>
+            <option value="Outro">Outro / não informado</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="p-dores">Dores e contexto do cliente hoje</label>
+          <textarea id="p-dores" class="ta" placeholder="ex: inadimplência alta, vendedores sem acompanhamento, ruptura de estoque, retrabalho na digitação de pedidos, falta de visibilidade do caixa..."></textarea>
+          <div class="hint">Ao digitar, o simulador sugere automaticamente agentes relacionados às dores descritas — revise e ajuste a seleção abaixo.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px;">Agentes de IA a incluir na proposta</label>
+        <div class="hint" style="margin-bottom:12px;">Foco das consultorias: funcionários digitais que automatizam tarefas específicas. Marque os que fazem sentido para este cliente.</div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+          <button type="button" class="btn-add-small" id="btnNewAgent" style="width:auto; padding:8px 16px;">+ Novo agente</button>
+          <span class="hint" id="dbSyncHint" style="margin:0;"></span>
+        </div>
+        <div id="agentCatalog"></div>
+      </div>
+
+      <!-- SUMMARY / ACTIONS -->
+      <div class="prop-summary">
+        <h2>Resumo da proposta</h2>
+        <div class="prop-stat-row">
+          <div class="prop-stat">
+            <div class="k">Plano recomendado</div>
+            <div class="v" id="propPlanStat">—</div>
+          </div>
+          <div class="prop-stat">
+            <div class="k">Investimento</div>
+            <div class="v tabular" id="propPriceStat">—</div>
+          </div>
+          <div class="prop-stat">
+            <div class="k">Agentes selecionados</div>
+            <div class="v" id="propAgentsStat">0</div>
+          </div>
+        </div>
+        <div id="propPlanWarn"></div>
+
+        <div class="prop-actions">
+          <button type="button" class="btn-secondary" id="btnPreview">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            Pré-visualizar proposta
+          </button>
+          <button type="button" class="btn-primary" id="btnBaixar" style="margin-top:0">Baixar modelo de proposta (HTML)</button>
+          <button type="button" class="btn-secondary" id="btnPrompt">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Copiar prompt para o Gemini (Gem do Waipe)
+          </button>
+        </div>
+
+        <div class="prop-note">
+          O modelo sai com plano, preço e fichas de agente já preenchidos, no layout que vocês usam hoje — revise números, ajuste o tom e confirme os agentes com o cliente antes de enviar. Os cargos dos agentes são denominações comerciais; o desenho final de cada um é definido na implantação.
+        </div>
+      </div>
+    </div>
+
+    <!-- SIMULADOR DE PREÇO -->
+    <div class="card" id="priceSimCard" style="margin-top:22px;">
+      <h2>Simulador de Preço</h2>
+      <div class="sub">Ajuste desconto e valores adicionais para este cliente — tudo aqui sai automaticamente na tabela comercial da proposta.</div>
+
+      <div id="priceSimBase"></div>
+
+      <div class="field" id="entBaseField" style="display:none; margin-top:14px;">
+        <label for="p-ent-base">Valor mensal base (Enterprise, sob negociação)</label>
+        <input type="number" id="p-ent-base" class="num-input tabular" min="990" step="10" value="990">
+        <div class="hint">Piso interno de R$990/mês — ajuste conforme a negociação com o cliente.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>Desconto</label>
+        <div class="discount-row">
+          <select id="p-desc-tipo" class="sel">
+            <option value="percent">%</option>
+            <option value="valor">R$</option>
+          </select>
+          <input type="number" id="p-desc-valor" class="num-input tabular" min="0" step="1" value="0">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Valores adicionais (setup, módulos extras, usuários avulsos, etc.)</label>
+        <div id="addlItemsWrap"></div>
+        <button type="button" class="btn-add-small" id="btnAddAddl">+ Adicionar valor adicional</button>
+      </div>
+
+      <div class="field" style="margin-bottom:0">
+        <label for="p-obs">Observações comerciais / condição especial</label>
+        <textarea id="p-obs" class="ta" style="min-height:56px" placeholder="ex: setup isento na adesão, condição válida até XX/XX, fidelidade de 12 meses..."></textarea>
+      </div>
+
+      <div class="divider"></div>
+      <div id="priceSimTotal"></div>
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <span>Uso interno — time de Customer Success · Londrisoft</span>
+    <span>Fonte: Planos e Precificação — Waipe 2026 (Notion)</span>
+  </footer>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <strong>Pré-visualização da proposta</strong>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Fechar">✕</button>
+    </div>
+    <iframe id="previewFrame" title="Pré-visualização da proposta"></iframe>
+  </div>
+</div>
+
+<div class="modal-overlay" id="newAgentModalOverlay">
+  <div class="modal-box" style="height:auto; max-height:88vh;">
+    <div class="modal-head">
+      <strong>Novo agente personalizado</strong>
+      <button type="button" class="modal-close" id="newAgentModalClose" aria-label="Fechar">✕</button>
+    </div>
+    <div style="padding:22px; overflow-y:auto; flex:1; min-height:0;">
+      <div class="field">
+        <label for="na-nome">Nome do agente *</label>
+        <input type="text" id="na-nome" class="num-input" placeholder="ex: Vigia de Frete">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="na-area">Área</label>
+          <select id="na-area" class="sel">
+            <option value="Diretoria">Diretoria</option>
+            <option value="Comercial">Comercial</option>
+            <option value="Financeiro">Financeiro</option>
+            <option value="Estoque">Estoque</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="na-turno">Turno / gatilho</label>
+          <input type="text" id="na-turno" class="num-input" placeholder="ex: Diário às 08:00">
+        </div>
+      </div>
+      <div class="field">
+        <label for="na-oque">O que é (resumo de uma linha)</label>
+        <input type="text" id="na-oque" class="num-input" placeholder="ex: Um vigia diário do custo de frete por rota.">
+      </div>
+      <div class="field">
+        <label for="na-faz">O que ele faz</label>
+        <textarea id="na-faz" class="ta" placeholder="Como o agente analisa os dados, o que ele compara..."></textarea>
+      </div>
+      <div class="field">
+        <label for="na-entrega">O que ele entrega</label>
+        <textarea id="na-entrega" class="ta" placeholder="Para quem e em que formato o resultado chega."></textarea>
+      </div>
+      <div class="field">
+        <label for="na-substitui">O que ele substitui</label>
+        <textarea id="na-substitui" class="ta" placeholder="A tarefa manual que deixa de existir."></textarea>
+      </div>
+      <div class="field">
+        <label for="na-msg">Mensagem de exemplo (WhatsApp)</label>
+        <textarea id="na-msg" class="ta" placeholder="ex: Frete da rota Sul 12% acima do padrão hoje. Ver detalhe?"></textarea>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label for="na-keywords">Palavras-chave para sugestão automática (separadas por vírgula)</label>
+        <input type="text" id="na-keywords" class="num-input" placeholder="ex: frete, transportadora, custo de entrega">
+        <div class="hint">Se o texto de "Dores e contexto do cliente" citar uma dessas palavras, este agente é sugerido automaticamente.</div>
+      </div>
+    </div>
+    <div style="padding:14px 22px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
+      <button type="button" class="btn-secondary" id="btnCancelNewAgent" style="width:auto;">Cancelar</button>
+      <button type="button" class="btn-primary" id="btnSaveNewAgent" style="width:auto; margin-top:0;">Salvar agente</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-copy" id="toastCopy">Copiado!</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Shared state (feeds the "Gerar Proposta" tab) ----------
+  var lastDiagnostic = null; // { input, rec, price }
+
+  // ---------- Tabs ----------
+  var tabBtns = document.querySelectorAll(".tab-btn");
+  var panels = { diag: document.getElementById("panel-diag"), cmp: document.getElementById("panel-cmp"), vendas: document.getElementById("panel-vendas"), prop: document.getElementById("panel-prop") };
+  tabBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      tabBtns.forEach(function(b){ b.classList.remove("active"); b.setAttribute("aria-selected","false"); });
+      btn.classList.add("active"); btn.setAttribute("aria-selected","true");
+      Object.keys(panels).forEach(function(k){ panels[k].classList.remove("active"); });
+      panels[btn.getAttribute("data-tab")].classList.add("active");
+    });
+  });
+
+  // ---------- Segmented (yes/no) controls ----------
+  var segState = { governanca:"nao", auditoria:"nao", enterprisePorVolume:"nao" };
+  document.querySelectorAll(".seg").forEach(function(seg){
+    var group = seg.getAttribute("data-group");
+    seg.querySelectorAll("button").forEach(function(b){
+      b.addEventListener("click", function(){
+        seg.querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
+        b.classList.add("on");
+        segState[group] = b.getAttribute("data-val");
+      });
+    });
+  });
+
+  // ---------- Radio cards (automação) ----------
+  document.querySelectorAll('.radio-opt').forEach(function(opt){
+    opt.addEventListener("click", function(){
+      document.querySelectorAll('.radio-opt').forEach(function(o){ o.classList.remove("on"); });
+      opt.classList.add("on");
+    });
+  });
+
+  // ---------- Pricing helpers ----------
+  function fmtBRL(n){
+    return "R$" + n.toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function tieredUserCost(u){
+    var cost = 0;
+    for (var n = 4; n <= u; n++){
+      if (n <= 10) cost += 79;
+      else if (n <= 25) cost += 55;
+      else cost += 35;
+    }
+    return cost;
+  }
+
+  function svgCheck(color){
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="'+color+'" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  }
+  function svgFlag(color){
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>';
+  }
+
+  // ---------- Recommendation engine ----------
+  function recommend(input){
+    var reasons = [];
+    var plan;
+
+    if (input.automacao === "personalizada"){
+      plan = "Enterprise";
+      reasons.push("Precisa alterar a estrutura da automação ou integrar o Waipe Flow a sistemas externos do cliente — isso só é possível no Enterprise.");
+    } else {
+      var soIndividual = input.usuarios <= 1 && input.empresas <= 1 && input.governanca === "nao" && input.auditoria === "nao";
+      if (soIndividual){
+        plan = "Individual";
+        reasons.push("Apenas 1 usuário e 1 empresa, sem necessidade de controle de acesso ou auditoria por pessoa.");
+      } else {
+        plan = "Time";
+        if (input.usuarios > 1) reasons.push("Mais de um usuário (" + input.usuarios + ") — o Individual não permite usuário adicional, então isso já é sinal de migração para o Time.");
+        if (input.empresas > 1) reasons.push("Mais de uma empresa do grupo econômico (" + input.empresas + ") — o Individual não permite empresa adicional.");
+        if (input.governanca === "sim") reasons.push("Precisa controlar quem acessa o quê — políticas de acesso só existem a partir do Time.");
+        if (input.auditoria === "sim") reasons.push("Precisa de auditoria de uso ou relatório por pessoa — recurso exclusivo do Time/Enterprise.");
+        if (reasons.length === 0) reasons.push("O perfil já ultrapassa o escopo fechado do Individual (1 usuário e 1 empresa, sem adicionais).");
+      }
+    }
+    return { plan: plan, reasons: reasons };
+  }
+
+  function priceFor(plan, input){
+    if (plan === "Individual"){
+      return { total: 99, breakdown: [{label:"Valor base (1 usuário, 1 empresa)", value:99}] };
+    }
+    if (plan === "Time"){
+      var extraUsers = tieredUserCost(Math.max(input.usuarios, 0));
+      var extraCompanies = Math.max(0, input.empresas - 1) * 149;
+      var breakdown = [{label:"Valor base (3 usuários, 1 empresa)", value:249}];
+      if (extraUsers > 0) breakdown.push({label:"Usuários adicionais (faixas decrescentes)", value:extraUsers});
+      if (extraCompanies > 0) breakdown.push({label: (input.empresas-1) + " empresa(s) adicional(is) × R$149", value:extraCompanies});
+      return { total: 249 + extraUsers + extraCompanies, breakdown: breakdown };
+    }
+    return { total: null, breakdown: [] };
+  }
+
+  function volumeNotes(plan, input){
+    var notes = [];
+    var quotas = {
+      Individual: { conversas: 500, execucoes: 100 },
+      Time: { conversas: 1500, execucoes: 500 },
+      Enterprise: { conversas: null, execucoes: 2000 }
+    };
+    var q = quotas[plan];
+    if (input.conversas != null && !isNaN(input.conversas) && input.conversas > 0 && q.conversas != null){
+      var limiteConversas = q.conversas * 1.2;
+      if (input.conversas > limiteConversas){
+        notes.push({type:"warn", text: input.conversas + " conversas/mês estimadas ultrapassam a franquia + tolerância de 20% (" + Math.round(limiteConversas) + "). Excedente a R$19,90/milhão de tokens; após 2 meses seguidos acima, ajustar plano ou pacote recorrente."});
+      } else {
+        notes.push({type:"ok", text: input.conversas + " conversas/mês estimadas cabem na franquia de " + q.conversas + " conversas/mês do " + plan + " (com folga de 20% de tolerância)."});
+      }
+    }
+    if (input.execucoes != null && !isNaN(input.execucoes) && input.execucoes > 0){
+      if (input.execucoes > q.execucoes){
+        var excedente = Math.ceil((input.execucoes - q.execucoes) / 1000);
+        notes.push({type:"warn", text: input.execucoes + " execuções/mês estimadas ultrapassam a franquia de " + q.execucoes + " do " + plan + ". Provável necessidade de " + excedente + " bloco(s) adicional(is) de 1.000 execuções (R$49 cada)."});
+      } else {
+        notes.push({type:"ok", text: input.execucoes + " execuções/mês estimadas cabem na franquia de " + q.execucoes + " execuções/mês do " + plan + "."});
+      }
+    }
+    return notes;
+  }
+
+  var pitches = {
+    Individual: "Pelo que entendi, vocês precisam de uma entrada simples: 1 usuário, 1 empresa e uso direto da IA. O Waipe Individual por R$99/mês resolve isso com 500 conversas, 1 milhão de Créditos de Execução, conectores nativos, Datalab e 1 modelo de automação pronto.",
+    Time: "Vocês querem levar o Waipe para mais pessoas ou mais empresas do grupo. O Waipe Time por R$249/mês já inclui 3 usuários, permite adicionar usuários com preço decrescente, adicionar empresas por R$149, além de trazer governança, auditoria, relatórios compartilhados e até 3 modelos de Waipe Flow.",
+    Enterprise: "Esse caso exige mais do que ativar modelos prontos. Quando o processo precisa tocar sistemas externos ou exige uma automação personalizada, o caminho é o Waipe Enterprise: uma mensalidade recorrente para operação da tecnologia e, quando aplicável, um projeto de implantação assistida tratado conforme o guia próprio."
+  };
+
+  var planClass = { Individual: "individual", Time: "time", Enterprise: "enterprise" };
+
+  document.getElementById("btnCalcular").addEventListener("click", function(){
+    var input = {
+      usuarios: parseInt(document.getElementById("f-usuarios").value, 10) || 1,
+      empresas: parseInt(document.getElementById("f-empresas").value, 10) || 1,
+      governanca: segState.governanca,
+      auditoria: segState.auditoria,
+      automacao: document.querySelector('input[name="automacao"]:checked').value,
+      enterprisePorVolume: segState.enterprisePorVolume,
+      conversas: document.getElementById("f-conversas").value === "" ? null : parseFloat(document.getElementById("f-conversas").value),
+      execucoes: document.getElementById("f-execucoes").value === "" ? null : parseFloat(document.getElementById("f-execucoes").value)
+    };
+
+    var rec = recommend(input);
+    var price = priceFor(rec.plan, input);
+    var vNotes = volumeNotes(rec.plan, input);
+    var cls = planClass[rec.plan];
+
+    var html = '<div class="result-head">' +
+      '<div><span class="plan-chip ' + cls + '">' + rec.plan + '</span></div>' +
+      '<div style="text-align:right">' +
+        (price.total != null
+          ? '<div class="result-price tabular">' + fmtBRL(price.total) + ' <small>/ mês</small></div>'
+          : '<div class="result-price" style="font-size:16px">Sob negociação <small style="display:block">piso interno de R$990/mês</small></div>') +
+      '</div></div>' +
+      '<div class="result-body">';
+
+    html += '<ul class="reasons">' + rec.reasons.map(function(r){ return '<li>' + svgCheck("var(--success)") + '<span>' + r + '</span></li>'; }).join("") + '</ul>';
+
+    if (price.breakdown.length){
+      html += '<div class="price-breakdown">' +
+        price.breakdown.map(function(b){ return '<div class="row"><span>' + b.label + '</span><span class="tabular">' + fmtBRL(b.value) + '</span></div>'; }).join("") +
+        '<div class="row total"><span>Total estimado</span><span class="tabular">' + fmtBRL(price.total) + ' / mês</span></div>' +
+        '</div>';
+    }
+
+    if (vNotes.length){
+      html += vNotes.map(function(n){ return '<div class="volume-note ' + n.type + '">' + svgFlag("currentColor") + '<span>' + n.text + '</span></div>'; }).join("");
+    }
+
+    html += '<div class="sub" style="margin:14px 0 4px; text-transform:uppercase; letter-spacing:.04em; font-size:11px; font-weight:700; color:var(--muted)">Pitch de fechamento</div>';
+    html += '<div class="pitch-box">' + pitches[rec.plan] + '</div>';
+
+    if (input.enterprisePorVolume === "sim" && rec.plan !== "Enterprise"){
+      html += '<div class="alert-box">' + svgFlag("var(--warning)") + '<span><b>Atenção:</b> o cliente sinalizou interesse em Enterprise apenas por volume, usuários ou empresas. Isso não justifica Enterprise — reforce que tudo isso escala dentro do Time.</span></div>';
+    }
+    if (input.enterprisePorVolume === "sim" && rec.plan === "Enterprise"){
+      html += '<div class="alert-box">' + svgFlag("var(--warning)") + '<span>Confirme que a necessidade real é integração com sistema externo ou automação personalizada — e não apenas volume, usuários ou empresas, que não justificam Enterprise sozinhos.</span></div>';
+    }
+
+    html += '</div>';
+
+    document.getElementById("resultWrap").innerHTML = '<div class="result-card">' + html + '</div>';
+
+    lastDiagnostic = { input: input, rec: rec, price: price };
+    if (typeof renderPriceSim === "function") renderPriceSim();
+    if (typeof refreshPropSummary === "function") refreshPropSummary();
+  });
+
+  // =====================================================================
+  // ---------- GERAR PROPOSTA ----------
+  // =====================================================================
+
+  var AGENTS = [
+    { id:"bom-dia-empresa", area:"Diretoria", nome:"Bom Dia Empresa", turno:"Todo dia · 08:00", gatilho:"Horário fixo diário",
+      oque:"Um resumo executivo diário que chega antes de qualquer pergunta ser feita.",
+      faz:"Lê no ERP as vendas de ontem, o saldo de caixa, as contas do dia e pendências relevantes, e consolida tudo em um boletim curto.",
+      entrega:"Para a diretoria: um resumo diário no WhatsApp com vendas, caixa e pontos de atenção do dia.",
+      substitui:"A rotina de abrir o sistema toda manhã só para saber \"como está a empresa\".",
+      msg:"Bom dia! ☀️ Vendas de ontem: R$ 24.500 (108% da meta). Caixa atual: R$ 84.200. 2 títulos relevantes vencem hoje.",
+      keywords:["visibilidade","nao sei como esta","relatorio diario","resumo executivo","falta de controle","painel"] },
+    { id:"reporter-manha", area:"Diretoria", nome:"Repórter da Manhã", turno:"Todo dia · 08:00", gatilho:"Horário fixo diário",
+      oque:"O briefing matinal comparado — não só o número de ontem, mas o contexto dele.",
+      faz:"Compara o fechamento de ontem com o mesmo dia da semana anterior e identifica o que fugiu do padrão.",
+      entrega:"Para a gestão: o resumo de ontem com contexto e o alerta do dia, todo dia, inclusive quando está tudo bem.",
+      substitui:"A pergunta constante de \"como fechamos ontem\" sem ninguém preparado para responder.",
+      msg:"Resumo de ontem: R$ 62.400 em vendas (+18% vs. a mesma terça). Caixa positivo. 2 contas vencem hoje.",
+      keywords:["comparar semana","contexto","o que mudou","sem visibilidade do dia"] },
+    { id:"guardiao-meta", area:"Diretoria", nome:"Guardião da Meta do Mês", turno:"Contínuo", gatilho:"Ritmo de vendas do mês",
+      oque:"A projeção contínua da meta — responde todo dia \"nesse ritmo, a gente chega?\".",
+      faz:"Acompanha o ritmo de vendas contra a meta do mês e projeta o resultado final, apontando o desvio quando ele aparece.",
+      entrega:"Para a gestão: o alerta de desvio dentro do mês, com tempo de corrigir a rota.",
+      substitui:"Descobrir que a meta não vai bater só no fechamento do mês.",
+      msg:"No ritmo atual, a meta do mês fecha em 88%. Maior desvio: canal Televendas, 20% abaixo do esperado.",
+      keywords:["meta","nao bate a meta","vendedores sem acompanhamento","ritmo de vendas"] },
+    { id:"placar-canais", area:"Diretoria", nome:"Placar dos Canais", turno:"Semanal", gatilho:"Toda semana",
+      oque:"A visão executiva semanal de todos os canais de venda, consolidada sem planilha.",
+      faz:"Consolida toda semana o desempenho de cada canal (televendas, prospecção, venda externa, etc.) contra a meta declarada.",
+      entrega:"Para a gestão: o placar semanal, canal a canal, meta x realizado.",
+      substitui:"A consolidação manual entre canais que ninguém tem tempo de montar.",
+      msg:"Placar da semana: Televendas 92% da meta · Externa 78% · Prospecção 110%. Canal de atenção: Externa.",
+      keywords:["canais","televendas","prospeccao","varios canais de venda"] },
+    { id:"analista-vendas-diario", area:"Diretoria", nome:"Analista de Vendas Diário", turno:"Todo dia · fim do expediente", gatilho:"Fim do expediente",
+      oque:"O fechamento do dia feito por um analista que nunca falta.",
+      faz:"Consolida as vendas do dia por vendedor, produto e canal, e compara com o ritmo necessário para a meta do mês.",
+      entrega:"Para a gestão: o resumo executivo do dia, com quem está fora do ritmo.",
+      substitui:"De 30 a 60 minutos diários de montagem manual de resumo — ou a ausência dele.",
+      msg:"Fechamento de hoje: R$ 58.900 (96% do ritmo da meta). 2 vendedores abaixo do ritmo — ver o detalhe?",
+      keywords:["fechamento diario","relatorio de vendas manual"] },
+    { id:"coach-representantes", area:"Comercial", nome:"Coach dos Representantes", turno:"Semanal · segunda de manhã", gatilho:"Toda segunda",
+      oque:"Um analista comercial dedicado ao acompanhamento semanal de cada vendedor.",
+      faz:"Lê as vendas da semana e a carteira de cada representante, compara com a meta e a semana anterior, e identifica oportunidades na carteira individual.",
+      entrega:"Para cada vendedor: desempenho e clientes que precisam de ação. Para a gestão: o consolidado da equipe.",
+      substitui:"A extração e cobrança manual de carteira, vendedor por vendedor.",
+      msg:"Bom dia! Fechei o balanço da sua semana: R$ 38.200 vendidos, 82% da meta. 3 oportunidades na sua carteira.",
+      keywords:["vendedores sem acompanhamento","carteira","equipe comercial","representantes","time de vendas"] },
+    { id:"vendedor-ciclo", area:"Comercial", nome:"Vendedor do Ciclo (Recompra)", turno:"Todo dia", gatilho:"Ciclo de recompra do cliente",
+      oque:"Um assistente de recompra que conhece o ritmo de cada cliente.",
+      faz:"Aprende o ciclo de compra de cada cliente e, quando ele passa do próprio ciclo sem comprar, monta uma oferta personalizada com os produtos habituais.",
+      entrega:"Para o vendedor ou gestor: as ofertas do dia, prontas, aguardando aprovação antes de seguir ao cliente.",
+      substitui:"O acompanhamento cliente a cliente do ciclo de recompra, inviável manualmente em bases grandes.",
+      msg:"Cliente X está no dia 19 sem pedido (ciclo: 15 dias). Oferta pronta com os itens habituais. Aprovar?",
+      keywords:["recompra","recorrencia","ticket medio","frequencia de compra","clientes recorrentes"] },
+    { id:"reativacao-clientes", area:"Comercial", nome:"Sentinela de Clientes Inativos & Reativação", turno:"Todo dia", gatilho:"Diário",
+      oque:"O responsável em tempo integral pela carteira parada.",
+      faz:"Identifica diariamente clientes que pararam de comprar, cruza com o histórico de cada um e prioriza quem tem retorno real, com abordagem sugerida.",
+      entrega:"Para o vendedor ou televendas: os clientes do dia que valem contato, com histórico e abordagem sugerida.",
+      substitui:"A extração manual de listas de inativos e o esquecimento que transforma cliente frio em cliente perdido.",
+      msg:"Cliente Y não compra há 45 dias (padrão: a cada 20). Abordagem sugerida já preparada. Revisar?",
+      keywords:["clientes inativos","carteira parada","churn","reativacao","cliente parado"] },
+    { id:"guardiao-margem", area:"Comercial", nome:"Guardião de Margem, Descontos & Crédito", turno:"Por evento de venda", gatilho:"A cada pedido lançado",
+      oque:"Um supervisor digital das políticas comerciais.",
+      faz:"Monitora pedidos lançados em tempo real e dispara alertas quando um desconto estoura a margem mínima ou um cliente com saldo em aberto tenta comprar sem aprovação.",
+      entrega:"Para a gestão: notificação imediata com botão de aprovação ou recusa da exceção.",
+      substitui:"A auditoria manual de descontos e crédito, feita depois que o problema já aconteceu.",
+      msg:"Alerta: desconto de 14% (limite: 8%) no pedido 8.492. Margem caiu para 4,2%. Aprovar exceção?",
+      keywords:["desconto","margem","credito","inadimplencia na venda","alcada"] },
+    { id:"apurador-premiacoes", area:"Comercial", nome:"Apurador de Premiações", turno:"Mensal · fechamento", gatilho:"Fechamento do período",
+      oque:"O departamento de apuração de campanhas comerciais.",
+      faz:"Aplica as regras de uma campanha (por volume, por SKU, por cliente novo) sobre as vendas registradas, venda a venda, no fechamento do período.",
+      entrega:"Para a gestão: o demonstrativo de cada vendedor, pronto para conferência.",
+      substitui:"A disputa de planilha para apurar premiação no fechamento do mês.",
+      msg:"Apuração da campanha fechada: 12 representantes pontuados, demonstrativo pronto para aprovação.",
+      keywords:["premiacao","campanha comercial","comissao"] },
+    { id:"posvenda", area:"Comercial", nome:"Pós-venda & Satisfação", turno:"Por evento · a cada venda", gatilho:"A cada venda registrada",
+      oque:"O agradecimento e a pesquisa de satisfação que nunca são esquecidos.",
+      faz:"É disparado a cada venda registrada, agradece o cliente e mede a satisfação de forma simples pelo WhatsApp.",
+      entrega:"Para o cliente: o agradecimento e a pesquisa. Para a gestão: as respostas consolidadas e o alerta imediato de insatisfação.",
+      substitui:"O pós-venda que só acontece quando alguém lembra — ou seja, quase nunca.",
+      msg:"Pesquisa enviada ao Cliente Z. Resultado: nota 9/10. Nenhuma insatisfação pendente esta semana.",
+      keywords:["pos-venda","satisfacao","nps","experiencia do cliente"] },
+    { id:"analista-variacao", area:"Comercial", nome:"Analista de Vendas por Cor & Variação", turno:"Todo dia", gatilho:"Diário",
+      oque:"Um especialista em interpretar vendas de produtos com muitas variações (cor, tamanho, modelo).",
+      faz:"Lê as vendas diárias e usa IA para interpretar descrições e códigos, consolidando o giro por variação sem exigir cadastro manual complexo.",
+      entrega:"Para compras e gestão: um painel diário do giro por variação, pronto para decisão.",
+      substitui:"As planilhas paralelas de controle de cor/variação.",
+      msg:"Giro de hoje: Preto/Grafite 52% das vendas (estoque em alerta). Azul Marinho 28%. Demais cores 20%.",
+      keywords:["variacao","cor","modelo","planilha paralela","sku","tamanho"] },
+    { id:"vigia-caixa", area:"Financeiro", nome:"Vigia de Caixa (Radar de Caixa)", turno:"Todo dia · manhã", gatilho:"Diário",
+      oque:"Um tesoureiro digital de plantão.",
+      faz:"Cruza contas a pagar e a receber e projeta o saldo dos próximos dias; quando a projeção tende ao negativo, investiga a causa e sugere alternativas.",
+      entrega:"Para o financeiro: aviso antecipado com a causa identificada e sugestão de solução — silêncio quando está tudo bem.",
+      substitui:"O susto de descobrir o aperto de caixa quando ele já chegou.",
+      msg:"Projeção: o caixa aperta na sexta (-R$ 12.400). Causa: concentração de fornecedores. Antecipar recebíveis cobre a diferença.",
+      keywords:["caixa","fluxo de caixa","liquidez","capital de giro","aperto financeiro","sem visibilidade do caixa"] },
+    { id:"cobrador-cordial", area:"Financeiro", nome:"Cobrador Cordial (Régua de Cobrança)", turno:"Todo dia", gatilho:"Diário",
+      oque:"A rotina de cobrança que ninguém gosta de fazer, feita todo dia com educação.",
+      faz:"Localiza os títulos vencidos do dia e redige, para cada cliente, uma mensagem cordial e personalizada.",
+      entrega:"Para a gestão: o lote do dia pronto para revisão. Para o cliente: a mensagem, só depois da aprovação.",
+      substitui:"A cobrança cliente a cliente que depende de alguém lembrar.",
+      msg:"4 títulos vencidos hoje (R$ 9.850). Mensagens cordiais preparadas para cada cliente. Aprovar o lote?",
+      keywords:["inadimplencia","cobranca","titulos vencidos","atraso","boleto vencido"] },
+    { id:"auditor-despesas", area:"Financeiro", nome:"Auditor de Despesas", turno:"Todo dia", gatilho:"Diário",
+      oque:"Uma auditoria diária de gastos contra o padrão histórico da própria empresa.",
+      faz:"Compara as despesas lançadas com o histórico, conta por conta, e desce ao detalhe quando uma conta foge do padrão.",
+      entrega:"Para o financeiro: o apontamento do desvio antes do fechamento, com tempo de questionar.",
+      substitui:"A conferência manual de lançamentos que ninguém tem tempo de fazer.",
+      msg:"Conta \"Manutenção\" 40% acima do padrão histórico este mês. 3 lançamentos concentram o desvio.",
+      keywords:["despesas","gastos","sangria financeira","custos fora do padrao"] },
+    { id:"sentinela-estoque", area:"Estoque", nome:"Sentinela de Estoque", turno:"Todo dia", gatilho:"Diário",
+      oque:"A vigilância diária contra ruptura.",
+      faz:"Confere os saldos contra os estoques mínimos definidos e identifica o que furou ou está prestes a furar, priorizando pelos itens de maior giro.",
+      entrega:"Para compras: a lista de reposição do dia, organizada por fornecedor.",
+      substitui:"A conferência manual de saldos e a montagem de pedido item a item.",
+      msg:"3 peças no vermelho hoje: Pistão classe 4 (8 un), Rodízio PU (22 un). Pedido separado por fornecedor pronto.",
+      keywords:["estoque parado","ruptura","falta de produto","reposicao","sem peca"] },
+    { id:"analista-giro", area:"Estoque", nome:"Analista de Giro (Curva ABC)", turno:"Semanal", gatilho:"Toda semana",
+      oque:"Um analista que mostra o que está vendendo bem e o que está encalhado.",
+      faz:"Cruza vendas e estoque e monta a curva ABC: o que gira, o que está parado, o que tem estoque alto sem saída.",
+      entrega:"Para a gestão: o ranking do que gira e a lista do que está parado, para decidir o que empurrar ou deixar de comprar.",
+      substitui:"A conferência manual para saber o que está parado, e o dinheiro imobilizado nisso.",
+      msg:"Mais vendida: cadeira executiva PU. Parada há 60+ dias: cadeira fixa preta (14 un, R$4.200 imobilizados).",
+      keywords:["curva abc","giro de estoque","produto parado","mix de produtos","estoque encalhado"] },
+    { id:"sugestao-compra", area:"Estoque", nome:"Agente de Sugestão de Compra", turno:"Semanal", gatilho:"Toda semana",
+      oque:"O planejador de reposição que cruza giro, sazonalidade e prazo de entrega.",
+      faz:"Analisa o histórico de vendas e o lead time de cada fornecedor para sugerir quanto e quando comprar de cada item.",
+      entrega:"Para compras: a sugestão de pedido por fornecedor, pronta para ajuste e envio.",
+      substitui:"O cálculo manual de ponto de pedido e quantidade de compra.",
+      msg:"Sugestão de compra da semana pronta: 6 itens no ponto de pedido, agrupados por fornecedor.",
+      keywords:["compras","reposicao","fornecedor","ponto de pedido","retrabalho na compra"] }
+  ];
+
+  var AREA_ORDER = ["Diretoria", "Comercial", "Financeiro", "Estoque"];
+  var selectedAgentIds = {};       // id -> true
+  var manuallyToggled = {};        // id -> true (user explicitly clicked; don't auto-toggle again)
+
+  // ---------- Agentes personalizados (compartilhados via Artifact db, quando disponível) ----------
+  var customAgents = [];           // agentes cadastrados pelo time, no mesmo formato de AGENTS + {custom:true}
+  var dbNs = null;                 // namespace da capability "db", quando a página está publicada com acesso a ela
+  var customAgentsCol = null;
+  var customAgentsUnsub = null;
+
+  function allAgentsList(){ return AGENTS.concat(customAgents); }
+
+  function setDbSyncHint(text){
+    var el = document.getElementById("dbSyncHint");
+    if (el) el.textContent = text;
+  }
+
+  (function initCustomAgentsDb(){
+    try {
+      if (window.claude && typeof window.claude.use === "function"){
+        setDbSyncHint("Conectando à sincronização compartilhada…");
+        window.claude.use("db").then(function(ns){
+          dbNs = ns;
+          if (!dbNs){
+            setDbSyncHint("Agentes personalizados salvos apenas nesta sessão (sem sincronização com o time).");
+            return;
+          }
+          customAgentsCol = dbNs.collection("custom_agents");
+          setDbSyncHint("Sincronizado com o time — novos agentes aparecem para todo mundo.");
+          customAgentsUnsub = customAgentsCol.onSnapshot(function(snap){
+            customAgents = snap.docs.map(function(d){ return Object.assign({ id: d.id, custom: true }, d.data()); });
+            renderAgentCatalog();
+            if (typeof runAutoSuggest === "function") runAutoSuggest();
+          }, function(err){
+            setDbSyncHint("Sincronização indisponível no momento (" + err.code + ") — agentes novos ficam só nesta sessão.");
+          });
+        }).catch(function(){
+          dbNs = null;
+          setDbSyncHint("Agentes personalizados salvos apenas nesta sessão (sem sincronização com o time).");
+        });
+      } else {
+        setDbSyncHint("Agentes personalizados salvos apenas nesta sessão (abra a versão publicada da página para sincronizar com o time).");
+      }
+    } catch (e){
+      dbNs = null;
+      setDbSyncHint("Agentes personalizados salvos apenas nesta sessão (sem sincronização com o time).");
+    }
+  })();
+
+  function saveCustomAgent(agent){
+    if (customAgentsCol){
+      return customAgentsCol.add(agent).then(function(){ /* onSnapshot re-renderiza */ });
+    }
+    agent.id = "local-" + Date.now() + "-" + Math.floor(Math.random() * 1e4);
+    agent.custom = true;
+    customAgents.push(agent);
+    renderAgentCatalog();
+    return Promise.resolve();
+  }
+
+  function deleteCustomAgent(id){
+    delete selectedAgentIds[id];
+    delete suggestedIds[id];
+    delete manuallyToggled[id];
+    if (customAgentsCol && id.indexOf("local-") !== 0){
+      customAgentsCol.doc(id).delete().catch(function(){ /* ignore */ });
+    } else {
+      customAgents = customAgents.filter(function(a){ return a.id !== id; });
+      renderAgentCatalog();
+    }
+    refreshPropSummary();
+  }
+
+  // ---------- Simulador de Preço (desconto + valores adicionais) ----------
+  var extraState = { additionalItems: [] }; // [{label, value}]
+
+  function computePricing(){
+    var diag = lastDiagnostic;
+    var baseRows = [];
+    var subtotal = 0;
+    if (diag){
+      if (diag.price.total != null){
+        baseRows = diag.price.breakdown.map(function(b){ return { label: b.label, value: b.value }; });
+        subtotal = diag.price.total;
+      } else {
+        var entInput = document.getElementById("p-ent-base");
+        var entBase = entInput ? (parseFloat(entInput.value) || 990) : 990;
+        baseRows = [{ label: "Valor mensal base (Enterprise, sob negociação)", value: entBase }];
+        subtotal = entBase;
+      }
+    }
+    var addl = extraState.additionalItems.filter(function(i){ return (i.label && i.label.trim() !== "") || (parseFloat(i.value) || 0) !== 0; });
+    var additionalTotal = addl.reduce(function(s, i){ return s + (parseFloat(i.value) || 0); }, 0);
+
+    var tipoEl = document.getElementById("p-desc-tipo");
+    var valEl = document.getElementById("p-desc-valor");
+    var discountType = tipoEl ? tipoEl.value : "percent";
+    var discountValue = valEl ? (parseFloat(valEl.value) || 0) : 0;
+    if (discountValue < 0) discountValue = 0;
+
+    var base = subtotal + additionalTotal;
+    var discountAmount = discountType === "percent" ? subtotal * (discountValue / 100) : discountValue;
+    if (discountAmount < 0) discountAmount = 0;
+    if (discountAmount > base) discountAmount = base;
+
+    var total = base - discountAmount;
+    if (total < 0) total = 0;
+
+    return {
+      hasDiag: !!diag,
+      baseRows: baseRows,
+      subtotal: subtotal,
+      additionalItems: addl,
+      additionalTotal: additionalTotal,
+      discountType: discountType,
+      discountValue: discountValue,
+      discountAmount: discountAmount,
+      total: total
+    };
+  }
+
+  function renderAddlItems(){
+    var wrap = document.getElementById("addlItemsWrap");
+    if (!wrap) return;
+    wrap.innerHTML = extraState.additionalItems.map(function(item, idx){
+      return '<div class="addl-item">' +
+        '<input type="text" class="num-input" data-addl-label="' + idx + '" placeholder="Descrição (ex: Setup inicial)" value="' + escapeHtml(item.label || "") + '">' +
+        '<input type="number" class="num-input tabular" data-addl-value="' + idx + '" placeholder="0,00" value="' + (item.value || "") + '">' +
+        '<button type="button" class="btn-remove" data-addl-remove="' + idx + '" aria-label="Remover item">✕</button>' +
+      '</div>';
+    }).join("");
+    wrap.querySelectorAll("[data-addl-label]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        extraState.additionalItems[parseInt(inp.getAttribute("data-addl-label"), 10)].label = inp.value;
+        renderPriceSim(); refreshPropSummary();
+      });
+    });
+    wrap.querySelectorAll("[data-addl-value]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        extraState.additionalItems[parseInt(inp.getAttribute("data-addl-value"), 10)].value = inp.value;
+        renderPriceSim(); refreshPropSummary();
+      });
+    });
+    wrap.querySelectorAll("[data-addl-remove]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        extraState.additionalItems.splice(parseInt(btn.getAttribute("data-addl-remove"), 10), 1);
+        renderAddlItems(); renderPriceSim(); refreshPropSummary();
+      });
+    });
+  }
+
+  function renderPriceSim(){
+    var baseWrap = document.getElementById("priceSimBase");
+    var totalWrap = document.getElementById("priceSimTotal");
+    var entField = document.getElementById("entBaseField");
+    if (!baseWrap || !totalWrap) return;
+    var diag = lastDiagnostic;
+    if (entField) entField.style.display = (diag && diag.price.total == null) ? "block" : "none";
+
+    var p = computePricing();
+
+    if (!diag){
+      baseWrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico do Cliente" para trazer o valor base do plano.</span></div>';
+    } else {
+      baseWrap.innerHTML = p.baseRows.map(function(r){
+        return '<div class="pricesim-row"><span class="lbl">' + escapeHtml(r.label) + '</span><span class="val tabular">' + fmtBRL(r.value) + '</span></div>';
+      }).join("");
+    }
+
+    var rowsHtml = "";
+    if (p.additionalTotal !== 0){
+      rowsHtml += '<div class="pricesim-row"><span class="lbl">Valores adicionais</span><span class="val tabular">' + fmtBRL(p.additionalTotal) + '</span></div>';
+    }
+    if (p.discountAmount > 0){
+      rowsHtml += '<div class="pricesim-row discount"><span class="lbl">Desconto' + (p.discountType === "percent" ? " (" + p.discountValue + "%)" : "") + '</span><span class="val tabular">-' + fmtBRL(p.discountAmount) + '</span></div>';
+    }
+    rowsHtml += '<div class="pricesim-row total"><span class="lbl">Total mensal</span><span class="val tabular">' + fmtBRL(p.total) + '</span></div>';
+    totalWrap.innerHTML = rowsHtml;
+  }
+
+  function normalize(str){
+    return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function renderAgentCatalog(){
+    var wrap = document.getElementById("agentCatalog");
+    if (!wrap) return;
+    var html = "";
+    var all = allAgentsList();
+    AREA_ORDER.forEach(function(area){
+      var inArea = all.filter(function(a){ return a.area === area; });
+      if (!inArea.length) return;
+      html += '<div class="agent-area">' + area + '</div>';
+      inArea.forEach(function(a){
+        var checked = !!selectedAgentIds[a.id];
+        html += '<label class="agent-item' + (checked ? ' on' : '') + '" data-agent="' + a.id + '">' +
+          '<input type="checkbox" data-agent-cb="' + a.id + '"' + (checked ? ' checked' : '') + '>' +
+          '<span class="atxt"><strong>' + escapeHtml(a.nome) + (checked && suggestedIds[a.id] ? ' <span class="sug-tag">sugerido</span>' : '') + (a.custom ? ' <span class="tag-custom">personalizado</span>' : '') + '</strong>' +
+          '<span>' + escapeHtml(a.oque || "") + ' · turno: ' + escapeHtml(a.turno || "") + '</span></span>' +
+          (a.custom ? '<button type="button" class="btn-del-agent" data-del-agent="' + a.id + '" aria-label="Remover agente personalizado">✕</button>' : '') +
+        '</label>';
+      });
+    });
+    wrap.innerHTML = html;
+    wrap.querySelectorAll("input[data-agent-cb]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var id = cb.getAttribute("data-agent-cb");
+        manuallyToggled[id] = true;
+        if (cb.checked){ selectedAgentIds[id] = true; } else { delete selectedAgentIds[id]; delete suggestedIds[id]; }
+        cb.closest(".agent-item").classList.toggle("on", cb.checked);
+        refreshPropSummary();
+      });
+    });
+    wrap.querySelectorAll("[data-del-agent]").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        var id = btn.getAttribute("data-del-agent");
+        if (window.confirm("Remover este agente personalizado para todo o time?")) deleteCustomAgent(id);
+      });
+    });
+  }
+
+  var suggestedIds = {};
+  function runAutoSuggest(){
+    var text = normalize(document.getElementById("p-dores").value);
+    if (!text) return;
+    var changed = false;
+    allAgentsList().forEach(function(a){
+      if (manuallyToggled[a.id]) return; // respect explicit user choice
+      var matches = (a.keywords || []).some(function(k){ return text.indexOf(normalize(k)) !== -1; });
+      if (matches && !selectedAgentIds[a.id]){
+        selectedAgentIds[a.id] = true;
+        suggestedIds[a.id] = true;
+        changed = true;
+      }
+    });
+    if (changed){ renderAgentCatalog(); refreshPropSummary(); }
+  }
+
+  var doresDebounce = null;
+  document.getElementById("p-dores").addEventListener("input", function(){
+    clearTimeout(doresDebounce);
+    doresDebounce = setTimeout(runAutoSuggest, 500);
+  });
+
+  function refreshPropSummary(){
+    var planStat = document.getElementById("propPlanStat");
+    var priceStat = document.getElementById("propPriceStat");
+    var agentsStat = document.getElementById("propAgentsStat");
+    var warnBox = document.getElementById("propPlanWarn");
+    if (!planStat) return;
+
+    if (lastDiagnostic){
+      planStat.textContent = lastDiagnostic.rec.plan;
+      var p = computePricing();
+      priceStat.textContent = fmtBRL(p.total) + "/mês" + ((p.discountAmount > 0 || p.additionalTotal !== 0) ? " (ajustado)" : "");
+      warnBox.innerHTML = "";
+    } else {
+      planStat.textContent = "—";
+      priceStat.textContent = "—";
+      warnBox.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na primeira aba antes de gerar a proposta, para trazer o plano e o preço certos.</span></div>';
+    }
+    agentsStat.textContent = Object.keys(selectedAgentIds).length;
+  }
+
+  document.getElementById("btnAddAddl").addEventListener("click", function(){
+    extraState.additionalItems.push({ label: "", value: "" });
+    renderAddlItems(); renderPriceSim(); refreshPropSummary();
+  });
+  document.getElementById("p-desc-tipo").addEventListener("change", function(){ renderPriceSim(); refreshPropSummary(); });
+  document.getElementById("p-desc-valor").addEventListener("input", function(){ renderPriceSim(); refreshPropSummary(); });
+  document.getElementById("p-ent-base").addEventListener("input", function(){ renderPriceSim(); refreshPropSummary(); });
+
+  // ---------- Modal: Novo agente personalizado ----------
+  function openNewAgentModal(){
+    ["na-nome","na-turno","na-oque","na-faz","na-entrega","na-substitui","na-msg","na-keywords"].forEach(function(id){
+      document.getElementById(id).value = "";
+    });
+    document.getElementById("na-area").value = "Comercial";
+    document.getElementById("newAgentModalOverlay").classList.add("show");
+    document.getElementById("na-nome").focus();
+  }
+  function closeNewAgentModal(){
+    document.getElementById("newAgentModalOverlay").classList.remove("show");
+  }
+  document.getElementById("btnNewAgent").addEventListener("click", openNewAgentModal);
+  document.getElementById("newAgentModalClose").addEventListener("click", closeNewAgentModal);
+  document.getElementById("btnCancelNewAgent").addEventListener("click", closeNewAgentModal);
+  document.getElementById("newAgentModalOverlay").addEventListener("click", function(e){
+    if (e.target === document.getElementById("newAgentModalOverlay")) closeNewAgentModal();
+  });
+  document.getElementById("btnSaveNewAgent").addEventListener("click", function(){
+    var nome = document.getElementById("na-nome").value.trim();
+    if (!nome){
+      showToast("Dê um nome ao agente antes de salvar.");
+      document.getElementById("na-nome").focus();
+      return;
+    }
+    var keywords = document.getElementById("na-keywords").value.split(",").map(function(k){ return k.trim(); }).filter(Boolean);
+    var agent = {
+      nome: nome,
+      area: document.getElementById("na-area").value,
+      turno: document.getElementById("na-turno").value.trim() || "A combinar",
+      gatilho: document.getElementById("na-turno").value.trim() || "A combinar",
+      oque: document.getElementById("na-oque").value.trim(),
+      faz: document.getElementById("na-faz").value.trim(),
+      entrega: document.getElementById("na-entrega").value.trim(),
+      substitui: document.getElementById("na-substitui").value.trim(),
+      msg: document.getElementById("na-msg").value.trim(),
+      keywords: keywords
+    };
+    var btn = document.getElementById("btnSaveNewAgent");
+    btn.disabled = true;
+    btn.textContent = "Salvando…";
+    Promise.resolve(saveCustomAgent(agent)).then(function(){
+      btn.disabled = false;
+      btn.textContent = "Salvar agente";
+      closeNewAgentModal();
+      showToast(dbNs ? "Agente salvo e compartilhado com o time" : "Agente salvo nesta sessão");
+    }).catch(function(){
+      btn.disabled = false;
+      btn.textContent = "Salvar agente";
+      showToast("Não foi possível salvar o agente — tente novamente.");
+    });
+  });
+
+  renderAgentCatalog();
+  renderAddlItems();
+  renderPriceSim();
+  refreshPropSummary();
+
+  // ---------- Proposal HTML builder ----------
+  function escapeHtml(s){
+    return (s || "").replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; });
+  }
+
+  function getProposalContext(){
+    var cliente = document.getElementById("p-cliente").value.trim() || "Cliente";
+    var segmento = document.getElementById("p-segmento").value.trim();
+    var contato = document.getElementById("p-contato").value.trim();
+    var csm = document.getElementById("p-csm").value.trim();
+    var erp = document.getElementById("p-erp").value;
+    var dores = document.getElementById("p-dores").value.trim();
+    var obs = document.getElementById("p-obs") ? document.getElementById("p-obs").value.trim() : "";
+    var agents = allAgentsList().filter(function(a){ return selectedAgentIds[a.id]; });
+    return { cliente: cliente, segmento: segmento, contato: contato, csm: csm, erp: erp, dores: dores, obs: obs, agents: agents };
+  }
+
+  var NETWORK_SVG = '<svg class="net" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid slice" fill="none"><g stroke="#fff" stroke-width="1" opacity="0.5"><line x1="120" y1="90" x2="300" y2="180"/><line x1="300" y1="180" x2="240" y2="360"/><line x1="300" y1="180" x2="500" y2="120"/><line x1="500" y1="120" x2="700" y2="220"/><line x1="240" y1="360" x2="460" y2="430"/><line x1="460" y1="430" x2="700" y2="220"/><line x1="700" y1="220" x2="820" y2="400"/><line x1="460" y1="430" x2="660" y2="500"/><line x1="120" y1="90" x2="240" y2="360"/><line x1="500" y1="120" x2="460" y2="430"/></g><g fill="#fff"><circle cx="120" cy="90" r="5"/><circle cx="300" cy="180" r="7"/><circle cx="500" cy="120" r="6"/><circle cx="700" cy="220" r="8"/><circle cx="240" cy="360" r="6"/><circle cx="460" cy="430" r="7"/><circle cx="820" cy="400" r="5"/><circle cx="660" cy="500" r="6"/></g></svg>';
+
+  function brandNodeSvg(color, size){
+    return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/></svg>';
+  }
+
+  var DEFAULT_ICON = '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/>';
+  var ICONS = {
+    "bom-dia-empresa": '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+    "reporter-manha": '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>',
+    "guardiao-meta": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="#fff"/>',
+    "placar-canais": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15v-4M12 15V9M17 15v-6"/>',
+    "analista-vendas-diario": '<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>',
+    "coach-representantes": '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.3"/><path d="M15.5 13.2c2.4.4 4.5 2 4.5 4.8"/>',
+    "vendedor-ciclo": '<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>',
+    "reativacao-clientes": '<path d="M6 4v7a6 6 0 0 0 12 0V4"/><path d="M6 4h4M14 4h4M6 8h4"/>',
+    "guardiao-margem": '<circle cx="7" cy="7" r="3"/><circle cx="17" cy="17" r="3"/><path d="M6 18L18 6"/>',
+    "apurador-premiacoes": '<circle cx="12" cy="9" r="5"/><path d="M9 13l-2 8 5-3 5 3-2-8"/>',
+    "posvenda": '<path d="M12 21s-7-4.35-9.5-8.5C1 9 3 5.5 6.5 5.5 9 5.5 12 8 12 8s3-2.5 5.5-2.5C21 5.5 23 9 21.5 12.5 19 16.65 12 21 12 21z"/>',
+    "analista-variacao": '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+    "vigia-caixa": '<path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/>',
+    "cobrador-cordial": '<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/>',
+    "auditor-despesas": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    "sentinela-estoque": '<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
+    "analista-giro": '<path d="M3 3v18h18"/><path d="M7 14l3-3 3 3 5-5"/>',
+    "sugestao-compra": '<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2l2.6 12.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L21 7H6"/>'
+  };
+
+  function buildAgentFicha(a){
+    var icon = ICONS[a.id] || DEFAULT_ICON;
+    return '<div class="ficha">' +
+      '<div class="topo"><div class="av"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg></div>' +
+      '<div class="cargo">' + escapeHtml(a.nome) + '</div><div class="turno">turno: ' + escapeHtml(a.turno || "a combinar") + '</div></div>' +
+      '<div class="oque"><span class="k">O que é</span>' + escapeHtml(a.oque || "") + '</div>' +
+      '<div class="grade">' +
+        '<div class="cel"><span class="k">O que ele faz</span>' + escapeHtml(a.faz || "") + '</div>' +
+        '<div class="cel"><span class="k">O que ele entrega</span>' + escapeHtml(a.entrega || "") + '</div>' +
+        '<div class="cel"><span class="k">Substitui</span>' + escapeHtml(a.substitui || "") + '</div>' +
+        '<div class="cel"><span class="k">Gatilho</span>' + escapeHtml(a.gatilho || a.turno || "") + '</div>' +
+      '</div>' +
+      '<div class="zona">' +
+        '<div class="fluxo"><div class="flow">' +
+          '<div class="fnode trigger"><div class="fstep">1 · Observa</div><div class="ftext">' + escapeHtml(a.gatilho || a.turno || "") + '</div></div>' +
+          '<div class="farrow">›</div>' +
+          '<div class="fnode"><div class="fstep">2 · Entende</div><div class="ftext">Analisa os dados no ERP</div></div>' +
+          '<div class="farrow">›</div>' +
+          '<div class="fnode"><div class="fstep">3 · Age</div><div class="ftext">Prepara a informação pronta</div></div>' +
+          '<div class="farrow">›</div>' +
+          '<div class="fnode deliver"><div class="fstep">4 · Entrega</div><div class="ftext">No WhatsApp de quem precisa agir</div></div>' +
+        '</div></div>' +
+        (a.msg ? '<div class="phone"><div class="notch"></div><div class="scr">' +
+          '<div class="ph"><span class="dot"></span><div class="nm">Waipe · ' + escapeHtml(a.nome) + '</div><span class="st" style="margin-left:auto">online</span></div>' +
+          '<div class="body"><div class="bolha">' + escapeHtml(a.msg) + '</div></div>' +
+          '<div class="cap">Exemplo ilustrativo — ajuste com os dados reais do cliente.</div>' +
+        '</div></div>' : "") +
+      '</div>' +
+    '</div>';
+  }
+
+  function buildCommercialSection(pricing, diag, ctx){
+    if (!pricing.hasDiag){
+      return '<p class="muted">Plano ainda não calculado nesta simulação — volte à aba Diagnóstico.</p>';
+    }
+    var rows = "";
+    pricing.baseRows.forEach(function(r){ rows += '<tr><td>' + escapeHtml(r.label) + '</td><td class="num">' + fmtBRL(r.value) + '</td></tr>'; });
+    pricing.additionalItems.forEach(function(i){ rows += '<tr><td>' + escapeHtml(i.label || "Valor adicional") + '</td><td class="num">' + fmtBRL(parseFloat(i.value) || 0) + '</td></tr>'; });
+    var subtotalBeforeDiscount = pricing.subtotal + pricing.additionalTotal;
+
+    var html = '<div class="pricebox">' +
+      '<div class="tier">Waipe ' + escapeHtml(diag.rec.plan) + ' · Investimento mensal</div>' +
+      (pricing.discountAmount > 0
+        ? '<div class="val"><span class="strike">' + fmtBRL(subtotalBeforeDiscount) + '</span>&nbsp;→&nbsp;<span style="color:var(--verde)">' + fmtBRL(pricing.total) + '</span> <small>/ mês</small></div>'
+        : '<div class="val">' + fmtBRL(pricing.total) + ' <small>/ mês</small></div>') +
+      '<table><tr><th>Item</th><th style="text-align:right">Valor</th></tr>' + rows + '</table>' +
+    '</div>';
+
+    if (pricing.discountAmount > 0){
+      html += '<div class="freeband">' +
+        '<div class="selo"><b>' + (pricing.discountType === "percent" ? pricing.discountValue + "%" : "R$") + '</b><span>desconto</span></div>' +
+        '<div class="txt"><b>Condição especial aplicada nesta proposta.</b><br>' +
+        'Valor de tabela <span class="old">' + fmtBRL(subtotalBeforeDiscount) + '</span> → <span class="new">' + fmtBRL(pricing.total) + '</span> por mês' + (ctx.obs ? " — " + escapeHtml(ctx.obs) : ".") + '</div>' +
+      '</div>';
+    } else if (ctx.obs) {
+      html += '<div class="callout green"><span class="lbl">Condição comercial</span>' + escapeHtml(ctx.obs) + '</div>';
+    }
+    return html;
+  }
+
+  function buildProposalHTML(){
+    var ctx = getProposalContext();
+    var diag = lastDiagnostic;
+    var pricing = computePricing();
+    var planNome = diag ? diag.rec.plan : "a definir";
+    var dataHoje = new Date().toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
+    var anoAtual = new Date().getFullYear();
+
+    var doresList = ctx.dores ? ctx.dores.split(/\n|;|•/).map(function(s){ return s.trim(); }).filter(Boolean) : [];
+    var doresHtml = doresList.length
+      ? '<ul class="clean">' + doresList.map(function(d){ return '<li>' + escapeHtml(d) + '</li>'; }).join("") + '</ul>'
+      : '<p class="muted">Dores do cliente não descritas nesta simulação — preencha antes de enviar.</p>';
+
+    var fichasHtml = ctx.agents.length
+      ? ctx.agents.map(buildAgentFicha).join("")
+      : '<p class="muted">Nenhum agente selecionado na simulação. Volte à aba Gerar Proposta e marque os agentes relevantes para este cliente.</p>';
+
+    var commercialHtml = buildCommercialSection(pricing, diag, ctx);
+    var docHeader = '<div class="doc-header"><div class="brand">' + brandNodeSvg("#000035", 18) + 'LONDRISOFT</div><div class="docname">Proposta comercial · ' + escapeHtml(ctx.cliente) + '<br>Confidencial · ' + anoAtual + '</div></div>';
+    var watermark = '<svg class="wm" width="320" height="320" viewBox="0 0 24 24" fill="none" stroke="#3A86FF" stroke-width="1"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/></svg>';
+
+    return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+    '<title>Proposta — ' + escapeHtml(ctx.cliente) + ' · Londrisoft</title>' +
+    '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@600;700&display=swap" rel="stylesheet">' +
+    '<style>' +
+    ':root{--azul:#3A86FF;--noite:#000035;--profundo:#0A41B4;--claro:#A8C5FF;--quasebranco:#F0F4FF;--branco:#FFFFFF;--cinzaclaro:#E5E7EB;--cinzamedio:#6B7280;--cinzaescuro:#374151;--verde:#16A34A;--verdebg:#ECFDF5;--amarelo:#CA8A04}' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'html{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    'body{font-family:"Inter",Arial,sans-serif;color:var(--cinzaescuro);line-height:1.6;background:var(--cinzaclaro);font-size:15px}' +
+    '.screen-bar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--noite);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,.3)}' +
+    '.screen-bar .title{font-size:12.5px;font-weight:700;color:var(--claro);letter-spacing:.05em;text-transform:uppercase}' +
+    '.btn-print{background:var(--azul);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-weight:700;font-size:12.5px;cursor:pointer}' +
+    '.btn-print:hover{background:var(--profundo)}' +
+    '.page{background:var(--branco);max-width:900px;margin:24px auto;padding:56px 64px;box-shadow:0 2px 18px rgba(0,0,53,.08);position:relative;overflow:hidden}' +
+    '.page .wm{position:absolute;right:-60px;top:30px;opacity:.04;pointer-events:none;z-index:0}' +
+    '.page>*{position:relative;z-index:1}' +
+    'h1,h2,h3,h4{font-family:"Poppins","Inter",sans-serif;line-height:1.25}' +
+    'h2{font-size:23px;color:var(--noite);font-weight:700;margin:6px 0 14px}' +
+    'p{margin:0 0 12px}strong{color:var(--noite)}.muted{color:var(--cinzamedio)}.small{font-size:12.5px}' +
+    '.cover{background:linear-gradient(120deg,var(--azul) 0%,var(--profundo) 100%);color:#fff;max-width:900px;margin:24px auto 0;padding:64px;box-shadow:0 2px 18px rgba(0,0,53,.08);position:relative;overflow:hidden}' +
+    '.cover .net{position:absolute;inset:0;opacity:.22;pointer-events:none}' +
+    '.cover .glow{position:absolute;right:-120px;top:-120px;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,rgba(168,197,255,.5),transparent 68%);pointer-events:none}' +
+    '.cover>*{position:relative;z-index:2}' +
+    '.cover .kicker{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--claro);font-weight:600;margin:34px 0 14px}' +
+    '.cover h1{font-size:40px;font-weight:700;color:#fff;line-height:1.12;max-width:680px}' +
+    '.cover .sub{font-size:17px;font-weight:300;color:#fff;opacity:.92;margin-top:14px;max-width:640px}' +
+    '.cover .meta{margin-top:40px;display:flex;gap:36px;flex-wrap:wrap;font-size:13px}' +
+    '.cover .meta div span{display:block;color:var(--claro);opacity:.85;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}' +
+    '.brandword{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:24px;letter-spacing:.02em;display:flex;align-items:center;gap:10px}' +
+    '.doc-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid var(--azul);padding-bottom:14px;margin-bottom:28px}' +
+    '.doc-header .brand{font-family:Poppins,Inter,sans-serif;font-weight:700;color:var(--noite);font-size:14px;letter-spacing:.06em;display:flex;align-items:center;gap:8px}' +
+    '.doc-header .docname{font-size:11px;color:var(--cinzamedio);text-align:right;letter-spacing:.04em}' +
+    '.section-num{color:var(--azul);font-weight:700;font-family:Poppins,Inter,sans-serif;font-size:12.5px;letter-spacing:.1em}' +
+    '.callout{background:var(--quasebranco);border-left:4px solid var(--azul);padding:15px 19px;border-radius:0 8px 8px 0;margin:16px 0;font-size:13px}' +
+    '.callout.green{background:var(--verdebg);border-left-color:var(--verde)}' +
+    '.callout .lbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--azul);margin-bottom:6px}' +
+    '.callout.green .lbl{color:var(--verde)}' +
+    'table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}' +
+    'th{background:var(--azul);color:#fff;text-align:left;padding:10px 12px;font-weight:600;font-size:12.5px}' +
+    'td{padding:10px 12px;border:1px solid var(--cinzaclaro);vertical-align:top}' +
+    'tr:nth-child(even) td{background:var(--quasebranco)}' +
+    'td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}' +
+    'ul.clean{list-style:none;padding:0}' +
+    'ul.clean li{padding-left:24px;position:relative;margin-bottom:8px;font-size:13.5px}' +
+    'ul.clean li:before{content:"→";position:absolute;left:0;color:var(--azul);font-weight:700}' +
+    '.ficha{border:1.5px solid var(--azul);border-radius:14px;margin:18px 0;overflow:hidden;background:#fff;page-break-inside:avoid}' +
+    '.ficha .topo{background:linear-gradient(120deg,var(--azul),var(--profundo));color:#fff;padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}' +
+    '.ficha .topo .av{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;flex:0 0 auto}' +
+    '.ficha .topo .cargo{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:16.5px}' +
+    '.ficha .topo .turno{margin-left:auto;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap}' +
+    '.ficha .oque{background:var(--quasebranco);padding:12px 20px;font-size:13.5px;border-bottom:1px solid var(--cinzaclaro)}' +
+    '.ficha .oque .k,.ficha .cel .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--azul);margin-bottom:3px}' +
+    '.ficha .grade{display:grid;grid-template-columns:1fr 1fr;gap:0}' +
+    '.ficha .cel{padding:13px 20px;border-top:1px solid var(--cinzaclaro);font-size:13px}' +
+    '.ficha .cel:nth-child(odd){border-right:1px solid var(--cinzaclaro)}' +
+    '.ficha .grade .cel:first-child,.ficha .grade .cel:nth-child(2){border-top:none}' +
+    '.zona{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:6px 20px 18px}.zona>.fluxo{flex:1;min-width:260px;padding-left:0}' +
+    '.flow{display:flex;align-items:stretch;gap:6px;flex-wrap:wrap;margin:12px 0}' +
+    '.fnode{flex:1 1 0;min-width:104px;background:var(--quasebranco);border:1px solid var(--cinzaclaro);border-radius:11px;padding:11px 9px;text-align:center}' +
+    '.fnode.trigger{background:#EAF1FF;border-color:var(--azul)}' +
+    '.fnode.deliver{background:linear-gradient(135deg,var(--azul),var(--profundo));border-color:var(--profundo)}' +
+    '.fnode.deliver .fstep{color:#cfe0ff}.fnode.deliver .ftext{color:#fff}' +
+    '.fstep{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--azul);font-weight:700;margin-bottom:3px}' +
+    '.ftext{font-size:11px;color:var(--cinzaescuro);line-height:1.3}' +
+    '.farrow{display:flex;align-items:center;color:var(--azul);font-weight:700;font-size:16px}' +
+    '.phone{flex:0 0 auto;width:230px;background:#0b1020;border-radius:26px;padding:10px;box-shadow:0 6px 20px rgba(0,0,53,.2)}' +
+    '.phone .notch{width:70px;height:5px;background:#2a2f45;border-radius:3px;margin:2px auto 8px}' +
+    '.phone .scr{background:#0e1630;border-radius:18px;overflow:hidden}' +
+    '.phone .ph{background:#0a2170;padding:9px 12px;display:flex;align-items:center;gap:8px}' +
+    '.phone .ph .dot{width:8px;height:8px;border-radius:50%;background:#2ee06a}' +
+    '.phone .ph .nm{color:#fff;font-size:11.5px;font-weight:700}' +
+    '.phone .ph .st{color:#9fb8e8;font-size:9px}' +
+    '.phone .body{padding:12px 11px}' +
+    '.bolha{background:#16234d;color:#e8f0fb;border-radius:11px 11px 11px 3px;padding:8px 11px;font-size:11.5px;margin-bottom:7px;line-height:1.4}' +
+    '.phone .cap{font-size:10px;color:var(--claro);opacity:.85;margin-top:5px;font-style:italic;padding:0 11px 10px}' +
+    '.pricebox{border:2px solid var(--azul);border-radius:14px;padding:24px;margin:18px 0;background:#fff;page-break-inside:avoid}' +
+    '.pricebox .tier{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--azul);font-weight:700}' +
+    '.pricebox .val{font-family:Poppins,Inter,sans-serif;font-size:28px;font-weight:700;color:var(--noite);margin:4px 0}' +
+    '.pricebox .val small{font-size:14px;color:var(--cinzamedio);font-weight:400}' +
+    '.strike{text-decoration:line-through;color:var(--cinzamedio);font-weight:400}' +
+    '.freeband{display:flex;align-items:center;gap:16px;background:var(--verdebg);border:1px solid #A7F3D0;border-left:5px solid var(--verde);border-radius:12px;padding:16px 20px;margin:14px 0;page-break-inside:avoid}' +
+    '.freeband .selo{flex:0 0 auto;width:60px;height:60px;border-radius:50%;background:var(--verde);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1;transform:rotate(-8deg);box-shadow:0 4px 10px rgba(22,163,74,.3)}' +
+    '.freeband .selo b{font-family:Poppins,Inter,sans-serif;font-size:15px}' +
+    '.freeband .selo span{font-size:8px;text-transform:uppercase;letter-spacing:.06em;margin-top:2px}' +
+    '.freeband .txt{font-size:13px;color:#065F46}' +
+    '.freeband .txt .old{color:#6B7280;text-decoration:line-through}' +
+    '.freeband .txt .new{color:var(--verde);font-weight:700}' +
+    '.footer{font-size:11px;color:var(--cinzamedio);text-align:center;margin-top:40px;padding-top:16px;border-top:1px solid var(--cinzaclaro)}' +
+    '@media print{.screen-bar{display:none!important}body{background:#fff}.page,.cover{box-shadow:none;margin:0 auto;max-width:100%}.page{padding:38px 42px;page-break-before:always}.cover{page-break-after:always}.ficha,.pricebox,.freeband,table,.callout{break-inside:avoid}}' +
+    '@media (max-width:680px){.page,.cover{padding:30px 20px}.cover h1{font-size:28px}.ficha .grade{grid-template-columns:1fr}.ficha .cel:nth-child(odd){border-right:none}.zona{flex-direction:column}.phone{width:100%;max-width:250px;margin:0 auto}}' +
+    '</style></head><body>' +
+
+    '<div class="screen-bar"><div class="title">Proposta — ' + escapeHtml(ctx.cliente) + '</div>' +
+      '<button class="btn-print" onclick="window.print()">Gerar / Imprimir PDF</button></div>' +
+
+    '<div class="cover">' + NETWORK_SVG +
+      '<div class="glow"></div>' +
+      '<div class="brandword">' + brandNodeSvg("#fff", 26) + 'LONDRISOFT</div>' +
+      '<div class="kicker">Proposta Comercial · Waipe ' + escapeHtml(planNome) + '</div>' +
+      '<h1>O Time Digital ' + escapeHtml(ctx.cliente) + '</h1>' +
+      '<div class="sub">Um time de agentes de inteligência artificial — funcionários digitais com função fixa — que assumem tarefas manuais e entregam o resultado pronto no WhatsApp de quem precisa agir.</div>' +
+      '<div class="meta">' +
+        '<div><span>Cliente</span>' + escapeHtml(ctx.cliente) + (ctx.segmento ? "<br>" + escapeHtml(ctx.segmento) : "") + '</div>' +
+        (ctx.contato ? '<div><span>A/C</span>' + escapeHtml(ctx.contato) + '</div>' : "") +
+        (ctx.csm ? '<div><span>Gerente de Contas</span>' + escapeHtml(ctx.csm) + '<br>Londrisoft</div>' : "") +
+        '<div><span>Data</span>' + dataHoje + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="page">' +
+      docHeader +
+      '<p class="section-num">01</p>' +
+      '<h2>Contexto e Dores do Cliente</h2>' +
+      doresHtml +
+      '<div class="callout"><span class="lbl">Sobre este documento</span>Este é um modelo de proposta gerado a partir da simulação de plano e dos agentes selecionados pelo CSM. Revise cada seção, ajuste o texto ao tom da conversa com o cliente e confirme os números antes de enviar.</div>' +
+    '</div>' +
+
+    '<div class="page">' + watermark +
+      '<p class="section-num">02</p>' +
+      '<h2>O Time Digital Proposto</h2>' +
+      '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' +
+      fichasHtml +
+    '</div>' +
+
+    '<div class="page">' + watermark +
+      '<p class="section-num">03</p>' +
+      '<h2>Plano Recomendado e Investimento</h2>' +
+      (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
+      commercialHtml +
+      (diag && diag.rec.plan === "Enterprise" ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. Automação personalizada, integração com sistemas externos ou desenho assistido de fluxos seguem o guia próprio de implantação Enterprise, tratado à parte.</div>' : "") +
+    '</div>' +
+
+    '<div class="page">' + watermark +
+      '<p class="section-num">04</p>' +
+      '<h2>Próximos Passos</h2>' +
+      '<ul class="clean"><li>Validar com o cliente as dores mapeadas e os agentes propostos.</li><li>Ajustar turnos, destinatários e regras de cada agente ao processo real do cliente.</li><li>Confirmar plano, usuários e empresas para fechar a proposta comercial.</li></ul>' +
+      '<div class="footer">Londrisoft © ' + anoAtual + ' — Documento confidencial, preparado para ' + escapeHtml(ctx.cliente) + '.<br>Nomes de cargo dos agentes são denominações comerciais desta proposta; o desenho final de cada agente é definido em conjunto na implantação.</div>' +
+    '</div>' +
+    '</body></html>';
+  }
+
+  // ---------- Runtime capability: downloads ----------
+  var capDownloads = null;
+  (function(){
+    try{
+      if (window.claude && typeof window.claude.use === "function"){
+        window.claude.use("downloads").then(function(ns){ capDownloads = ns; }).catch(function(){ capDownloads = null; });
+      }
+    } catch(e){ capDownloads = null; }
+  })();
+
+  function showToast(msg){
+    var t = document.getElementById("toastCopy");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  function copyToClipboard(text){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject){
+      try{
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        resolve();
+      } catch(e){ reject(e); }
+    });
+  }
+
+  document.getElementById("btnPreview").addEventListener("click", function(){
+    var html = buildProposalHTML();
+    var frame = document.getElementById("previewFrame");
+    frame.srcdoc = html;
+    document.getElementById("modalOverlay").classList.add("show");
+  });
+  document.getElementById("modalClose").addEventListener("click", function(){
+    document.getElementById("modalOverlay").classList.remove("show");
+  });
+  document.getElementById("modalOverlay").addEventListener("click", function(e){
+    if (e.target === document.getElementById("modalOverlay")) document.getElementById("modalOverlay").classList.remove("show");
+  });
+
+  document.getElementById("btnBaixar").addEventListener("click", function(){
+    var html = buildProposalHTML();
+    var ctx = getProposalContext();
+    var filename = "proposta-" + ctx.cliente.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + ".html";
+
+    if (capDownloads && typeof capDownloads.save === "function"){
+      capDownloads.save({ filename: filename, data: html }).then(function(){
+        showToast("Download iniciado");
+      }).catch(function(){
+        openFallbackDownload(html);
+      });
+    } else {
+      openFallbackDownload(html);
+    }
+  });
+
+  function openFallbackDownload(html){
+    // Downloads não disponível neste visualizador: oferece o HTML para copiar e salvar manualmente.
+    copyToClipboard(html).then(function(){
+      showToast("Download direto indisponível aqui — HTML da proposta copiado. Cole em um editor e salve como .html");
+    }).catch(function(){
+      document.getElementById("btnPreview").click();
+      showToast("Copie o HTML pela pré-visualização (Ctrl+U / ver código-fonte) e salve como .html");
+    });
+  }
+
+  document.getElementById("btnPrompt").addEventListener("click", function(){
+    var ctx = getProposalContext();
+    var diag = lastDiagnostic;
+    var lines = [];
+    lines.push("Cliente: " + ctx.cliente + (ctx.segmento ? " (" + ctx.segmento + ")" : ""));
+    if (ctx.contato) lines.push("Contato: " + ctx.contato);
+    if (ctx.csm) lines.push("Gerente de contas (CSM): " + ctx.csm);
+    lines.push("ERP utilizado: " + ctx.erp);
+    if (diag){
+      lines.push("Plano recomendado pelo simulador: Waipe " + diag.rec.plan + " (" + (diag.price.total != null ? fmtBRL(diag.price.total) + "/mês" : "sob negociação") + ")");
+      lines.push("Usuários: " + diag.input.usuarios + " · Empresas: " + diag.input.empresas);
+    }
+    lines.push("");
+    lines.push("Dores e contexto do cliente hoje:");
+    lines.push(ctx.dores || "(preencher)");
+    lines.push("");
+    if (ctx.agents.length){
+      lines.push("Agentes de IA já sinalizados como relevantes pelo CSM (pode ajustar ou expandir):");
+      ctx.agents.forEach(function(a){ lines.push("- " + a.nome + ": " + a.oque); });
+      lines.push("");
+    }
+    lines.push("Com base nisso, gere a Proposta Estratégica e Comercial completa do Time Digital Waipe, seguindo a estrutura: 1) Conceito e Racional Estratégico; 2) O Time Digital Proposto (Escala de Agentes); 3) Tempo Devolvido à Gestão e Impacto Financeiro (ROI); 4) Proposta Comercial e Planos de Precificação.");
+
+    copyToClipboard(lines.join("\n")).then(function(){
+      showToast("Prompt copiado — cole no Gem do Waipe no Gemini");
+    }).catch(function(){
+      showToast("Não foi possível copiar automaticamente. Selecione o texto manualmente.");
+    });
+  });
+})();
+</script>
+</body>
+</html>
