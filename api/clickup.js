@@ -422,6 +422,10 @@ function validarValor(campo, value) {
     if (typeof value === 'string' && campo.opcoes.has(value)) return value;
     return undefined;
   }
+  if (campo.tipo === 'numero') {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= campo.max) return value;
+    return undefined;
+  }
   if (campo.tipo === 'lista') {
     if (!Array.isArray(value) || value.length > MAX_LABELS) return undefined;
     for (const v of value) {

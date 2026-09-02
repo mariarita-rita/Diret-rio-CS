@@ -31,6 +31,9 @@ const CF = {
   DATA_CANCEL: '7a36a0b2-6de0-4f9b-8278-d7338e42b325',
   CSAT: '98acac2a-932b-4c60-8a16-bd2e211961d5',
   EVENTO_CAMP: '54ee7ad4-4689-4d79-bec7-5ac1373d96e9',
+  CAMP_VENDIDOS: '4a4400e7-6bfd-423e-9467-9c6f11c458c9',
+  CAMP_CORTESIA: '62514802-d199-462a-9a44-9e8389c74951',
+  CAMP_VALOR: '748dbd02-1c2f-4f31-a5f7-5cc82bcd3cb0',
 };
 
 /**
@@ -172,6 +175,23 @@ export const CAMPOS_ESCRITA = {
      * via POST, que ja funciona.
      */
     limpavel: true,
+  },
+  // Campanha de metas do Camp 2026 (quantidade + comissão). Numeros, nao opcoes: sem
+  // Set de ids para validar, so o teto em `max` contra digitacao errada.
+  [CF.CAMP_VENDIDOS]: {
+    nome: 'Camp 2026 - Ingressos vendidos',
+    tipo: 'numero',
+    max: 999,
+  },
+  [CF.CAMP_CORTESIA]: {
+    nome: 'Camp 2026 - Ingressos cortesia',
+    tipo: 'numero',
+    max: 999,
+  },
+  [CF.CAMP_VALOR]: {
+    nome: 'Camp 2026 - Valor vendido (R$)',
+    tipo: 'numero',
+    max: 999999,
   },
   [CF.ALERTAS]: {
     nome: 'Alertas',
@@ -411,6 +431,9 @@ function mapTask(t) {
     // significaria gravar a opcao errada quando alguem renomear no ClickUp.
     eventoCamp: cfVal(t, CF.EVENTO_CAMP),
     eventoCampId: cfOpcaoId(t, CF.EVENTO_CAMP),
+    campVendidos: Number(cfVal(t, CF.CAMP_VENDIDOS)) || 0,
+    campCortesia: Number(cfVal(t, CF.CAMP_CORTESIA)) || 0,
+    campValor: Number(cfVal(t, CF.CAMP_VALOR)) || 0,
   };
 }
 
@@ -750,6 +773,19 @@ export function refletirEscrita(taskId, fieldId, valor) {
     }
     alvo.linha.eventoCamp = rotulo;
     alvo.linha.eventoCampId = valor;
+    return;
+  }
+
+  if (fieldId === CF.CAMP_VENDIDOS) {
+    alvo.linha.campVendidos = valor;
+    return;
+  }
+  if (fieldId === CF.CAMP_CORTESIA) {
+    alvo.linha.campCortesia = valor;
+    return;
+  }
+  if (fieldId === CF.CAMP_VALOR) {
+    alvo.linha.campValor = valor;
     return;
   }
 

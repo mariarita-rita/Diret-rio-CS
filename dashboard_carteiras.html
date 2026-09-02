@@ -212,6 +212,9 @@ table{width:100%;border-collapse:collapse}
 th{font-size:10px;font-weight:600;color:var(--neutral-400);text-transform:uppercase;
   letter-spacing:0.5px;padding:9px 14px;text-align:left;background:var(--neutral-50);
   border-bottom:1px solid var(--neutral-200);white-space:nowrap}
+th.th-sort{cursor:pointer;user-select:none}
+th.th-sort:hover{color:var(--brand-night)}
+th.th-sort-ativo{color:var(--info)}
 td{font-size:12px;color:var(--brand-night);padding:9px 14px;
   border-bottom:1px solid var(--neutral-50);vertical-align:middle}
 tr:last-child td{border-bottom:none}
@@ -414,6 +417,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
   <div id="periodo-bar"></div>
   <div id="meta-section"></div>
   <div id="bonus-section"></div>
+  <div id="campanha-section"></div>
   <div class="metrics" id="metrics"></div>
   <div class="metrics" id="metrics2" style="margin-top:-4px"></div>
   <div id="gestao-section"></div>
@@ -429,7 +433,7 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
     <span class="search-icon-inline">🔍</span>
     <input type="text" id="search-inline" placeholder="Buscar por cliente, ID Núcleo ou CNPJ..." autocomplete="off">
     <div class="table-controls">
-      <select class="ctrl-select" id="sort-select" onchange="applySort()" title="Ordenar">
+      <select class="ctrl-select" id="sort-select" onchange="colSort=null;applySort()" title="Ordenar">
         <option value="cliente-asc">Nome A→Z</option>
         <option value="mrr-desc">MRR ↓</option>
         <option value="mrr-asc">MRR ↑</option>
@@ -469,6 +473,16 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
         <option value="Simplaz Bronze">Simplaz Bronze</option>
         <option value="Simplaz Prata">Simplaz Prata</option>
         <option value="Simplaz Ouro">Simplaz Ouro</option>
+      </select>
+      <!-- Opções fixas: mesmas 4 de EVENTO_CAMP, só sem os ids (o filtro compara por
+           rótulo, não precisa do id da opção do ClickUp). "sem" cobre eventoCampId vazio. -->
+      <select class="ctrl-select" id="filter-camp" onchange="applyFilters()" title="Camp 2026">
+        <option value="">Camp 2026 (todos)</option>
+        <option value="sem">— sem marcação —</option>
+        <option value="Convidado 💠">Convidado</option>
+        <option value="Inscrito ✅">Inscrito</option>
+        <option value="Não Vai 🚫">Não Vai</option>
+        <option value="Participou ✨">Participou</option>
       </select>
     </div>
   </div>
@@ -518,6 +532,27 @@ const EVENTO_CAMP=[
   {id:'8ceeca28-bc44-4f86-b3ff-f6205c316dda',rotulo:'Participou ✨',cor:'#854D0E',bg:'#FEF9C3'},
 ];
 const CAMPO_EVENTO_CAMP='54ee7ad4-4689-4d79-bec7-5ac1373d96e9';
+
+// Campos numéricos da campanha Camp 2026. Mesma allowlist em api/_lib/clickup.js —
+// a suíte prova que os dois lados batem.
+const CAMPO_CAMP_VENDIDOS='4a4400e7-6bfd-423e-9467-9c6f11c458c9';
+const CAMPO_CAMP_CORTESIA='62514802-d199-462a-9a44-9e8389c74951';
+const CAMPO_CAMP_VALOR='748dbd02-1c2f-4f31-a5f7-5cc82bcd3cb0';
+
+// Regras da campanha, combinadas com o time em set/2026: 75 inscritos (vendidos +
+// cortesia, qualquer proporção) libera R$350 fixo por CSM; 10% sobre o valor vendido
+// só é somado à comissão depois que a meta de 75 é batida — nunca antes.
+// `COTA_CAMPANHA` é a "vaga disponível" de cada CSM: começa em 75, e a gestão pode
+// ampliar individualmente (sem mudar META_QTD, que é o gatilho do prêmio fixo) quando
+// alguém bate a meta antes do fim da campanha. Mesmo padrão manual de META_EQ acima:
+// editar aqui e publicar é o jeito de liberar mais cota.
+const CAMPANHA_META_QTD=75;
+const CAMPANHA_PREMIO_QTD=350;
+const CAMPANHA_COMISSAO_PCT=0.10;
+const CAMPANHA_FIM='2026-10-15T23:59:59';
+const COTA_CAMPANHA={
+  'Gian Luca':75,'Lucineia Felix':75,'Guilherme Camargo':75,'Patricia Carvalho':75,
+};
 
 // Opção "Contratou em outro CNPJ" do campo Motivo da perda. Troca de titularidade
 // gera um cancelamento administrativo, mas não é perda real — sai do MRR perdido do
@@ -1037,6 +1072,7 @@ function applyFilters(){
   const fAl=document.getElementById('filter-alerta')?.value||'';
   const fSrv=document.getElementById('filter-servico')?.value||'';
   const fCid=document.getElementById('filter-cidade')?.value||'';
+  const fCamp=document.getElementById('filter-camp')?.value||'';
 
   // Cancelados sempre incluídos (para consulta/reativação), mas excluídos dos cálculos
   filtered=allData.filter(r=>{
@@ -1049,13 +1085,23 @@ function applyFilters(){
     // Compara pela forma normalizada, a mesma que agrupou as opções.
     const cidNorm=normTxt(r.cidade);
     const cidOk=!fCid||(fCid===CIDADE_VAZIA?!cidNorm:cidNorm===fCid);
-    return csmOk&&qOk&&stOk&&finOk&&alOk&&srvOk&&cidOk;
+    const campOk=!fCamp||(fCamp==='sem'?!r.eventoCampId:r.eventoCamp===fCamp);
+    return csmOk&&qOk&&stOk&&finOk&&alOk&&srvOk&&cidOk&&campOk;
   });
   applySort();
 }
 function applySort(){
   currentSort=document.getElementById('sort-select')?.value||'cliente-asc';
   filtered.sort((a,b)=>{
+    // Clique em cabeçalho de coluna manda mais que o dropdown, até alguém trocar o
+    // dropdown de novo — ver o onchange dele, que zera colSort.
+    if(colSort){
+      const g=COL_DEFS[colSort.key].get;
+      const va=g(a),vb=g(b);
+      if(va<vb)return -1*colSort.dir;
+      if(va>vb)return 1*colSort.dir;
+      return 0;
+    }
     if(currentSort==='mrr-desc')return b.mrr-a.mrr;
     if(currentSort==='mrr-asc') return a.mrr-b.mrr;
     if(currentSort==='cliente-asc')return(a.nome||'').localeCompare(b.nome||'');
@@ -1086,6 +1132,7 @@ function renderAll(){
   document.getElementById('periodo-bar').innerHTML='';
   document.getElementById('meta-section').innerHTML='';
   document.getElementById('bonus-section').innerHTML='';
+  document.getElementById('campanha-section').innerHTML='';
   document.getElementById('gestao-section').innerHTML='';
   document.getElementById('cancelados-section').innerHTML='';
   const m2=document.getElementById('metrics2');if(m2)m2.innerHTML='';
@@ -1102,6 +1149,9 @@ function renderAll(){
   // recebe valor financeiro — o servidor manda `periodos` vazio para esse perfil.
   if(showMRR){
     renderEquipe();
+  }
+  if(showMRR){
+    renderCampanha(csm,col);
   }
   if(session.nivel==='gestao'&&currentTab==='geral'){renderGestao();renderCancelados();}
 
@@ -1501,6 +1551,106 @@ function eqMini(l,v,bonusTexto,ok){
   </div>`;
 }
 
+// ── CAMPANHA CAMP 2026 ────────────────────────────────────
+/**
+ * Progresso de um CSM na campanha: quantidade (vendidos + cortesia, na mesma conta —
+ * regra combinada em set/2026, não importa a proporção) até CAMPANHA_META_QTD libera
+ * CAMPANHA_PREMIO_QTD fixo. A comissão de 10% sobre o valor vendido é calculada
+ * sempre, mas só "liberada" (soma no total a pagar) depois que a meta é batida —
+ * `comissaoAcumulada` existe para o CSM ver o quanto já rendeu, mesmo represado.
+ */
+function campanhaDoCsm(csm){
+  const primeiro=csm.split(' ')[0];
+  const cl=allData.filter(r=>(r.gerente||'').includes(primeiro));
+  const vendidos=cl.reduce((s,r)=>s+(r.campVendidos||0),0);
+  const cortesia=cl.reduce((s,r)=>s+(r.campCortesia||0),0);
+  const valor=cl.reduce((s,r)=>s+(r.campValor||0),0);
+  const qtd=vendidos+cortesia;
+  const cota=COTA_CAMPANHA[csm]||CAMPANHA_META_QTD;
+  const metaBatida=qtd>=CAMPANHA_META_QTD;
+  const comissaoAcumulada=valor*CAMPANHA_COMISSAO_PCT;
+  const comissaoLiberada=metaBatida?comissaoAcumulada:0;
+  const premioQtd=metaBatida?CAMPANHA_PREMIO_QTD:0;
+  return{csm,vendidos,cortesia,valor,qtd,cota,metaBatida,premioQtd,comissaoAcumulada,comissaoLiberada,totalGanho:premioQtd+comissaoLiberada};
+}
+function diasRestantesCampanha(){
+  return Math.max(0,Math.ceil((new Date(CAMPANHA_FIM)-new Date())/86400000));
+}
+function campanhaCardHTML(c,col){
+  col=col||getColor(c.csm)||{dot:'#3A86FF',bg:'#EBF4FB',text:'#1B5E8C'};
+  const dias=diasRestantesCampanha();
+  const pct=Math.min((c.qtd/c.cota)*100,100);
+  const barColor=c.metaBatida?'linear-gradient(90deg,#16A34A,#15803D)':'linear-gradient(90deg,#3A86FF,#0A41B4)';
+  return`<div class="meta-card" style="border-top:3px solid ${col.dot}">
+    <div class="meta-header">
+      <div><div class="meta-title">🎟️ Campanha Camp 2026 — ${esc(c.csm.split(' ')[0])} <span style="font-size:11px;font-weight:400;color:var(--neutral-400)">${dias>0?dias+' dias até 15/10':'campanha encerrada'}</span></div></div>
+      <div class="meta-prem">
+        <div class="meta-prem-label">Total ganho</div>
+        <div class="meta-prem-val" style="color:${c.totalGanho>0?col.text:'var(--neutral-400)'}">${c.totalGanho>0?fmt(c.totalGanho):'—'}</div>
+        <div style="font-size:10px;color:var(--neutral-400)">prêmio + comissão</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--neutral-500);margin-bottom:5px">
+      <span>Inscritos: <strong style="color:var(--brand-night)">${c.qtd}</strong> de ${c.cota} · ${c.vendidos} vendidos + ${c.cortesia} cortesia</span>
+      <span>${Math.round(pct)}%</span>
+    </div>
+    <div style="height:14px;border-radius:7px;background:var(--neutral-100);overflow:hidden;margin-bottom:1rem">
+      <div style="height:100%;border-radius:7px;background:${barColor};width:${pct}%;transition:width 1s cubic-bezier(.34,1.56,.64,1)"></div>
+    </div>
+    <div class="fase-badge" style="background:${c.metaBatida?'#D1FAE5':'#F1F5F9'};color:${c.metaBatida?'#065F46':'#475569'}">
+      <span style="font-size:18px">${c.metaBatida?'🏆':'🎯'}</span>
+      <span style="font-weight:600">${c.metaBatida?'Meta de '+CAMPANHA_META_QTD+' batida! Prêmio de '+fmt(CAMPANHA_PREMIO_QTD)+' garantido':'Faltam '+(CAMPANHA_META_QTD-c.qtd)+' inscritos para os '+fmt(CAMPANHA_PREMIO_QTD)+' de prêmio'}</span>
+    </div>
+    <div class="metas-grid">
+      <div class="meta-mini" style="${c.metaBatida?'border-color:'+col.dot+';background:'+col.bg:''}">
+        <div class="meta-mini-label">Prêmio por quantidade</div>
+        <div class="meta-mini-pct">${CAMPANHA_META_QTD} inscritos</div>
+        <div class="meta-mini-val" style="color:${c.metaBatida?col.text:'var(--neutral-400)'}">${c.metaBatida?'✅ Liberado':'🔒 Bloqueado'}</div>
+        <div class="meta-mini-premio">${fmt(CAMPANHA_PREMIO_QTD)}</div>
+      </div>
+      <div class="meta-mini" style="${c.metaBatida&&c.valor>0?'border-color:'+col.dot+';background:'+col.bg:''}">
+        <div class="meta-mini-label">Comissão sobre venda</div>
+        <div class="meta-mini-pct">10% de ${fmt(c.valor)}</div>
+        <div class="meta-mini-val" style="color:${c.metaBatida?col.text:'var(--neutral-400)'}">${c.metaBatida?'✅ Liberada':'🔒 Bloqueada até bater a meta'}</div>
+        <div class="meta-mini-premio">${fmt(c.comissaoAcumulada)}${c.metaBatida?'':' acumulado, ainda represado'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+/**
+ * Card individual na aba do próprio CSM (ou na aba dele, vista pela gestão); placar
+ * dos 4 CSMs na Visão Geral — só para gestão, mesma regra de sigilo que já vale para
+ * MRR e meta individual (comissão é informação tão sensível quanto).
+ */
+function renderCampanha(csm,col){
+  const alvo=document.getElementById('campanha-section');
+  if(!alvo)return;
+  if(csm){
+    alvo.innerHTML=campanhaCardHTML(campanhaDoCsm(csm),col);
+    return;
+  }
+  if(session.nivel!=='gestao'){alvo.innerHTML='';return;}
+  const dias=diasRestantesCampanha();
+  const dados=CSMS.map(campanhaDoCsm);
+  const cards=dados.map(d=>{
+    const cc=CSM_COLORS[d.csm]||{dot:'#3A86FF'};
+    return`<div class="gestao-card" style="border-top-color:${cc.dot}">
+      <div class="gestao-card-nome"><span class="gerente-dot" style="background:${cc.dot}"></span>${esc(d.csm)}</div>
+      <div class="gestao-stat"><span class="gestao-stat-label">Inscritos</span><span class="gestao-stat-val">${d.qtd} / ${d.cota}</span></div>
+      <div class="gestao-stat"><span class="gestao-stat-label">Vendidos / Cortesia</span><span class="gestao-stat-val">${d.vendidos} / ${d.cortesia}</span></div>
+      <div class="gestao-stat"><span class="gestao-stat-label">Valor vendido</span><span class="gestao-stat-val">${fmtc(d.valor)}</span></div>
+      <div class="gestao-stat"><span class="gestao-stat-label">Meta de ${CAMPANHA_META_QTD}</span><span class="gestao-stat-val ${d.metaBatida?'green':''}">${d.metaBatida?'✅ batida':'—'}</span></div>
+      <div class="gestao-stat"><span class="gestao-stat-label">Total a pagar</span><span class="gestao-stat-val ${d.totalGanho?'green':''}">${d.totalGanho?fmt(d.totalGanho):'—'}</span></div>
+    </div>`;
+  }).join('');
+  const totalPagar=dados.reduce((s,d)=>s+d.totalGanho,0);
+  alvo.innerHTML=`<div class="table-header" style="margin-top:1.5rem">
+      <div><div class="table-header-title">🎟️ Campanha Camp 2026 <span style="font-size:11px;font-weight:400;color:var(--neutral-400)">${dias>0?dias+' dias até 15/10':'campanha encerrada'}</span></div>
+      <div class="table-count">Total a pagar no fechamento: ${fmt(totalPagar)}</div></div>
+    </div>
+    <div class="gestao-grid">${cards}</div>`;
+}
+
 // ── GESTÃO ────────────────────────────────────────────────
 function renderGestao(){
   const {score:npsGeral,total:npsTot}=calcNPS(allData);
@@ -1655,11 +1805,41 @@ function renderCharts(accent,faint){
 }
 
 // ── TABLE ─────────────────────────────────────────────────
+// Registro de colunas ordenáveis da tabela principal. `dirPadrao` é a direção do
+// primeiro clique — desc para o que interessa ver "mais primeiro" (MRR, alertas,
+// em acompanhamento), asc para o resto.
+const COL_DEFS={
+  id:     {label:'ID',          get:r=>r.idNucleo||0,                                     dirPadrao:1},
+  cliente:{label:'Cliente',     get:r=>(r.nome||'').toLowerCase(),                         dirPadrao:1},
+  plano:  {label:'Plano',       get:r=>(r.planoGestor||r.planoUnique||'').toLowerCase(),   dirPadrao:1},
+  mrr:    {label:'MRR',         get:r=>r.mrr||0,                                           dirPadrao:-1},
+  renov:  {label:'Renovação',   get:r=>MESES.indexOf(r.baseRenov),                         dirPadrao:1},
+  gerente:{label:'Gerente',     get:r=>(r.gerente||'').toLowerCase(),                       dirPadrao:1},
+  finst:  {label:'Status Fin.', get:r=>(r.finStatus||'').toLowerCase(),                     dirPadrao:1},
+  status: {label:'Status',      get:r=>(r.status||'').toLowerCase(),                        dirPadrao:1},
+  alertas:{label:'Alertas',     get:r=>r.alertas.length,                                    dirPadrao:-1},
+  acomp:  {label:'Acomp.',      get:r=>r.acomp?1:0,                                         dirPadrao:-1},
+  camp:   {label:'Camp 2026',   get:r=>(r.eventoCamp||'').toLowerCase(),                    dirPadrao:1},
+};
+// null = nenhuma coluna clicada ainda, usa o dropdown "Ordenar" (currentSort).
+let colSort=null;
+
 function renderTableHead(showMRR){
   const cols=showMRR
-    ?['ID','Cliente','Plano','MRR','Renovação','Gerente','Status Fin.','Alertas','Acomp.','Camp 2026']
-    :['ID','Cliente','Plano','Renovação','Gerente','Status','Camp 2026'];
-  document.getElementById('table-head').innerHTML=cols.map(c=>`<th>${c}</th>`).join('');
+    ?['id','cliente','plano','mrr','renov','gerente','finst','alertas','acomp','camp']
+    :['id','cliente','plano','renov','gerente','status','camp'];
+  document.getElementById('table-head').innerHTML=cols.map(k=>{
+    const ativo=colSort?.key===k;
+    const seta=ativo?(colSort.dir===1?' ▲':' ▼'):'';
+    return`<th class="th-sort${ativo?' th-sort-ativo':''}" onclick="sortByCol('${k}')" title="Ordenar por ${COL_DEFS[k].label}">${COL_DEFS[k].label}${seta}</th>`;
+  }).join('');
+}
+/** Clique no cabeçalho da coluna: primeiro clique usa dirPadrao, segundo inverte. */
+function sortByCol(key){
+  const c=COL_DEFS[key];
+  if(!c)return;
+  colSort=(colSort&&colSort.key===key)?{key,dir:-colSort.dir}:{key,dir:c.dirPadrao};
+  applySort();
 }
 function renderTable(showMRR){
   const start=(currentPage-1)*PAGE_SIZE;
@@ -1790,7 +1970,25 @@ function openDetail(rStr,showMRR){
       </select>
       <span id="camp-estado" style="font-size:11px;min-width:80px"></span>
     </div>
-    <div style="font-size:10px;color:var(--neutral-400);margin-top:5px">Grava direto no ClickUp, sem sair do painel. "— sem marcação —" apaga o campo.</div>`}
+    <div style="font-size:10px;color:var(--neutral-400);margin-top:5px">Grava direto no ClickUp, sem sair do painel. "— sem marcação —" apaga o campo.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
+      <div>
+        <label style="font-size:10px;color:var(--neutral-500)">Ingressos vendidos</label>
+        <input type="number" id="camp-vendidos" class="ctrl-select" min="0" step="1" style="width:100%"
+          value="${r.campVendidos||0}" onchange="salvarCampoNumero(this,CAMPO_CAMP_VENDIDOS,'campVendidos')">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--neutral-500)">Ingressos cortesia</label>
+        <input type="number" id="camp-cortesia" class="ctrl-select" min="0" step="1" style="width:100%"
+          value="${r.campCortesia||0}" onchange="salvarCampoNumero(this,CAMPO_CAMP_CORTESIA,'campCortesia')">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--neutral-500)">Valor vendido (R$)</label>
+        <input type="number" id="camp-valor" class="ctrl-select" min="0" step="0.01" style="width:100%"
+          value="${r.campValor||0}" onchange="salvarCampoNumero(this,CAMPO_CAMP_VALOR,'campValor')">
+      </div>
+    </div>
+    <span id="camp-num-estado" style="font-size:11px"></span>`}
     ${r.outrosSrv?.length?`
       <div class="detail-section-title">🛠️ Outros serviços</div>
       <div class="detail-tags">${r.outrosSrv.map(s=>`<span class="badge badge-outro" style="font-size:11px;padding:3px 9px">${s}</span>`).join('')}</div>`:''}
@@ -1849,6 +2047,45 @@ async function salvarEventoCamp(sel){
     estado.title=e.message||'Falha ao gravar';
   }finally{
     sel.disabled=false;
+  }
+}
+
+/**
+ * Grava um dos 3 campos numéricos da campanha Camp 2026 (vendidos/cortesia/valor).
+ * Mesmo padrão de salvarEventoCamp: otimista, reverte no erro, reflete em `allData`
+ * sem recarregar a carteira. Não é `limpavel` — diferente do Evento, aqui "limpar" é
+ * só digitar 0, não precisa de um caminho de DELETE separado.
+ */
+async function salvarCampoNumero(input,fieldId,prop){
+  const r=_currentDetailCliente;
+  const estado=document.getElementById('camp-num-estado');
+  if(!r||!estado)return;
+
+  const anterior=r[prop]||0;
+  const novo=Number(input.value);
+  if(!Number.isFinite(novo)||novo<0){input.value=anterior;return;}
+  if(novo===anterior)return;
+
+  input.disabled=true;
+  estado.style.color='var(--neutral-500)';
+  estado.title='';
+  estado.textContent='salvando…';
+  try{
+    await apiPost('/api/clickup?action=set-field',{taskId:r.id,fieldId,value:novo});
+    r[prop]=novo;
+    const naTabela=allData.find(x=>x.id===r.id);
+    if(naTabela)naTabela[prop]=novo;
+    estado.style.color='var(--green)';
+    estado.textContent='✓ salvo';
+    renderCampanha();
+  }catch(e){
+    if(e.message==='sessao')return;
+    input.value=anterior;
+    estado.style.color='var(--red)';
+    estado.textContent='✕ não salvou';
+    estado.title=e.message||'Falha ao gravar';
+  }finally{
+    input.disabled=false;
   }
 }
 

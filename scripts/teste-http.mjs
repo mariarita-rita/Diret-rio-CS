@@ -1273,7 +1273,8 @@ console.log('\n[30] Evento: Camp 2026 — allowlist explicita, escopo e reflexo'
   checar('  e os ids sao os da lista exportada',
          lib.EVENTO_CAMP_OPCOES.map((o) => o.id).every((id) => lib.CAMPOS_ESCRITA[CAMPO].opcoes.has(id)), true);
   // Nenhuma regra generica de "qualquer drop_down": a allowlist segue fechada.
-  checar('total de campos na allowlist continua enumeravel', Object.keys(lib.CAMPOS_ESCRITA).length, 5);
+  // 5 + os 3 campos numericos da campanha (vendidos/cortesia/valor vendido).
+  checar('total de campos na allowlist continua enumeravel', Object.keys(lib.CAMPOS_ESCRITA).length, 8);
 
   // Front e servidor tem de usar os MESMOS ids.
   const front = ler('dashboard_carteiras.html');
@@ -1598,6 +1599,109 @@ console.log('\n[32] action=busca: diretorio sem valor financeiro, sem filtro de 
   checar('front tem a aba de busca', /id:'busca'/.test(front), true);
   checar('front chama action=busca', front.includes("action=busca"), true);
   checar('consulta nao carrega a carteira no front', /nivel==='consulta'\)\{[\s\S]{0,400}?return;/.test(front), true);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[33] Campanha Camp 2026 — 3 campos numericos, allowlist e escopo');
+{
+  const VENDIDOS = '4a4400e7-6bfd-423e-9467-9c6f11c458c9';
+  const CORTESIA = '62514802-d199-462a-9a44-9e8389c74951';
+  const VALOR = '748dbd02-1c2f-4f31-a5f7-5cc82bcd3cb0';
+  const GERENTE = '3898a8f4-bb21-46d7-88ee-79d164033fdf';
+  const fetchOriginal = globalThis.fetch;
+  const escritas = [];
+
+  const task = () => ({
+    id: 'tCampanha', name: 'Cliente Campanha', list: { id: '901327787926' }, status: { status: 'ativo' },
+    custom_fields: [
+      { id: GERENTE, type: 'drop_down', value: 0, type_config: { options: [{ orderindex: 0, name: 'Gian Luca' }] } },
+      { id: VENDIDOS, type: 'number', value: 10 },
+      { id: CORTESIA, type: 'number', value: 2 },
+      { id: VALOR, type: 'currency', value: 1234.5 },
+    ],
+  });
+
+  globalThis.fetch = async (url, init) => {
+    if (init?.method === 'POST') escritas.push({ url: String(url), body: JSON.parse(init.body) });
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '95'], ['x-ratelimit-reset', '0']]),
+      json: async () => (/\/list\//.test(String(url)) ? { tasks: [task()], last_page: true } : task()),
+      text: async () => '',
+    };
+  };
+
+  const libUrl = libClickupUnica('campanha-camp');
+  const lib = await import(libUrl);
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  // Allowlist: os 3 campos entraram como tipo numero, com teto contra digitacao errada.
+  for (const [nome, id, max] of [['vendidos', VENDIDOS, 999], ['cortesia', CORTESIA, 999], ['valor', VALOR, 999999]]) {
+    checar(`${nome} esta em CAMPOS_ESCRITA`, Object.hasOwn(lib.CAMPOS_ESCRITA, id), true);
+    checar(`  ${nome} como tipo numero`, lib.CAMPOS_ESCRITA[id].tipo, 'numero');
+    checar(`  ${nome} com o teto certo`, lib.CAMPOS_ESCRITA[id].max, max);
+    checar(`  ${nome} nao e limpavel`, Boolean(lib.CAMPOS_ESCRITA[id].limpavel), false);
+  }
+
+  // Front e servidor tem de usar os MESMOS ids.
+  const front = ler('dashboard_carteiras.html');
+  checar('front declara CAMPO_CAMP_VENDIDOS', front.includes(`CAMPO_CAMP_VENDIDOS='${VENDIDOS}'`), true);
+  checar('front declara CAMPO_CAMP_CORTESIA', front.includes(`CAMPO_CAMP_CORTESIA='${CORTESIA}'`), true);
+  checar('front declara CAMPO_CAMP_VALOR', front.includes(`CAMPO_CAMP_VALOR='${VALOR}'`), true);
+
+  // Leitura: mapTask expoe os 3 valores.
+  const { linhas } = await lib.getCarteira();
+  checar('mapTask expoe vendidos', linhas[0].campVendidos, 10);
+  checar('  cortesia', linhas[0].campCortesia, 2);
+  checar('  valor vendido', linhas[0].campValor, 1234.5);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const gravar = async (perfil, fieldId, value) => {
+    const r = res();
+    await cu({
+      method: 'POST',
+      headers: cabecalhos({ cookie: cookieDe(perfil), 'content-type': 'application/json' }),
+      query: { action: 'set-field' },
+      body: { taskId: 'tCampanha', fieldId, value },
+    }, r);
+    return r;
+  };
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'G' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'C' };
+
+  escritas.length = 0;
+  const ok = await gravar(GESTAO, VENDIDOS, 15);
+  checar('gestao grava numero valido: 200', [ok.code, ok.corpo.ok], [200, true]);
+  checar('  manda o numero, nao string', escritas.at(-1).body.value, 15);
+
+  const depois = await lib.getCarteira();
+  checar('refletirEscrita atualiza sem reler', depois.linhas[0].campVendidos, 15);
+
+  // Validacao do tipo numero.
+  const negativo = await gravar(GESTAO, VENDIDOS, -1);
+  checar('numero negativo: 403', [negativo.code, negativo.corpo.code], [403, 'valor_nao_permitido']);
+  const acimaDoTeto = await gravar(GESTAO, VENDIDOS, 1000);
+  checar('acima do teto (999): 403', [acimaDoTeto.code, acimaDoTeto.corpo.code], [403, 'valor_nao_permitido']);
+  const string = await gravar(GESTAO, VENDIDOS, '10');
+  checar('string em vez de numero: 403', [string.code, string.corpo.code], [403, 'valor_nao_permitido']);
+  const nan = await gravar(GESTAO, VENDIDOS, NaN);
+  checar('NaN: 403', [nan.code, nan.corpo.code], [403, 'valor_nao_permitido']);
+  const nulo = await gravar(GESTAO, VENDIDOS, null);
+  checar('null: 403 (campo nao e limpavel)', [nulo.code, nulo.corpo.code], [403, 'valor_nao_permitido']);
+  const valorAltoOk = await gravar(GESTAO, VALOR, 999999);
+  checar('valor no teto exato (999999): 200', valorAltoOk.code, 200);
+
+  // Escopo: mesmo portao de sempre.
+  const csmDono = await gravar(GIAN, CORTESIA, 3);
+  checar('csm dono grava: 200', csmDono.code, 200);
+  const csmOutro = await gravar(PATRICIA, CORTESIA, 3);
+  checar('csm de outra carteira: 403 fora_da_carteira', [csmOutro.code, csmOutro.corpo.code], [403, 'fora_da_carteira']);
+  const soLeitura = await gravar(CONSULTA, CORTESIA, 3);
+  checar('consulta: 403 somente_leitura', [soLeitura.code, soLeitura.corpo.code], [403, 'somente_leitura']);
 
   globalThis.fetch = fetchOriginal;
 }
