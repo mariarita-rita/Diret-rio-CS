@@ -668,7 +668,7 @@
               <tr><th>Excedente</th><td colspan="3">R$19,90 por milhão de tokens adicionais</td></tr>
               <tr><th>Ajuste automático</th><td colspan="3">Após 2 meses consecutivos acima da tolerância, o plano é ajustado ou um pacote recorrente é adicionado</td></tr>
               <tr><th>Compra de capacidade extra</th><td class="no">Não disponível</td><td class="yes">Disponível, sem mudar de plano</td><td class="yes">Disponível</td></tr>
-              <tr><th>Governança por usuário</th><td>Não se aplica</td><td>Perfis Padrão e Avançado para alocar capacidade</td><td>Mesma estrutura, com total maior</td></tr>
+              <tr><th>Governança por usuário</th><td>Não se aplica</td><td>Perfis Padrão e Avançado para alocar mais capacidade a usuários específicos.</td><td>Mesma estrutura, com total maior</td></tr>
             </tbody>
           </table>
         </div>
@@ -1036,6 +1036,61 @@
       <div id="horasSimRows"></div>
       <div class="divider"></div>
       <div id="horasSimTotal"></div>
+    </div>
+
+    <!-- IMPLANTAÇÃO ENTERPRISE -->
+    <div class="card" id="implantacaoCard" style="margin-top:22px; display:none;">
+      <h2>Implantação Enterprise</h2>
+      <div class="sub">Baseado no guia "Como Funciona a Precificação de Implantação Enterprise" — o cliente compra um pacote fechado, nunca hora avulsa.</div>
+
+      <div class="field">
+        <label for="im-pacote">Pacote de implantação</label>
+        <select id="im-pacote" class="sel">
+          <option value="padrao">Padrão — R$7.900 (até 3 fluxos, leitura)</option>
+          <option value="intermediario" selected>Intermediário — R$14.900 (regras de negócio, escrita no ERP)</option>
+          <option value="avancado">Avançado — R$24.900 (múltiplas áreas, integração externa)</option>
+          <option value="nenhum">Nenhum — implantação fora desta proposta</option>
+        </select>
+        <div class="hint" id="im-pacote-hint"></div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="im-sistemas">Sistemas externos adicionais</label>
+          <input type="number" id="im-sistemas" class="num-input tabular" min="0" step="1" value="0">
+          <div class="hint">+R$5.600 cada, só disponível em Intermediário/Avançado.</div>
+        </div>
+        <div class="field">
+          <label for="im-horas">Horas adicionais contratadas</label>
+          <input type="number" id="im-horas" class="num-input tabular" min="0" step="1" value="0">
+          <div class="hint">R$450/hora, além da referência interna do pacote.</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer;">
+          <input type="checkbox" id="im-isento" style="width:16px; height:16px; accent-color:var(--ink);">
+          Isentar o setup nesta proposta (condição comercial especial)
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="im-pagamento">Condição de pagamento do setup</label>
+        <select id="im-pagamento" class="sel">
+          <option value="avista">À vista — 100% na assinatura</option>
+          <option value="metade">50% na assinatura + 50% no go-live</option>
+          <option value="parcelado">Parcelado em até 3x</option>
+        </select>
+      </div>
+
+      <div class="field" style="margin-bottom:0">
+        <label for="im-ganho">Ganho mensal estimado (R$) — para calcular o payback</label>
+        <input type="number" id="im-ganho" class="num-input tabular" min="0" step="100" placeholder="ex: 37200">
+        <div class="hint">Vem do diagnóstico consultivo (receita recuperada, horas economizadas × custo/hora, redução de perdas etc.).</div>
+      </div>
+
+      <div class="divider"></div>
+      <div id="implantacaoBreakdown"></div>
     </div>
   </section>
 
@@ -1524,6 +1579,34 @@
     refreshPropSummary();
   }
 
+  // ---------- Implantação Enterprise (guia "Como Funciona a Precificação de Implantação Enterprise") ----------
+  var PACOTES_IMPLANTACAO = [
+    { id: "padrao", nome: "Padrão", setup: 7900, horasRef: 22, indicado: "Poucos fluxos simples, majoritariamente leitura, dentro do stack Londrisoft (Gestor, Bime, Unique, Simplaz, Waipe)." },
+    { id: "intermediario", nome: "Intermediário", setup: 14900, horasRef: 42, indicado: "Mais processos, regras de negócio, aprovações, escrita no ERP ou human-in-the-loop." },
+    { id: "avancado", nome: "Avançado", setup: 24900, horasRef: 70, indicado: "Múltiplas áreas, maior complexidade ou integração com sistema externo." }
+  ];
+  var HORA_ADICIONAL_VALOR = 450;
+  var SISTEMA_EXTERNO_VALOR = 5600;
+  var implantacao = { pacoteId: "intermediario", sistemasExternos: 0, horasAdicionais: 0, isento: false, pagamento: "avista", ganhoMensal: "" };
+
+  function computeImplantacao(){
+    var pac = PACOTES_IMPLANTACAO.filter(function(p){ return p.id === implantacao.pacoteId; })[0];
+    if (!pac || implantacao.pacoteId === "nenhum") return { hasPacote: false };
+    var extraSistemas = (parseInt(implantacao.sistemasExternos, 10) || 0) * SISTEMA_EXTERNO_VALOR;
+    var extraHoras = (parseFloat(implantacao.horasAdicionais) || 0) * HORA_ADICIONAL_VALOR;
+    var setupSubtotal = pac.setup + extraSistemas + extraHoras;
+    var setupTotal = implantacao.isento ? 0 : setupSubtotal;
+    var ganhoMensal = parseFloat(implantacao.ganhoMensal) || 0;
+    var payback = (ganhoMensal > 0 && setupTotal > 0) ? (setupTotal / ganhoMensal) : null;
+    return {
+      hasPacote: true, pacote: pac,
+      sistemasExternos: parseInt(implantacao.sistemasExternos, 10) || 0, extraSistemas: extraSistemas,
+      horasAdicionais: parseFloat(implantacao.horasAdicionais) || 0, extraHoras: extraHoras,
+      setupSubtotal: setupSubtotal, setupTotal: setupTotal, isento: implantacao.isento,
+      pagamento: implantacao.pagamento, ganhoMensal: ganhoMensal, payback: payback
+    };
+  }
+
   // ---------- Simulador de Preço (desconto + valores adicionais) ----------
   var extraState = { additionalItems: [] }; // [{label, value}]
 
@@ -1609,6 +1692,8 @@
     if (!baseWrap || !totalWrap) return;
     var diag = lastDiagnostic;
     if (entField) entField.style.display = (diag && diag.price.total == null) ? "block" : "none";
+    var implCard = document.getElementById("implantacaoCard");
+    if (implCard) implCard.style.display = (diag && diag.rec.plan === "Enterprise") ? "block" : "none";
 
     var p = computePricing();
 
@@ -1629,6 +1714,31 @@
     }
     rowsHtml += '<div class="pricesim-row total"><span class="lbl">Total mensal</span><span class="val tabular">' + fmtBRL(p.total) + '</span></div>';
     totalWrap.innerHTML = rowsHtml;
+  }
+
+  function renderImplantacaoSim(){
+    var wrap = document.getElementById("implantacaoBreakdown");
+    if (!wrap) return;
+    var i = computeImplantacao();
+    if (!i.hasPacote){
+      wrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Selecione "Nenhum" apenas se a implantação não fizer parte desta proposta — o guia recomenda sempre enquadrar em um pacote.</span></div>';
+      return;
+    }
+    var rows = '<div class="pricesim-row"><span class="lbl">Pacote ' + escapeHtml(i.pacote.nome) + ' (ref.: ' + i.pacote.horasRef + 'h internas)</span><span class="val tabular">' + fmtBRL(i.pacote.setup) + '</span></div>';
+    if (i.extraSistemas > 0){
+      rows += '<div class="pricesim-row"><span class="lbl">' + i.sistemasExternos + ' sistema(s) externo(s) adicional(is) × ' + fmtBRL(SISTEMA_EXTERNO_VALOR) + '</span><span class="val tabular">' + fmtBRL(i.extraSistemas) + '</span></div>';
+    }
+    if (i.extraHoras > 0){
+      rows += '<div class="pricesim-row"><span class="lbl">' + i.horasAdicionais + 'h adicionais × ' + fmtBRL(HORA_ADICIONAL_VALOR) + '</span><span class="val tabular">' + fmtBRL(i.extraHoras) + '</span></div>';
+    }
+    if (i.isento){
+      rows += '<div class="pricesim-row discount"><span class="lbl">Isenção de setup nesta proposta</span><span class="val tabular">-' + fmtBRL(i.setupSubtotal) + '</span></div>';
+    }
+    rows += '<div class="pricesim-row total"><span class="lbl">Setup total</span><span class="val tabular">' + fmtBRL(i.setupTotal) + '</span></div>';
+    if (i.payback != null){
+      rows += '<div class="hint" style="margin-top:6px;">Payback estimado: <strong>' + i.payback.toFixed(2).replace(".", ",") + ' mês(es)</strong> (Setup ÷ ganho mensal estimado).</div>';
+    }
+    wrap.innerHTML = rows;
   }
 
   function computeHoras(){
@@ -1778,6 +1888,26 @@
   document.getElementById("p-desc-valor").addEventListener("input", function(){ renderPriceSim(); refreshPropSummary(); });
   document.getElementById("p-ent-base").addEventListener("input", function(){ renderPriceSim(); refreshPropSummary(); });
 
+  // ---------- Implantação Enterprise ----------
+  function updatePacoteHint(){
+    var pac = PACOTES_IMPLANTACAO.filter(function(p){ return p.id === implantacao.pacoteId; })[0];
+    var hintEl = document.getElementById("im-pacote-hint");
+    if (hintEl) hintEl.textContent = pac ? pac.indicado : "";
+    var sistemasEl = document.getElementById("im-sistemas");
+    if (sistemasEl) sistemasEl.disabled = (implantacao.pacoteId === "padrao" || implantacao.pacoteId === "nenhum");
+  }
+  document.getElementById("im-pacote").addEventListener("change", function(){
+    implantacao.pacoteId = this.value;
+    updatePacoteHint();
+    renderImplantacaoSim();
+  });
+  document.getElementById("im-sistemas").addEventListener("input", function(){ implantacao.sistemasExternos = this.value; renderImplantacaoSim(); });
+  document.getElementById("im-horas").addEventListener("input", function(){ implantacao.horasAdicionais = this.value; renderImplantacaoSim(); });
+  document.getElementById("im-isento").addEventListener("change", function(){ implantacao.isento = this.checked; renderImplantacaoSim(); });
+  document.getElementById("im-pagamento").addEventListener("change", function(){ implantacao.pagamento = this.value; renderImplantacaoSim(); });
+  document.getElementById("im-ganho").addEventListener("input", function(){ implantacao.ganhoMensal = this.value; renderImplantacaoSim(); });
+  updatePacoteHint();
+
   // ---------- Modal: Novo agente personalizado ----------
   function openNewAgentModal(){
     ["na-nome","na-turno","na-oque","na-faz","na-entrega","na-substitui","na-msg","na-keywords"].forEach(function(id){
@@ -1837,6 +1967,7 @@
   renderAddlItems();
   renderPriceSim();
   renderHorasSim();
+  renderImplantacaoSim();
   refreshPropSummary();
 
   // ---------- Proposal HTML builder ----------
@@ -1960,6 +2091,44 @@
       '<strong>' + horas.total + ' horas por mês' + (horas.total >= 8 ? " equivalem a aproximadamente " + dias + " dia(s) de trabalho." : ".") + '</strong> Tempo que hoje é consumido em tarefas manuais e repetitivas, e passa a ser aplicado onde a gestão realmente agrega valor: decidir, priorizar e atender o cliente.</div>';
   }
 
+  function buildImplantacaoSection(impl){
+    if (!impl.hasPacote){
+      return '<p class="muted">Pacote de implantação não definido nesta simulação.</p>';
+    }
+    var rows = '<tr><td>Pacote ' + escapeHtml(impl.pacote.nome) + '</td><td class="num">' + fmtBRL(impl.pacote.setup) + '</td></tr>';
+    if (impl.extraSistemas > 0) rows += '<tr><td>' + impl.sistemasExternos + ' sistema(s) externo(s) adicional(is)</td><td class="num">' + fmtBRL(impl.extraSistemas) + '</td></tr>';
+    if (impl.extraHoras > 0) rows += '<tr><td>' + impl.horasAdicionais + 'h adicionais de escopo</td><td class="num">' + fmtBRL(impl.extraHoras) + '</td></tr>';
+
+    var pagamentoLabel = { avista: "À vista — 100% na assinatura do contrato", metade: "50% na assinatura + 50% no go-live", parcelado: "Parcelado em até 3x" }[impl.pagamento] || "";
+
+    var pricingBoxHtml = '<div class="pricebox">' +
+      '<div class="tier">Admissão do time · Implantação ' + escapeHtml(impl.pacote.nome) + '</div>' +
+      (impl.isento
+        ? '<div class="val"><span class="strike">' + fmtBRL(impl.setupSubtotal) + '</span>&nbsp;→&nbsp;<span style="color:var(--verde)">R$0</span> <small>· isento nesta contratação</small></div>'
+        : '<div class="val">' + fmtBRL(impl.setupTotal) + ' <small>· pagamento único</small></div>') +
+      '<table><tr><th>Item</th><th style="text-align:right">Valor</th></tr>' + rows + '</table>' +
+      '<p class="small muted" style="margin-top:10px">Condição de pagamento: ' + pagamentoLabel + '.</p>' +
+    '</div>';
+
+    var freebandHtml = "";
+    if (impl.isento){
+      freebandHtml = '<div class="freeband"><div class="selo"><b>100%</b><span>isenta</span></div>' +
+        '<div class="txt"><b>Nesta contratação, a admissão do time é integralmente isenta.</b><br>' +
+        'O trabalho de desenho e construção — avaliado em <span class="old">' + fmtBRL(impl.setupSubtotal) + '</span> — sai por <span class="new">R$0</span>.</div></div>';
+    }
+
+    var paybackHtml = "";
+    if (impl.payback != null){
+      paybackHtml = '<div class="callout green"><span class="lbl">Retorno estimado</span>' +
+        'Com um ganho mensal estimado de ' + fmtBRL(impl.ganhoMensal) + ', o investimento de implantação se paga em aproximadamente <strong>' + impl.payback.toFixed(2).replace(".", ",") + ' mês(es)</strong>.</div>';
+    }
+
+    var escopoHtml = '<div class="callout"><span class="lbl">O que está incluído</span>Diagnóstico e kickoff, setup de ambiente, configuração de governança básica, construção dos fluxos contratados, validação com o cliente, ajustes dentro do escopo aprovado, treinamento da equipe, go-live e acompanhamento inicial, relatório de fechamento.</div>' +
+      '<div class="callout warn"><span class="lbl">O que fica fora do escopo</span>Desenvolvimento de funcionalidades novas nos ERPs, migração ou saneamento de dados do cliente, integrações com sistemas externos além do contratado, suporte operacional contínuo fora do MRR e qualquer alteração de escopo após a aprovação — tratados à parte, quando necessário.</div>';
+
+    return pricingBoxHtml + freebandHtml + paybackHtml + escopoHtml;
+  }
+
   function buildProposalHTML(){
     var ctx = getProposalContext();
     var diag = lastDiagnostic;
@@ -2020,8 +2189,10 @@
     '.section-num{color:var(--azul);font-weight:700;font-family:Poppins,Inter,sans-serif;font-size:12.5px;letter-spacing:.1em}' +
     '.callout{background:var(--quasebranco);border-left:4px solid var(--azul);padding:15px 19px;border-radius:0 8px 8px 0;margin:16px 0;font-size:13px}' +
     '.callout.green{background:var(--verdebg);border-left-color:var(--verde)}' +
+    '.callout.warn{background:#FEF9C3;border-left-color:var(--amarelo)}' +
     '.callout .lbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--azul);margin-bottom:6px}' +
     '.callout.green .lbl{color:var(--verde)}' +
+    '.callout.warn .lbl{color:var(--amarelo)}' +
     'table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}' +
     'th{background:var(--azul);color:#fff;text-align:left;padding:10px 12px;font-weight:600;font-size:12.5px}' +
     'td{padding:10px 12px;border:1px solid var(--cinzaclaro);vertical-align:top}' +
@@ -2094,42 +2265,40 @@
       '</div>' +
     '</div>' +
 
-    '<div class="page">' +
-      docHeader +
-      '<p class="section-num">01</p>' +
-      '<h2>Contexto e Dores do Cliente</h2>' +
-      doresHtml +
-      '<div class="callout"><span class="lbl">Sobre este documento</span>Este é um modelo de proposta gerado a partir da simulação de plano e dos agentes selecionados pelo CSM. Revise cada seção, ajuste o texto ao tom da conversa com o cliente e confirme os números antes de enviar.</div>' +
-    '</div>' +
+    (function(){
+      var isEnterprise = diag && diag.rec.plan === "Enterprise";
+      var impl = isEnterprise ? computeImplantacao() : null;
 
-    '<div class="page">' + watermark +
-      '<p class="section-num">02</p>' +
-      '<h2>O Time Digital Proposto</h2>' +
-      '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' +
-      fichasHtml +
-    '</div>' +
+      var sections = [
+        { header: true, title: "Contexto e Dores do Cliente",
+          body: doresHtml + '<div class="callout"><span class="lbl">Sobre este documento</span>Este é um modelo de proposta gerado a partir da simulação de plano e dos agentes selecionados pelo CSM. Revise cada seção, ajuste o texto ao tom da conversa com o cliente e confirme os números antes de enviar.</div>' },
+        { title: "O Time Digital Proposto",
+          body: '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' + fichasHtml },
+        { title: "Tempo Devolvido à Gestão",
+          body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml },
+        { title: "Plano Recomendado e Investimento",
+          body: (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
+            commercialHtml +
+            (isEnterprise ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. O trabalho de desenho e construção dos fluxos está detalhado na próxima seção.</div>' : "") }
+      ];
 
-    '<div class="page">' + watermark +
-      '<p class="section-num">03</p>' +
-      '<h2>Tempo Devolvido à Gestão</h2>' +
-      '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' +
-      horasHtml +
-    '</div>' +
+      if (isEnterprise && impl.hasPacote){
+        sections.push({ title: "Implantação Enterprise", body: buildImplantacaoSection(impl) });
+      }
 
-    '<div class="page">' + watermark +
-      '<p class="section-num">04</p>' +
-      '<h2>Plano Recomendado e Investimento</h2>' +
-      (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
-      commercialHtml +
-      (diag && diag.rec.plan === "Enterprise" ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. Automação personalizada, integração com sistemas externos ou desenho assistido de fluxos seguem o guia próprio de implantação Enterprise, tratado à parte.</div>' : "") +
-    '</div>' +
+      sections.push({ title: "Próximos Passos",
+        body: '<ul class="clean"><li>Validar com o cliente as dores mapeadas e os agentes propostos.</li><li>Ajustar turnos, destinatários e regras de cada agente ao processo real do cliente.</li><li>Confirmar plano, usuários e empresas para fechar a proposta comercial.</li></ul>' +
+          '<div class="footer">Londrisoft © ' + anoAtual + ' — Documento confidencial, preparado para ' + escapeHtml(ctx.cliente) + '.<br>Nomes de cargo dos agentes são denominações comerciais desta proposta; o desenho final de cada agente é definido em conjunto na implantação.</div>' });
 
-    '<div class="page">' + watermark +
-      '<p class="section-num">05</p>' +
-      '<h2>Próximos Passos</h2>' +
-      '<ul class="clean"><li>Validar com o cliente as dores mapeadas e os agentes propostos.</li><li>Ajustar turnos, destinatários e regras de cada agente ao processo real do cliente.</li><li>Confirmar plano, usuários e empresas para fechar a proposta comercial.</li></ul>' +
-      '<div class="footer">Londrisoft © ' + anoAtual + ' — Documento confidencial, preparado para ' + escapeHtml(ctx.cliente) + '.<br>Nomes de cargo dos agentes são denominações comerciais desta proposta; o desenho final de cada agente é definido em conjunto na implantação.</div>' +
-    '</div>' +
+      return sections.map(function(s, i){
+        var num = String(i + 1).length < 2 ? "0" + (i + 1) : String(i + 1);
+        return '<div class="page">' + (s.header ? docHeader : watermark) +
+          '<p class="section-num">' + num + '</p>' +
+          '<h2>' + s.title + '</h2>' +
+          s.body +
+        '</div>';
+      }).join("");
+    })() +
     '</body></html>';
   }
 
