@@ -976,6 +976,10 @@
             Pré-visualizar proposta
           </button>
           <button type="button" class="btn-primary" id="btnBaixar" style="margin-top:0">Baixar modelo de proposta (HTML)</button>
+          <button type="button" class="btn-secondary" id="btnCopyHtml">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Copiar HTML da proposta
+          </button>
           <button type="button" class="btn-secondary" id="btnPrompt">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             Copiar prompt para o Gemini (Gem do Waipe)
@@ -983,7 +987,8 @@
         </div>
 
         <div class="prop-note">
-          O modelo sai com plano, preço e fichas de agente já preenchidos, no layout que vocês usam hoje — revise números, ajuste o tom e confirme os agentes com o cliente antes de enviar. Os cargos dos agentes são denominações comerciais; o desenho final de cada um é definido na implantação.
+          O modelo sai com plano, preço e fichas de agente já preenchidos, no layout que vocês usam hoje — revise números, ajuste o tom e confirme os agentes com o cliente antes de enviar. Os cargos dos agentes são denominações comerciais; o desenho final de cada um é definido na implantação.<br><br>
+          <strong>Prefira enviar o .html:</strong> abre com um duplo-clique em qualquer navegador (o cliente não precisa de PDF), e o layout sai idêntico ao da pré-visualização, sem os cortes de página que a impressão em PDF pode gerar. Se o e-mail do cliente costuma bloquear anexo .html, use "Copiar HTML" para colar o conteúdo em outro lugar (ex: um link hospedado), em vez de anexar o arquivo.
         </div>
       </div>
     </div>
@@ -2382,6 +2387,15 @@
     } else {
       openFallbackDownload(html);
     }
+  });
+
+  document.getElementById("btnCopyHtml").addEventListener("click", function(){
+    var html = buildProposalHTML();
+    copyToClipboard(html).then(function(){
+      showToast("HTML da proposta copiado — cole num editor e salve como .html, ou distribua como preferir");
+    }).catch(function(){
+      showToast("Não foi possível copiar automaticamente. Use \"Baixar\" ou a pré-visualização para copiar manualmente.");
+    });
   });
 
   function openFallbackDownload(html){
