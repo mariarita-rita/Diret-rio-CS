@@ -2003,8 +2003,9 @@
 
   var NETWORK_SVG = '<svg class="net" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid slice" fill="none"><g stroke="#fff" stroke-width="1" opacity="0.5"><line x1="120" y1="90" x2="300" y2="180"/><line x1="300" y1="180" x2="240" y2="360"/><line x1="300" y1="180" x2="500" y2="120"/><line x1="500" y1="120" x2="700" y2="220"/><line x1="240" y1="360" x2="460" y2="430"/><line x1="460" y1="430" x2="700" y2="220"/><line x1="700" y1="220" x2="820" y2="400"/><line x1="460" y1="430" x2="660" y2="500"/><line x1="120" y1="90" x2="240" y2="360"/><line x1="500" y1="120" x2="460" y2="430"/></g><g fill="#fff"><circle cx="120" cy="90" r="5"/><circle cx="300" cy="180" r="7"/><circle cx="500" cy="120" r="6"/><circle cx="700" cy="220" r="8"/><circle cx="240" cy="360" r="6"/><circle cx="460" cy="430" r="7"/><circle cx="820" cy="400" r="5"/><circle cx="660" cy="500" r="6"/></g></svg>';
 
-  function brandNodeSvg(color, size){
-    return '<svg width="' + (size || 22) + '" height="' + (size || 22) + '" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/></svg>';
+  var LONDRISOFT_LOGO_TEMPLATE = '<svg class="brand-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="239 409 1457 261"><polygon fill="§" points="635.6 462.6 609.1 462.6 609.1 626.1 719.2 626.1 719.2 602.8 635.6 602.8 635.6 462.6"/><path fill="§" d="M822,513c-9.1-5.3-19.5-8-31.2-8s-22,2.7-31.1,8c-9.2,5.3-16.4,12.5-21.7,21.6-5.3,9.1-8,19.3-8,30.8s2.7,22,8,31.1c5.3,9.2,12.5,16.4,21.7,21.7,9.1,5.3,19.5,8,31.1,8s22.2-2.7,31.2-8c9.1-5.3,16.3-12.5,21.7-21.7,5.4-9.1,8.1-19.5,8.1-31.1s-2.7-21.7-8.1-30.8c-5.4-9.1-12.6-16.3-21.7-21.6ZM821.9,585.9c-3.1,5.9-7.3,10.5-12.6,13.7-5.3,3.3-11.5,4.9-18.5,4.9s-13-1.6-18.4-4.9c-5.4-3.3-9.6-7.8-12.6-13.7-3-5.9-4.5-12.7-4.5-20.3s1.5-14.2,4.5-20.1c3-5.9,7.2-10.5,12.6-13.8,5.4-3.3,11.6-5,18.6-5s13,1.7,18.4,5c5.4,3.4,9.6,8,12.6,13.8,3,5.9,4.5,12.6,4.5,20.1s-1.6,14.5-4.7,20.3Z"/><path fill="§" d="M933.9,506.5c-10,0-18.7,2.4-26.2,7.1-5.4,3.4-9.7,7.8-12.9,13.1l-1-16.5h-23v115.8h24.8v-60.7c0-7.7,1.3-14.3,3.9-19.7,2.6-5.5,6.2-9.7,10.9-12.7,4.7-3,10.1-4.5,16.3-4.5s14.4,2.5,18.7,7.5c4.3,5,6.5,12.3,6.5,21.9v68.3h24.8v-71.7c0-15-3.8-26.8-11.3-35.2-7.5-8.4-18-12.6-31.4-12.6Z"/><path fill="§" d="M1082.1,512.5c-2.8-1.6-5.6-2.9-8.3-4-6.2-2.4-12.9-3.6-20.1-3.6-11.3,0-21.4,2.7-30.4,8.2-9,5.5-16,13-21.1,22.5-5.1,9.6-7.6,20.6-7.6,33s2.2,21.2,6.6,29.9c4.4,8.7,10.5,15.4,18.3,20.2,7.8,4.8,16.7,7.2,26.8,7.2s17.5-2.1,24.5-6.4c5-3,8.9-6.8,11.9-11.5l1,17.4h23v-166.5h-24.8v53.4ZM1073.4,595.4c-5.8,6-13.2,9.1-22.2,9.1s-17.3-3.4-22.9-10.2c-5.6-6.8-8.5-15.9-8.5-27.3s1.5-15.3,4.5-21.3c3-6,7.2-10.7,12.6-14.1,5.4-3.3,11.8-5,19.4-5s13.2,1.5,19.5,4.5c2.2,1,4.2,2.3,6.3,3.6v37.4c0,9.5-2.9,17.2-8.7,23.3Z"/><path fill="§" d="M1168.3,513.5c-5.1,3.5-9.2,8-12.5,13.5l-1.3-18.7h-23v117.7h24.8v-63.1c0-6.7,1.4-12.6,4.3-17.6,2.9-5.1,6.8-9,11.8-11.9,5-2.9,10.7-4.3,17-4.3s7.4.6,10.8,1.7l4.7-22.5c-4.1-1.3-8.3-2-12.7-2-8.8,0-16.7,2.4-23.7,7.1Z"/><rect fill="§" x="1217.2" y="509.1" width="24.8" height="117"/><rect fill="§" x="1216.2" y="463.3" width="27" height="25.5"/><path fill="§" d="M1320.4,555.5l-8.3-1.7c-8.3-1.6-14.2-3.6-17.5-5.8-3.4-2.2-5-5.4-5-9.4s1.8-7.8,5.5-10.2c3.7-2.4,9.1-3.6,16.3-3.6s11.7.9,17,2.8c5.3,1.9,10.3,4.7,14.8,8.5l11.5-16.7c-11.3-9.6-25.3-14.5-42.2-14.5s-25.6,3.2-34.2,9.7c-8.6,6.5-12.9,15.1-12.9,25.9s2.9,15.3,8.7,21c5.8,5.6,14.6,9.7,26.3,12.1l8.1,1.5c9.1,1.8,15.6,3.9,19.2,6.4,3.7,2.5,5.5,5.8,5.5,10s-2,8.4-6.1,10.9c-4.1,2.5-10,3.8-17.9,3.8s-13.8-1.2-19.7-3.6c-6-2.4-11.4-5.8-16.3-10.2l-13.2,16.4c5.6,5.6,12.5,9.8,21,12.7,8.4,2.9,17.7,4.4,27.8,4.4s18.6-1.4,26-4.3c7.4-2.9,13-7,17-12.5,4-5.5,6-12.1,6-20s-3-16.1-8.9-21.7c-6-5.6-15.5-9.7-28.6-12.1Z"/><path fill="§" d="M1464.1,513c-9.1-5.3-19.5-8-31.2-8s-22,2.7-31.1,8c-9.2,5.3-16.4,12.5-21.7,21.6-5.3,9.1-8,19.3-8,30.8s2.7,22,8,31.1c5.3,9.2,12.5,16.4,21.7,21.7,9.1,5.3,19.5,8,31.1,8s22.2-2.7,31.2-8c9.1-5.3,16.3-12.5,21.7-21.7,5.4-9.1,8.1-19.5,8.1-31.1s-2.7-21.7-8.1-30.8c-5.4-9.1-12.6-16.3-21.7-21.6ZM1464,585.9c-3.1,5.9-7.3,10.5-12.6,13.7-5.3,3.3-11.5,4.9-18.5,4.9s-13-1.6-18.4-4.9c-5.4-3.3-9.6-7.8-12.6-13.7-3-5.9-4.5-12.7-4.5-20.3s1.5-14.2,4.5-20.1c3-5.9,7.2-10.5,12.6-13.8,5.4-3.3,11.6-5,18.6-5s13,1.7,18.4,5c5.4,3.4,9.6,8,12.6,13.8,3,5.9,4.5,12.6,4.5,20.1s-1.6,14.5-4.7,20.3Z"/><path fill="§" d="M1545.2,501.2c0-16.7,6.8-25,20.3-25s6.9.6,9.8,1.8,5.9,3.1,8.8,5.5l11-16.2c-9-8-19.9-12-32.6-12s-23.6,4-31,12.1c-7.4,8.1-11.2,19.2-11.2,33.5v7.4h-20.3v20.1h20.3v97.2h24.8v-97.2h31.6v-20.1h-31.6v-7.1Z"/><path fill="§" d="M1660.5,598.1c-2.9,2.3-5.8,4-8.5,5.3-2.7,1.2-5.7,1.8-8.9,1.8-5.6,0-9.6-1.6-12.3-4.9-2.6-3.3-3.9-8.5-3.9-15.7v-55.9h32.8v-20.1h-32.8v-37.5h-24.8v37.5h-20.1v20.1h20.1v56.4c0,13.4,3.2,23.6,9.6,30.5,6.4,6.9,15.6,10.4,27.7,10.4s12.1-1,17.3-2.9c5.1-2,9.9-5.1,14.3-9.3l-10.5-15.7Z"/><path fill="§" d="M334.6,463.1c0-23.8-19.3-43.1-43.1-43.1h-42.6v111.1c0,23.8,19.3,43.1,43.1,43.1h42.6v-111.1Z"/><path fill="§" d="M488.9,660v-42.6c0-23.8-19.3-43.1-43.1-43.1h-111.1v42.6c0,23.8,19.3,43.1,43.1,43.1h111.1Z"/><path fill="§" d="M428.8,437.2c-23.8,0-43.1,19.3-43.1,43.1v42.6h111.1c23.8,0,43.1-19.3,43.1-43.1v-42.6h-111.1Z"/></svg>';
+  function londrisoftLogo(color){
+    return LONDRISOFT_LOGO_TEMPLATE.split("§").join(color);
   }
 
   var DEFAULT_ICON = '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/>';
@@ -2164,7 +2165,7 @@
     var horasHtml = buildHorasSection(horas);
 
     var commercialHtml = buildCommercialSection(pricing, diag, ctx);
-    var docHeader = '<div class="doc-header"><div class="brand">' + brandNodeSvg("#000035", 18) + 'LONDRISOFT</div><div class="docname">Proposta comercial · ' + escapeHtml(ctx.cliente) + '<br>Confidencial · ' + anoAtual + '</div></div>';
+    var docHeader = '<div class="doc-header"><div class="brand">' + londrisoftLogo("#000035") + '</div><div class="docname">Proposta comercial · ' + escapeHtml(ctx.cliente) + '<br>Confidencial · ' + anoAtual + '</div></div>';
     var watermark = '<svg class="wm" width="320" height="320" viewBox="0 0 24 24" fill="none" stroke="#3A86FF" stroke-width="1"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/></svg>';
 
     return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
@@ -2196,9 +2197,11 @@
     '.cover .sub{font-size:17px;font-weight:300;color:#fff;opacity:.92;margin-top:14px;max-width:640px}' +
     '.cover .meta{margin-top:40px;display:flex;gap:36px;flex-wrap:wrap;font-size:13px}' +
     '.cover .meta div span{display:block;color:var(--claro);opacity:.85;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}' +
-    '.brandword{font-family:Poppins,Inter,sans-serif;font-weight:700;font-size:24px;letter-spacing:.02em;display:flex;align-items:center;gap:10px}' +
+    '.brandword{display:flex;align-items:center;gap:10px}' +
+    '.brandword .brand-logo-svg{height:30px;width:auto}' +
     '.doc-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid var(--azul);padding-bottom:14px;margin-bottom:28px}' +
-    '.doc-header .brand{font-family:Poppins,Inter,sans-serif;font-weight:700;color:var(--noite);font-size:14px;letter-spacing:.06em;display:flex;align-items:center;gap:8px}' +
+    '.doc-header .brand{display:flex;align-items:center;gap:8px}' +
+    '.doc-header .brand .brand-logo-svg{height:18px;width:auto}' +
     '.doc-header .docname{font-size:11px;color:var(--cinzamedio);text-align:right;letter-spacing:.04em}' +
     '.section-num{color:var(--azul);font-weight:700;font-family:Poppins,Inter,sans-serif;font-size:12.5px;letter-spacing:.1em}' +
     '.callout{background:var(--quasebranco);border-left:4px solid var(--azul);padding:15px 19px;border-radius:0 8px 8px 0;margin:16px 0;font-size:13px}' +
@@ -2258,16 +2261,19 @@
     '.freeband .txt .old{color:#6B7280;text-decoration:line-through}' +
     '.freeband .txt .new{color:var(--verde);font-weight:700}' +
     '.footer{font-size:11px;color:var(--cinzamedio);text-align:center;margin-top:40px;padding-top:16px;border-top:1px solid var(--cinzaclaro)}' +
-    '@media print{.screen-bar{display:none!important}body{background:#fff}.page,.cover{box-shadow:none;margin:0 auto;max-width:100%}.page{padding:38px 42px;page-break-before:always}.cover{page-break-after:always}.ficha,.pricebox,.freeband,table,.callout{break-inside:avoid}}' +
+    '@page{margin:12mm 10mm}' +
+    '@media print{.screen-bar{display:none!important}body{background:#fff}.page,.cover{box-shadow:none;margin:0 auto;max-width:100%}.page{padding:38px 42px;page-break-before:always}.ficha,.pricebox,.freeband,table,.callout{break-inside:avoid}}' +
     '@media (max-width:680px){.page,.cover{padding:30px 20px}.cover h1{font-size:28px}.ficha .grade{grid-template-columns:1fr}.ficha .cel:nth-child(odd){border-right:none}.zona{flex-direction:column}.phone{width:100%;max-width:250px;margin:0 auto}}' +
     '</style></head><body>' +
 
+    '<script>function handlePrint(){try{if(window.top!==window.self){var w=window.open("","_blank");if(w){w.document.open();w.document.write(document.documentElement.outerHTML);w.document.close();w.addEventListener("load",function(){w.focus();w.print();});return;}}}catch(e){}window.print();}<' + '/script>' +
+
     '<div class="screen-bar"><div class="title">Proposta — ' + escapeHtml(ctx.cliente) + '</div>' +
-      '<button class="btn-print" onclick="window.print()">Gerar / Imprimir PDF</button></div>' +
+      '<button class="btn-print" onclick="handlePrint()">Gerar / Imprimir PDF</button></div>' +
 
     '<div class="cover">' + NETWORK_SVG +
       '<div class="glow"></div>' +
-      '<div class="brandword">' + brandNodeSvg("#fff", 26) + 'LONDRISOFT</div>' +
+      '<div class="brandword">' + londrisoftLogo("#fff") + '</div>' +
       '<div class="kicker">Proposta Comercial · Waipe ' + escapeHtml(planNome) + '</div>' +
       '<h1>O Time Digital ' + escapeHtml(ctx.cliente) + '</h1>' +
       '<div class="sub">Um time de agentes de inteligência artificial — funcionários digitais com função fixa — que assumem tarefas manuais e entregam o resultado pronto no WhatsApp de quem precisa agir.</div>' +
