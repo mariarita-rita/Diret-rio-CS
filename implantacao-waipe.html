@@ -816,12 +816,106 @@
     var body = Object.assign({ taskId: agenteId }, patch);
     apiPost("atualizar-agente", body).catch(function(){ showSimToast("Não deu para salvar o progresso deste agente."); });
   }
-  function adicionarNota(agenteId){
-    var texto = window.prompt("Nota para o time (vira comentário na task do ClickUp):");
-    if (!texto || !texto.trim()) return;
-    apiPost("comentar-implantacao", { taskId: agenteId, texto: texto.trim() }).then(function(){
-      showSimToast("Nota adicionada no ClickUp.");
-    }).catch(function(){ showSimToast("Não deu para salvar a nota."); });
+  function formatarData(ms){
+    if (!ms) return "";
+    try { return new Date(Number(ms)).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }); } catch(e){ return ""; }
+  }
+
+  // Mesma allowlist do backend (_lib/clickup.js, ISM_OPCOES) — ids de usuario
+  // real do ClickUp, nao texto livre. Duplicado de proposito, igual outras
+  // opcoes espelhadas entre front e servidor neste projeto.
+  var ISM_OPCOES = [
+    { id: 118125102, nome: "Bruno Vaz" },
+    { id: 48933858, nome: "Erica Fernanda" }
+  ];
+
+  function renderIsmPicker(containerId, label, idsAtuais, onChange){
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = '<div class="sp-k" style="margin-top:10px">' + esc(label || "ISM responsável") + '</div>' +
+      '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:4px;">' +
+      ISM_OPCOES.map(function(o){
+        var checked = (idsAtuais || []).indexOf(o.id) !== -1;
+        return '<label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;"><input type="checkbox" data-ism="' + o.id + '"' + (checked ? " checked" : "") + '> ' + esc(o.nome) + '</label>';
+      }).join("") + '</div>';
+    el.querySelectorAll("[data-ism]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var novos = Array.from(el.querySelectorAll("[data-ism]")).filter(function(c){ return c.checked; }).map(function(c){ return parseInt(c.getAttribute("data-ism"), 10); });
+        onChange(novos);
+      });
+    });
+  }
+
+  function persistirProjetoIsm(ids){
+    if (!dadosProjeto) return;
+    dadosProjeto.projeto.ismIds = ids;
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, ism: ids
+    }).then(function(){ showSimToast("ISM do projeto atualizado."); })
+      .catch(function(){ showSimToast("Não deu para salvar o ISM do projeto."); });
+  }
+
+  // ---- Comentários (lidos e escritos direto do painel — o time nao acessa o ClickUp) ----
+
+  function comentarioHtml(c){
+    if (/^\[\[FLOW\]\]/.test(c.texto)){
+      var jsonTexto = c.texto.replace(/^\[\[FLOW\]\]/, "");
+      return '<div class="build-check" style="align-items:flex-start"><span>📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
+        ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button></span></div>';
+    }
+    return '<div class="build-check" style="align-items:flex-start"><span><b>' + esc(c.autor) + '</b> — ' + esc(c.texto) +
+      '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span></span></div>';
+  }
+
+  function renderComentarios(taskId, container, titulo){
+    if (!container) return;
+    container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2><div class="sub">Carregando…</div></div>';
+    apiGet("listar-comentarios", { taskId: taskId }).then(function(resp){
+      var lista = resp.comentarios || [];
+      container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2>' +
+        (lista.length ? lista.map(comentarioHtml).join("") : '<div class="sub">Nenhum comentário ainda.</div>') +
+        '<div style="margin-top:12px; display:flex; gap:8px;">' +
+          '<input type="text" class="form-input" id="novoComentario">' +
+          '<button type="button" class="btn-flow-secondary" id="btnComentar">Comentar</button>' +
+        '</div></div>';
+      container.querySelectorAll("[data-copiar-flow]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var jsonTexto = decodeURIComponent(btn.getAttribute("data-copiar-flow"));
+          copyToClipboard(jsonTexto).then(function(){ showSimToast("JSON do Fluxo copiado."); }).catch(function(){ showSimToast("Não deu para copiar."); });
+        });
+      });
+      var btnComentar = container.querySelector("#btnComentar");
+      var input = container.querySelector("#novoComentario");
+      btnComentar.addEventListener("click", function(){
+        var texto = input.value.trim();
+        if (!texto) return;
+        apiPost("comentar-implantacao", { taskId: taskId, texto: texto }).then(function(){
+          renderComentarios(taskId, container, titulo);
+        }).catch(function(){ showSimToast("Não deu para comentar."); });
+      });
+    }).catch(function(){
+      container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2><div class="sub">Não deu para carregar os comentários.</div></div>';
+    });
+  }
+
+  // ---- Catálogo fixo de perguntas de viabilidade — condicional por canal/sistemas ----
+  var CATALOGO_PERGUNTAS = [
+    { id: "whatsapp_api", texto: "Já possui API oficial do WhatsApp Business ativa e configurada?",
+      gatilho: function(e){ return /whatsapp/i.test(e.canal || ""); } },
+    { id: "emails", texto: "Já tem os e-mails que vão disparar/receber esta rotina?",
+      gatilho: function(e){ return /e-?mail/i.test(e.canal || ""); } },
+    { id: "sms", texto: "Já possui provedor de SMS contratado?",
+      gatilho: function(e){ return /sms/i.test(e.canal || ""); } },
+    { id: "assinatura", texto: "Já possui plataforma de assinatura digital contratada?",
+      gatilho: function(e){ return /assinatura/i.test(e.canal || "") || (e.sistemas || []).some(function(s){ return /assinatura/i.test(s); }); } },
+    { id: "ferramenta_terceiro", texto: "Já possui liberação/acesso (API, credenciais) das ferramentas externas envolvidas?",
+      gatilho: function(e){ return (e.sistemas || []).some(function(s){ return !/erp gestor|crm|ploomes/i.test(s); }); } },
+    { id: "tv_local", texto: "A TV/tela de exibição já está disponível no local?",
+      gatilho: function(e){ return /tv|painel/i.test(e.canal || ""); } }
+  ];
+  function perguntasAplicaveis(estrutura){
+    return CATALOGO_PERGUNTAS.filter(function(p){ return p.gatilho(estrutura || {}); });
   }
 
   function irParaEtapa(id){
@@ -897,6 +991,41 @@
     '</div>';
   }
 
+  function statusCardAgente(a){
+    var v = a.validacao || { status: "pendente", motivo: "" };
+    var construindo = sim.agenteAtual === a.id && !(sim.concluidos.indexOf(a.id) !== -1);
+    var entregue = sim.concluidos.indexOf(a.id) !== -1;
+    var naPrioridade = sim.prioridade.indexOf(a.id) !== -1;
+    var rotulo, cls;
+    if (entregue){
+      rotulo = "✅ Entregue" + (a.dueDate ? " em " + formatarData(a.dueDate) : "");
+      cls = "ambos";
+    } else if (construindo){
+      rotulo = sim.etapa === "testes" ? "🧪 Em testes" : (sim.etapa === "entrega" ? "🚀 Em entrega" : "🛠️ Em construção");
+      cls = "londrisoft";
+    } else if (v.status === "validado"){
+      var pos = sim.prioridade.indexOf(a.id);
+      rotulo = "☑️ Validado" + (naPrioridade ? " — " + (pos + 1) + "º na fila" : "");
+      cls = "londrisoft";
+    } else if (v.status === "adiado"){
+      rotulo = "⏸️ Adiado" + (v.motivo ? " — " + v.motivo : "");
+      cls = "cliente";
+    } else if (v.status === "cancelado"){
+      rotulo = "🚫 Cancelado" + (v.motivo ? " — " + v.motivo : "");
+      cls = "cliente";
+    } else {
+      rotulo = "🔎 A validar";
+      cls = "cliente";
+    }
+    var e = a.estrutura || {};
+    return '<div class="agent-pick" style="cursor:default">' +
+      '<div class="apname">' + esc(a.nome) + '</div>' +
+      '<div class="apmeta">' + esc(e.frente || "") + (e.canal ? ' · ' + esc(e.canal) : "") + '</div>' +
+      '<div style="margin-top:6px"><span class="tag ' + cls + '">' + esc(rotulo) + '</span></div>' +
+      (a.ism && a.ism.length ? '<div class="apmeta" style="margin-top:4px">ISM: ' + esc(a.ism.join(", ")) + '</div>' : "") +
+    '</div>';
+  }
+
   function renderEscopo(){
     var p = dadosProjeto.projeto;
     var agentes = dadosProjeto.agentes;
@@ -904,68 +1033,160 @@
       '<h2>' + esc(p.cliente) + '</h2><div class="sub">CSM: ' + esc(p.csm || "—") + '</div>' +
       '<div class="sp-k" style="margin-top:8px">Contexto do projeto</div>' +
       '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
+      '<div id="ismProjetoWrap"></div>' +
     '</div>' +
+    '<div id="comentariosProjetoWrap"></div>' +
     '<div class="card">' +
-      '<h2>Backlog completo — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + ' propostos</h2><div class="sub">Revise antes da reunião de alinhamento.</div>' +
-      '<div class="agent-pick-grid">' + agentes.map(function(a){
-        var e = a.estrutura || {};
-        return '<div class="agent-pick" style="cursor:default"><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + esc(e.frente || "") + (e.canal ? ' · ' + esc(e.canal) : "") + '</div></div>';
-      }).join("") + '</div>' +
+      '<h2>Painel de agentes — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</h2><div class="sub">Status de cada agente do backlog. Nenhum agente é removido daqui — só muda o rótulo.</div>' +
+      '<div class="agent-pick-grid">' + agentes.map(statusCardAgente).join("") + '</div>' +
     '</div>' +
-    '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento">Ir para a Reunião de Alinhamento →</button></div>';
+    '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento">Ir para o Alinhamento →</button></div>';
     document.getElementById("stepContent").innerHTML = html;
+    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
+    renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
     document.getElementById("btnIrAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
   }
 
-  function renderAlinhamento(){
-    var max = 3;
-    var agentes = dadosProjeto.agentes;
-    var html = '<div class="callout"><div class="dot"></div><div>Nesta reunião, peça para o cliente <b>escolher até 3 agentes para priorizar no início</b>. Ao marcar um agente, a estrutura completa dele aparece abaixo — usem juntos para validar se é isso mesmo que o cliente precisa.</div></div>' +
-      '<div class="card">' +
-        '<h2>Escolha dos agentes prioritários <span class="tag ' + (sim.prioridade.length >= max ? "cliente" : "londrisoft") + '" id="contadorPrioridade">' + sim.prioridade.length + '/' + max + ' selecionados</span></h2>' +
-        '<div class="sub">A ordem em que você marca define a ordem de construção (1º marcado = 1º construído).</div>' +
-        '<div class="agent-pick-grid" id="agentPickGrid"></div>' +
+  function cardAlinhamentoAgente(a){
+    var e = a.estrutura || {};
+    var perguntas = perguntasAplicaveis(e);
+    var diag = a.diagnostico || {};
+    var prereq = e.prereq || [];
+    return '<div class="card" data-agente-card="' + esc(a.id) + '">' +
+      '<h2>' + esc(a.nome) + '</h2><div class="sub">Confirme/edite com o cliente — o que mudar aqui atualiza a estrutura do agente.</div>' +
+      '<div class="form-grid-2">' +
+        '<div class="form-field"><label>Frente/área</label><input type="text" class="form-input" data-ed="frente" value="' + esc(e.frente || "") + '"></div>' +
+        '<div class="form-field"><label>Frequência</label><input type="text" class="form-input" data-ed="frequencia" value="' + esc(e.frequencia || "") + '"></div>' +
+        '<div class="form-field"><label>Canal</label><input type="text" class="form-input" data-ed="canal" value="' + esc(e.canal || "") + '"></div>' +
+        '<div class="form-field"><label>Público</label><input type="text" class="form-input" data-ed="publico" value="' + esc(e.publico || "") + '"></div>' +
       '</div>' +
-      '<div id="estruturasWrap"></div>' +
+      (perguntas.length ? '<div class="sp-k" style="margin-top:10px">Perguntas de viabilidade</div>' +
+        perguntas.map(function(p){
+          var r = diag[p.id] || {};
+          return '<div style="margin:8px 0 12px;"><div style="font-size:12.5px; margin-bottom:5px;">' + esc(p.texto) + '</div>' +
+            '<select class="form-input" data-diag="' + p.id + '" data-campo="resposta" style="width:auto; display:inline-block; margin-right:8px;">' +
+              '<option value=""' + (!r.resposta ? " selected" : "") + '>—</option>' +
+              '<option value="sim"' + (r.resposta === "sim" ? " selected" : "") + '>Sim</option>' +
+              '<option value="nao"' + (r.resposta === "nao" ? " selected" : "") + '>Não</option>' +
+              '<option value="andamento"' + (r.resposta === "andamento" ? " selected" : "") + '>Em andamento</option>' +
+            '</select>' +
+            '<input type="text" class="form-input" data-diag="' + p.id + '" data-campo="nota" placeholder="Nota (opcional)" value="' + esc(r.nota || "") + '" style="width:auto; display:inline-block; min-width:220px;">' +
+          '</div>';
+        }).join("") : "") +
+      (prereq.length ? '<div class="sp-k" style="margin-top:10px">Checklist — o que precisa ser solicitado</div>' +
+        prereq.map(function(p, i){
+          var done = !!(a.prereqChecks || {})[i];
+          return '<div class="build-check' + (done ? " done" : "") + '"><input type="checkbox" data-prereq="' + i + '"' + (done ? " checked" : "") + '><span>' + esc(p) + '</span></div>';
+        }).join("") : "") +
+      '<div id="ismAgente_' + esc(a.id) + '"></div>' +
+      '<div id="comentarios_' + esc(a.id) + '"></div>' +
       '<div class="flow-actions">' +
-        '<button type="button" class="btn-flow-secondary" id="btnVoltarEscopo">← Voltar ao Escopo</button>' +
-        '<button type="button" class="btn-flow" id="btnIrConstrucao"' + (sim.prioridade.length ? "" : " disabled") + '>Confirmar priorização e iniciar construção →</button>' +
-      '</div>';
-    document.getElementById("stepContent").innerHTML = html;
+        '<button type="button" class="btn-flow-secondary" data-adiar="' + esc(a.id) + '">Adiar</button>' +
+        '<button type="button" class="btn-flow-secondary" data-cancelar="' + esc(a.id) + '" style="color:var(--danger); border-color:color-mix(in srgb, var(--danger) 40%, var(--border-strong));">Cancelar</button>' +
+        '<button type="button" class="btn-flow" data-validar="' + esc(a.id) + '">✅ Validado</button>' +
+      '</div>' +
+    '</div>';
+  }
 
-    function renderGrid(){
-      var grid = document.getElementById("agentPickGrid");
-      grid.innerHTML = agentes.map(function(a){
-        var pos = sim.prioridade.indexOf(a.id);
-        var on = pos !== -1;
-        var disabled = !on && sim.prioridade.length >= max;
-        var cls = "agent-pick" + (on ? " on" : "") + (disabled ? " disabled" : "");
-        return '<div class="' + cls + '" data-agent="' + esc(a.id) + '"><div class="apnum">' + (on ? (pos + 1) : "") + '</div><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + esc((a.estrutura || {}).frente || "") + '</div></div>';
-      }).join("");
-      grid.querySelectorAll("[data-agent]").forEach(function(card){
-        card.addEventListener("click", function(){
-          var id = card.getAttribute("data-agent");
-          var pos = sim.prioridade.indexOf(id);
-          if (pos !== -1){ sim.prioridade.splice(pos, 1); }
-          else { if (sim.prioridade.length >= max) return; sim.prioridade.push(id); }
-          persistirProjeto();
-          renderGrid();
-          renderEstruturas();
-          document.getElementById("contadorPrioridade").textContent = sim.prioridade.length + "/" + max + " selecionados";
-          document.getElementById("contadorPrioridade").className = "tag " + (sim.prioridade.length >= max ? "cliente" : "londrisoft");
-          document.getElementById("btnIrConstrucao").disabled = sim.prioridade.length === 0;
-        });
+  function wireCardAlinhamento(a){
+    var card = document.querySelector('[data-agente-card="' + a.id + '"]');
+    if (!card) return;
+    card.querySelectorAll("[data-ed]").forEach(function(input){
+      input.addEventListener("change", function(){
+        var estrutura = Object.assign({}, a.estrutura);
+        estrutura[input.getAttribute("data-ed")] = input.value;
+        a.estrutura = estrutura;
+        persistirAgente(a.id, { estrutura: estrutura });
       });
-    }
-    function renderEstruturas(){
-      var wrap = document.getElementById("estruturasWrap");
-      if (!sim.prioridade.length){ wrap.innerHTML = ""; return; }
-      wrap.innerHTML = '<h2 class="section-title">Estrutura dos agentes escolhidos</h2>' +
-        sim.prioridade.map(function(id){ var a = agentePorId(id); return a ? buildEstruturaPanel(a) : ""; }).join("");
-    }
-    renderGrid();
-    renderEstruturas();
+    });
+    card.querySelectorAll("[data-diag]").forEach(function(input){
+      input.addEventListener("change", function(){
+        var pid = input.getAttribute("data-diag");
+        a.diagnostico = a.diagnostico || {};
+        a.diagnostico[pid] = a.diagnostico[pid] || { resposta: "", nota: "" };
+        a.diagnostico[pid][input.getAttribute("data-campo")] = input.value;
+        persistirAgente(a.id, { diagnostico: a.diagnostico });
+      });
+    });
+    card.querySelectorAll("[data-prereq]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var i = cb.getAttribute("data-prereq");
+        a.prereqChecks = a.prereqChecks || {};
+        a.prereqChecks[i] = cb.checked;
+        cb.closest(".build-check").classList.toggle("done", cb.checked);
+        persistirAgente(a.id, { prereqChecks: a.prereqChecks });
+      });
+    });
+    renderIsmPicker("ismAgente_" + a.id, "ISM responsável por este agente", a.ismIds || [], function(ids){
+      a.ismIds = ids;
+      persistirAgente(a.id, { ism: ids });
+    });
+    renderComentarios(a.id, document.getElementById("comentarios_" + a.id), "Comentários deste agente");
 
+    var btnValidar = card.querySelector("[data-validar]");
+    if (btnValidar) btnValidar.addEventListener("click", function(){
+      a.validacao = { status: "validado", motivo: "" };
+      if (sim.prioridade.indexOf(a.id) === -1) sim.prioridade.push(a.id);
+      persistirAgente(a.id, { validacao: a.validacao });
+      persistirProjeto();
+      renderSimulador();
+    });
+    var btnAdiar = card.querySelector("[data-adiar]");
+    if (btnAdiar) btnAdiar.addEventListener("click", function(){
+      var motivo = window.prompt('Motivo de adiar "' + a.nome + '":') || "";
+      a.validacao = { status: "adiado", motivo: motivo };
+      persistirAgente(a.id, { validacao: a.validacao });
+      renderAlinhamento();
+    });
+    var btnCancelar = card.querySelector("[data-cancelar]");
+    if (btnCancelar) btnCancelar.addEventListener("click", function(){
+      if (!window.confirm('Cancelar "' + a.nome + '"? Ele sai da fila de priorização, mas continua visível no painel.')) return;
+      var motivo = window.prompt('Motivo de cancelar "' + a.nome + '":') || "";
+      a.validacao = { status: "cancelado", motivo: motivo };
+      var pos = sim.prioridade.indexOf(a.id);
+      if (pos !== -1) sim.prioridade.splice(pos, 1);
+      persistirAgente(a.id, { validacao: a.validacao });
+      persistirProjeto();
+      renderSimulador();
+    });
+  }
+
+  function renderAlinhamento(){
+    var candidatos = dadosProjeto.agentes.filter(function(a){
+      var st = (a.validacao || {}).status || "pendente";
+      return st === "pendente" || st === "adiado";
+    });
+    var validados = dadosProjeto.agentes.filter(function(a){ return (a.validacao || {}).status === "validado"; });
+    var cancelados = dadosProjeto.agentes.filter(function(a){ return (a.validacao || {}).status === "cancelado"; });
+
+    var html = '<div class="callout"><div class="dot"></div><div>Nesta reunião, revise a estrutura de cada agente com o cliente — pode editar horário, canal, público etc. Responda o que se aplicar e marque <b>Validado</b>, <b>Adiar</b> ou <b>Cancelar</b>.</div></div>';
+
+    if (!candidatos.length){
+      html += '<div class="callout"><div class="dot"></div><div>Nenhum agente aguardando validação no momento' + (validados.length ? " — os já validados estão na fila, pode seguir para a Construção." : ".") + '</div></div>';
+    } else {
+      html += candidatos.map(cardAlinhamentoAgente).join("");
+    }
+
+    if (validados.length){
+      html += '<h2 class="section-title">Já validados (' + validados.length + ')</h2>' +
+        '<div class="agent-pick-grid">' + validados.map(function(a){
+          var pos = sim.prioridade.indexOf(a.id);
+          return '<div class="agent-pick on" style="cursor:default"><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + (pos + 1) + 'º na fila</div></div>';
+        }).join("") + '</div>';
+    }
+    if (cancelados.length){
+      html += '<details style="margin-top:14px"><summary style="cursor:pointer; font-size:12.5px; color:var(--muted);">Cancelados (' + cancelados.length + ')</summary>' +
+        '<div class="agent-pick-grid" style="margin-top:10px">' + cancelados.map(function(a){
+          return '<div class="agent-pick" style="cursor:default; opacity:.6"><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + esc((a.validacao || {}).motivo || "") + '</div></div>';
+        }).join("") + '</div></details>';
+    }
+
+    html += '<div class="flow-actions">' +
+      '<button type="button" class="btn-flow-secondary" id="btnVoltarEscopo">← Voltar ao Painel</button>' +
+      '<button type="button" class="btn-flow" id="btnIrConstrucao"' + (sim.prioridade.length ? "" : " disabled") + '>Ir para a Construção →</button>' +
+    '</div>';
+
+    document.getElementById("stepContent").innerHTML = html;
     document.getElementById("btnVoltarEscopo").addEventListener("click", function(){ irParaEtapa("escopo"); });
     document.getElementById("btnIrConstrucao").addEventListener("click", function(){
       if (!sim.prioridade.length) return;
@@ -973,6 +1194,8 @@
       persistirProjeto();
       irParaEtapa("construcao");
     });
+
+    candidatos.forEach(wireCardAlinhamento);
   }
 
   var PASSOS_CONSTRUCAO = [
@@ -1032,16 +1255,30 @@
     if (!a){ irParaEtapa("alinhamento"); return; }
     var html = seletorAgenteAtual() +
       buildEstruturaPanel(a) +
-      '<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><h2>Por onde começar — checklist de construção</h2><button type="button" class="btn-reset" id="btnNotaConstrucao">💬 Nota</button></div><div class="sub">Agente atual: ' + esc(a.nome) + '</div>' +
+      '<div class="card"><h2>Por onde começar — checklist de construção</h2><div class="sub">Agente atual: ' + esc(a.nome) + '</div>' +
       renderChecklist(PASSOS_CONSTRUCAO, "build", a.buildChecks || {}) +
       '</div>' +
+      '<div class="card"><h2>📐 Salvar Fluxo</h2><div class="sub">Depois de montar no Flow (ou de mapear com o cliente no Miro), cole aqui o JSON exportado — fica guardado como comentário na task deste agente.</div>' +
+        '<textarea class="form-textarea" rows="4" id="flowJsonInput" placeholder="Cole o JSON exportado do Flow..."></textarea>' +
+        '<div style="margin-top:8px"><button type="button" class="btn-flow-secondary" id="btnSalvarFlow">Salvar Fluxo</button></div>' +
+      '</div>' +
+      '<div id="comentariosConstrucao"></div>' +
       '<div class="flow-actions">' +
         '<button type="button" class="btn-flow-secondary" id="btnVoltarAlinhamento">← Voltar ao Alinhamento</button>' +
         '<button type="button" class="btn-flow" id="btnIrTestes">Agente construído, ir para Testes →</button>' +
       '</div>';
     document.getElementById("stepContent").innerHTML = html;
     wireChecklist("build", a, a.buildChecks || (a.buildChecks = {}), "buildChecks");
-    document.getElementById("btnNotaConstrucao").addEventListener("click", function(){ adicionarNota(a.id); });
+    renderComentarios(a.id, document.getElementById("comentariosConstrucao"), "Comentários deste agente");
+    document.getElementById("btnSalvarFlow").addEventListener("click", function(){
+      var texto = document.getElementById("flowJsonInput").value.trim();
+      if (!texto) return;
+      apiPost("comentar-implantacao", { taskId: a.id, texto: "[[FLOW]]" + texto }).then(function(){
+        showSimToast("Fluxo salvo como comentário.");
+        document.getElementById("flowJsonInput").value = "";
+        renderComentarios(a.id, document.getElementById("comentariosConstrucao"), "Comentários deste agente");
+      }).catch(function(){ showSimToast("Não deu para salvar o Fluxo."); });
+    });
     var sel = document.getElementById("seletorAgente");
     if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderConstrucao(); renderBacklogStrip(); });
     document.getElementById("btnVoltarAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
@@ -1053,52 +1290,39 @@
     var a = agentePorId(sim.agenteAtual);
     if (!a){ irParaEtapa("alinhamento"); return; }
     var html = seletorAgenteAtual() +
-      '<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><h2>Testes — ' + esc(a.nome) + '</h2><button type="button" class="btn-reset" id="btnNotaTestes">💬 Nota</button></div><div class="sub">Público a validar: ' + esc((a.estrutura || {}).publico || "—") + '</div>' +
+      '<div class="card"><h2>Testes — ' + esc(a.nome) + '</h2><div class="sub">Público a validar: ' + esc((a.estrutura || {}).publico || "—") + '</div>' +
       renderChecklist(PASSOS_TESTE, "test", a.testChecks || {}) +
       '</div>' +
+      '<div id="comentariosTestes"></div>' +
       '<div class="flow-actions">' +
         '<button type="button" class="btn-flow-secondary" id="btnVoltarConstrucao">← Voltar à Construção</button>' +
         '<button type="button" class="btn-flow" id="btnIrEntrega">Testado e aprovado, ir para Entrega →</button>' +
       '</div>';
     document.getElementById("stepContent").innerHTML = html;
     wireChecklist("test", a, a.testChecks || (a.testChecks = {}), "testChecks");
-    document.getElementById("btnNotaTestes").addEventListener("click", function(){ adicionarNota(a.id); });
+    renderComentarios(a.id, document.getElementById("comentariosTestes"), "Comentários deste agente");
     var sel = document.getElementById("seletorAgente");
     if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderTestes(); renderBacklogStrip(); });
     document.getElementById("btnVoltarConstrucao").addEventListener("click", function(){ irParaEtapa("construcao"); });
     document.getElementById("btnIrEntrega").addEventListener("click", function(){ irParaEtapa("entrega"); });
   }
 
-  function wireBacklogPicker(){
-    document.querySelectorAll("[data-next]").forEach(function(card){
-      card.addEventListener("click", function(){
-        var id = card.getAttribute("data-next");
-        sim.prioridade.push(id);
-        sim.agenteAtual = id;
-        persistirProjeto();
-        var ag = agentePorId(id);
-        showSimToast("Novo agente do mês: " + (ag ? ag.nome : id));
-        irParaEtapa("construcao");
-      });
-    });
-  }
-
   function renderEntrega(){
     // Nada em prioridade ainda: precisa passar pelo Alinhamento primeiro.
     if (!sim.prioridade.length){ irParaEtapa("alinhamento"); return; }
 
-    var restantesBacklog = dadosProjeto.agentes.filter(function(ag){ return sim.prioridade.indexOf(ag.id) === -1 && sim.concluidos.indexOf(ag.id) === -1; });
-
-    // Toda a prioridade inicial já foi entregue: mostra o backlog restante para
-    // escolher o agente do próximo mês, sem checklist de entrega (não há "agente
-    // atual" nesse momento).
+    // Toda a prioridade validada já foi entregue: nao ha mais "agente atual" —
+    // quem prioriza o proximo e o Alinhamento (botao Validado), nao um grid aqui.
     if (!sim.agenteAtual){
-      var htmlFim = '<div class="callout"><div class="dot"></div><div>🎉 <b>Toda a prioridade inicial foi entregue!</b> Escolha o próximo agente do backlog para seguir a cadência de 1 por mês.</div></div>' +
-        (restantesBacklog.length
-          ? '<div class="card"><h2>Backlog restante</h2><div class="agent-pick-grid">' + restantesBacklog.map(function(ag){ return '<div class="agent-pick" data-next="' + esc(ag.id) + '"><div class="apname">' + esc(ag.nome) + '</div><div class="apmeta">' + esc((ag.estrutura || {}).frente || "") + '</div></div>'; }).join("") + '</div></div>'
-          : '<div class="callout"><div class="dot"></div><div><b>Backlog completo!</b> Todos os agentes mapeados para este cliente já foram entregues.</div></div>');
+      var pendentes = dadosProjeto.agentes.filter(function(ag){
+        var st = (ag.validacao || {}).status || "pendente";
+        return st === "pendente" || st === "adiado";
+      });
+      var htmlFim = '<div class="callout"><div class="dot"></div><div>🎉 <b>Toda a prioridade validada foi entregue!</b> ' +
+        (pendentes.length ? "Volte ao Alinhamento para validar o próximo agente e seguir a cadência mensal." : "Não há mais agentes aguardando validação no backlog.") + '</div></div>' +
+        '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamentoFim">Ir para o Alinhamento →</button></div>';
       document.getElementById("stepContent").innerHTML = htmlFim;
-      wireBacklogPicker();
+      document.getElementById("btnIrAlinhamentoFim").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
       return;
     }
 
@@ -1110,21 +1334,24 @@
       '<div class="card"><h2>Entrega — ' + esc(a.nome) + '</h2>' +
       renderChecklist(PASSOS_ENTREGA, "entrega", a.entregaChecks || {}) +
       '</div>' +
+      '<div id="comentariosEntrega"></div>' +
       '<div class="flow-actions">' +
         '<button type="button" class="btn-flow-secondary" id="btnVoltarTestes">← Voltar aos Testes</button>' +
         '<button type="button" class="btn-flow" id="btnConcluirAgente">🎉 Marcar "' + esc(a.nome.split(" & ")[0].split(" (")[0]) + '" como entregue</button>' +
-      '</div>' +
-      (restantesBacklog.length ? '<div class="card" style="margin-top:18px"><h2>Backlog restante (próximos meses)</h2><div class="sub">Cadência: 1 agente por mês. Quando a prioridade inicial acabar, escolha o próximo aqui.</div>' +
-        '<div class="agent-pick-grid">' + restantesBacklog.map(function(ag){ return '<div class="agent-pick" data-next="' + esc(ag.id) + '"><div class="apname">' + esc(ag.nome) + '</div><div class="apmeta">' + esc((ag.estrutura || {}).frente || "") + '</div></div>'; }).join("") + '</div></div>' : "");
+      '</div>';
 
     document.getElementById("stepContent").innerHTML = html;
     wireChecklist("entrega", a, a.entregaChecks || (a.entregaChecks = {}), "entregaChecks");
+    renderComentarios(a.id, document.getElementById("comentariosEntrega"), "Comentários deste agente");
     var sel = document.getElementById("seletorAgente");
     if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderEntrega(); renderBacklogStrip(); });
     document.getElementById("btnVoltarTestes").addEventListener("click", function(){ irParaEtapa("testes"); });
     document.getElementById("btnConcluirAgente").addEventListener("click", function(){
       if (sim.concluidos.indexOf(sim.agenteAtual) === -1) sim.concluidos.push(sim.agenteAtual);
-      persistirAgente(sim.agenteAtual, { status: "concluído" });
+      var hoje = new Date().toISOString().slice(0, 10);
+      persistirAgente(sim.agenteAtual, { status: "concluído", dueDate: hoje });
+      a.status = "concluído";
+      a.dueDate = Date.now();
       var proximo = restantesPrioridade[0] || null;
       if (proximo){
         sim.agenteAtual = proximo;
@@ -1135,12 +1362,11 @@
       } else {
         sim.agenteAtual = null;
         persistirProjeto();
-        showSimToast("Prioridade inicial concluída! Escolha o próximo do backlog para seguir a cadência mensal.");
+        showSimToast("Prioridade validada concluída! Volte ao Alinhamento para validar o próximo do backlog.");
         renderBacklogStrip();
         renderEntrega();
       }
     });
-    wireBacklogPicker();
   }
 
   function renderSimulador(){

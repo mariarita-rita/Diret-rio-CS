@@ -806,6 +806,24 @@ export async function criarComentario(taskId, texto) {
   });
 }
 
+/** Comentarios nativos de uma task, mais recentes primeiro (como o ClickUp devolve). */
+export async function listarComentarios(taskId) {
+  const r = await cu(`/task/${taskId}/comment`);
+  return Array.isArray(r.comments) ? r.comments : [];
+}
+
+/**
+ * ISMs (Implementation Success Managers) responsaveis por implantacao — papel
+ * diferente do CSM (que e dono de carteira, atribuido por texto). Aqui e
+ * assignee DE VERDADE do ClickUp, por isso a allowlist e por id de usuario do
+ * workspace (confirmados via clickup_get_workspace_members), no mesmo espirito
+ * de CAMPOS_ESCRITA: um id fora daqui e descartado, nunca vira 500.
+ */
+export const ISM_OPCOES = [
+  { id: 118125102, nome: 'Bruno Vaz' },
+  { id: 48933858, nome: 'Erica Fernanda' },
+];
+
 // ── Estado do fluxo Waipe embutido na descricao ────────────────────────────
 //
 // O workflow de status do ClickUp e fixo por espaco (pendente/in progress/

@@ -74,6 +74,8 @@ const stubClickup = `
   export async function listarImplantacoes() { return []; }
   export async function obterTaskComSubtasks() { return { pai: null, subtasks: [] }; }
   export async function criarComentario() { return {}; }
+  export async function listarComentarios() { return []; }
+  export const ISM_OPCOES = [{ id: 118125102, nome: 'Bruno Vaz' }, { id: 48933858, nome: 'Erica Fernanda' }];
   export function parseWaipeState() { return {}; }
   export function stringifyWaipeState(description) { return description || ''; }
   export function contextoSemEstado(description) { return description || ''; }
@@ -1770,6 +1772,9 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
       escritas.push({ alvo: 'comentario', body: JSON.parse(init.body) });
       return ok({});
     }
+    if (metodo === 'GET' && u.endsWith('/comment')) {
+      return ok({ comments: [{ id: 'c1', comment_text: 'Nota antiga', user: { username: 'Gian Luca' }, date: '1700000000000' }] });
+    }
     if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
       escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
       return ok({ id: 'tNovoProjeto' });
@@ -1869,6 +1874,50 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   const comentarOk = await chamarAcao(GIAN, 'POST', 'comentar-implantacao', { body: { taskId: 'tAgente1', texto: 'Alinhamento feito.' } });
   checar('comentar-implantacao: 200', [comentarOk.code, comentarOk.corpo.ok], [200, true]);
   checar('  posta no ClickUp', escritas.some((e) => e.alvo === 'comentario'), true);
+
+  // criar-implantacao: ISM (projeto e agente) saneado contra a allowlist ISM_OPCOES
+  escritas.length = 0;
+  const criarComIsm = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', {
+    body: {
+      cliente: 'Cliente ISM', contexto: '',
+      ismProjeto: [48933858, 999999],
+      agentes: [{ nome: 'Agente ISM', ism: [118125102, 'invalido'] }],
+    },
+  });
+  checar('criar-implantacao com ISM: 200', [criarComIsm.code, criarComIsm.corpo.ok], [200, true]);
+  const criarBodies = escritas.filter((e) => e.alvo === 'criar').map((e) => e.body);
+  checar('  ISM do projeto saneado (id invalido descartado)', criarBodies[0].assignees, [48933858]);
+  checar('  ISM do agente saneado (id invalido descartado)', criarBodies[1].assignees, [118125102]);
+
+  // atualizar-agente: validacao/diagnostico/prereqChecks/estrutura/ism, tudo mesclado no mesmo bloco
+  escritas.length = 0;
+  const atualizarCompleto = await chamarAcao(GIAN, 'POST', 'atualizar-agente', {
+    body: {
+      taskId: 'tAgente1',
+      estrutura: { nome: 'Guardião X Editado', frente: 'Comercial', canal: 'WhatsApp' },
+      diagnostico: { whatsapp_api: { resposta: 'sim', nota: 'confirmado' }, vazia: { resposta: '', nota: '' } },
+      prereqChecks: { '0': true },
+      validacao: { status: 'validado', motivo: '' },
+      ism: [48933858, 'xyz'],
+    },
+  });
+  checar('atualizar-agente completo: 200', [atualizarCompleto.code, atualizarCompleto.corpo.ok], [200, true]);
+  const escritaCompleta = escritas.find((e) => e.alvo === 'agente');
+  checar('  estrutura editada persistida', escritaCompleta.body.markdown_description.includes('"nome":"Guardião X Editado"'), true);
+  checar('  diagnostico persistido (so a pergunta com resposta/nota)', escritaCompleta.body.markdown_description.includes('"whatsapp_api":{"resposta":"sim","nota":"confirmado"}'), true);
+  checar('  diagnostico descarta pergunta vazia', escritaCompleta.body.markdown_description.includes('"vazia"'), false);
+  checar('  prereqChecks persistido', escritaCompleta.body.markdown_description.includes('"prereqChecks":{"0":true}'), true);
+  checar('  validacao persistida', escritaCompleta.body.markdown_description.includes('"validacao":{"status":"validado","motivo":""}'), true);
+  checar('  ISM saneado na atualizacao do agente', escritaCompleta.body.assignees, [48933858]);
+
+  // listar-comentarios: dono le, outro csm 403, taskId invalido 400
+  const comentariosGian = await chamarAcao(GIAN, 'GET', 'listar-comentarios', { query: { taskId: 'tAgente1' } });
+  checar('listar-comentarios: 200 com o comentario mockado', [comentariosGian.code, comentariosGian.corpo.comentarios.length], [200, 1]);
+  checar('  autor traduzido', comentariosGian.corpo.comentarios[0].autor, 'Gian Luca');
+  const comentariosPatricia = await chamarAcao(PATRICIA, 'GET', 'listar-comentarios', { query: { taskId: 'tAgente1' } });
+  checar('listar-comentarios: csm de outra carteira -> 403', [comentariosPatricia.code, comentariosPatricia.corpo.code], [403, 'fora_da_carteira']);
+  const comentariosInvalido = await chamarAcao(GESTAO, 'GET', 'listar-comentarios', { query: { taskId: 'zzz!!' } });
+  checar('listar-comentarios: taskId invalido -> 400', [comentariosInvalido.code, comentariosInvalido.corpo.code], [400, 'task_invalida']);
 
   const invalida = await chamarAcao(GESTAO, 'GET', 'nao-existe');
   checar('acao invalida -> 400', [invalida.code, invalida.corpo.code], [400, 'acao_invalida']);

@@ -11,6 +11,7 @@
 //   POST /api/clickup?action=atualizar-implantacao { id, etapaAtual, prioridade[], ... }
 //   POST /api/clickup?action=atualizar-agente      { taskId, buildChecks?, testChecks?, ... }
 //   POST /api/clickup?action=comentar-implantacao  { taskId, texto }
+//   GET  /api/clickup?action=listar-comentarios    { taskId }
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -44,9 +45,11 @@ import {
   getCarteira,
   getMetas,
   gravarCampo,
+  ISM_OPCOES,
   lerClienteFresco,
   limparCampo,
   LISTA_IMPLANTACOES_WAIPE,
+  listarComentarios,
   listarImplantacoes,
   localizarTask,
   obterTask,
@@ -96,11 +99,13 @@ export default async function handler(req, res) {
     }
     if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
+    if (req.method === 'GET' && acao === 'listar-comentarios') return await listarComentariosAcao(req, res, sessao);
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
+      'listar-comentarios',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -576,6 +581,56 @@ function sanearChecks(v) {
   return out;
 }
 
+const ISM_IDS_VALIDOS = new Set(ISM_OPCOES.map((i) => i.id));
+
+/** Ids de ISM saneados contra a allowlist ISM_OPCOES — o resto é descartado, nunca 500. */
+function sanearAssignees(ids) {
+  if (!Array.isArray(ids)) return [];
+  const out = [];
+  for (const id of ids) {
+    const n = Number(id);
+    if (ISM_IDS_VALIDOS.has(n) && !out.includes(n)) out.push(n);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+/** Nomes de ISM a partir do array `assignees` que o ClickUp devolve na task. */
+function nomesIsm(assignees) {
+  if (!Array.isArray(assignees)) return [];
+  const porId = new Map(ISM_OPCOES.map((i) => [i.id, i.nome]));
+  return assignees.map((a) => porId.get(Number(a?.id))).filter(Boolean);
+}
+
+const DIAGNOSTICO_RESPOSTAS_VALIDAS = new Set(['sim', 'nao', 'andamento']);
+
+/** Respostas do diagnóstico de viabilidade — só perguntas com resposta ou nota sobrevivem. */
+function sanearDiagnostico(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out = {};
+  let n = 0;
+  for (const [k, val] of Object.entries(v)) {
+    if (n >= 20) break;
+    const chave = texto(k, 40);
+    if (!chave || !val || typeof val !== 'object') continue;
+    const resposta = typeof val.resposta === 'string' && DIAGNOSTICO_RESPOSTAS_VALIDAS.has(val.resposta) ? val.resposta : '';
+    const nota = texto(val.nota, 300);
+    if (!resposta && !nota) continue;
+    out[chave] = { resposta, nota };
+    n++;
+  }
+  return out;
+}
+
+const VALIDACAO_STATUS_VALIDOS = new Set(['pendente', 'validado', 'adiado', 'cancelado']);
+
+/** Status de validação do agente no alinhamento, com motivo (obrigatório só na prática, não aqui). */
+function sanearValidacao(v) {
+  if (!v || typeof v !== 'object') return null;
+  const status = typeof v.status === 'string' && VALIDACAO_STATUS_VALIDOS.has(v.status) ? v.status : 'pendente';
+  return { status, motivo: texto(v.motivo, 300) };
+}
+
 /** Um agente do backlog, saneado a partir do corpo enviado por criar-implantacao. */
 function sanearAgente(a) {
   if (!a || typeof a !== 'object') return null;
@@ -632,6 +687,7 @@ async function listarImplantacoesAcao(res, sessao) {
       status: t.status?.status || '',
       etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
       csm: csmDaDescricaoImplantacao(t.description),
+      ism: nomesIsm(t.assignees),
       agentesTotal: Number.isFinite(estado.agentesTotal) ? estado.agentesTotal : 0,
       agentesConcluidos: Array.isArray(estado.concluidos) ? estado.concluidos.length : 0,
     };
@@ -669,10 +725,15 @@ async function obterImplantacaoAcao(req, res, sessao) {
         nome: t.name,
         status: t.status?.status || '',
         dueDate: t.due_date || null,
+        ism: nomesIsm(t.assignees),
+        ismIds: sanearAssignees((t.assignees || []).map((a) => a.id)),
         estrutura: e.estrutura || {},
         buildChecks: e.buildChecks || {},
         testChecks: e.testChecks || {},
         entregaChecks: e.entregaChecks || {},
+        prereqChecks: e.prereqChecks || {},
+        diagnostico: e.diagnostico || {},
+        validacao: e.validacao || { status: 'pendente', motivo: '' },
       };
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -683,6 +744,8 @@ async function obterImplantacaoAcao(req, res, sessao) {
       cliente: pai.name,
       status: pai.status?.status || '',
       csm,
+      ism: nomesIsm(pai.assignees),
+      ismIds: sanearAssignees((pai.assignees || []).map((a) => a.id)),
       contexto: contextoSemEstado(pai.description),
       etapaAtual: ETAPAS_VALIDAS.has(estadoProjeto.etapaAtual) ? estadoProjeto.etapaAtual : 'escopo',
       prioridade: sanearListaIds(estadoProjeto.prioridade),
@@ -718,12 +781,14 @@ async function criarImplantacaoAcao(req, res, sessao) {
   }
   const contexto = texto(corpo.contexto, 6000);
 
-  const agentes = Array.isArray(corpo.agentes)
-    ? corpo.agentes.map(sanearAgente).filter(Boolean).slice(0, MAX_AGENTES)
-    : [];
+  const agentesRaw = Array.isArray(corpo.agentes) ? corpo.agentes.slice(0, MAX_AGENTES) : [];
+  const agentes = agentesRaw
+    .map((a) => ({ estrutura: sanearAgente(a), ism: sanearAssignees(a?.ism) }))
+    .filter((a) => a.estrutura);
   if (!agentes.length) {
     return erro(res, 400, 'agentes_invalidos', 'É preciso ao menos um agente.');
   }
+  const ismProjeto = sanearAssignees(corpo.ismProjeto);
 
   const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
   const descricaoProjeto = stringifyWaipeState(
@@ -734,18 +799,23 @@ async function criarImplantacaoAcao(req, res, sessao) {
   const projeto = await criarTaskImplantacao({
     name: `${cliente} — Implantação Waipe`,
     markdown_description: descricaoProjeto,
+    assignees: ismProjeto,
   });
 
   for (const a of agentes) {
-    const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a), {
-      estrutura: a,
+    const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a.estrutura), {
+      estrutura: a.estrutura,
       buildChecks: {},
       testChecks: {},
       entregaChecks: {},
+      prereqChecks: {},
+      diagnostico: {},
+      validacao: { status: 'pendente', motivo: '' },
     });
     await criarSubtaskAgente(projeto.id, {
-      name: a.nome,
+      name: a.estrutura.nome,
       markdown_description: descricaoAgenteTask,
+      assignees: a.ism,
     });
   }
 
@@ -795,6 +865,9 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
     payload.status = corpo.status;
   }
+  if (Array.isArray(corpo.ism)) {
+    payload.assignees = sanearAssignees(corpo.ism);
+  }
 
   await atualizarTask(corpo.id, payload);
   return res.status(200).json({ ok: true });
@@ -829,10 +902,13 @@ async function atualizarAgenteAcao(req, res, sessao) {
 
   const estadoAtual = parseWaipeState(tarefa.description);
   const novoEstado = {
-    estrutura: estadoAtual.estrutura || {},
+    estrutura: sanearAgente(corpo.estrutura) || estadoAtual.estrutura || {},
     buildChecks: sanearChecks(corpo.buildChecks) ?? (estadoAtual.buildChecks || {}),
     testChecks: sanearChecks(corpo.testChecks) ?? (estadoAtual.testChecks || {}),
     entregaChecks: sanearChecks(corpo.entregaChecks) ?? (estadoAtual.entregaChecks || {}),
+    prereqChecks: sanearChecks(corpo.prereqChecks) ?? (estadoAtual.prereqChecks || {}),
+    diagnostico: sanearDiagnostico(corpo.diagnostico) ?? (estadoAtual.diagnostico || {}),
+    validacao: sanearValidacao(corpo.validacao) ?? (estadoAtual.validacao || { status: 'pendente', motivo: '' }),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
@@ -844,9 +920,36 @@ async function atualizarAgenteAcao(req, res, sessao) {
   } else if (typeof corpo.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(corpo.dueDate)) {
     payload.due_date = Date.parse(`${corpo.dueDate}T12:00:00-03:00`);
   }
+  if (Array.isArray(corpo.ism)) {
+    payload.assignees = sanearAssignees(corpo.ism);
+  }
 
   await atualizarTask(corpo.taskId, payload);
   return res.status(200).json({ ok: true });
+}
+
+async function listarComentariosAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const taskId = String(req.query?.taskId || '');
+  if (!taskIdValido(taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(taskId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
+  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const comentarios = await listarComentarios(taskId);
+  const mapeados = comentarios.map((c) => ({
+    id: c.id,
+    texto: c.comment_text || '',
+    autor: c.user?.username || '',
+    data: c.date || null,
+  }));
+  return res.status(200).json({ comentarios: mapeados });
 }
 
 async function comentarImplantacaoAcao(req, res, sessao) {
