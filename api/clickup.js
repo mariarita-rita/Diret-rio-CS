@@ -1,9 +1,10 @@
-// Proxy do ClickUp. NAO e um proxy generico: aceita apenas tres acoes fixas e
+// Proxy do ClickUp. NAO e um proxy generico: aceita apenas acoes fixas e
 // nunca um path livre vindo do cliente.
 //
-//   GET  /api/clickup?action=carteira    lista 901327787926 paginada no servidor
-//   GET  /api/clickup?action=metas       lista 901327940637
-//   POST /api/clickup?action=set-field   { taskId, fieldId, value }
+//   GET  /api/clickup?action=carteira      lista 901327787926 paginada no servidor
+//   GET  /api/clickup?action=metas         lista 901327940637
+//   POST /api/clickup?action=set-field     { taskId, fieldId, value }
+//   POST /api/clickup?action=log-proposta  cria task de log em 901328973414
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -17,12 +18,14 @@ import {
   erroLimite,
   lerCorpo,
   taskIdValido,
+  texto,
   uuidValido,
   ErroCorpo,
 } from './_lib/http.js';
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
   CAMPOS_ESCRITA,
+  criarTaskPropostaWaipe,
   EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
@@ -66,8 +69,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && acao === 'metas') return await lerMetas(res, sessao);
     if (req.method === 'GET' && acao === 'cliente') return await lerCliente(req, res, sessao);
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
+    if (req.method === 'POST' && acao === 'log-proposta') return await logProposta(req, res, sessao);
 
-    if (!['carteira', 'busca', 'metas', 'cliente', 'set-field'].includes(acao)) {
+    if (!['carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta'].includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
     }
     return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido para esta ação.');
@@ -434,6 +438,79 @@ function validarValor(campo, value) {
     return value;
   }
   return undefined;
+}
+
+const PLANOS_VALIDOS = new Set(['Individual', 'Time', 'Enterprise']);
+
+/**
+ * POST ?action=log-proposta — registra uma proposta gerada pelo simulador Waipe
+ * como task em LISTA_PROPOSTAS_WAIPE. Nao toca em nenhuma task de cliente das
+ * listas Carteira/Metas; e so um log de atividade, uma task por proposta.
+ *
+ * Passa pelo mesmo portao de `podeEscrever` que `set-field` — e criacao de
+ * dado, nao leitura, entao `consulta` fica de fora. A atribuicao de CSM vem da
+ * SESSAO (sessao.nome), nunca do corpo: o campo `csm` que o simulador manda e
+ * texto livre digitado por quem preencheu a proposta, e nao serve para
+ * atribuicao confiavel.
+ */
+async function logProposta(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const cliente = texto(corpo.cliente, 120);
+  if (!cliente) {
+    return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
+  }
+
+  const plano = typeof corpo.plano === 'string' && PLANOS_VALIDOS.has(corpo.plano) ? corpo.plano : 'A definir';
+  const segmento = texto(corpo.segmento, 120);
+  const acaoOrigem = texto(corpo.acaoOrigem, 40);
+  const dores = texto(corpo.dores, 600);
+
+  let valorMensal = null;
+  if (
+    typeof corpo.valorMensal === 'number' &&
+    Number.isFinite(corpo.valorMensal) &&
+    corpo.valorMensal >= 0 &&
+    corpo.valorMensal <= 999999
+  ) {
+    valorMensal = corpo.valorMensal;
+  }
+
+  const agentes = Array.isArray(corpo.agentes)
+    ? corpo.agentes.filter((a) => typeof a === 'string').slice(0, 30).map((a) => texto(a, 80)).filter(Boolean)
+    : [];
+
+  const dataRotulo = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const nomeTask = `${cliente} — ${plano} — ${dataRotulo}`;
+
+  const linhasDescricao = [
+    `**CSM:** ${texto(sessao.nome, 120) || sessao.csm || sessao.nivel}`,
+    segmento ? `**Segmento:** ${segmento}` : null,
+    `**Plano:** ${plano}`,
+    valorMensal !== null ? `**Investimento mensal:** R$ ${valorMensal.toFixed(2)}` : null,
+    agentes.length ? `**Agentes selecionados (${agentes.length}):** ${agentes.join(', ')}` : null,
+    dores ? `**Dores do cliente:**\n${dores}` : null,
+    acaoOrigem ? `**Ação:** ${acaoOrigem}` : null,
+  ].filter(Boolean);
+
+  await criarTaskPropostaWaipe({
+    name: nomeTask,
+    markdown_description: linhasDescricao.join('\n\n'),
+  });
+
+  return res.status(200).json({ ok: true });
 }
 
 // ── Erros ─────────────────────────────────────────────────────────────────

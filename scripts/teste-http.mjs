@@ -65,6 +65,7 @@ const stubClickup = `
   export async function localizarTask() { return null; }
   export async function localizarCliente() { return null; }
   export async function lerClienteFresco() { return null; }
+  export async function criarTaskPropostaWaipe() { return {}; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 

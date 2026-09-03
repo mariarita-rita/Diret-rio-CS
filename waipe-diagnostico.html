@@ -2373,10 +2373,40 @@
     if (e.target === document.getElementById("modalOverlay")) document.getElementById("modalOverlay").classList.remove("show");
   });
 
+  // ---------- Log de proposta gerada (ClickUp, quando disponível) ----------
+  // So funciona quando a pagina roda na mesma origem do Dashboard de carteiras
+  // (a aba "Diagnóstico Waipe"), onde existe sessao logada e /api/clickup
+  // responde. Em qualquer outro contexto (arquivo local, link direto do
+  // Artifact) a chamada falha e e silenciosamente ignorada — nunca bloqueia
+  // download/copia por causa disso.
+  function logPropostaClickUp(acaoOrigem){
+    try {
+      var ctx = getProposalContext();
+      var diag = lastDiagnostic;
+      var pricing = computePricing();
+      var payload = {
+        cliente: ctx.cliente,
+        segmento: ctx.segmento,
+        plano: diag ? diag.rec.plan : null,
+        valorMensal: pricing.hasDiag ? pricing.total : null,
+        csm: ctx.csm,
+        agentes: ctx.agents.map(function(a){ return a.nome; }),
+        dores: ctx.dores,
+        acaoOrigem: acaoOrigem
+      };
+      fetch("/api/clickup?action=log-proposta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).catch(function(){ /* fora do Dashboard, ou sem sessao — ignora */ });
+    } catch (e) { /* nunca deixa o log quebrar a geracao da proposta */ }
+  }
+
   document.getElementById("btnBaixar").addEventListener("click", function(){
     var html = buildProposalHTML();
     var ctx = getProposalContext();
     var filename = "proposta-" + ctx.cliente.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + ".html";
+    logPropostaClickUp("baixar");
 
     if (capDownloads && typeof capDownloads.save === "function"){
       capDownloads.save({ filename: filename, data: html }).then(function(){
@@ -2391,6 +2421,7 @@
 
   document.getElementById("btnCopyHtml").addEventListener("click", function(){
     var html = buildProposalHTML();
+    logPropostaClickUp("copiar-html");
     copyToClipboard(html).then(function(){
       showToast("HTML da proposta copiado — cole num editor e salve como .html, ou distribua como preferir");
     }).catch(function(){

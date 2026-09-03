@@ -10,6 +10,11 @@ export const LISTA_CARTEIRA = '901327787926';
 export const LISTA_METAS = '901327940637';
 export const LISTAS_PERMITIDAS = new Set([LISTA_CARTEIRA, LISTA_METAS]);
 
+// Log de propostas geradas pelo simulador Waipe. Lista separada das duas acima —
+// nao entra em LISTAS_PERMITIDAS porque essa constante gate-keeps escopo de
+// CLIENTE (localizarTask/set-field), e uma task de log nao e um cliente.
+export const LISTA_PROPOSTAS_WAIPE = '901328973414';
+
 // Campos da lista Carteira
 const CF = {
   ID_NUCLEO: '6126a50b-7afb-40fd-8654-26a687f34258',
@@ -713,6 +718,18 @@ export async function gravarCampo(taskId, fieldId, value) {
  */
 export async function limparCampo(taskId, fieldId) {
   return cu(`/task/${taskId}/field/${fieldId}`, { method: 'DELETE' }, { semCorpo: true });
+}
+
+/**
+ * Cria uma task de log em LISTA_PROPOSTAS_WAIPE — uma por proposta gerada no
+ * simulador Waipe. `payload` ja vem validado e saneado pelo endpoint
+ * (log-proposta, em clickup.js); esta funcao so faz o POST.
+ */
+export async function criarTaskPropostaWaipe(payload) {
+  return cu(`/list/${LISTA_PROPOSTAS_WAIPE}/task`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 /**
