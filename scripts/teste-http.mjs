@@ -66,6 +66,18 @@ const stubClickup = `
   export async function localizarCliente() { return null; }
   export async function lerClienteFresco() { return null; }
   export async function criarTaskPropostaWaipe() { return {}; }
+  export const LISTA_IMPLANTACOES_WAIPE = '901328976497';
+  export async function criarTaskImplantacao() { return { id: 'stub-projeto' }; }
+  export async function criarSubtaskAgente() { return { id: 'stub-agente' }; }
+  export async function atualizarTask() { return {}; }
+  export async function obterTask() { return null; }
+  export async function listarImplantacoes() { return []; }
+  export async function obterTaskComSubtasks() { return { pai: null, subtasks: [] }; }
+  export async function criarComentario() { return {}; }
+  export function parseWaipeState() { return {}; }
+  export function stringifyWaipeState(description) { return description || ''; }
+  export function contextoSemEstado(description) { return description || ''; }
+  export function csmDaDescricaoImplantacao() { return ''; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -1703,6 +1715,163 @@ console.log('\n[33] Campanha Camp 2026 — 3 campos numericos, allowlist e escop
   checar('csm de outra carteira: 403 fora_da_carteira', [csmOutro.code, csmOutro.corpo.code], [403, 'fora_da_carteira']);
   const soLeitura = await gravar(CONSULTA, CORTESIA, 3);
   checar('consulta: 403 somente_leitura', [soLeitura.code, soLeitura.corpo.code], [403, 'somente_leitura']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado embutido na descricao');
+{
+  const fetchOriginal = globalThis.fetch;
+  const escritas = [];
+  const LISTA = '901328976497';
+
+  // Sem negrito/fence de proposito: uma task real devolve markdown_description
+  // como texto simples (ClickUp descarta a sintaxe no round-trip — confirmado
+  // com uma task real), entao o formato do fixture espelha o que volta de la.
+  const descProjeto = (estado) =>
+    `CSM: Gian Luca\n\nContexto de teste.\n\n${JSON.stringify(estado)}`;
+  const descAgente = (estado) =>
+    `Frente: Cobranca\n\n${JSON.stringify(estado)}`;
+
+  const estadoProjeto = { etapaAtual: 'alinhamento', prioridade: ['tAgente1'], agenteAtualId: 'tAgente1', concluidos: [], agentesTotal: 1 };
+  const estadoAgente = { estrutura: { nome: 'Guardião X', frente: 'Cobranca' }, buildChecks: {}, testChecks: {}, entregaChecks: {} };
+
+  const taskProjeto = () => ({
+    id: 'tProjeto', name: 'Cliente X — Implantação Waipe', list: { id: LISTA },
+    status: { status: 'pendente' }, parent: null, subtasks: [{ id: 'tAgente1' }],
+    description: descProjeto(estadoProjeto),
+  });
+  const taskAgente = () => ({
+    id: 'tAgente1', name: 'Guardião X', list: { id: LISTA }, parent: 'tProjeto',
+    status: { status: 'pendente' }, due_date: null,
+    description: descAgente(estadoAgente),
+  });
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'PUT' && u.endsWith('/task/tProjeto')) {
+      escritas.push({ alvo: 'projeto', body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'PUT' && u.endsWith('/task/tAgente1')) {
+      escritas.push({ alvo: 'agente', body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'POST' && u.endsWith('/comment')) {
+      escritas.push({ alvo: 'comentario', body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
+      escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
+      return ok({ id: 'tNovoProjeto' });
+    }
+    if (u.includes(`/list/${LISTA}/task?`)) return ok({ tasks: [taskProjeto()], last_page: true });
+    if (u.includes('/task/tProjeto')) return ok(taskProjeto());
+    if (u.includes('/task/tAgente1')) return ok(taskAgente());
+    return ok({});
+  };
+
+  const libUrl = libClickupUnica('implantacoes');
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+
+  const chamarAcao = async (perfil, method, action, extra = {}) => {
+    const r = res();
+    await cu({
+      method,
+      headers: cabecalhos({ cookie: cookieDe(perfil) }),
+      query: { action, ...(extra.query || {}) },
+      body: extra.body,
+    }, r);
+    return r;
+  };
+
+  // listar-implantacoes: escopo por CSM
+  const listaGian = await chamarAcao(GIAN, 'GET', 'listar-implantacoes');
+  checar('listar-implantacoes: csm dono ve o projeto', listaGian.corpo.tasks.map((t) => t.id), ['tProjeto']);
+  const listaPatricia = await chamarAcao(PATRICIA, 'GET', 'listar-implantacoes');
+  checar('listar-implantacoes: csm de outra carteira nao ve', listaPatricia.corpo.tasks, []);
+  const listaGestao = await chamarAcao(GESTAO, 'GET', 'listar-implantacoes');
+  checar('listar-implantacoes: gestao ve tudo', listaGestao.corpo.total, 1);
+
+  // obter-implantacao: dono ve com agentes e estado embutido, outro csm 403, id invalido 400
+  const obterGian = await chamarAcao(GIAN, 'GET', 'obter-implantacao', { query: { id: 'tProjeto' } });
+  checar('obter-implantacao: 200 com 1 agente', [obterGian.code, obterGian.corpo.agentes.length], [200, 1]);
+  checar('  etapaAtual do estado embutido', obterGian.corpo.projeto.etapaAtual, 'alinhamento');
+  checar('  estrutura do agente veio do estado embutido', obterGian.corpo.agentes[0].estrutura.frente, 'Cobranca');
+  checar('  contexto sem o bloco de estado', obterGian.corpo.projeto.contexto.includes('waipe-state'), false);
+  const obterPatricia = await chamarAcao(PATRICIA, 'GET', 'obter-implantacao', { query: { id: 'tProjeto' } });
+  checar('obter-implantacao: csm de outra carteira -> 403', [obterPatricia.code, obterPatricia.corpo.code], [403, 'fora_da_carteira']);
+  const obterInvalido = await chamarAcao(GESTAO, 'GET', 'obter-implantacao', { query: { id: 'zzz!!' } });
+  checar('obter-implantacao: id invalido -> 400', [obterInvalido.code, obterInvalido.corpo.code], [400, 'task_invalida']);
+
+  // criar-implantacao: consulta nao pode, sem agente 400, gestao cria pai + subtask
+  const criarConsulta = await chamarAcao(CONSULTA, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [{ nome: 'A' }] } });
+  checar('criar-implantacao: consulta -> 403', [criarConsulta.code, criarConsulta.corpo.code], [403, 'somente_leitura']);
+  const criarSemAgente = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [] } });
+  checar('criar-implantacao: sem agentes -> 400', [criarSemAgente.code, criarSemAgente.corpo.code], [400, 'agentes_invalidos']);
+  escritas.length = 0;
+  const criarOk = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', {
+    body: { cliente: 'Cliente Novo', contexto: 'Escopo fechado', agentes: [{ nome: 'Agente 1', frente: 'Cobranca' }] },
+  });
+  checar('criar-implantacao: 200', [criarOk.code, criarOk.corpo.ok], [200, true]);
+  checar('  cria 1 projeto + 1 subtask', escritas.filter((e) => e.alvo === 'criar').length, 2);
+
+  // atualizar-implantacao: dono grava o estado, etapa invalida 400, outro csm 403
+  escritas.length = 0;
+  const atualizarOk = await chamarAcao(GIAN, 'POST', 'atualizar-implantacao', {
+    body: { id: 'tProjeto', etapaAtual: 'construcao', prioridade: ['tAgente1'], agenteAtualId: 'tAgente1', concluidos: [] },
+  });
+  checar('atualizar-implantacao: 200', [atualizarOk.code, atualizarOk.corpo.ok], [200, true]);
+  const escritaProjeto = escritas.find((e) => e.alvo === 'projeto');
+  checar('  grava etapaAtual no bloco de estado', escritaProjeto.body.markdown_description.includes('"etapaAtual":"construcao"'), true);
+  const atualizarEtapaInvalida = await chamarAcao(GIAN, 'POST', 'atualizar-implantacao', { body: { id: 'tProjeto', etapaAtual: 'xyz' } });
+  checar('atualizar-implantacao: etapa invalida -> 400', [atualizarEtapaInvalida.code, atualizarEtapaInvalida.corpo.code], [400, 'etapa_invalida']);
+  const atualizarOutroCsm = await chamarAcao(PATRICIA, 'POST', 'atualizar-implantacao', {
+    body: { id: 'tProjeto', etapaAtual: 'testes', prioridade: [], concluidos: [] },
+  });
+  checar('atualizar-implantacao: csm de outra carteira -> 403', [atualizarOutroCsm.code, atualizarOutroCsm.corpo.code], [403, 'fora_da_carteira']);
+
+  // atualizar-agente: posse resolvida pelo PROJETO PAI, preserva a estrutura ja salva
+  escritas.length = 0;
+  const atualizarAgenteOk = await chamarAcao(GIAN, 'POST', 'atualizar-agente', {
+    body: { taskId: 'tAgente1', buildChecks: { passo1: true }, status: 'in progress' },
+  });
+  checar('atualizar-agente: 200', [atualizarAgenteOk.code, atualizarAgenteOk.corpo.ok], [200, true]);
+  const escritaAgente = escritas.find((e) => e.alvo === 'agente');
+  checar('  grava buildChecks', escritaAgente.body.markdown_description.includes('"passo1":true'), true);
+  checar('  preserva a estrutura ja salva', escritaAgente.body.markdown_description.includes('"frente":"Cobranca"'), true);
+  checar('  grava status', escritaAgente.body.status, 'in progress');
+  const atualizarAgenteOutroCsm = await chamarAcao(PATRICIA, 'POST', 'atualizar-agente', { body: { taskId: 'tAgente1', buildChecks: {} } });
+  checar('atualizar-agente: posse pelo pai, csm errado -> 403', [atualizarAgenteOutroCsm.code, atualizarAgenteOutroCsm.corpo.code], [403, 'fora_da_carteira']);
+
+  // comentar-implantacao: consulta nao pode, texto vazio 400, dono posta
+  const comentarConsulta = await chamarAcao(CONSULTA, 'POST', 'comentar-implantacao', { body: { taskId: 'tAgente1', texto: 'oi' } });
+  checar('comentar-implantacao: consulta -> 403', [comentarConsulta.code, comentarConsulta.corpo.code], [403, 'somente_leitura']);
+  const comentarVazio = await chamarAcao(GIAN, 'POST', 'comentar-implantacao', { body: { taskId: 'tAgente1', texto: '   ' } });
+  checar('comentar-implantacao: texto vazio -> 400', [comentarVazio.code, comentarVazio.corpo.code], [400, 'texto_invalido']);
+  escritas.length = 0;
+  const comentarOk = await chamarAcao(GIAN, 'POST', 'comentar-implantacao', { body: { taskId: 'tAgente1', texto: 'Alinhamento feito.' } });
+  checar('comentar-implantacao: 200', [comentarOk.code, comentarOk.corpo.ok], [200, true]);
+  checar('  posta no ClickUp', escritas.some((e) => e.alvo === 'comentario'), true);
+
+  const invalida = await chamarAcao(GESTAO, 'GET', 'nao-existe');
+  checar('acao invalida -> 400', [invalida.code, invalida.corpo.code], [400, 'acao_invalida']);
 
   globalThis.fetch = fetchOriginal;
 }

@@ -15,6 +15,14 @@ export const LISTAS_PERMITIDAS = new Set([LISTA_CARTEIRA, LISTA_METAS]);
 // CLIENTE (localizarTask/set-field), e uma task de log nao e um cliente.
 export const LISTA_PROPOSTAS_WAIPE = '901328973414';
 
+/**
+ * Projetos de implantacao Waipe (Projetos em Andamento). Task-pai = cliente,
+ * subtask = agente do backlog daquele cliente. Tambem fora de LISTAS_PERMITIDAS
+ * pelo mesmo motivo de LISTA_PROPOSTAS_WAIPE: aquele set gate-keeps escopo de
+ * CLIENTE (localizarTask/set-field), e isto e outra entidade.
+ */
+export const LISTA_IMPLANTACOES_WAIPE = '901328976497';
+
 // Campos da lista Carteira
 const CF = {
   ID_NUCLEO: '6126a50b-7afb-40fd-8654-26a687f34258',
@@ -730,6 +738,131 @@ export async function criarTaskPropostaWaipe(payload) {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+/**
+ * Cria a task-pai de um projeto de implantacao em LISTA_IMPLANTACOES_WAIPE.
+ * `payload` ja vem validado pelo endpoint (criar-implantacao, em clickup.js).
+ */
+export async function criarTaskImplantacao(payload) {
+  return cu(`/list/${LISTA_IMPLANTACOES_WAIPE}/task`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Cria uma subtask (agente do backlog) presa a `parentId`, na mesma lista. */
+export async function criarSubtaskAgente(parentId, payload) {
+  return cu(`/list/${LISTA_IMPLANTACOES_WAIPE}/task`, {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, parent: parentId }),
+  });
+}
+
+/** PUT generico em /task/{id} — nome, descricao, status, due_date. */
+export async function atualizarTask(taskId, payload) {
+  return cu(`/task/${taskId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** GET de uma task sozinha, sem subtasks. `null` se o ClickUp disser 404/400. */
+export async function obterTask(taskId) {
+  try {
+    return await cu(`/task/${taskId}`);
+  } catch (e) {
+    if (e instanceof ErroUpstream && (e.status === 404 || e.status === 400)) return null;
+    throw e;
+  }
+}
+
+/**
+ * Todas as tasks-pai de LISTA_IMPLANTACOES_WAIPE. Lote 1: e uma lista pequena
+ * (uma linha por cliente em implantacao), mesmo raciocinio de getMetas.
+ */
+export async function listarImplantacoes() {
+  return buscarPaginado(LISTA_IMPLANTACOES_WAIPE, 'include_closed=true', 1);
+}
+
+/**
+ * Uma task-pai (projeto) e suas subtasks (agentes), cada uma com a descricao
+ * completa. `include_subtasks=true` no GET devolve os IDS das subtasks; o
+ * conteudo de cada uma (description) so vem confiavel buscando-a de novo —
+ * por isso o Promise.all abaixo, no mesmo padrao de buscarPaginado.
+ */
+export async function obterTaskComSubtasks(taskId) {
+  const pai = await cu(`/task/${taskId}?include_subtasks=true`);
+  const subIds = Array.isArray(pai.subtasks) ? pai.subtasks.map((s) => s.id).filter(Boolean) : [];
+  const subtasks = subIds.length ? await Promise.all(subIds.map((id) => cu(`/task/${id}`))) : [];
+  return { pai, subtasks };
+}
+
+/** Comentario nativo do ClickUp numa task (nota do ISM durante o fluxo). */
+export async function criarComentario(taskId, texto) {
+  return cu(`/task/${taskId}/comment`, {
+    method: 'POST',
+    body: JSON.stringify({ comment_text: texto }),
+  });
+}
+
+// ── Estado do fluxo Waipe embutido na descricao ────────────────────────────
+//
+// O workflow de status do ClickUp e fixo por espaco (pendente/in progress/
+// agendado/bloqueado/cancelado/concluido/Closed — confirmado lendo
+// LISTA_PROPOSTAS_WAIPE, mesmo espaco) e nao ha ferramenta para criar um novo
+// conjunto de status por lista. Por isso a etapa fina do fluxo (escopo ->
+// alinhamento -> construcao -> testes -> entrega), a fila de prioridade e os
+// checklists por agente NAO viram status: viram um bloco JSON no fim da
+// descricao da task.
+//
+// IMPORTANTE, confirmado com uma task real: o ClickUp reescreve
+// `markdown_description` para texto simples na leitura (`description` e
+// `text_content`) e DESCARTA toda sintaxe markdown — negrito, divisor `---`,
+// fence de codigo, tudo. Um delimitador como ```` ```waipe-state ```` some
+// no round-trip; so o TEXTO fica. Por isso o bloco nao e localizado por
+// marcador nenhum: e o ULTIMO valor JSON valido da descricao, procurado de
+// tras para frente a partir do `{` mais proximo do fim.
+function localizarBlocoEstado(description) {
+  const texto = String(description || '');
+  let pos = texto.length;
+  for (;;) {
+    const idx = texto.lastIndexOf('{', pos - 1);
+    if (idx === -1) return null;
+    try {
+      return { inicio: idx, valor: JSON.parse(texto.slice(idx).trim()) };
+    } catch {
+      pos = idx;
+    }
+  }
+}
+
+/** Le o bloco de estado de uma descricao. `{}` se ausente ou corrompido. */
+export function parseWaipeState(description) {
+  return localizarBlocoEstado(description)?.valor || {};
+}
+
+/** Descricao sem o bloco de estado — o texto que faz sentido mostrar a uma pessoa. */
+export function contextoSemEstado(description) {
+  const texto = String(description || '');
+  const achado = localizarBlocoEstado(texto);
+  return (achado ? texto.slice(0, achado.inicio) : texto).trimEnd();
+}
+
+/** Substitui (ou acrescenta) o bloco de estado ao final da descricao. */
+export function stringifyWaipeState(description, state) {
+  return `${contextoSemEstado(description)}\n\n${JSON.stringify(state)}`;
+}
+
+/**
+ * Extrai o nome do CSM da linha gravada por criar-implantacao. Aceita com ou
+ * sem `**` ao redor: a task RECEM-CRIADA ainda tem o markdown intacto no
+ * corpo que acabamos de montar, mas qualquer leitura de volta do ClickUp ja
+ * devolve isso como texto simples (ver nota acima).
+ */
+export function csmDaDescricaoImplantacao(description) {
+  const m = /\*{0,2}CSM:\*{0,2}\s*(.+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
 }
 
 /**

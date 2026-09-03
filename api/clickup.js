@@ -1,10 +1,16 @@
 // Proxy do ClickUp. NAO e um proxy generico: aceita apenas acoes fixas e
 // nunca um path livre vindo do cliente.
 //
-//   GET  /api/clickup?action=carteira      lista 901327787926 paginada no servidor
-//   GET  /api/clickup?action=metas         lista 901327940637
-//   POST /api/clickup?action=set-field     { taskId, fieldId, value }
-//   POST /api/clickup?action=log-proposta  cria task de log em 901328973414
+//   GET  /api/clickup?action=carteira              lista 901327787926 paginada no servidor
+//   GET  /api/clickup?action=metas                 lista 901327940637
+//   POST /api/clickup?action=set-field             { taskId, fieldId, value }
+//   POST /api/clickup?action=log-proposta          cria task de log em 901328973414
+//   GET  /api/clickup?action=listar-implantacoes   lista 901328976497 (projetos em andamento)
+//   GET  /api/clickup?action=obter-implantacao     { id } -> projeto + agentes
+//   POST /api/clickup?action=criar-implantacao     { cliente, contexto, agentes[] }
+//   POST /api/clickup?action=atualizar-implantacao { id, etapaAtual, prioridade[], ... }
+//   POST /api/clickup?action=atualizar-agente      { taskId, buildChecks?, testChecks?, ... }
+//   POST /api/clickup?action=comentar-implantacao  { taskId, texto }
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -24,8 +30,14 @@ import {
 } from './_lib/http.js';
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
+  atualizarTask,
   CAMPOS_ESCRITA,
+  contextoSemEstado,
+  criarComentario,
+  criarSubtaskAgente,
+  criarTaskImplantacao,
   criarTaskPropostaWaipe,
+  csmDaDescricaoImplantacao,
   EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
@@ -34,9 +46,15 @@ import {
   gravarCampo,
   lerClienteFresco,
   limparCampo,
+  LISTA_IMPLANTACOES_WAIPE,
+  listarImplantacoes,
   localizarTask,
+  obterTask,
+  obterTaskComSubtasks,
+  parseWaipeState,
   refletirEscrita,
   STATUS_MES_ATUAL,
+  stringifyWaipeState,
 } from './_lib/clickup.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -70,8 +88,21 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && acao === 'cliente') return await lerCliente(req, res, sessao);
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
     if (req.method === 'POST' && acao === 'log-proposta') return await logProposta(req, res, sessao);
+    if (req.method === 'GET' && acao === 'listar-implantacoes') return await listarImplantacoesAcao(res, sessao);
+    if (req.method === 'GET' && acao === 'obter-implantacao') return await obterImplantacaoAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'criar-implantacao') return await criarImplantacaoAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'atualizar-implantacao') {
+      return await atualizarImplantacaoAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
 
-    if (!['carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta'].includes(acao)) {
+    const ACOES_VALIDAS = [
+      'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
+      'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
+      'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
+    ];
+    if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
     }
     return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido para esta ação.');
@@ -510,6 +541,344 @@ async function logProposta(req, res, sessao) {
     markdown_description: linhasDescricao.join('\n\n'),
   });
 
+  return res.status(200).json({ ok: true });
+}
+
+// ── Projetos em Andamento (implantação Waipe) ───────────────────────────────
+
+const MAX_AGENTES = 20;
+const ETAPAS_VALIDAS = new Set(['escopo', 'alinhamento', 'construcao', 'testes', 'entrega']);
+// Vocabulario de status e fixo por espaco (ver nota em _lib/clickup.js) — so
+// os 3 que fazem sentido pro fluxo de um projeto/agente ficam disponiveis aqui.
+const STATUS_IMPLANTACAO_VALIDOS = new Set(['pendente', 'in progress', 'concluído']);
+
+function sanearListaTexto(v, maxItens, maxLen) {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x) => typeof x === 'string').slice(0, maxItens).map((x) => texto(x, maxLen)).filter(Boolean);
+}
+
+function sanearListaIds(v) {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x) => typeof x === 'string').slice(0, MAX_AGENTES).map((x) => texto(x, 60)).filter(Boolean);
+}
+
+function sanearChecks(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out = {};
+  let n = 0;
+  for (const [k, val] of Object.entries(v)) {
+    if (n >= 60) break;
+    const chave = texto(k, 60);
+    if (!chave) continue;
+    out[chave] = !!val;
+    n++;
+  }
+  return out;
+}
+
+/** Um agente do backlog, saneado a partir do corpo enviado por criar-implantacao. */
+function sanearAgente(a) {
+  if (!a || typeof a !== 'object') return null;
+  const nome = texto(a.nome, 120);
+  if (!nome) return null;
+  return {
+    nome,
+    frente: texto(a.frente, 120),
+    frequencia: texto(a.frequencia, 120),
+    canal: texto(a.canal, 120),
+    publico: texto(a.publico, 200),
+    entrega: sanearListaTexto(a.entrega, 20, 200),
+    sistemas: sanearListaTexto(a.sistemas, 20, 80),
+    prereq: sanearListaTexto(a.prereq, 20, 200),
+  };
+}
+
+/** Descrição legível (pra quem abre a task direto no ClickUp) da estrutura do agente. */
+function descricaoAgente(a) {
+  const linhas = [
+    a.frente ? `**Frente:** ${a.frente}` : null,
+    a.frequencia || a.canal ? `**Frequência/Canal:** ${[a.frequencia, a.canal].filter(Boolean).join(' — ')}` : null,
+    a.publico ? `**Público:** ${a.publico}` : null,
+    a.sistemas.length ? `**Sistemas:** ${a.sistemas.join(', ')}` : null,
+    a.entrega.length ? `**Entrega:**\n${a.entrega.map((e) => `- ${e}`).join('\n')}` : null,
+    a.prereq.length ? `**Pré-requisitos:**\n${a.prereq.map((e) => `- ${e}`).join('\n')}` : null,
+  ].filter(Boolean);
+  return linhas.join('\n\n');
+}
+
+/**
+ * Resolve a task-pai (projeto) de um id que tanto pode ser o proprio projeto
+ * quanto um agente (subtask) dele. `null` quando a task nao existe ou nao e
+ * desta lista — usado por toda ação de escrita abaixo pra checar posse antes
+ * de tocar em qualquer dado.
+ */
+async function resolverImplantacao(taskId) {
+  const tarefa = await obterTask(taskId);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_IMPLANTACOES_WAIPE) return null;
+  if (!tarefa.parent) return { tarefa, projeto: tarefa };
+  const projeto = await obterTask(String(tarefa.parent));
+  if (!projeto) return null;
+  return { tarefa, projeto };
+}
+
+async function listarImplantacoesAcao(res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const tasks = await listarImplantacoes();
+  const linhas = tasks.map((t) => {
+    const estado = parseWaipeState(t.description);
+    return {
+      id: t.id,
+      cliente: t.name,
+      status: t.status?.status || '',
+      etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
+      csm: csmDaDescricaoImplantacao(t.description),
+      agentesTotal: Number.isFinite(estado.agentesTotal) ? estado.agentesTotal : 0,
+      agentesConcluidos: Array.isArray(estado.concluidos) ? estado.concluidos.length : 0,
+    };
+  });
+  const visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
+  return res.status(200).json({ tasks: visiveis, total: visiveis.length });
+}
+
+async function obterImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const id = String(req.query?.id || '');
+  if (!taskIdValido(id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const { pai, subtasks } = await obterTaskComSubtasks(id).catch((e) => {
+    if (e instanceof ErroUpstream && (e.status === 404 || e.status === 400)) return { pai: null, subtasks: [] };
+    throw e;
+  });
+  if (!pai || String(pai.list?.id || '') !== LISTA_IMPLANTACOES_WAIPE) {
+    return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  }
+
+  const csm = csmDaDescricaoImplantacao(pai.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const estadoProjeto = parseWaipeState(pai.description);
+  const agentes = subtasks
+    .map((t) => {
+      const e = parseWaipeState(t.description);
+      return {
+        id: t.id,
+        nome: t.name,
+        status: t.status?.status || '',
+        dueDate: t.due_date || null,
+        estrutura: e.estrutura || {},
+        buildChecks: e.buildChecks || {},
+        testChecks: e.testChecks || {},
+        entregaChecks: e.entregaChecks || {},
+      };
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  return res.status(200).json({
+    projeto: {
+      id: pai.id,
+      cliente: pai.name,
+      status: pai.status?.status || '',
+      csm,
+      contexto: contextoSemEstado(pai.description),
+      etapaAtual: ETAPAS_VALIDAS.has(estadoProjeto.etapaAtual) ? estadoProjeto.etapaAtual : 'escopo',
+      prioridade: sanearListaIds(estadoProjeto.prioridade),
+      agenteAtualId: typeof estadoProjeto.agenteAtualId === 'string' ? estadoProjeto.agenteAtualId : null,
+      concluidos: sanearListaIds(estadoProjeto.concluidos),
+    },
+    agentes,
+  });
+}
+
+/**
+ * Cria o projeto (task-pai) e uma subtask por agente. So e chamada depois que
+ * a pessoa revisou/editou o resultado da extração por IA na tela — a chamada
+ * de IA em si roda no navegador (capability `sample`), nunca aqui.
+ */
+async function criarImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const cliente = texto(corpo.cliente, 120);
+  if (!cliente) {
+    return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
+  }
+  const contexto = texto(corpo.contexto, 6000);
+
+  const agentes = Array.isArray(corpo.agentes)
+    ? corpo.agentes.map(sanearAgente).filter(Boolean).slice(0, MAX_AGENTES)
+    : [];
+  if (!agentes.length) {
+    return erro(res, 400, 'agentes_invalidos', 'É preciso ao menos um agente.');
+  }
+
+  const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
+  const descricaoProjeto = stringifyWaipeState(
+    [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
+    { etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: agentes.length }
+  );
+
+  const projeto = await criarTaskImplantacao({
+    name: `${cliente} — Implantação Waipe`,
+    markdown_description: descricaoProjeto,
+  });
+
+  for (const a of agentes) {
+    const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a), {
+      estrutura: a,
+      buildChecks: {},
+      testChecks: {},
+      entregaChecks: {},
+    });
+    await criarSubtaskAgente(projeto.id, {
+      name: a.nome,
+      markdown_description: descricaoAgenteTask,
+    });
+  }
+
+  return res.status(200).json({ ok: true, id: projeto.id });
+}
+
+async function atualizarImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+  if (!ETAPAS_VALIDAS.has(corpo.etapaAtual)) {
+    return erro(res, 400, 'etapa_invalida', 'etapaAtual inválida.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { tarefa, projeto } = resolvido;
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const estadoAtual = parseWaipeState(tarefa.description);
+  const novoEstado = {
+    etapaAtual: corpo.etapaAtual,
+    prioridade: sanearListaIds(corpo.prioridade),
+    agenteAtualId: typeof corpo.agenteAtualId === 'string' ? texto(corpo.agenteAtualId, 60) : null,
+    concluidos: sanearListaIds(corpo.concluidos),
+    agentesTotal: Number.isFinite(estadoAtual.agentesTotal) ? estadoAtual.agentesTotal : 0,
+  };
+
+  const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
+  if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
+    payload.status = corpo.status;
+  }
+
+  await atualizarTask(corpo.id, payload);
+  return res.status(200).json({ ok: true });
+}
+
+async function atualizarAgenteAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.taskId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Agente não encontrado.');
+  const { tarefa, projeto } = resolvido;
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const estadoAtual = parseWaipeState(tarefa.description);
+  const novoEstado = {
+    estrutura: estadoAtual.estrutura || {},
+    buildChecks: sanearChecks(corpo.buildChecks) ?? (estadoAtual.buildChecks || {}),
+    testChecks: sanearChecks(corpo.testChecks) ?? (estadoAtual.testChecks || {}),
+    entregaChecks: sanearChecks(corpo.entregaChecks) ?? (estadoAtual.entregaChecks || {}),
+  };
+
+  const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
+  if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
+    payload.status = corpo.status;
+  }
+  if (corpo.dueDate === null) {
+    payload.due_date = null;
+  } else if (typeof corpo.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(corpo.dueDate)) {
+    payload.due_date = Date.parse(`${corpo.dueDate}T12:00:00-03:00`);
+  }
+
+  await atualizarTask(corpo.taskId, payload);
+  return res.status(200).json({ ok: true });
+}
+
+async function comentarImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+  const comentario = texto(corpo.texto, 2000);
+  if (!comentario) {
+    return erro(res, 400, 'texto_invalido', 'Comentário vazio.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.taskId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
+  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  await criarComentario(corpo.taskId, comentario);
   return res.status(200).json({ ok: true });
 }
 

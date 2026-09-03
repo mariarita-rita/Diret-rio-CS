@@ -1,0 +1,1383 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Implantação do Waipe</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap');
+
+  :root{
+    --azul:#3A86FF; --noite:#000035; --profundo:#0A41B4; --claro:#A8C5FF;
+    --quasebranco:#F0F4FF; --branco:#FFFFFF;
+    --bg:#F7F8FC; --surface:#FFFFFF; --surface-2:#EEF2FC;
+    --border:#E2E7F5; --border-strong:#C9D3EC;
+    --ink:#101033; --ink-2:#3A3F5C; --muted:#5C6180; --muted-2:#8A8FB0;
+    --success:#16A34A; --success-bg:#ECFDF5;
+    --warning:#B45309; --warning-bg:#FFFBEB;
+    --danger:#B91C1C; --danger-bg:#FEF2F2;
+    --tag-londrisoft:#0A41B4; --tag-londrisoft-bg:#EAF1FF;
+    --tag-cliente:#B45309; --tag-cliente-bg:#FFF7E8;
+    --tag-ambos:#5B21B6; --tag-ambos-bg:#F3E8FF;
+    --shadow:0 1px 2px rgba(16,16,51,.05), 0 8px 24px rgba(16,16,51,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1024; --surface:#171933; --surface-2:#1F2242;
+      --border:#2B2E56; --border-strong:#3A3D6B;
+      --ink:#EDEEFA; --ink-2:#C7C9E8; --muted:#9498C2; --muted-2:#6A6E9C;
+      --success:#4ADE80; --success-bg:#0F2A1B;
+      --warning:#FBBF24; --warning-bg:#2A2112;
+      --danger:#F87171; --danger-bg:#2A1515;
+      --tag-londrisoft:#8FB4FF; --tag-londrisoft-bg:#132048;
+      --tag-cliente:#FBBF24; --tag-cliente-bg:#2A2112;
+      --tag-ambos:#C4A6FF; --tag-ambos-bg:#241A3A;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1024; --surface:#171933; --surface-2:#1F2242;
+    --border:#2B2E56; --border-strong:#3A3D6B;
+    --ink:#EDEEFA; --ink-2:#C7C9E8; --muted:#9498C2; --muted-2:#6A6E9C;
+    --success:#4ADE80; --success-bg:#0F2A1B;
+    --warning:#FBBF24; --warning-bg:#2A2112;
+    --danger:#F87171; --danger-bg:#2A1515;
+    --tag-londrisoft:#8FB4FF; --tag-londrisoft-bg:#132048;
+    --tag-cliente:#FBBF24; --tag-cliente-bg:#2A2112;
+    --tag-ambos:#C4A6FF; --tag-ambos-bg:#241A3A;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; line-height:1.55;}
+  h1,h2,h3,h4{font-family:Poppins,Inter,sans-serif; text-wrap:balance; margin:0; color:var(--ink);}
+  a{color:var(--profundo);}
+  table{border-collapse:collapse; width:100%;}
+  .tabular{font-variant-numeric:tabular-nums;}
+
+  .page{max-width:1080px; margin:0 auto; padding:28px 20px 90px;}
+
+  /* Header */
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:20px; padding-bottom:22px; margin-bottom:24px; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand-logo-svg{height:26px; width:auto;}
+  .header-title h1{font-size:21px; font-weight:800; letter-spacing:-.01em;}
+  .header-title p{margin:4px 0 0; font-size:13px; color:var(--muted);}
+  .header-meta{font-size:11.5px; color:var(--muted-2); text-align:right; line-height:1.5;}
+  .header-meta a{color:var(--muted-2); text-decoration:underline;}
+
+  /* Tabs */
+  .tabs{display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:4px; margin-bottom:26px; width:fit-content; flex-wrap:wrap;}
+  .tab-btn{appearance:none; border:none; background:transparent; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; color:var(--muted); padding:9px 15px; border-radius:9px; transition:background .15s,color .15s; white-space:nowrap;}
+  .tab-btn:hover{color:var(--ink);}
+  .tab-btn.active{background:var(--surface); color:var(--profundo); box-shadow:var(--shadow);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  /* Cards & callouts */
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; margin-bottom:18px;}
+  .card h2{font-size:16px; font-weight:700; margin-bottom:4px;}
+  .card .sub{font-size:12.5px; color:var(--muted); margin-bottom:16px;}
+  .section-title{font-size:18px; font-weight:800; margin:32px 0 6px; letter-spacing:-.01em;}
+  .section-title:first-child{margin-top:0;}
+  .section-sub{font-size:13px; color:var(--muted); margin-bottom:16px;}
+
+  .callout{display:flex; gap:12px; padding:14px 16px; border-radius:12px; border:1px solid var(--border); background:var(--quasebranco); font-size:13px; line-height:1.55; margin-bottom:16px;}
+  .callout .dot{flex-shrink:0; width:8px; height:8px; border-radius:50%; margin-top:6px; background:var(--profundo);}
+  .callout.warn{background:var(--warning-bg); border-color:color-mix(in srgb, var(--warning) 30%, var(--border));}
+  .callout.warn .dot{background:var(--warning);}
+  .callout.danger{background:var(--danger-bg); border-color:color-mix(in srgb, var(--danger) 30%, var(--border));}
+  .callout.danger .dot{background:var(--danger);}
+  .callout b{color:var(--ink);}
+
+  .layer-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:14px 0;}
+  @media (max-width:760px){ .layer-grid{grid-template-columns:1fr;} }
+  .layer-card{border:1.5px solid var(--border); border-radius:14px; padding:16px;}
+  .layer-card.l1{border-color:var(--azul); background:var(--quasebranco);}
+  .layer-card.l2{border-color:var(--border-strong); background:var(--surface-2);}
+  .layer-card.l3{border-color:var(--warning); background:var(--warning-bg);}
+  .layer-card .lk{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; font-weight:800; color:var(--profundo); margin-bottom:6px;}
+  .layer-card.l3 .lk{color:var(--warning);}
+  .layer-card h4{font-size:14px; font-weight:700; margin-bottom:5px;}
+  .layer-card p{font-size:12.5px; color:var(--muted); margin:0; line-height:1.5;}
+
+  /* Tables */
+  .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:14px; margin:14px 0; background:var(--surface);}
+  table.cmp{width:100%; min-width:560px; font-size:13px;}
+  table.cmp th, table.cmp td{padding:11px 15px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top;}
+  table.cmp thead th{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:var(--surface-2); position:sticky; top:0;}
+  table.cmp tbody tr:last-child td{border-bottom:none;}
+  table.cmp tbody th{font-weight:600; color:var(--ink-2); width:26%;}
+  .yes{color:var(--success); font-weight:700;}
+  .no{color:var(--muted-2);}
+
+  /* Responsibility tags */
+  .tag{display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; letter-spacing:.02em; padding:3px 9px; border-radius:20px; white-space:nowrap;}
+  .tag.londrisoft{background:var(--tag-londrisoft-bg); color:var(--tag-londrisoft);}
+  .tag.cliente{background:var(--tag-cliente-bg); color:var(--tag-cliente);}
+  .tag.ambos{background:var(--tag-ambos-bg); color:var(--tag-ambos);}
+
+  /* Runbook checklist */
+  .phase{border:1px solid var(--border); border-radius:16px; margin-bottom:14px; overflow:hidden; background:var(--surface);}
+  .phase-head{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px; background:var(--surface-2); cursor:pointer; flex-wrap:wrap;}
+  .phase-head h3{font-size:14.5px; font-weight:700;}
+  .phase-head .pmeta{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .phase-progress{display:flex; align-items:center; gap:8px; flex-shrink:0;}
+  .phase-progress .bar{width:80px; height:6px; border-radius:3px; background:var(--border-strong); overflow:hidden;}
+  .phase-progress .bar > div{height:100%; background:var(--success); transition:width .2s;}
+  .phase-progress .cnt{font-size:11.5px; font-weight:700; color:var(--muted); min-width:34px; text-align:right;}
+  .phase-body{padding:6px 20px 16px;}
+  .step{display:flex; align-items:flex-start; gap:11px; padding:11px 0; border-top:1px solid var(--border);}
+  .step:first-child{border-top:none;}
+  .step input[type="checkbox"]{margin-top:3px; width:17px; height:17px; accent-color:var(--success); flex-shrink:0; cursor:pointer;}
+  .step .stxt{flex:1; min-width:0;}
+  .step .stxt .stitle{font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .step.done .stitle{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--border-strong);}
+  .step .stxt .sdesc{font-size:12px; color:var(--muted); margin-top:3px; line-height:1.5;}
+
+  .btn-reset{background:transparent; border:1px solid var(--border-strong); color:var(--muted); font-family:inherit; font-size:12px; font-weight:600; padding:8px 14px; border-radius:9px; cursor:pointer;}
+  .btn-reset:hover{border-color:var(--danger); color:var(--danger);}
+
+  /* Timeline (client) */
+  .timeline{position:relative; margin:20px 0 10px; padding-left:28px;}
+  .timeline:before{content:""; position:absolute; left:8px; top:6px; bottom:6px; width:2px; background:var(--border-strong);}
+  .tl-item{position:relative; padding-bottom:26px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-item:before{content:""; position:absolute; left:-28px; top:2px; width:18px; height:18px; border-radius:50%; background:var(--profundo); border:3px solid var(--quasebranco);}
+  .tl-item .tlw{font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--profundo);}
+  .tl-item h4{font-size:14.5px; font-weight:700; margin:3px 0 4px;}
+  .tl-item p{font-size:13px; color:var(--muted); margin:0;}
+
+  .prep-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin:14px 0;}
+  @media (max-width:700px){ .prep-grid{grid-template-columns:1fr;} }
+  .prep-item{border:1px solid var(--border); border-radius:12px; padding:14px 16px; background:var(--surface);}
+  .prep-item .pk{font-size:12.5px; font-weight:700; margin-bottom:3px;}
+  .prep-item .pv{font-size:12px; color:var(--muted); line-height:1.5;}
+
+  /* FAQ */
+  .faq-item{border-bottom:1px solid var(--border); padding:14px 2px;}
+  .faq-item:last-child{border-bottom:none;}
+  .faq-item summary{cursor:pointer; list-style:none; font-size:13.5px; font-weight:600; display:flex; gap:10px; align-items:flex-start;}
+  .faq-item summary::-webkit-details-marker{display:none;}
+  .faq-item summary::before{content:"+"; flex-shrink:0; font-weight:700; color:var(--muted);}
+  .faq-item[open] summary::before{content:"–";}
+  .faq-item .a{font-size:13px; color:var(--muted); line-height:1.6; margin:9px 0 0 20px;}
+
+  footer.page-footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); font-size:11.5px; color:var(--muted-2); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
+
+  /* ---- Simulador de fluxo ---- */
+  .backlog-strip{display:flex; gap:6px; flex-wrap:wrap; padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--surface); margin-bottom:20px;}
+  .backlog-chip{display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:5px 10px; border-radius:20px; background:var(--surface-2); border:1px solid var(--border); color:var(--muted); white-space:nowrap;}
+  .backlog-chip .dot{width:7px; height:7px; border-radius:50%; background:var(--muted-2); flex-shrink:0;}
+  .backlog-chip.done{color:var(--success); border-color:color-mix(in srgb, var(--success) 35%, var(--border));}
+  .backlog-chip.done .dot{background:var(--success);}
+  .backlog-chip.active{color:var(--profundo); border-color:var(--azul); background:var(--quasebranco); font-weight:700;}
+  .backlog-chip.active .dot{background:var(--azul);}
+
+  .stepper{display:flex; align-items:flex-start; gap:0; margin-bottom:24px; overflow-x:auto; padding-bottom:4px;}
+  .stepper-item{display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; min-width:104px; cursor:pointer; position:relative;}
+  .stepper-item .sc{width:32px; height:32px; border-radius:50%; background:var(--surface-2); border:2px solid var(--border-strong); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:var(--muted); flex-shrink:0; transition:background .15s,border-color .15s,color .15s;}
+  .stepper-item .sl{font-size:11px; font-weight:600; color:var(--muted); text-align:center; line-height:1.3;}
+  .stepper-item .sline{position:absolute; top:16px; left:50%; width:100%; height:2px; background:var(--border-strong); z-index:0;}
+  .stepper-item:first-child .sline{display:none;}
+  .stepper-item .sc{z-index:1;}
+  .stepper-item.current .sc{background:var(--azul); border-color:var(--azul); color:#fff;}
+  .stepper-item.current .sl{color:var(--profundo); font-weight:700;}
+  .stepper-item.done .sc{background:var(--success); border-color:var(--success); color:#fff;}
+  .stepper-item.done .sline{background:var(--success);}
+
+  .agent-pick-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; margin:14px 0;}
+  .agent-pick{border:1.5px solid var(--border-strong); border-radius:12px; padding:12px 14px; cursor:pointer; transition:border-color .15s,background .15s; background:var(--surface); position:relative;}
+  .agent-pick:hover{border-color:var(--azul);}
+  .agent-pick.on{border-color:var(--azul); background:var(--quasebranco);}
+  .agent-pick.disabled{opacity:.45; cursor:not-allowed;}
+  .agent-pick .apnum{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--surface-2); border:1px solid var(--border-strong); font-size:10.5px; font-weight:700; color:var(--muted); margin-bottom:6px;}
+  .agent-pick.on .apnum{background:var(--azul); border-color:var(--azul); color:#fff;}
+  .agent-pick .apname{font-size:13px; font-weight:700; margin-bottom:3px; line-height:1.3;}
+  .agent-pick .apmeta{font-size:11px; color:var(--muted);}
+
+  .struct-panel{border:1.5px solid var(--azul); border-radius:14px; overflow:hidden; margin-bottom:14px; background:var(--surface);}
+  .struct-panel .sp-head{background:var(--quasebranco); padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .struct-panel .sp-head h4{font-size:14px; font-weight:700;}
+  .struct-panel .sp-body{padding:14px 18px; display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media (max-width:640px){ .struct-panel .sp-body{grid-template-columns:1fr;} }
+  .struct-panel .sp-k{font-size:10px; text-transform:uppercase; letter-spacing:.06em; font-weight:700; color:var(--profundo); margin-bottom:4px;}
+  .struct-panel .sp-v{font-size:12.5px; color:var(--ink-2); line-height:1.6;}
+  .struct-panel ul{margin:0; padding-left:16px;}
+  .struct-panel li{font-size:12.5px; color:var(--ink-2); line-height:1.6;}
+
+  .flow-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px; flex-wrap:wrap;}
+  .btn-flow{background:var(--azul); color:#fff; border:none; font-family:inherit; font-size:13px; font-weight:700; padding:11px 20px; border-radius:10px; cursor:pointer;}
+  .btn-flow:hover{background:var(--profundo);}
+  .btn-flow:disabled{background:var(--border-strong); color:var(--muted-2); cursor:not-allowed;}
+  .btn-flow-secondary{background:transparent; color:var(--muted); border:1px solid var(--border-strong); font-family:inherit; font-size:13px; font-weight:600; padding:11px 18px; border-radius:10px; cursor:pointer;}
+  .btn-flow-secondary:hover{color:var(--ink); border-color:var(--ink-2);}
+
+  .build-check{display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-top:1px solid var(--border);}
+  .build-check:first-child{border-top:none;}
+  .build-check input{margin-top:3px; width:16px; height:16px; accent-color:var(--success); flex-shrink:0; cursor:pointer;}
+  .build-check span{font-size:13px; color:var(--ink-2); line-height:1.5;}
+  .build-check.done span{color:var(--muted); text-decoration:line-through;}
+
+  /* ---- Projetos em Andamento ---- */
+  .proj-card{border:1px solid var(--border); border-radius:14px; padding:16px 18px; background:var(--surface); margin-bottom:10px; cursor:pointer; transition:border-color .15s;}
+  .proj-card:hover{border-color:var(--azul);}
+  .proj-card-top{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .proj-card-top h3{font-size:15px; font-weight:700;}
+  .proj-card-meta{font-size:12px; color:var(--muted); margin-top:6px;}
+
+  .form-field{margin-bottom:14px;}
+  .form-field label{display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px;}
+  .form-input, .form-textarea{width:100%; padding:9px 12px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px;}
+  .form-textarea{resize:vertical; line-height:1.5;}
+  .form-grid-2{display:grid; grid-template-columns:1fr 1fr; gap:0 14px;}
+  @media (max-width:640px){ .form-grid-2{grid-template-columns:1fr;} }
+  .agent-editor-card h2{font-size:14.5px;}
+
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+</style>
+
+<div class="page">
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="239 409 1457 261"><polygon fill="#0A41B4" points="635.6 462.6 609.1 462.6 609.1 626.1 719.2 626.1 719.2 602.8 635.6 602.8 635.6 462.6"/><path fill="#0A41B4" d="M822,513c-9.1-5.3-19.5-8-31.2-8s-22,2.7-31.1,8c-9.2,5.3-16.4,12.5-21.7,21.6-5.3,9.1-8,19.3-8,30.8s2.7,22,8,31.1c5.3,9.2,12.5,16.4,21.7,21.7,9.1,5.3,19.5,8,31.1,8s22.2-2.7,31.2-8c9.1-5.3,16.3-12.5,21.7-21.7,5.4-9.1,8.1-19.5,8.1-31.1s-2.7-21.7-8.1-30.8c-5.4-9.1-12.6-16.3-21.7-21.6ZM821.9,585.9c-3.1,5.9-7.3,10.5-12.6,13.7-5.3,3.3-11.5,4.9-18.5,4.9s-13-1.6-18.4-4.9c-5.4-3.3-9.6-7.8-12.6-13.7-3-5.9-4.5-12.7-4.5-20.3s1.5-14.2,4.5-20.1c3-5.9,7.2-10.5,12.6-13.8,5.4-3.3,11.6-5,18.6-5s13,1.7,18.4,5c5.4,3.4,9.6,8,12.6,13.8,3,5.9,4.5,12.6,4.5,20.1s-1.6,14.5-4.7,20.3Z"/><path fill="#0A41B4" d="M933.9,506.5c-10,0-18.7,2.4-26.2,7.1-5.4,3.4-9.7,7.8-12.9,13.1l-1-16.5h-23v115.8h24.8v-60.7c0-7.7,1.3-14.3,3.9-19.7,2.6-5.5,6.2-9.7,10.9-12.7,4.7-3,10.1-4.5,16.3-4.5s14.4,2.5,18.7,7.5c4.3,5,6.5,12.3,6.5,21.9v68.3h24.8v-71.7c0-15-3.8-26.8-11.3-35.2-7.5-8.4-18-12.6-31.4-12.6Z"/><path fill="#0A41B4" d="M1082.1,512.5c-2.8-1.6-5.6-2.9-8.3-4-6.2-2.4-12.9-3.6-20.1-3.6-11.3,0-21.4,2.7-30.4,8.2-9,5.5-16,13-21.1,22.5-5.1,9.6-7.6,20.6-7.6,33s2.2,21.2,6.6,29.9c4.4,8.7,10.5,15.4,18.3,20.2,7.8,4.8,16.7,7.2,26.8,7.2s17.5-2.1,24.5-6.4c5-3,8.9-6.8,11.9-11.5l1,17.4h23v-166.5h-24.8v53.4ZM1073.4,595.4c-5.8,6-13.2,9.1-22.2,9.1s-17.3-3.4-22.9-10.2c-5.6-6.8-8.5-15.9-8.5-27.3s1.5-15.3,4.5-21.3c3-6,7.2-10.7,12.6-14.1,5.4-3.3,11.8-5,19.4-5s13.2,1.5,19.5,4.5c2.2,1,4.2,2.3,6.3,3.6v37.4c0,9.5-2.9,17.2-8.7,23.3Z"/><path fill="#0A41B4" d="M1168.3,513.5c-5.1,3.5-9.2,8-12.5,13.5l-1.3-18.7h-23v117.7h24.8v-63.1c0-6.7,1.4-12.6,4.3-17.6,2.9-5.1,6.8-9,11.8-11.9,5-2.9,10.7-4.3,17-4.3s7.4.6,10.8,1.7l4.7-22.5c-4.1-1.3-8.3-2-12.7-2-8.8,0-16.7,2.4-23.7,7.1Z"/><rect fill="#0A41B4" x="1217.2" y="509.1" width="24.8" height="117"/><rect fill="#0A41B4" x="1216.2" y="463.3" width="27" height="25.5"/><path fill="#0A41B4" d="M1320.4,555.5l-8.3-1.7c-8.3-1.6-14.2-3.6-17.5-5.8-3.4-2.2-5-5.4-5-9.4s1.8-7.8,5.5-10.2c3.7-2.4,9.1-3.6,16.3-3.6s11.7.9,17,2.8c5.3,1.9,10.3,4.7,14.8,8.5l11.5-16.7c-11.3-9.6-25.3-14.5-42.2-14.5s-25.6,3.2-34.2,9.7c-8.6,6.5-12.9,15.1-12.9,25.9s2.9,15.3,8.7,21c5.8,5.6,14.6,9.7,26.3,12.1l8.1,1.5c9.1,1.8,15.6,3.9,19.2,6.4,3.7,2.5,5.5,5.8,5.5,10s-2,8.4-6.1,10.9c-4.1,2.5-10,3.8-17.9,3.8s-13.8-1.2-19.7-3.6c-6-2.4-11.4-5.8-16.3-10.2l-13.2,16.4c5.6,5.6,12.5,9.8,21,12.7,8.4,2.9,17.7,4.4,27.8,4.4s18.6-1.4,26-4.3c7.4-2.9,13-7,17-12.5,4-5.5,6-12.1,6-20s-3-16.1-8.9-21.7c-6-5.6-15.5-9.7-28.6-12.1Z"/><path fill="#0A41B4" d="M1464.1,513c-9.1-5.3-19.5-8-31.2-8s-22,2.7-31.1,8c-9.2,5.3-16.4,12.5-21.7,21.6-5.3,9.1-8,19.3-8,30.8s2.7,22,8,31.1c5.3,9.2,12.5,16.4,21.7,21.7,9.1,5.3,19.5,8,31.1,8s22.2-2.7,31.2-8c9.1-5.3,16.3-12.5,21.7-21.7,5.4-9.1,8.1-19.5,8.1-31.1s-2.7-21.7-8.1-30.8c-5.4-9.1-12.6-16.3-21.7-21.6ZM1464,585.9c-3.1,5.9-7.3,10.5-12.6,13.7-5.3,3.3-11.5,4.9-18.5,4.9s-13-1.6-18.4-4.9c-5.4-3.3-9.6-7.8-12.6-13.7-3-5.9-4.5-12.7-4.5-20.3s1.5-14.2,4.5-20.1c3-5.9,7.2-10.5,12.6-13.8,5.4-3.3,11.6-5,18.6-5s13,1.7,18.4,5c5.4,3.4,9.6,8,12.6,13.8,3,5.9,4.5,12.6,4.5,20.1s-1.6,14.5-4.7,20.3Z"/><path fill="#0A41B4" d="M1545.2,501.2c0-16.7,6.8-25,20.3-25s6.9.6,9.8,1.8,5.9,3.1,8.8,5.5l11-16.2c-9-8-19.9-12-32.6-12s-23.6,4-31,12.1c-7.4,8.1-11.2,19.2-11.2,33.5v7.4h-20.3v20.1h20.3v97.2h24.8v-97.2h31.6v-20.1h-31.6v-7.1Z"/><path fill="#0A41B4" d="M1660.5,598.1c-2.9,2.3-5.8,4-8.5,5.3-2.7,1.2-5.7,1.8-8.9,1.8-5.6,0-9.6-1.6-12.3-4.9-2.6-3.3-3.9-8.5-3.9-15.7v-55.9h32.8v-20.1h-32.8v-37.5h-24.8v37.5h-20.1v20.1h20.1v56.4c0,13.4,3.2,23.6,9.6,30.5,6.4,6.9,15.6,10.4,27.7,10.4s12.1-1,17.3-2.9c5.1-2,9.9-5.1,14.3-9.3l-10.5-15.7Z"/><path fill="#0A41B4" d="M334.6,463.1c0-23.8-19.3-43.1-43.1-43.1h-42.6v111.1c0,23.8,19.3,43.1,43.1,43.1h42.6v-111.1Z"/><path fill="#0A41B4" d="M488.9,660v-42.6c0-23.8-19.3-43.1-43.1-43.1h-111.1v42.6c0,23.8,19.3,43.1,43.1,43.1h111.1Z"/><path fill="#0A41B4" d="M428.8,437.2c-23.8,0-43.1,19.3-43.1,43.1v42.6h111.1c23.8,0,43.1-19.3,43.1-43.1v-42.6h-111.1Z"/></svg>
+    </div>
+    <div class="header-title">
+      <h1>Implantação do Waipe</h1>
+      <p>Passos, cronograma, escopo técnico e pontos de atenção — para o time interno e para o cliente</p>
+    </div>
+    <div class="header-meta">Baseado em<br><a href="https://docs.londrisoft.com.br/waipe/central-do-cliente/como-funciona-a-implantacao-do-waipe" target="_blank" rel="noopener">docs.londrisoft.com.br › Como funciona a implantação</a></div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Seções">
+    <button class="tab-btn active" data-tab="visao">Visão Geral</button>
+    <button class="tab-btn" data-tab="projetos">📁 Projetos em Andamento</button>
+    <button class="tab-btn" data-tab="runbook">🛠️ Runbook (Time Interno)</button>
+    <button class="tab-btn" data-tab="cliente">👤 Jornada do Cliente</button>
+    <button class="tab-btn" data-tab="escopo">Escopo Técnico</button>
+    <button class="tab-btn" data-tab="faq">FAQ</button>
+  </nav>
+
+  <!-- ===================== VISÃO GERAL ===================== -->
+  <section class="panel active" id="panel-visao">
+
+    <div class="callout">
+      <div class="dot"></div>
+      <div><b>Regra central:</b> a proposta comercial define o serviço contratado (Ativação, Projeto de Implantação ou Deploy) e quem constrói a Camada 2. Todo desalinhamento de expectativa nasce de não confirmar isso antes do kickoff.</div>
+    </div>
+
+    <h2 class="section-title">As três camadas do Waipe</h2>
+    <p class="section-sub">Toda solicitação do cliente se encaixa em uma destas camadas — identificar qual evita prometer o que não está no escopo contratado.</p>
+    <div class="layer-grid">
+      <div class="layer-card l1">
+        <div class="lk">Camada 1 · Plataforma</div>
+        <h4>Sempre entregue pela Londrisoft</h4>
+        <p>Ambiente, usuários, perfis, permissões, conectores Londrisoft e governança.</p>
+      </div>
+      <div class="layer-card l2">
+        <div class="lk">Camada 2 · Configuração</div>
+        <h4>Cliente ou Londrisoft, conforme contrato</h4>
+        <p>Assistentes, skills, consultas, painéis do Data Lab, relatórios e fluxos no Flow.</p>
+      </div>
+      <div class="layer-card l3">
+        <div class="lk">Camada 3 · Terceiros</div>
+        <h4>Sempre contratada e paga pelo cliente</h4>
+        <p>WhatsApp, e-mail, SMS, assinatura digital — qualquer ação fora da plataforma.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div><b>O Waipe não substitui ferramentas de execução final.</b> Ele não é provedor de WhatsApp, e-mail, assinatura digital ou gateway de pagamento. Exemplo: um fluxo identifica um boleto vencido e prepara a mensagem — o envio ocorre na conta de WhatsApp ou e-mail do próprio cliente.</div>
+    </div>
+
+    <h2 class="section-title">Os três serviços, lado a lado</h2>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th>Aspecto</th><th>Ativação</th><th>Projeto de Implantação</th><th>Londrisoft Deploy</th></tr></thead>
+        <tbody>
+          <tr><th>Quem constrói a Camada 2</th><td>Seu time</td><td>Londrisoft</td><td>Londrisoft</td></tr>
+          <tr><th>Escopo</th><td>Plataforma liberada e time capacitado</td><td>Fechado na proposta</td><td>Aberto e evolutivo</td></tr>
+          <tr><th>Data de fim</th><td class="yes">Sim</td><td class="yes">Sim, com aceite formal</td><td class="no">Não</td></tr>
+          <tr><th>Ritmo</th><td>Sessões do kickoff</td><td>Cronograma do projeto</td><td>Cadência contratada</td></tr>
+          <tr><th>Entrega</th><td>Ambiente pronto e time treinado</td><td>Configuração em produção + relatório de fechamento</td><td>Entregas por ciclo + direcionamento ao time</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-sub">Os três serviços estão disponíveis em todos os planos — a negociação comercial define a contratação. <b>Projeto seguido de Deploy é o caminho mais comum.</b></p>
+  </section>
+
+  <!-- ===================== PROJETOS EM ANDAMENTO ===================== -->
+  <section class="panel" id="panel-projetos">
+    <div id="projetosRoot"></div>
+  </section>
+
+  <!-- ===================== RUNBOOK (TIME INTERNO) ===================== -->
+  <section class="panel" id="panel-runbook">
+
+    <div class="callout">
+      <div class="dot"></div>
+      <div>Checklist operacional para conduzir um <b>Projeto de Implantação</b> (o caminho mais comum). O progresso fica salvo neste navegador — use "Reiniciar checklist" ao começar uma implantação nova.</div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button type="button" class="btn-reset" id="btnResetChecklist">↺ Reiniciar checklist</button>
+    </div>
+
+    <div id="phasesWrap"></div>
+
+    <h2 class="section-title">Pontos de atenção críticos</h2>
+    <div class="callout danger">
+      <div class="dot"></div>
+      <div><b>Ferramentas de terceiros atrasam o cronograma se não estiverem prontas.</b> Se a ferramenta (WhatsApp Business API, SMTP, assinatura digital...) não estiver ativa no prazo acordado, a entrega dependente dela fica pendente — e essa pendência é do cliente, não da Londrisoft.</div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div><b>Suporte Londrisoft não configura Camada 2 após a entrega.</b> Mudança de processo, novo assistente ou novo fluxo depois do go-live exige um novo Projeto ou Deploy — não é atendimento de suporte.</div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div><b>Escopo crescendo no meio do projeto?</b> Apresente 3 caminhos ao cliente antes de executar: reduzir/fasear a demanda, contratar esforço adicional, ou migrar de pacote. Nunca deixe para discutir estouro de escopo no final.</div>
+    </div>
+    <div class="callout">
+      <div class="dot"></div>
+      <div><b>Integração com sistema externo</b> exige API documentada e acessível, credenciais válidas e licenças contratadas pelo cliente. A Londrisoft não solicita acessos em nome do cliente nem responde por instabilidade da API de terceiros.</div>
+    </div>
+  </section>
+
+  <!-- ===================== JORNADA DO CLIENTE ===================== -->
+  <section class="panel" id="panel-cliente">
+
+    <div class="callout">
+      <div class="dot"></div>
+      <div>Linha do tempo de referência para um <b>Projeto de Implantação</b>. Os prazos variam conforme o pacote contratado — Padrão, Intermediário ou Avançado.</div>
+    </div>
+
+    <h2 class="section-title">Sua jornada, do kickoff ao go-live</h2>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tlw">Antes de começar</div>
+        <h4>Alinhamento pré-implantação</h4>
+        <p>Confirmamos juntos o serviço contratado, o escopo descrito na proposta, as ferramentas de terceiros necessárias e quem são os responsáveis do seu lado. Esse alinhamento evita retrabalho e atraso mais à frente.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tlw">Semana 1</div>
+        <h4>Kickoff e diagnóstico</h4>
+        <p>Apresentamos a equipe, entendemos sua operação e confirmamos nominalmente cada fluxo, assistente ou painel do escopo. Começamos a preparar seu ambiente (usuários, perfis, permissões, conectores).</p>
+      </div>
+      <div class="tl-item">
+        <div class="tlw">Durante a construção</div>
+        <h4>Configuração em produção</h4>
+        <p>Construímos o que foi contratado. Em paralelo, sua empresa contrata e configura as ferramentas de terceiros necessárias (ex: conta na API oficial do WhatsApp Business) — esse é o principal ponto que pode acelerar ou atrasar o prazo.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tlw">Antes do go-live</div>
+        <h4>Validação e homologação</h4>
+        <p>Seus usuários-chave testam o que foi construído. Ajustes dentro do escopo aprovado são feitos aqui. A homologação final antes do go-live é responsabilidade da sua empresa.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tlw">Entrega</div>
+        <h4>Treinamento e go-live</h4>
+        <p>Treinamos sua equipe nos recursos entregues e acompanhamos os primeiros dias de operação real.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tlw">Fechamento</div>
+        <h4>Relatório e aceite formal</h4>
+        <p>Entregamos o relatório de fechamento do projeto. A partir daqui, sua empresa opera a plataforma no dia a dia — o Suporte Londrisoft atende falhas e dúvidas da plataforma, mas não configura Camada 2 nova.</p>
+      </div>
+      <div class="tl-item">
+        <div class="tlw">Depois (opcional)</div>
+        <h4>Evolução contínua com o Deploy</h4>
+        <p>Se sua operação precisa evoluir continuamente — novos assistentes, novos fluxos, ajustes de processo — o Deploy define o escopo em cada encontro de ciclo e entrega entre um encontro e outro, sem data de fim.</p>
+      </div>
+    </div>
+
+    <h2 class="section-title">O que sua empresa precisa preparar</h2>
+    <p class="section-sub">Ferramentas de terceiros são sempre contratadas e pagas pela sua empresa, em qualquer serviço — a Londrisoft indica parceiros, mas não revende, repassa ou fornece essas contas.</p>
+    <div class="prep-grid">
+      <div class="prep-item"><div class="pk">📱 Envio de mensagem no WhatsApp</div><div class="pv">Conta ativa na API oficial do WhatsApp Business, com um provedor.</div></div>
+      <div class="prep-item"><div class="pk">✉️ Envio de e-mail</div><div class="pv">Provedor de e-mail transacional ou SMTP corporativo.</div></div>
+      <div class="prep-item"><div class="pk">💬 Envio de SMS</div><div class="pv">Provedor de SMS.</div></div>
+      <div class="prep-item"><div class="pk">✍️ Assinatura de documentos</div><div class="pv">Plataforma de assinatura digital.</div></div>
+      <div class="prep-item"><div class="pk">🔗 Leitura/escrita em sistema externo</div><div class="pv">API documentada e credenciais válidas.</div></div>
+      <div class="prep-item"><div class="pk">🗂️ Armazenamento de arquivos</div><div class="pv">Serviço de armazenamento em nuvem.</div></div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div>O plano <b>não inclui</b> uma conta de WhatsApp. Se a ferramenta não estiver ativa no prazo combinado, a entrega que depende dela fica pendente — e isso impacta o cronograma do projeto.</div>
+    </div>
+  </section>
+
+  <!-- ===================== ESCOPO TÉCNICO ===================== -->
+  <section class="panel" id="panel-escopo">
+
+    <h2 class="section-title" style="margin-top:0">Escopo por recurso</h2>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th>Recurso</th><th>Camada 1 — Londrisoft entrega</th><th>Camada 2 — configuração</th><th>Precisa de terceiro?</th></tr></thead>
+        <tbody>
+          <tr><th>Chat</th><td>Acesso liberado e conectado às suas bases</td><td>Uso direto</td><td class="no">Não</td></tr>
+          <tr><th>Assistentes</th><td>Recurso e modelos prontos ativados</td><td>Assistentes próprios, instruções e comportamento</td><td class="no">Não</td></tr>
+          <tr><th>Skills</th><td>Recurso disponível</td><td>Skills da sua operação</td><td class="no">Não</td></tr>
+          <tr><th>Data Lab</th><td>Acesso aos dados por conectores</td><td>Consultas, tabelas e painéis</td><td class="no">Não</td></tr>
+          <tr><th>Conectores Londrisoft</th><td>Conexão configurada e validada</td><td>Bases e empresas conectadas</td><td class="no">Não</td></tr>
+          <tr><th>Governança</th><td>Perfis, permissões e auditoria disponíveis</td><td>Pessoas e acessos definidos</td><td class="no">Não</td></tr>
+          <tr><th>Flow — fluxos internos</th><td>Recurso disponível</td><td>Fluxos construídos e parametrizados</td><td class="no">Não</td></tr>
+          <tr><th>Flow — envio/integração externa</th><td>Recurso disponível</td><td>Fluxos construídos e parametrizados</td><td class="yes">Sim</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-sub">Ferramentas de terceiros só entram quando o fluxo age fora da plataforma. Uso analítico e conversacional nunca exige terceiro.</p>
+
+    <h2 class="section-title">Matriz de responsabilidades</h2>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th>Atividade</th><th>Ativação</th><th>Projeto</th><th>Deploy</th></tr></thead>
+        <tbody>
+          <tr><th>Provisionar ambiente, usuários e permissões</th><td><span class="tag londrisoft">Londrisoft</span></td><td><span class="tag londrisoft">Londrisoft</span></td><td>—</td></tr>
+          <tr><th>Conectar conectores Londrisoft</th><td><span class="tag londrisoft">Londrisoft</span></td><td><span class="tag londrisoft">Londrisoft</span></td><td>—</td></tr>
+          <tr><th>Definir o que será configurado</th><td><span class="tag cliente">Cliente</span></td><td><span class="tag ambos">Cliente + apoio Londrisoft</span></td><td><span class="tag ambos">Cliente + apoio Londrisoft</span></td></tr>
+          <tr><th>Construir a Camada 2</th><td><span class="tag cliente">Cliente</span></td><td><span class="tag londrisoft">Londrisoft</span></td><td><span class="tag londrisoft">Londrisoft</span></td></tr>
+          <tr><th>Contratar ferramentas de terceiros</th><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente</span></td></tr>
+          <tr><th>Fornecer credenciais e acessos</th><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente</span></td></tr>
+          <tr><th>Treinar o time</th><td><span class="tag londrisoft">Londrisoft</span></td><td><span class="tag londrisoft">Londrisoft</span></td><td>Direcionamento por ciclo</td></tr>
+          <tr><th>Homologar antes do go-live</th><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente</span></td></tr>
+          <tr><th>Manter após mudança de processo</th><td><span class="tag cliente">Cliente</span></td><td><span class="tag cliente">Cliente, salvo novo contrato</span></td><td><span class="tag londrisoft">Londrisoft</span></td></tr>
+          <tr><th>Atender erros da plataforma</th><td><span class="tag londrisoft">Londrisoft</span></td><td><span class="tag londrisoft">Londrisoft</span></td><td><span class="tag londrisoft">Londrisoft</span></td></tr>
+          <tr><th>Atender erros de terceiros</th><td><span class="tag ambos">Cliente, com o fornecedor</span></td><td><span class="tag ambos">Cliente, com o fornecedor</span></td><td><span class="tag ambos">Cliente, com o fornecedor</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title">Checklist de validação pré-implantação</h2>
+    <p class="section-sub">O escopo está alinhado quando dá para confirmar todos os itens abaixo. Se alguma resposta estiver em aberto, alinhe com o consultor antes do início.</p>
+    <ul style="font-size:13.5px; color:var(--ink-2); padding-left:20px; line-height:1.9;">
+      <li>O serviço contratado e eventuais serviços adicionais</li>
+      <li>Quem constrói a Camada 2: o time do cliente ou a Londrisoft</li>
+      <li>O que está descrito na proposta, quando houver Projeto</li>
+      <li>As ferramentas de terceiros necessárias</li>
+      <li>As pessoas treinadas e responsáveis pela operação</li>
+    </ul>
+  </section>
+
+  <!-- ===================== FAQ ===================== -->
+  <section class="panel" id="panel-faq">
+    <h2 class="section-title" style="margin-top:0">Perguntas frequentes</h2>
+    <div>
+      <details class="faq-item">
+        <summary>Preciso contratar uma ferramenta de terceiro para usar chat e Data Lab?</summary>
+        <div class="a">Não. O uso analítico e conversacional ocorre dentro do Waipe, com dados dos sistemas Londrisoft. Ferramentas de terceiros são necessárias somente para ações externas.</div>
+      </details>
+      <details class="faq-item">
+        <summary>O WhatsApp está incluído no meu plano?</summary>
+        <div class="a">Não. Para enviar mensagens, sua empresa precisa de uma conta ativa na API oficial do WhatsApp Business. A Londrisoft indica parceiros, mas o contrato e o custo são da sua empresa.</div>
+      </details>
+      <details class="faq-item">
+        <summary>O ambiente será entregue como na demonstração?</summary>
+        <div class="a">Depende do serviço contratado. Na Ativação, o time do cliente configura os recursos após o treinamento. No Projeto, a Londrisoft entrega os itens descritos na proposta. No Deploy, a construção acontece por ciclos.</div>
+      </details>
+      <details class="faq-item">
+        <summary>O cliente contratou a Ativação. A Londrisoft cria os assistentes dele?</summary>
+        <div class="a">Durante o treinamento, a Londrisoft cria recursos junto com o time do cliente para fins didáticos. Assistentes, skills, painéis ou fluxos de produção sob demanda exigem Projeto ou Deploy.</div>
+      </details>
+      <details class="faq-item">
+        <summary>O cliente contratou o Projeto. A Londrisoft constrói qualquer item solicitado?</summary>
+        <div class="a">Não. A proposta descreve os itens incluídos. Antes de executar uma solicitação adicional, a Londrisoft avalia o escopo e solicita aprovação do cliente.</div>
+      </details>
+      <details class="faq-item">
+        <summary>O cliente pode integrar o Waipe ao sistema atual dele?</summary>
+        <div class="a">Sim, se o sistema oferecer uma API documentada. O cliente também precisa fornecer credenciais válidas e autorização de uso.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Qual é a diferença entre Projeto de Implantação e Deploy?</summary>
+        <div class="a">O Projeto entrega um conjunto definido até uma data, com aceite formal. O Deploy é contínuo e evolui a operação na cadência contratada, sem data de fim.</div>
+      </details>
+    </div>
+  </section>
+
+  <footer class="page-footer">
+    <span>Uso interno — time de Implantação e CS · Londrisoft</span>
+    <span>Fonte: docs.londrisoft.com.br — Central do Cliente Waipe</span>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Tabs ----------
+  var tabBtns = document.querySelectorAll(".tab-btn");
+  var panels = {
+    visao: document.getElementById("panel-visao"),
+    projetos: document.getElementById("panel-projetos"),
+    runbook: document.getElementById("panel-runbook"),
+    cliente: document.getElementById("panel-cliente"),
+    escopo: document.getElementById("panel-escopo"),
+    faq: document.getElementById("panel-faq")
+  };
+  tabBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      tabBtns.forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      Object.keys(panels).forEach(function(k){ panels[k].classList.remove("active"); });
+      panels[btn.getAttribute("data-tab")].classList.add("active");
+    });
+  });
+
+  // ---------- Runbook data ----------
+  var PHASES = [
+    { id: "pre", nome: "Fase 0 — Pré-implantação", meta: "Antes do kickoff", steps: [
+      { id: "pre-1", tag: "ambos", titulo: "Confirmar o serviço contratado", desc: "Ativação, Projeto de Implantação ou Deploy — conforme a proposta comercial." },
+      { id: "pre-2", tag: "ambos", titulo: "Confirmar quem constrói a Camada 2", desc: "Time do cliente (Ativação) ou Londrisoft (Projeto/Deploy)." },
+      { id: "pre-3", tag: "ambos", titulo: "Confirmar o escopo descrito na proposta", desc: "Cada item contratado deve descrever objetivo, sistemas envolvidos e tipo de automação." },
+      { id: "pre-4", tag: "cliente", titulo: "Levantar ferramentas de terceiros necessárias", desc: "WhatsApp Business API, e-mail transacional/SMTP, SMS, assinatura digital, storage — o que o fluxo contratado precisa para agir fora da plataforma." },
+      { id: "pre-5", tag: "cliente", titulo: "Confirmar responsáveis do lado do cliente", desc: "Quem valida, quem homologa e quem opera a plataforma depois da entrega." }
+    ]},
+    { id: "kickoff", nome: "Fase 1 — Kickoff e diagnóstico", meta: "Semana 1", steps: [
+      { id: "k-1", tag: "londrisoft", titulo: "Sessão de kickoff", desc: "Apresentar a equipe e alinhar expectativas com o cliente." },
+      { id: "k-2", tag: "ambos", titulo: "Diagnóstico da operação do cliente", desc: "Entender o processo real antes de configurar qualquer coisa." },
+      { id: "k-3", tag: "ambos", titulo: "Descrever nominalmente cada fluxo/assistente/painel do escopo", desc: "Sem essa descrição nominal, não há como medir se o pacote entregou o combinado." },
+      { id: "k-4", tag: "londrisoft", titulo: "Provisionar ambiente, usuários, perfis e permissões (Camada 1)", desc: "" },
+      { id: "k-5", tag: "londrisoft", titulo: "Conectar conectores Londrisoft e validar acesso", desc: "" }
+    ]},
+    { id: "build", nome: "Fase 2 — Construção", meta: "Duração conforme o pacote (Padrão / Intermediário / Avançado)", steps: [
+      { id: "b-1", tag: "londrisoft", titulo: "Construir a Camada 2 conforme escopo aprovado", desc: "Assistentes, skills, painéis do Data Lab, fluxos no Flow." },
+      { id: "b-2", tag: "cliente", titulo: "Cliente contrata e configura as ferramentas de terceiros", desc: "Em paralelo à construção — é o item que mais atrasa cronograma quando fica para depois." },
+      { id: "b-3", tag: "cliente", titulo: "Cliente fornece credenciais/API de sistemas externos, se houver integração", desc: "API documentada, credenciais válidas e licenças contratadas pelo fornecedor." },
+      { id: "b-4", tag: "londrisoft", titulo: "Monitorar consumo de horas internas contra o pacote contratado", desc: "Se a estimativa passar de 80% das horas do pacote antes do fechamento, reavaliar escopo, preço ou pacote." }
+    ]},
+    { id: "valid", nome: "Fase 3 — Validação e homologação", meta: "Antes do go-live", steps: [
+      { id: "v-1", tag: "ambos", titulo: "Validação com usuários-chave do cliente", desc: "" },
+      { id: "v-2", tag: "londrisoft", titulo: "Ajustes dentro do escopo aprovado", desc: "Pedido fora do escopo aprovado passa por avaliação e aprovação antes de executar." },
+      { id: "v-3", tag: "cliente", titulo: "Homologação final antes do go-live", desc: "Responsabilidade do cliente — não é etapa da Londrisoft." }
+    ]},
+    { id: "golive", nome: "Fase 4 — Treinamento e go-live", meta: "Entrega", steps: [
+      { id: "g-1", tag: "londrisoft", titulo: "Treinamento da equipe do cliente", desc: "" },
+      { id: "g-2", tag: "londrisoft", titulo: "Go-live acompanhado", desc: "" },
+      { id: "g-3", tag: "londrisoft", titulo: "Acompanhamento inicial", desc: "Primeiros dias de operação real." }
+    ]},
+    { id: "fechamento", nome: "Fase 5 — Fechamento", meta: "Fim do projeto", steps: [
+      { id: "f-1", tag: "londrisoft", titulo: "Relatório de fechamento", desc: "" },
+      { id: "f-2", tag: "cliente", titulo: "Aceite formal do escopo entregue", desc: "" },
+      { id: "f-3", tag: "ambos", titulo: "Transição para operação diária", desc: "Suporte Londrisoft cobre falhas de plataforma; Camada 2 nova exige Deploy ou novo Projeto." }
+    ]},
+    { id: "deploy", nome: "Fase 6 — Deploy por ciclos (opcional/contínuo)", meta: "Sem data de fim", steps: [
+      { id: "d-1", tag: "ambos", titulo: "Reunião de ciclo: definir o escopo do próximo ciclo", desc: "" },
+      { id: "d-2", tag: "londrisoft", titulo: "Construção entre os encontros", desc: "" },
+      { id: "d-3", tag: "londrisoft", titulo: "Entrega e orientação ao time do cliente", desc: "Repete na cadência contratada." }
+    ]}
+  ];
+
+  var TAG_LABEL = { londrisoft: "Londrisoft", cliente: "Cliente", ambos: "Ambos" };
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem("waipe_runbook_state");
+      return raw ? JSON.parse(raw) : {};
+    } catch(e){ return {}; }
+  }
+  function saveState(state){
+    try{ localStorage.setItem("waipe_runbook_state", JSON.stringify(state)); } catch(e){}
+  }
+  var state = loadState();
+
+  function renderPhases(){
+    var wrap = document.getElementById("phasesWrap");
+    var html = "";
+    PHASES.forEach(function(phase){
+      var doneCount = phase.steps.filter(function(s){ return state[s.id]; }).length;
+      var pct = Math.round((doneCount / phase.steps.length) * 100);
+      html += '<div class="phase">' +
+        '<div class="phase-head" data-phase="' + phase.id + '">' +
+          '<div><h3>' + phase.nome + '</h3><div class="pmeta">' + phase.meta + '</div></div>' +
+          '<div class="phase-progress"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + doneCount + '/' + phase.steps.length + '</span></div>' +
+        '</div>' +
+        '<div class="phase-body">' +
+          phase.steps.map(function(s){
+            var done = !!state[s.id];
+            return '<div class="step' + (done ? ' done' : '') + '">' +
+              '<input type="checkbox" data-step="' + s.id + '"' + (done ? ' checked' : '') + '>' +
+              '<div class="stxt"><div class="stitle">' + s.titulo + ' <span class="tag ' + s.tag + '">' + TAG_LABEL[s.tag] + '</span></div>' +
+              (s.desc ? '<div class="sdesc">' + s.desc + '</div>' : '') +
+              '</div></div>';
+          }).join("") +
+        '</div>' +
+      '</div>';
+    });
+    wrap.innerHTML = html;
+    wrap.querySelectorAll("[data-step]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        state[cb.getAttribute("data-step")] = cb.checked;
+        saveState(state);
+        renderPhases();
+      });
+    });
+  }
+  renderPhases();
+
+  document.getElementById("btnResetChecklist").addEventListener("click", function(){
+    if (window.confirm("Reiniciar o checklist? Isso desmarca todos os passos nesta implantação.")){
+      state = {};
+      saveState(state);
+      renderPhases();
+    }
+  });
+
+  // ==================== PROJETOS EM ANDAMENTO ====================
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; });
+  }
+
+  // A capability `sample` (extração por IA) só existe dentro do viewer/host do
+  // claude.ai; o /api/clickup só responde com sessão de cookie no MESMO domínio
+  // do Dashboard. As duas coisas nunca funcionam juntas na mesma página — por
+  // isso o botão final do assistente muda conforme onde a página está aberta:
+  // aqui (claude.ai) ele copia os dados; em diretoriocs.vercel.app ele cria de
+  // fato o projeto no ClickUp.
+  var API_ORIGIN_OK = (typeof location !== "undefined" && location.origin === "https://diretoriocs.vercel.app");
+
+  function copyToClipboard(text){
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject){
+      try{
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        resolve();
+      } catch(e){ reject(e); }
+    });
+  }
+
+  var ETAPAS = [
+    { id:"escopo", label:"Escopo Fechado", icone:"📋" },
+    { id:"alinhamento", label:"Alinhamento", icone:"🤝" },
+    { id:"construcao", label:"Construção", icone:"🛠️" },
+    { id:"testes", label:"Testes", icone:"✅" },
+    { id:"entrega", label:"Entrega", icone:"🚀" }
+  ];
+  var ETAPA_LABEL = {};
+  ETAPAS.forEach(function(e){ ETAPA_LABEL[e.id] = e.label; });
+  var STATUS_LABEL = { "pendente": "A iniciar", "in progress": "Em andamento", "concluído": "Concluído" };
+
+  // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
+  function apiGet(action, params){
+    var qs = "";
+    if (params) qs = "&" + Object.keys(params).map(function(k){ return k + "=" + encodeURIComponent(params[k]); }).join("&");
+    return fetch("/api/clickup?action=" + action + qs).then(function(r){
+      return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+    });
+  }
+  function apiPost(action, body){
+    return fetch("/api/clickup?action=" + action, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function(r){
+      return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+    });
+  }
+
+  // ---- Capability `sample` (extração de agentes por IA) ----
+  var sampleFn = null;
+  if (window.claude && typeof window.claude.use === "function"){
+    window.claude.use("sample").then(function(s){
+      sampleFn = s;
+      if (wizard && wizard.step === "colar") renderProjetosPanel();
+    }).catch(function(){ sampleFn = null; });
+  }
+
+  // ---- Estado ----
+  var projetosCache = null;   // lista de listar-implantacoes
+  var projetoAtualId = null;  // id do projeto aberto, ou null = lista
+  var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
+  var wizard = null;          // assistente de novo projeto
+  var sim = { etapa:"escopo", prioridade:[], concluidos:[], agenteAtual:null };
+
+  function agentePorId(id){
+    if (!dadosProjeto) return null;
+    for (var i = 0; i < dadosProjeto.agentes.length; i++) if (dadosProjeto.agentes[i].id === id) return dadosProjeto.agentes[i];
+    return null;
+  }
+
+  function mensagemErro(e){
+    return (e && (e.error || e.message)) || "erro";
+  }
+
+  function showSimToast(msg){
+    var t = document.getElementById("toastCopySim");
+    if (!t){
+      t = document.createElement("div");
+      t.id = "toastCopySim";
+      t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:13px;font-weight:600;padding:10px 18px;border-radius:999px;box-shadow:var(--shadow);z-index:999;opacity:0;transition:opacity .2s;";
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = "1";
+    clearTimeout(showSimToast._t);
+    showSimToast._t = setTimeout(function(){ t.style.opacity = "0"; }, 2600);
+  }
+
+  // ---- Dispatcher do painel ----
+  function renderProjetosPanel(){
+    var root = document.getElementById("projetosRoot");
+    if (!root) return;
+    if (wizard){ renderWizard(root); return; }
+    if (projetoAtualId){ renderProjetoDetalhe(root); return; }
+    renderListaProjetos(root);
+  }
+
+  // ---- Lista de projetos ----
+  function renderListaProjetos(root){
+    root.innerHTML =
+      '<div class="callout"><div class="dot"></div><div>Lista de implantações Waipe em andamento. Clique num projeto para abrir o fluxo (escopo → alinhamento → construção → testes → entrega). Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
+      '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>' +
+      '<div id="listaProjetosWrap"><div class="sub">Carregando…</div></div>';
+    document.getElementById("btnNovoProjeto").addEventListener("click", function(){
+      wizard = { step: "colar", cliente: "", textoColado: "", erro: "" };
+      renderProjetosPanel();
+    });
+    if (projetosCache) renderListaProjetosWrap();
+    else carregarListaProjetos();
+  }
+
+  function carregarListaProjetos(){
+    apiGet("listar-implantacoes").then(function(resp){
+      projetosCache = resp.tasks || [];
+      renderListaProjetosWrap();
+    }).catch(function(e){
+      var wrap = document.getElementById("listaProjetosWrap");
+      if (wrap) wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para carregar os projetos (' + esc(mensagemErro(e)) + '). Esta aba só funciona publicada no Dashboard de carteiras, com sessão ativa.</div></div>';
+    });
+  }
+
+  function renderListaProjetosWrap(){
+    var wrap = document.getElementById("listaProjetosWrap");
+    if (!wrap) return;
+    if (!projetosCache || !projetosCache.length){
+      wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>Nenhum projeto ainda. Clique em "+ Novo projeto" para criar o primeiro.</div></div>';
+      return;
+    }
+    wrap.innerHTML = projetosCache.map(function(p){
+      var tagCls = p.status === "concluído" ? "ambos" : (p.status === "in progress" ? "londrisoft" : "cliente");
+      return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
+        '<div class="proj-card-top"><h3>' + esc(p.cliente) + '</h3><span class="tag ' + tagCls + '">' + esc(STATUS_LABEL[p.status] || p.status || "—") + '</span></div>' +
+        '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) + ' · ' + p.agentesConcluidos + '/' + p.agentesTotal + ' agentes entregues</div>' +
+      '</div>';
+    }).join("");
+    wrap.querySelectorAll("[data-proj]").forEach(function(card){
+      card.addEventListener("click", function(){ abrirProjeto(card.getAttribute("data-proj")); });
+    });
+  }
+
+  function abrirProjeto(id){
+    projetoAtualId = id;
+    dadosProjeto = null;
+    renderProjetosPanel();
+    apiGet("obter-implantacao", { id: id }).then(function(resp){
+      dadosProjeto = resp;
+      sim = {
+        etapa: resp.projeto.etapaAtual,
+        prioridade: resp.projeto.prioridade.slice(),
+        concluidos: resp.projeto.concluidos.slice(),
+        agenteAtual: resp.projeto.agenteAtualId
+      };
+      renderProjetosPanel();
+    }).catch(function(e){
+      var root = document.getElementById("projetosRoot");
+      if (!root) return;
+      root.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para abrir este projeto (' + esc(mensagemErro(e)) + ').</div></div>' +
+        '<div class="flow-actions"><button type="button" class="btn-flow-secondary" id="btnVoltarLista2">← Voltar aos projetos</button></div>';
+      document.getElementById("btnVoltarLista2").addEventListener("click", function(){ projetoAtualId = null; renderProjetosPanel(); });
+    });
+  }
+
+  // ---- Persistência (ClickUp) ----
+  function persistirProjeto(){
+    if (!dadosProjeto) return;
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id,
+      etapaAtual: sim.etapa,
+      prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual,
+      concluidos: sim.concluidos
+    }).then(function(){
+      if (projetosCache){
+        var row = projetosCache.filter(function(x){ return x.id === dadosProjeto.projeto.id; })[0];
+        if (row){ row.etapaAtual = sim.etapa; row.agentesConcluidos = sim.concluidos.length; }
+      }
+    }).catch(function(){ showSimToast("Não deu para salvar — verifique sua conexão."); });
+  }
+  function persistirAgente(agenteId, patch){
+    var body = Object.assign({ taskId: agenteId }, patch);
+    apiPost("atualizar-agente", body).catch(function(){ showSimToast("Não deu para salvar o progresso deste agente."); });
+  }
+  function adicionarNota(agenteId){
+    var texto = window.prompt("Nota para o time (vira comentário na task do ClickUp):");
+    if (!texto || !texto.trim()) return;
+    apiPost("comentar-implantacao", { taskId: agenteId, texto: texto.trim() }).then(function(){
+      showSimToast("Nota adicionada no ClickUp.");
+    }).catch(function(){ showSimToast("Não deu para salvar a nota."); });
+  }
+
+  function irParaEtapa(id){
+    sim.etapa = id;
+    persistirProjeto();
+    renderSimulador();
+  }
+
+  function renderProjetoDetalhe(root){
+    if (!dadosProjeto){
+      root.innerHTML = '<div class="sub">Carregando projeto…</div>';
+      return;
+    }
+    root.innerHTML =
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">' +
+        '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
+        '<h2 style="font-size:16px">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
+      '</div>' +
+      '<div class="backlog-strip" id="backlogStrip"></div>' +
+      '<div class="stepper" id="stepper"></div>' +
+      '<div id="stepContent"></div>';
+    document.getElementById("btnVoltarLista").addEventListener("click", function(){
+      projetoAtualId = null;
+      dadosProjeto = null;
+      renderProjetosPanel();
+    });
+    renderSimulador();
+  }
+
+  function renderBacklogStrip(){
+    var el = document.getElementById("backlogStrip");
+    if (!el || !dadosProjeto) return;
+    el.innerHTML = dadosProjeto.agentes.map(function(a){
+      var cls = "backlog-chip";
+      var rotulo = "pendente";
+      if (sim.concluidos.indexOf(a.id) !== -1){ cls += " done"; rotulo = "entregue"; }
+      else if (sim.agenteAtual === a.id){ cls += " active"; rotulo = "em andamento"; }
+      return '<span class="' + cls + '" title="' + esc(a.nome) + ' — ' + rotulo + '"><span class="dot"></span>' + esc(a.nome.split(" & ")[0].split(" (")[0]) + '</span>';
+    }).join("");
+  }
+
+  function renderStepper(){
+    var el = document.getElementById("stepper");
+    if (!el) return;
+    var idxAtual = ETAPAS.map(function(e){ return e.id; }).indexOf(sim.etapa);
+    el.innerHTML = ETAPAS.map(function(e, i){
+      var cls = "stepper-item";
+      if (i < idxAtual) cls += " done";
+      if (i === idxAtual) cls += " current";
+      return '<div class="' + cls + '" data-etapa="' + e.id + '">' +
+        '<div class="sline"></div>' +
+        '<div class="sc">' + (i < idxAtual ? "✓" : e.icone) + '</div>' +
+        '<div class="sl">' + (i + 1) + '. ' + e.label + '</div>' +
+      '</div>';
+    }).join("");
+    el.querySelectorAll("[data-etapa]").forEach(function(it){
+      it.addEventListener("click", function(){ irParaEtapa(it.getAttribute("data-etapa")); });
+    });
+  }
+
+  function buildEstruturaPanel(a){
+    var e = a.estrutura || {};
+    var entrega = e.entrega || [], sistemas = e.sistemas || [], prereq = e.prereq || [];
+    return '<div class="struct-panel">' +
+      '<div class="sp-head"><h4>' + esc(a.nome) + '</h4>' + (e.frente ? '<span class="tag londrisoft">' + esc(e.frente) + '</span>' : "") + '</div>' +
+      '<div class="sp-body">' +
+        '<div><div class="sp-k">Público</div><div class="sp-v">' + esc(e.publico || "—") + '</div>' +
+          '<div class="sp-k" style="margin-top:10px">Canal · Frequência</div><div class="sp-v">' + esc(e.canal || "—") + ' · ' + esc(e.frequencia || "—") + '</div>' +
+          '<div class="sp-k" style="margin-top:10px">Sistemas envolvidos</div><div class="sp-v">' + esc(sistemas.join(", ") || "—") + '</div></div>' +
+        '<div><div class="sp-k">O que entrega</div><ul>' + (entrega.length ? entrega.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join("") : '<li>—</li>') + '</ul></div>' +
+      '</div>' +
+      (prereq.length ? '<div style="padding:0 18px 14px"><div class="sp-k">Pré-requisitos específicos</div><ul>' + prereq.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>' : "") +
+    '</div>';
+  }
+
+  function renderEscopo(){
+    var p = dadosProjeto.projeto;
+    var agentes = dadosProjeto.agentes;
+    var html = '<div class="card">' +
+      '<h2>' + esc(p.cliente) + '</h2><div class="sub">CSM: ' + esc(p.csm || "—") + '</div>' +
+      '<div class="sp-k" style="margin-top:8px">Contexto do projeto</div>' +
+      '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
+    '</div>' +
+    '<div class="card">' +
+      '<h2>Backlog completo — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + ' propostos</h2><div class="sub">Revise antes da reunião de alinhamento.</div>' +
+      '<div class="agent-pick-grid">' + agentes.map(function(a){
+        var e = a.estrutura || {};
+        return '<div class="agent-pick" style="cursor:default"><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + esc(e.frente || "") + (e.canal ? ' · ' + esc(e.canal) : "") + '</div></div>';
+      }).join("") + '</div>' +
+    '</div>' +
+    '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento">Ir para a Reunião de Alinhamento →</button></div>';
+    document.getElementById("stepContent").innerHTML = html;
+    document.getElementById("btnIrAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
+  }
+
+  function renderAlinhamento(){
+    var max = 3;
+    var agentes = dadosProjeto.agentes;
+    var html = '<div class="callout"><div class="dot"></div><div>Nesta reunião, peça para o cliente <b>escolher até 3 agentes para priorizar no início</b>. Ao marcar um agente, a estrutura completa dele aparece abaixo — usem juntos para validar se é isso mesmo que o cliente precisa.</div></div>' +
+      '<div class="card">' +
+        '<h2>Escolha dos agentes prioritários <span class="tag ' + (sim.prioridade.length >= max ? "cliente" : "londrisoft") + '" id="contadorPrioridade">' + sim.prioridade.length + '/' + max + ' selecionados</span></h2>' +
+        '<div class="sub">A ordem em que você marca define a ordem de construção (1º marcado = 1º construído).</div>' +
+        '<div class="agent-pick-grid" id="agentPickGrid"></div>' +
+      '</div>' +
+      '<div id="estruturasWrap"></div>' +
+      '<div class="flow-actions">' +
+        '<button type="button" class="btn-flow-secondary" id="btnVoltarEscopo">← Voltar ao Escopo</button>' +
+        '<button type="button" class="btn-flow" id="btnIrConstrucao"' + (sim.prioridade.length ? "" : " disabled") + '>Confirmar priorização e iniciar construção →</button>' +
+      '</div>';
+    document.getElementById("stepContent").innerHTML = html;
+
+    function renderGrid(){
+      var grid = document.getElementById("agentPickGrid");
+      grid.innerHTML = agentes.map(function(a){
+        var pos = sim.prioridade.indexOf(a.id);
+        var on = pos !== -1;
+        var disabled = !on && sim.prioridade.length >= max;
+        var cls = "agent-pick" + (on ? " on" : "") + (disabled ? " disabled" : "");
+        return '<div class="' + cls + '" data-agent="' + esc(a.id) + '"><div class="apnum">' + (on ? (pos + 1) : "") + '</div><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + esc((a.estrutura || {}).frente || "") + '</div></div>';
+      }).join("");
+      grid.querySelectorAll("[data-agent]").forEach(function(card){
+        card.addEventListener("click", function(){
+          var id = card.getAttribute("data-agent");
+          var pos = sim.prioridade.indexOf(id);
+          if (pos !== -1){ sim.prioridade.splice(pos, 1); }
+          else { if (sim.prioridade.length >= max) return; sim.prioridade.push(id); }
+          persistirProjeto();
+          renderGrid();
+          renderEstruturas();
+          document.getElementById("contadorPrioridade").textContent = sim.prioridade.length + "/" + max + " selecionados";
+          document.getElementById("contadorPrioridade").className = "tag " + (sim.prioridade.length >= max ? "cliente" : "londrisoft");
+          document.getElementById("btnIrConstrucao").disabled = sim.prioridade.length === 0;
+        });
+      });
+    }
+    function renderEstruturas(){
+      var wrap = document.getElementById("estruturasWrap");
+      if (!sim.prioridade.length){ wrap.innerHTML = ""; return; }
+      wrap.innerHTML = '<h2 class="section-title">Estrutura dos agentes escolhidos</h2>' +
+        sim.prioridade.map(function(id){ var a = agentePorId(id); return a ? buildEstruturaPanel(a) : ""; }).join("");
+    }
+    renderGrid();
+    renderEstruturas();
+
+    document.getElementById("btnVoltarEscopo").addEventListener("click", function(){ irParaEtapa("escopo"); });
+    document.getElementById("btnIrConstrucao").addEventListener("click", function(){
+      if (!sim.prioridade.length) return;
+      if (!sim.agenteAtual) sim.agenteAtual = sim.prioridade[0];
+      persistirProjeto();
+      irParaEtapa("construcao");
+    });
+  }
+
+  var PASSOS_CONSTRUCAO = [
+    "Mapear a fonte de dados no ERP Gestor (e CRM, quando aplicável)",
+    "Validar os pré-requisitos específicos deste agente com o cliente",
+    "Configurar regras e parâmetros do agente",
+    "Definir canal de entrega e destinatários",
+    "Montar o layout da mensagem/dashboard"
+  ];
+  var PASSOS_TESTE = [
+    "Validar com o(s) usuário(s)-chave (o público deste agente)",
+    "Conferir se o dado bate com um relatório manual/real do cliente",
+    "Ajustar parâmetros conforme o feedback do teste",
+    "Aprovação do cliente para este agente específico"
+  ];
+  var PASSOS_ENTREGA = [
+    "Treinamento do público deste agente",
+    "Go-live do agente",
+    "Confirmar que o cliente está recebendo normalmente"
+  ];
+
+  function seletorAgenteAtual(){
+    if (sim.prioridade.length <= 1) return "";
+    return '<div class="field" style="margin-bottom:14px"><label style="font-size:12px; font-weight:600; color:var(--muted); display:block; margin-bottom:6px;">Trabalhando em qual agente da prioridade agora?</label>' +
+      '<select id="seletorAgente" style="width:100%; padding:9px 12px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px;">' +
+      sim.prioridade.map(function(id){
+        var a = agentePorId(id);
+        if (!a) return "";
+        var concluido = sim.concluidos.indexOf(id) !== -1;
+        return '<option value="' + esc(id) + '"' + (id === sim.agenteAtual ? " selected" : "") + '>' + esc(a.nome) + (concluido ? " (já entregue)" : "") + '</option>';
+      }).join("") + '</select></div>';
+  }
+
+  function renderChecklist(passos, statePrefix, checksObj){
+    return passos.map(function(p, i){
+      var key = String(i);
+      var done = !!checksObj[key];
+      return '<div class="build-check' + (done ? " done" : "") + '"><input type="checkbox" data-check="' + statePrefix + '" data-key="' + key + '"' + (done ? " checked" : "") + '><span>' + esc(p) + '</span></div>';
+    }).join("");
+  }
+
+  function wireChecklist(prefix, agente, checksObj, campo){
+    document.querySelectorAll('[data-check="' + prefix + '"]').forEach(function(cb){
+      cb.addEventListener("change", function(){
+        checksObj[cb.getAttribute("data-key")] = cb.checked;
+        cb.closest(".build-check").classList.toggle("done", cb.checked);
+        var patch = {}; patch[campo] = checksObj;
+        persistirAgente(agente.id, patch);
+      });
+    });
+  }
+
+  function renderConstrucao(){
+    if (!sim.prioridade.length){ irParaEtapa("alinhamento"); return; }
+    if (!sim.agenteAtual) sim.agenteAtual = sim.prioridade[0];
+    var a = agentePorId(sim.agenteAtual);
+    if (!a){ irParaEtapa("alinhamento"); return; }
+    var html = seletorAgenteAtual() +
+      buildEstruturaPanel(a) +
+      '<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><h2>Por onde começar — checklist de construção</h2><button type="button" class="btn-reset" id="btnNotaConstrucao">💬 Nota</button></div><div class="sub">Agente atual: ' + esc(a.nome) + '</div>' +
+      renderChecklist(PASSOS_CONSTRUCAO, "build", a.buildChecks || {}) +
+      '</div>' +
+      '<div class="flow-actions">' +
+        '<button type="button" class="btn-flow-secondary" id="btnVoltarAlinhamento">← Voltar ao Alinhamento</button>' +
+        '<button type="button" class="btn-flow" id="btnIrTestes">Agente construído, ir para Testes →</button>' +
+      '</div>';
+    document.getElementById("stepContent").innerHTML = html;
+    wireChecklist("build", a, a.buildChecks || (a.buildChecks = {}), "buildChecks");
+    document.getElementById("btnNotaConstrucao").addEventListener("click", function(){ adicionarNota(a.id); });
+    var sel = document.getElementById("seletorAgente");
+    if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderConstrucao(); renderBacklogStrip(); });
+    document.getElementById("btnVoltarAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
+    document.getElementById("btnIrTestes").addEventListener("click", function(){ irParaEtapa("testes"); });
+  }
+
+  function renderTestes(){
+    if (!sim.agenteAtual){ irParaEtapa("alinhamento"); return; }
+    var a = agentePorId(sim.agenteAtual);
+    if (!a){ irParaEtapa("alinhamento"); return; }
+    var html = seletorAgenteAtual() +
+      '<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><h2>Testes — ' + esc(a.nome) + '</h2><button type="button" class="btn-reset" id="btnNotaTestes">💬 Nota</button></div><div class="sub">Público a validar: ' + esc((a.estrutura || {}).publico || "—") + '</div>' +
+      renderChecklist(PASSOS_TESTE, "test", a.testChecks || {}) +
+      '</div>' +
+      '<div class="flow-actions">' +
+        '<button type="button" class="btn-flow-secondary" id="btnVoltarConstrucao">← Voltar à Construção</button>' +
+        '<button type="button" class="btn-flow" id="btnIrEntrega">Testado e aprovado, ir para Entrega →</button>' +
+      '</div>';
+    document.getElementById("stepContent").innerHTML = html;
+    wireChecklist("test", a, a.testChecks || (a.testChecks = {}), "testChecks");
+    document.getElementById("btnNotaTestes").addEventListener("click", function(){ adicionarNota(a.id); });
+    var sel = document.getElementById("seletorAgente");
+    if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderTestes(); renderBacklogStrip(); });
+    document.getElementById("btnVoltarConstrucao").addEventListener("click", function(){ irParaEtapa("construcao"); });
+    document.getElementById("btnIrEntrega").addEventListener("click", function(){ irParaEtapa("entrega"); });
+  }
+
+  function wireBacklogPicker(){
+    document.querySelectorAll("[data-next]").forEach(function(card){
+      card.addEventListener("click", function(){
+        var id = card.getAttribute("data-next");
+        sim.prioridade.push(id);
+        sim.agenteAtual = id;
+        persistirProjeto();
+        var ag = agentePorId(id);
+        showSimToast("Novo agente do mês: " + (ag ? ag.nome : id));
+        irParaEtapa("construcao");
+      });
+    });
+  }
+
+  function renderEntrega(){
+    // Nada em prioridade ainda: precisa passar pelo Alinhamento primeiro.
+    if (!sim.prioridade.length){ irParaEtapa("alinhamento"); return; }
+
+    var restantesBacklog = dadosProjeto.agentes.filter(function(ag){ return sim.prioridade.indexOf(ag.id) === -1 && sim.concluidos.indexOf(ag.id) === -1; });
+
+    // Toda a prioridade inicial já foi entregue: mostra o backlog restante para
+    // escolher o agente do próximo mês, sem checklist de entrega (não há "agente
+    // atual" nesse momento).
+    if (!sim.agenteAtual){
+      var htmlFim = '<div class="callout"><div class="dot"></div><div>🎉 <b>Toda a prioridade inicial foi entregue!</b> Escolha o próximo agente do backlog para seguir a cadência de 1 por mês.</div></div>' +
+        (restantesBacklog.length
+          ? '<div class="card"><h2>Backlog restante</h2><div class="agent-pick-grid">' + restantesBacklog.map(function(ag){ return '<div class="agent-pick" data-next="' + esc(ag.id) + '"><div class="apname">' + esc(ag.nome) + '</div><div class="apmeta">' + esc((ag.estrutura || {}).frente || "") + '</div></div>'; }).join("") + '</div></div>'
+          : '<div class="callout"><div class="dot"></div><div><b>Backlog completo!</b> Todos os agentes mapeados para este cliente já foram entregues.</div></div>');
+      document.getElementById("stepContent").innerHTML = htmlFim;
+      wireBacklogPicker();
+      return;
+    }
+
+    var a = agentePorId(sim.agenteAtual);
+    if (!a){ irParaEtapa("alinhamento"); return; }
+    var restantesPrioridade = sim.prioridade.filter(function(id){ return sim.concluidos.indexOf(id) === -1 && id !== sim.agenteAtual; });
+
+    var html = seletorAgenteAtual() +
+      '<div class="card"><h2>Entrega — ' + esc(a.nome) + '</h2>' +
+      renderChecklist(PASSOS_ENTREGA, "entrega", a.entregaChecks || {}) +
+      '</div>' +
+      '<div class="flow-actions">' +
+        '<button type="button" class="btn-flow-secondary" id="btnVoltarTestes">← Voltar aos Testes</button>' +
+        '<button type="button" class="btn-flow" id="btnConcluirAgente">🎉 Marcar "' + esc(a.nome.split(" & ")[0].split(" (")[0]) + '" como entregue</button>' +
+      '</div>' +
+      (restantesBacklog.length ? '<div class="card" style="margin-top:18px"><h2>Backlog restante (próximos meses)</h2><div class="sub">Cadência: 1 agente por mês. Quando a prioridade inicial acabar, escolha o próximo aqui.</div>' +
+        '<div class="agent-pick-grid">' + restantesBacklog.map(function(ag){ return '<div class="agent-pick" data-next="' + esc(ag.id) + '"><div class="apname">' + esc(ag.nome) + '</div><div class="apmeta">' + esc((ag.estrutura || {}).frente || "") + '</div></div>'; }).join("") + '</div></div>' : "");
+
+    document.getElementById("stepContent").innerHTML = html;
+    wireChecklist("entrega", a, a.entregaChecks || (a.entregaChecks = {}), "entregaChecks");
+    var sel = document.getElementById("seletorAgente");
+    if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderEntrega(); renderBacklogStrip(); });
+    document.getElementById("btnVoltarTestes").addEventListener("click", function(){ irParaEtapa("testes"); });
+    document.getElementById("btnConcluirAgente").addEventListener("click", function(){
+      if (sim.concluidos.indexOf(sim.agenteAtual) === -1) sim.concluidos.push(sim.agenteAtual);
+      persistirAgente(sim.agenteAtual, { status: "concluído" });
+      var proximo = restantesPrioridade[0] || null;
+      if (proximo){
+        sim.agenteAtual = proximo;
+        persistirProjeto();
+        var prox = agentePorId(proximo);
+        showSimToast("Agente entregue! Próximo da prioridade: " + (prox ? prox.nome : proximo));
+        irParaEtapa("construcao");
+      } else {
+        sim.agenteAtual = null;
+        persistirProjeto();
+        showSimToast("Prioridade inicial concluída! Escolha o próximo do backlog para seguir a cadência mensal.");
+        renderBacklogStrip();
+        renderEntrega();
+      }
+    });
+    wireBacklogPicker();
+  }
+
+  function renderSimulador(){
+    if (!dadosProjeto) return;
+    renderBacklogStrip();
+    renderStepper();
+    if (sim.etapa === "escopo") renderEscopo();
+    else if (sim.etapa === "alinhamento") renderAlinhamento();
+    else if (sim.etapa === "construcao") renderConstrucao();
+    else if (sim.etapa === "testes") renderTestes();
+    else if (sim.etapa === "entrega") renderEntrega();
+  }
+
+  // ==================== ASSISTENTE DE NOVO PROJETO (extração por IA) ====================
+
+  function renderWizard(root){
+    if (wizard.step === "colar") renderWizardColar(root);
+    else renderWizardRevisao(root);
+  }
+
+  function renderWizardColar(root){
+    root.innerHTML =
+      '<div class="callout"><div class="dot"></div><div>Cole o texto da proposta comercial (escopo fechado, condições, agentes propostos). A IA sugere os agentes e o contexto — você revisa e edita tudo antes de criar o projeto.</div></div>' +
+      '<div class="card">' +
+        '<h2>Novo projeto</h2>' +
+        '<div class="form-field"><label>Nome do cliente</label><input type="text" id="wzCliente" class="form-input" placeholder="Ex: SERLIMP e Filiais" value="' + esc(wizard.cliente || "") + '"></div>' +
+        '<div class="form-field"><label>Texto da proposta (cole aqui)</label><textarea id="wzTexto" class="form-textarea" rows="10" placeholder="Cole o texto da proposta, incluindo os agentes/assistentes descritos...">' + esc(wizard.textoColado || "") + '</textarea></div>' +
+        (wizard.erro ? '<div class="callout danger"><div class="dot"></div><div>' + esc(wizard.erro) + '</div></div>' : "") +
+        '<div style="margin:6px 0 10px;"><a href="#" id="linkColarJson" style="font-size:12px; color:var(--muted);">Já extraiu os agentes no artifact do claude.ai? Cole o JSON copiado de lá →</a></div>' +
+        '<div id="colarJsonWrap" style="display:none; margin-bottom:10px;">' +
+          '<textarea id="wzJsonColado" class="form-textarea" rows="4" placeholder="Cole aqui o JSON copiado no artifact"></textarea>' +
+          '<div style="margin-top:8px;"><button type="button" class="btn-flow-secondary" id="btnUsarJson">Usar estes dados →</button></div>' +
+        '</div>' +
+        '<div class="flow-actions">' +
+          '<button type="button" class="btn-flow-secondary" id="btnCancelarWizard">Cancelar</button>' +
+          '<button type="button" class="btn-flow-secondary" id="btnPularIA">Pular a IA, preencher manualmente →</button>' +
+          '<button type="button" class="btn-flow" id="btnExtrairIA"' + (wizard.carregando ? " disabled" : "") + '>' + (wizard.carregando ? "Pensando…" : "✨ Extrair agentes com IA") + '</button>' +
+        '</div>' +
+      '</div>';
+    document.getElementById("btnCancelarWizard").addEventListener("click", function(){ wizard = null; renderProjetosPanel(); });
+    document.getElementById("btnPularIA").addEventListener("click", function(){
+      wizard.cliente = document.getElementById("wzCliente").value;
+      iniciarRevisao({ contexto: "", agentes: [] });
+    });
+    document.getElementById("linkColarJson").addEventListener("click", function(ev){
+      ev.preventDefault();
+      var w = document.getElementById("colarJsonWrap");
+      w.style.display = w.style.display === "none" ? "block" : "none";
+    });
+    document.getElementById("btnUsarJson").addEventListener("click", function(){
+      var raw = document.getElementById("wzJsonColado").value.trim();
+      if (!raw) return;
+      try{
+        var dados = JSON.parse(raw);
+        wizard.cliente = dados.cliente || document.getElementById("wzCliente").value.trim();
+        iniciarRevisao(dados);
+      } catch(e){
+        wizard.erro = "JSON inválido — cole exatamente o texto copiado no artifact.";
+        renderProjetosPanel();
+      }
+    });
+    var btnIA = document.getElementById("btnExtrairIA");
+    function atualizarBotaoIA(){
+      var pronto = !!(document.getElementById("wzCliente").value.trim() && document.getElementById("wzTexto").value.trim());
+      btnIA.disabled = wizard.carregando || !pronto || !sampleFn;
+      btnIA.title = sampleFn ? "" : "IA indisponível nesta visualização — use \"preencher manualmente\" ou \"colar JSON\".";
+    }
+    document.getElementById("wzTexto").addEventListener("input", atualizarBotaoIA);
+    document.getElementById("wzCliente").addEventListener("input", atualizarBotaoIA);
+    atualizarBotaoIA();
+    btnIA.addEventListener("click", function(){
+      wizard.cliente = document.getElementById("wzCliente").value.trim();
+      wizard.textoColado = document.getElementById("wzTexto").value.trim();
+      extrairComIA(wizard.textoColado);
+    });
+  }
+
+  function mensagemErroSample(e){
+    var code = e && e.code;
+    if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled") return "A extração por IA não está disponível nesta visualização. Use \"preencher manualmente\".";
+    if (code === "rate_limited") return "Muitas tentativas agora — aguarde um pouco e tente de novo.";
+    if (code === "invalid_json") return "A IA não devolveu um JSON válido desta vez. Tente novamente ou preencha manualmente.";
+    if (code === "cancelled") return "Extração cancelada.";
+    return "Não deu para extrair agora (" + (e && e.message ? e.message : "erro") + "). Tente de novo ou preencha manualmente.";
+  }
+
+  function extrairComIA(texto){
+    if (!sampleFn) return;
+    wizard.carregando = true;
+    wizard.erro = "";
+    renderProjetosPanel();
+    var prompt =
+      'Extraia, de uma proposta comercial da Londrisoft (Waipe), a lista de "agentes" (assistentes de automação) descritos nela.\n\n' +
+      'Responda APENAS com um JSON (sem texto antes ou depois, sem markdown), neste formato exato:\n' +
+      '{"contexto":"resumo em texto simples do escopo fechado, condicoes comerciais e cronograma, ate 600 caracteres","agentes":[{"nome":"","frente":"","frequencia":"","canal":"","publico":"","entrega":["..."],"sistemas":["..."],"prereq":["..."]}]}\n\n' +
+      'Regras: nome curto; frente = area (Comercial, Financeiro, Fiscal, Compras, Logistica, Gestao Operacional, etc); frequencia = periodicidade (ex: "Diario as 08h"); canal = meio de entrega (WhatsApp, E-mail, Dashboard, TV, Planilha); publico = quem recebe; entrega = lista curta do que o agente entrega; sistemas = de onde vem o dado; prereq = pre-requisitos especificos. Se a proposta nao mencionar um campo, deixe "" ou []. Nao invente dado que nao esta no texto.\n\n' +
+      'Texto da proposta:\n' + texto.slice(0, 12000);
+    sampleFn.json(prompt, { modelTier: "default" }).then(function(dados){
+      wizard.carregando = false;
+      var agentes = Array.isArray(dados.agentes) ? dados.agentes : [];
+      iniciarRevisao({ contexto: String(dados.contexto || ""), agentes: agentes });
+    }).catch(function(e){
+      wizard.carregando = false;
+      wizard.erro = mensagemErroSample(e);
+      renderProjetosPanel();
+    });
+  }
+
+  function iniciarRevisao(draft){
+    wizard = {
+      step: "revisao",
+      cliente: wizard.cliente,
+      contexto: draft.contexto || "",
+      agentes: (draft.agentes || []).map(function(a){
+        return {
+          nome: a.nome || "", frente: a.frente || "", frequencia: a.frequencia || "", canal: a.canal || "", publico: a.publico || "",
+          entrega: Array.isArray(a.entrega) ? a.entrega.join("\n") : "",
+          sistemas: Array.isArray(a.sistemas) ? a.sistemas.join(", ") : "",
+          prereq: Array.isArray(a.prereq) ? a.prereq.join("\n") : ""
+        };
+      }),
+      erro: "", salvando: false
+    };
+    if (!wizard.agentes.length) wizard.agentes.push({ nome:"", frente:"", frequencia:"", canal:"", publico:"", entrega:"", sistemas:"", prereq:"" });
+    renderProjetosPanel();
+  }
+
+  function renderWizardRevisao(root){
+    var rotuloBotao = wizard.salvando ? "Criando…" : (API_ORIGIN_OK ? "Confirmar e criar projeto" : "📋 Copiar dados do projeto");
+    root.innerHTML =
+      '<div class="callout"><div class="dot"></div><div>Revise e edite antes de criar o projeto. Nada é salvo no ClickUp até você confirmar.</div></div>' +
+      (API_ORIGIN_OK ? "" : '<div class="callout warn"><div class="dot"></div><div>Esta é a visualização do artifact — aqui não dá para criar o projeto direto no ClickUp. Ao confirmar, os dados revisados são copiados; cole-os no link "Já extraiu os agentes..." da página publicada (diretoriocs.vercel.app/implantacao-waipe.html) para criar de fato.</div></div>') +
+      '<div class="card">' +
+        '<div class="form-field"><label>Nome do cliente</label><input type="text" id="rvCliente" class="form-input" value="' + esc(wizard.cliente || "") + '"></div>' +
+        '<div class="form-field"><label>Contexto do projeto</label><textarea id="rvContexto" class="form-textarea" rows="4">' + esc(wizard.contexto || "") + '</textarea></div>' +
+      '</div>' +
+      '<div id="agentesEditorWrap"></div>' +
+      '<div style="margin:10px 0 18px;"><button type="button" class="btn-flow-secondary" id="btnAddAgente">+ Adicionar agente</button></div>' +
+      (wizard.erro ? '<div class="callout danger"><div class="dot"></div><div>' + esc(wizard.erro) + '</div></div>' : "") +
+      '<div class="flow-actions">' +
+        '<button type="button" class="btn-flow-secondary" id="btnVoltarColar">← Voltar</button>' +
+        '<button type="button" class="btn-flow" id="btnCriarProjeto"' + (wizard.salvando ? " disabled" : "") + '>' + rotuloBotao + '</button>' +
+      '</div>';
+
+    function renderAgentesEditor(){
+      var wrap = document.getElementById("agentesEditorWrap");
+      wrap.innerHTML = wizard.agentes.map(function(a, i){
+        return '<div class="card agent-editor-card">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;"><h2>Agente ' + (i + 1) + '</h2>' +
+            (wizard.agentes.length > 1 ? '<button type="button" class="btn-reset" data-remove-agente="' + i + '">Remover</button>' : "") +
+          '</div>' +
+          '<div class="form-grid-2">' +
+            '<div class="form-field"><label>Nome</label><input type="text" class="form-input" data-f="nome" data-i="' + i + '" value="' + esc(a.nome) + '"></div>' +
+            '<div class="form-field"><label>Frente/área</label><input type="text" class="form-input" data-f="frente" data-i="' + i + '" value="' + esc(a.frente) + '"></div>' +
+            '<div class="form-field"><label>Frequência</label><input type="text" class="form-input" data-f="frequencia" data-i="' + i + '" value="' + esc(a.frequencia) + '"></div>' +
+            '<div class="form-field"><label>Canal</label><input type="text" class="form-input" data-f="canal" data-i="' + i + '" value="' + esc(a.canal) + '"></div>' +
+          '</div>' +
+          '<div class="form-field"><label>Público</label><input type="text" class="form-input" data-f="publico" data-i="' + i + '" value="' + esc(a.publico) + '"></div>' +
+          '<div class="form-field"><label>O que entrega (uma por linha)</label><textarea class="form-textarea" rows="3" data-f="entrega" data-i="' + i + '">' + esc(a.entrega) + '</textarea></div>' +
+          '<div class="form-grid-2">' +
+            '<div class="form-field"><label>Sistemas (separados por vírgula)</label><input type="text" class="form-input" data-f="sistemas" data-i="' + i + '" value="' + esc(a.sistemas) + '"></div>' +
+            '<div class="form-field"><label>Pré-requisitos (um por linha)</label><textarea class="form-textarea" rows="2" data-f="prereq" data-i="' + i + '">' + esc(a.prereq) + '</textarea></div>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+      wrap.querySelectorAll("[data-f]").forEach(function(el){
+        el.addEventListener("input", function(){
+          wizard.agentes[parseInt(el.getAttribute("data-i"), 10)][el.getAttribute("data-f")] = el.value;
+        });
+      });
+      wrap.querySelectorAll("[data-remove-agente]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          wizard.agentes.splice(parseInt(btn.getAttribute("data-remove-agente"), 10), 1);
+          renderAgentesEditor();
+        });
+      });
+    }
+    renderAgentesEditor();
+
+    document.getElementById("rvCliente").addEventListener("input", function(e){ wizard.cliente = e.target.value; });
+    document.getElementById("rvContexto").addEventListener("input", function(e){ wizard.contexto = e.target.value; });
+    document.getElementById("btnAddAgente").addEventListener("click", function(){
+      wizard.agentes.push({ nome:"", frente:"", frequencia:"", canal:"", publico:"", entrega:"", sistemas:"", prereq:"" });
+      renderAgentesEditor();
+    });
+    document.getElementById("btnVoltarColar").addEventListener("click", function(){ wizard.step = "colar"; renderProjetosPanel(); });
+    document.getElementById("btnCriarProjeto").addEventListener("click", API_ORIGIN_OK ? criarProjetoConfirmado : copiarDadosProjeto);
+  }
+
+  /** Valida o formulário de revisão e devolve o payload pronto para criar-implantacao, ou null (e seta wizard.erro) se inválido. */
+  function coletarDadosProjeto(){
+    var cliente = (wizard.cliente || "").trim();
+    if (!cliente){ wizard.erro = "Informe o nome do cliente."; renderProjetosPanel(); return null; }
+    var agentesValidos = wizard.agentes
+      .map(function(a){
+        return {
+          nome: (a.nome || "").trim(), frente: a.frente || "", frequencia: a.frequencia || "", canal: a.canal || "", publico: a.publico || "",
+          entrega: (a.entrega || "").split("\n").map(function(s){ return s.trim(); }).filter(Boolean),
+          sistemas: (a.sistemas || "").split(",").map(function(s){ return s.trim(); }).filter(Boolean),
+          prereq: (a.prereq || "").split("\n").map(function(s){ return s.trim(); }).filter(Boolean)
+        };
+      })
+      .filter(function(a){ return a.nome; });
+    if (!agentesValidos.length){ wizard.erro = "Informe pelo menos um agente com nome."; renderProjetosPanel(); return null; }
+    wizard.erro = "";
+    return { cliente: cliente, contexto: wizard.contexto || "", agentes: agentesValidos };
+  }
+
+  function criarProjetoConfirmado(){
+    var dados = coletarDadosProjeto();
+    if (!dados) return;
+    wizard.salvando = true;
+    renderProjetosPanel();
+    apiPost("criar-implantacao", dados).then(function(resp){
+      wizard = null;
+      projetosCache = null;
+      renderProjetosPanel();
+      if (resp && resp.id) abrirProjeto(resp.id);
+    }).catch(function(e){
+      wizard.salvando = false;
+      wizard.erro = "Não deu para criar o projeto (" + mensagemErro(e) + ").";
+      renderProjetosPanel();
+    });
+  }
+
+  function copiarDadosProjeto(){
+    var dados = coletarDadosProjeto();
+    if (!dados) return;
+    copyToClipboard(JSON.stringify(dados)).then(function(){
+      showSimToast("Dados copiados! Cole na página publicada (diretoriocs.vercel.app) para criar o projeto de verdade.");
+    }).catch(function(){
+      showSimToast("Não deu para copiar automaticamente — selecione e copie manualmente.");
+    });
+  }
+
+  renderProjetosPanel();
+})();
+</script>
+
+</html>
