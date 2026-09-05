@@ -8,16 +8,18 @@
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
   :root{
-    --bg:#ffffff;
-    --surface:#faf9f7;
-    --surface-2:#f5f5f4;
-    --border:#e7e5e4;
-    --border-strong:#d6d3d1;
-    --ink:#1c1917;
-    --ink-2:#44403c;
-    --muted:#78716c;
-    --muted-2:#a8a29e;
-    --brand:#1c1917;
+    --brand-night:#000035;
+    --bg:#F7F9FF;
+    --surface:#ffffff;
+    --surface-2:#F0F4FF;
+    --border:#E2E7F5;
+    --border-strong:#C9D3EC;
+    --ink:#000035;
+    --ink-2:#1A2158;
+    --muted:#5C6180;
+    --muted-2:#8A8FB0;
+    --brand:#3A86FF;
+    --brand-dark:#0A41B4;
     --brand-ink:#ffffff;
     --focus-ring:#3a86ff;
     --success:#15803d;
@@ -28,25 +30,26 @@
     --warning-bg:#fffbeb;
     --plan-individual:#0f766e;
     --plan-individual-bg:#f0fdfa;
-    --plan-time:#1c1917;
-    --plan-time-bg:#f5f5f4;
+    --plan-time:#0A41B4;
+    --plan-time-bg:#F0F4FF;
     --plan-enterprise:#92400e;
     --plan-enterprise-bg:#fffbeb;
-    --shadow:0 1px 2px rgba(28,25,23,.06), 0 8px 24px rgba(28,25,23,.07);
+    --shadow:0 1px 2px rgba(0,0,53,.06), 0 8px 24px rgba(0,0,53,.07);
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --bg:#16140f;
-      --surface:#1f1c17;
-      --surface-2:#2a2621;
-      --border:#3a352d;
-      --border-strong:#4a4437;
-      --ink:#f3efe8;
-      --ink-2:#d6d0c4;
-      --muted:#a89e8e;
-      --muted-2:#7d7566;
-      --brand:#f3efe8;
-      --brand-ink:#1c1917;
+      --bg:#000035;
+      --surface:#0A0F4D;
+      --surface-2:#0F1660;
+      --border:#232B70;
+      --border-strong:#334085;
+      --ink:#F0F4FF;
+      --ink-2:#CBD6FF;
+      --muted:#A8B4E8;
+      --muted-2:#7883C4;
+      --brand:#3A86FF;
+      --brand-dark:#A8C5FF;
+      --brand-ink:#000035;
       --success:#4ade80;
       --success-bg:#132318;
       --danger:#f87171;
@@ -55,25 +58,26 @@
       --warning-bg:#2a2112;
       --plan-individual:#2dd4bf;
       --plan-individual-bg:#0f2624;
-      --plan-time:#f3efe8;
-      --plan-time-bg:#2a2621;
+      --plan-time:#A8C5FF;
+      --plan-time-bg:#0F1660;
       --plan-enterprise:#fbbf24;
       --plan-enterprise-bg:#2a2112;
       --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
     }
   }
   :root[data-theme="dark"]{
-    --bg:#16140f;
-    --surface:#1f1c17;
-    --surface-2:#2a2621;
-    --border:#3a352d;
-    --border-strong:#4a4437;
-    --ink:#f3efe8;
-    --ink-2:#d6d0c4;
-    --muted:#a89e8e;
-    --muted-2:#7d7566;
-    --brand:#f3efe8;
-    --brand-ink:#1c1917;
+    --bg:#000035;
+    --surface:#0A0F4D;
+    --surface-2:#0F1660;
+    --border:#232B70;
+    --border-strong:#334085;
+    --ink:#F0F4FF;
+    --ink-2:#CBD6FF;
+    --muted:#A8B4E8;
+    --muted-2:#7883C4;
+    --brand:#3A86FF;
+    --brand-dark:#A8C5FF;
+    --brand-ink:#000035;
     --success:#4ade80;
     --success-bg:#132318;
     --danger:#f87171;
@@ -82,8 +86,8 @@
     --warning-bg:#2a2112;
     --plan-individual:#2dd4bf;
     --plan-individual-bg:#0f2624;
-    --plan-time:#f3efe8;
-    --plan-time-bg:#2a2621;
+    --plan-time:#A8C5FF;
+    --plan-time-bg:#0F1660;
     --plan-enterprise:#fbbf24;
     --plan-enterprise-bg:#2a2112;
     --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
@@ -106,17 +110,16 @@
 
   /* Header */
   .topbar{
-    display:flex; align-items:center; justify-content:space-between; gap:16px;
-    padding-bottom:22px; margin-bottom:22px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:20px;
+    padding:20px 24px; margin-bottom:26px; border-radius:16px;
+    background:var(--brand-night); color:#fff;
     flex-wrap:wrap;
   }
-  .brand{display:flex; align-items:center; gap:10px;}
-  .brand svg{display:block;}
-  .brand-name{font-weight:800; font-size:15px; letter-spacing:.01em;}
+  .brand{display:flex; align-items:center; gap:10px; color:#fff;}
+  .brand svg{display:block; height:22px; width:auto;}
   .header-title{display:flex; flex-direction:column; gap:4px;}
-  .header-title h1{font-size:22px; font-weight:800; letter-spacing:-.01em;}
-  .header-title p{margin:0; font-size:13.5px; color:var(--muted);}
-  .header-meta{font-size:12px; color:var(--muted-2); text-align:right;}
+  .header-title h1{font-size:22px; font-weight:800; letter-spacing:-.01em; color:#fff;}
+  .header-title p{margin:0; font-size:13.5px; color:rgba(255,255,255,.62);}
 
   /* Tabs */
   .tabs{
@@ -420,18 +423,12 @@
 
   <header class="topbar">
     <div class="brand">
-      <svg width="26" height="17" viewBox="0 0 54 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M22.4174 11.5937L19.1623 5.85231C18.142 4.05915 16.2634 2.97339 14.2391 2.97339H5.76938C1.33207 2.97339 -1.4372 7.84288 0.781456 11.7418L12.5225 32.4042C14.7412 36.3031 20.2797 36.3031 22.4983 32.4042L28.377 22.073L22.4174 11.5937Z" fill="currentColor"/>
-        <path d="M43.7455 9.17639H37.9317C36.5551 9.17639 35.2919 9.91668 34.6118 11.1341L32.3607 15.0987L28.3931 22.074L32.4093 29.1479C33.883 31.7307 37.5592 31.7307 39.0329 29.1479L47.0654 15C48.5391 12.4172 46.6929 9.17639 43.7617 9.17639H43.7455Z" fill="currentColor"/>
-        <path d="M44.5875 0.0277107C35.6481 0.19222 28.3767 5.0617 28.3767 11.2802C28.3767 17.4986 29.3484 15.8535 31.2431 17.038L32.3444 15.1132L34.5954 11.1486C35.2756 9.94764 36.555 9.1909 37.9153 9.1909H43.7291C46.6766 9.1909 48.5065 12.4317 47.0328 15.0145L45.9154 16.9887C50.6604 15.2449 53.8345 11.856 53.8345 7.08517C53.8345 2.31439 50.6928 -0.301309 44.5713 0.0277107H44.5875Z" fill="var(--muted-2)"/>
-      </svg>
-      <span class="brand-name" style="color:var(--ink)">waipe</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="239 409 1457 261"><polygon fill="currentColor" points="635.6 462.6 609.1 462.6 609.1 626.1 719.2 626.1 719.2 602.8 635.6 602.8 635.6 462.6"/><path fill="currentColor" d="M822,513c-9.1-5.3-19.5-8-31.2-8s-22,2.7-31.1,8c-9.2,5.3-16.4,12.5-21.7,21.6-5.3,9.1-8,19.3-8,30.8s2.7,22,8,31.1c5.3,9.2,12.5,16.4,21.7,21.7,9.1,5.3,19.5,8,31.1,8s22.2-2.7,31.2-8c9.1-5.3,16.3-12.5,21.7-21.7,5.4-9.1,8.1-19.5,8.1-31.1s-2.7-21.7-8.1-30.8c-5.4-9.1-12.6-16.3-21.7-21.6ZM821.9,585.9c-3.1,5.9-7.3,10.5-12.6,13.7-5.3,3.3-11.5,4.9-18.5,4.9s-13-1.6-18.4-4.9c-5.4-3.3-9.6-7.8-12.6-13.7-3-5.9-4.5-12.7-4.5-20.3s1.5-14.2,4.5-20.1c3-5.9,7.2-10.5,12.6-13.8,5.4-3.3,11.6-5,18.6-5s13,1.7,18.4,5c5.4,3.4,9.6,8,12.6,13.8,3,5.9,4.5,12.6,4.5,20.1s-1.6,14.5-4.7,20.3Z"/><path fill="currentColor" d="M933.9,506.5c-10,0-18.7,2.4-26.2,7.1-5.4,3.4-9.7,7.8-12.9,13.1l-1-16.5h-23v115.8h24.8v-60.7c0-7.7,1.3-14.3,3.9-19.7,2.6-5.5,6.2-9.7,10.9-12.7,4.7-3,10.1-4.5,16.3-4.5s14.4,2.5,18.7,7.5c4.3,5,6.5,12.3,6.5,21.9v68.3h24.8v-71.7c0-15-3.8-26.8-11.3-35.2-7.5-8.4-18-12.6-31.4-12.6Z"/><path fill="currentColor" d="M1082.1,512.5c-2.8-1.6-5.6-2.9-8.3-4-6.2-2.4-12.9-3.6-20.1-3.6-11.3,0-21.4,2.7-30.4,8.2-9,5.5-16,13-21.1,22.5-5.1,9.6-7.6,20.6-7.6,33s2.2,21.2,6.6,29.9c4.4,8.7,10.5,15.4,18.3,20.2,7.8,4.8,16.7,7.2,26.8,7.2s17.5-2.1,24.5-6.4c5-3,8.9-6.8,11.9-11.5l1,17.4h23v-166.5h-24.8v53.4ZM1073.4,595.4c-5.8,6-13.2,9.1-22.2,9.1s-17.3-3.4-22.9-10.2c-5.6-6.8-8.5-15.9-8.5-27.3s1.5-15.3,4.5-21.3c3-6,7.2-10.7,12.6-14.1,5.4-3.3,11.8-5,19.4-5s13.2,1.5,19.5,4.5c2.2,1,4.2,2.3,6.3,3.6v37.4c0,9.5-2.9,17.2-8.7,23.3Z"/><path fill="currentColor" d="M1168.3,513.5c-5.1,3.5-9.2,8-12.5,13.5l-1.3-18.7h-23v117.7h24.8v-63.1c0-6.7,1.4-12.6,4.3-17.6,2.9-5.1,6.8-9,11.8-11.9,5-2.9,10.7-4.3,17-4.3s7.4.6,10.8,1.7l4.7-22.5c-4.1-1.3-8.3-2-12.7-2-8.8,0-16.7,2.4-23.7,7.1Z"/><rect fill="currentColor" x="1217.2" y="509.1" width="24.8" height="117"/><rect fill="currentColor" x="1216.2" y="463.3" width="27" height="25.5"/><path fill="currentColor" d="M1320.4,555.5l-8.3-1.7c-8.3-1.6-14.2-3.6-17.5-5.8-3.4-2.2-5-5.4-5-9.4s1.8-7.8,5.5-10.2c3.7-2.4,9.1-3.6,16.3-3.6s11.7.9,17,2.8c5.3,1.9,10.3,4.7,14.8,8.5l11.5-16.7c-11.3-9.6-25.3-14.5-42.2-14.5s-25.6,3.2-34.2,9.7c-8.6,6.5-12.9,15.1-12.9,25.9s2.9,15.3,8.7,21c5.8,5.6,14.6,9.7,26.3,12.1l8.1,1.5c9.1,1.8,15.6,3.9,19.2,6.4,3.7,2.5,5.5,5.8,5.5,10s-2,8.4-6.1,10.9c-4.1,2.5-10,3.8-17.9,3.8s-13.8-1.2-19.7-3.6c-6-2.4-11.4-5.8-16.3-10.2l-13.2,16.4c5.6,5.6,12.5,9.8,21,12.7,8.4,2.9,17.7,4.4,27.8,4.4s18.6-1.4,26-4.3c7.4-2.9,13-7,17-12.5,4-5.5,6-12.1,6-20s-3-16.1-8.9-21.7c-6-5.6-15.5-9.7-28.6-12.1Z"/><path fill="currentColor" d="M1464.1,513c-9.1-5.3-19.5-8-31.2-8s-22,2.7-31.1,8c-9.2,5.3-16.4,12.5-21.7,21.6-5.3,9.1-8,19.3-8,30.8s2.7,22,8,31.1c5.3,9.2,12.5,16.4,21.7,21.7,9.1,5.3,19.5,8,31.1,8s22.2-2.7,31.2-8c9.1-5.3,16.3-12.5,21.7-21.7,5.4-9.1,8.1-19.5,8.1-31.1s-2.7-21.7-8.1-30.8c-5.4-9.1-12.6-16.3-21.7-21.6ZM1464,585.9c-3.1,5.9-7.3,10.5-12.6,13.7-5.3,3.3-11.5,4.9-18.5,4.9s-13-1.6-18.4-4.9c-5.4-3.3-9.6-7.8-12.6-13.7-3-5.9-4.5-12.7-4.5-20.3s1.5-14.2,4.5-20.1c3-5.9,7.2-10.5,12.6-13.8,5.4-3.3,11.6-5,18.6-5s13,1.7,18.4,5c5.4,3.4,9.6,8,12.6,13.8,3,5.9,4.5,12.6,4.5,20.1s-1.6,14.5-4.7,20.3Z"/><path fill="currentColor" d="M1545.2,501.2c0-16.7,6.8-25,20.3-25s6.9.6,9.8,1.8,5.9,3.1,8.8,5.5l11-16.2c-9-8-19.9-12-32.6-12s-23.6,4-31,12.1c-7.4,8.1-11.2,19.2-11.2,33.5v7.4h-20.3v20.1h20.3v97.2h24.8v-97.2h31.6v-20.1h-31.6v-7.1Z"/><path fill="currentColor" d="M1660.5,598.1c-2.9,2.3-5.8,4-8.5,5.3-2.7,1.2-5.7,1.8-8.9,1.8-5.6,0-9.6-1.6-12.3-4.9-2.6-3.3-3.9-8.5-3.9-15.7v-55.9h32.8v-20.1h-32.8v-37.5h-24.8v37.5h-20.1v20.1h20.1v56.4c0,13.4,3.2,23.6,9.6,30.5,6.4,6.9,15.6,10.4,27.7,10.4s12.1-1,17.3-2.9c5.1-2,9.9-5.1,14.3-9.3l-10.5-15.7Z"/><path fill="currentColor" d="M334.6,463.1c0-23.8-19.3-43.1-43.1-43.1h-42.6v111.1c0,23.8,19.3,43.1,43.1,43.1h42.6v-111.1Z"/><path fill="currentColor" d="M488.9,660v-42.6c0-23.8-19.3-43.1-43.1-43.1h-111.1v42.6c0,23.8,19.3,43.1,43.1,43.1h111.1Z"/><path fill="currentColor" d="M428.8,437.2c-23.8,0-43.1,19.3-43.1,43.1v42.6h111.1c23.8,0,43.1-19.3,43.1-43.1v-42.6h-111.1Z"/></svg>
     </div>
     <div class="header-title">
       <h1>Arquitetura de Solução</h1>
       <p>Ferramenta interna do time de CS — monte a arquitetura de solução do cliente (Waipe e o resto do ecossistema) e consulte a precificação completa</p>
     </div>
-    <div class="header-meta">Baseado em<br>Planos e Precificação — Waipe 2026</div>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Seções">
@@ -1112,7 +1109,7 @@
 
   <footer class="page-footer">
     <span>Uso interno — time de Customer Success · Londrisoft</span>
-    <span>Fonte: Planos e Precificação — Waipe 2026 (Notion)</span>
+    <span>Fontes: Waipe — Planos e Precificação 2026 (Notion) · Gestor, Simplaz e Unique — páginas de planos e relação de telas por produto · BIME APP — critério comercial de indicação</span>
   </footer>
 </div>
 
