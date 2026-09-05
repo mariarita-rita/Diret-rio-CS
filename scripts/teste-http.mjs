@@ -2023,6 +2023,130 @@ console.log('\n[35] api/ia.js — analisar-transcricao: sessao, saneamento e con
   delete process.env.ANTHROPIC_API_KEY;
 }
 
+console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e confirmar-fechamento-implantacao');
+{
+  const fetchOriginal = globalThis.fetch;
+  const escritas = [];
+  const LISTA = '901328976497';
+
+  const estadoProposta = {
+    etapaAtual: 'proposta',
+    agentesPropostos: [{ nome: 'Agente Novo', frente: 'Comercial', entrega: ['Resumo diário'] }],
+    outrasSolucoesPropostas: [
+      { produto: 'Gestor', planoSugerido: 'Avançado', variante: 'Nuvem', motivo: 'Multi-filial.', quantidade: 1, valorTabela: 719, valorManual: 0, pol: 'padrao', descontoPercent: 0, incluir: true },
+      { produto: 'BIME APP', planoSugerido: '', variante: null, motivo: 'Recusado pelo cliente.', quantidade: 4, valorTabela: 69.9, valorManual: 0, pol: 'sem', descontoPercent: 0, incluir: false },
+    ],
+    diagnosticoWaipe: { usuarios: 3, empresas: 1, governanca: 'nao', auditoria: 'nao', automacao: 'pronta', enterprisePorVolume: 'nao', plano: 'Time', valorMensal: 249 },
+  };
+  const descProposta = (estado) => `CSM: Gian Luca\n\nContexto de teste.\n\n${JSON.stringify(estado)}`;
+
+  const taskPropostaProjeto = () => ({
+    id: 'tProposta', name: 'Cliente Y — Proposta — 01/01/2026', list: { id: LISTA },
+    status: { status: 'pendente' }, parent: null, subtasks: [],
+    description: descProposta(estadoProposta),
+  });
+  const taskJaPromovida = () => ({
+    id: 'tPromovida', name: 'Cliente Z — Implantação Waipe', list: { id: LISTA },
+    status: { status: 'pendente' }, parent: null, subtasks: [],
+    description: descProposta({ etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: 1 }),
+  });
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'PUT' && u.endsWith('/task/tProposta')) {
+      escritas.push({ alvo: 'proposta', body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
+      escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
+      return ok({ id: 'tSubtaskNova' });
+    }
+    if (u.includes('/task/tProposta')) return ok(taskPropostaProjeto());
+    if (u.includes('/task/tPromovida')) return ok(taskJaPromovida());
+    return ok({});
+  };
+
+  const libUrl = libClickupUnica('proposta-implantacao');
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+
+  const chamarAcao = async (perfil, action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body }, r);
+    return r;
+  };
+
+  // salvar-proposta-implantacao: consulta nao pode, cliente ausente 400, gestao cria
+  const salvarConsulta = await chamarAcao(CONSULTA, 'salvar-proposta-implantacao', { cliente: 'X' });
+  checar('salvar-proposta: consulta -> 403', [salvarConsulta.code, salvarConsulta.corpo.code], [403, 'somente_leitura']);
+  const salvarSemCliente = await chamarAcao(GESTAO, 'salvar-proposta-implantacao', { cliente: '' });
+  checar('salvar-proposta: sem cliente -> 400', [salvarSemCliente.code, salvarSemCliente.corpo.code], [400, 'cliente_invalido']);
+
+  escritas.length = 0;
+  const salvarNovo = await chamarAcao(GESTAO, 'salvar-proposta-implantacao', {
+    cliente: 'Cliente Y', contexto: 'Consultoria de ontem',
+    agentesPropostos: [{ nome: 'Agente Novo', frente: 'Comercial', entrega: ['Resumo diário'] }],
+    outrasSolucoesPropostas: estadoProposta.outrasSolucoesPropostas,
+    diagnosticoWaipe: estadoProposta.diagnosticoWaipe,
+  });
+  checar('salvar-proposta: 200 cria task nova', [salvarNovo.code, salvarNovo.corpo.ok], [200, true]);
+  const criarBody = escritas.find((e) => e.alvo === 'criar')?.body;
+  checar('  etapaAtual "proposta" no estado embutido', criarBody.markdown_description.includes('"etapaAtual":"proposta"'), true);
+  checar('  agentesPropostos gravado', criarBody.markdown_description.includes('"nome":"Agente Novo"'), true);
+  checar('  outrasSolucoesPropostas gravado (produto invalido seria descartado, aqui os 2 sao validos)', criarBody.markdown_description.includes('"produto":"BIME APP"'), true);
+
+  // salvar-proposta-implantacao: taskIdExistente ATUALIZA a mesma task (nao cria outra)
+  escritas.length = 0;
+  const salvarExistente = await chamarAcao(GIAN, 'salvar-proposta-implantacao', {
+    cliente: 'Cliente Y', contexto: 'Consultoria de ontem, ajustada',
+    taskIdExistente: 'tProposta',
+    outrasSolucoesPropostas: [{ ...estadoProposta.outrasSolucoesPropostas[0], incluir: false }],
+  });
+  checar('salvar-proposta: 200 atualiza task existente', [salvarExistente.code, salvarExistente.corpo.ok, salvarExistente.corpo.id], [200, true, 'tProposta']);
+  checar('  nao cria task nova', escritas.filter((e) => e.alvo === 'criar').length, 0);
+  checar('  atualiza a task existente', escritas.some((e) => e.alvo === 'proposta'), true);
+  const salvarOutroCsm = await chamarAcao(PATRICIA, 'salvar-proposta-implantacao', { cliente: 'Cliente Y', taskIdExistente: 'tProposta' });
+  checar('salvar-proposta: csm de outra carteira -> 403', [salvarOutroCsm.code, salvarOutroCsm.corpo.code], [403, 'fora_da_carteira']);
+  const salvarJaPromovida = await chamarAcao(GIAN, 'salvar-proposta-implantacao', { cliente: 'Cliente Z', taskIdExistente: 'tPromovida' });
+  checar('salvar-proposta: ja promovida -> 409', [salvarJaPromovida.code, salvarJaPromovida.corpo.code], [409, 'ja_promovida']);
+
+  // confirmar-fechamento-implantacao: promove so os itens incluidos, avanca etapa
+  escritas.length = 0;
+  const confirmarOk = await chamarAcao(GIAN, 'confirmar-fechamento-implantacao', { id: 'tProposta' });
+  checar('confirmar-fechamento: 200', [confirmarOk.code, confirmarOk.corpo.ok], [200, true]);
+  checar('  cria 1 agente + 1 solucao incluida (BIME APP recusado fica de fora)', confirmarOk.corpo.criados, 2);
+  const criadas = escritas.filter((e) => e.alvo === 'criar').map((e) => e.body);
+  checar('  subtask do agente', criadas.some((c) => c.name === 'Agente Novo'), true);
+  checar('  subtask da solucao incluida', criadas.some((c) => c.name === 'Gestor — Avançado'), true);
+  checar('  solucao recusada NAO virou subtask', criadas.some((c) => c.name.includes('BIME APP')), false);
+  const escritaProjeto = escritas.find((e) => e.alvo === 'proposta');
+  checar('  projeto avanca pra etapa escopo', escritaProjeto.body.markdown_description.includes('"etapaAtual":"escopo"'), true);
+
+  const confirmarOutroCsm = await chamarAcao(PATRICIA, 'confirmar-fechamento-implantacao', { id: 'tProposta' });
+  checar('confirmar-fechamento: csm de outra carteira -> 403', [confirmarOutroCsm.code, confirmarOutroCsm.corpo.code], [403, 'fora_da_carteira']);
+  const confirmarJaPromovida = await chamarAcao(GIAN, 'confirmar-fechamento-implantacao', { id: 'tPromovida' });
+  checar('confirmar-fechamento: ja promovida -> 409', [confirmarJaPromovida.code, confirmarJaPromovida.corpo.code], [409, 'ja_promovida']);
+  const confirmarInvalida = await chamarAcao(GESTAO, 'confirmar-fechamento-implantacao', { id: 'zzz!!' });
+  checar('confirmar-fechamento: id invalido -> 400', [confirmarInvalida.code, confirmarInvalida.corpo.code], [400, 'task_invalida']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);

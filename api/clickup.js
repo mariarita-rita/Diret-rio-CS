@@ -12,6 +12,11 @@
 //   POST /api/clickup?action=atualizar-agente      { taskId, buildChecks?, testChecks?, ... }
 //   POST /api/clickup?action=comentar-implantacao  { taskId, texto }
 //   GET  /api/clickup?action=listar-comentarios    { taskId }
+//   POST /api/clickup?action=salvar-proposta-implantacao      cria/atualiza task
+//        na etapa "proposta" (o simulador Waipe salva o que foi proposto e o
+//        CSM reabre dias depois pra editar o que o cliente fechou)
+//   POST /api/clickup?action=confirmar-fechamento-implantacao { id } -> promove
+//        a proposta a projeto de implantacao de verdade (cria as subtasks)
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -100,12 +105,19 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-comentarios') return await listarComentariosAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'salvar-proposta-implantacao') {
+      return await salvarPropostaImplantacaoAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'confirmar-fechamento-implantacao') {
+      return await confirmarFechamentoImplantacaoAcao(req, res, sessao);
+    }
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
-      'listar-comentarios',
+      'listar-comentarios', 'salvar-proposta-implantacao',
+      'confirmar-fechamento-implantacao',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -552,7 +564,10 @@ async function logProposta(req, res, sessao) {
 // ── Projetos em Andamento (implantação Waipe) ───────────────────────────────
 
 const MAX_AGENTES = 20;
-const ETAPAS_VALIDAS = new Set(['escopo', 'alinhamento', 'construcao', 'testes', 'entrega']);
+const MAX_OUTRAS_SOLUCOES = 10;
+// "proposta" e a etapa anterior a "escopo" — projeto ainda nao promovido,
+// sem subtasks reais, so o que foi proposto guardado pra revisao do CSM.
+const ETAPAS_VALIDAS = new Set(['proposta', 'escopo', 'alinhamento', 'construcao', 'testes', 'entrega']);
 // Vocabulario de status e fixo por espaco (ver nota em _lib/clickup.js) — so
 // os 3 que fazem sentido pro fluxo de um projeto/agente ficam disponiveis aqui.
 const STATUS_IMPLANTACAO_VALIDOS = new Set(['pendente', 'in progress', 'concluído']);
@@ -661,6 +676,87 @@ function descricaoAgente(a) {
   return linhas.join('\n\n');
 }
 
+// ── Etapa "proposta" — o que foi proposto, antes do fechamento ─────────────
+// Preço aqui é informativo (definido no simulador de proposta, nunca
+// recalculado neste servidor) — mesmo príncipio de api/ia.js: nunca confiar
+// cru no corpo, mas também nunca fingir que o servidor sabe o preço certo.
+
+/** Inteiro dentro de uma faixa, ou o padrão se vier algo fora do esperado. */
+function inteiroEntre(v, min, max, padrao) {
+  const n = Math.trunc(Number(v));
+  if (!Number.isFinite(n) || n < min || n > max) return padrao;
+  return n;
+}
+
+/** Número dentro de uma faixa, ou null se vier algo fora do esperado (sem inventar padrão). */
+function numeroOuNulo(v, min, max) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < min || n > max) return null;
+  return n;
+}
+
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Outro']);
+const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
+const POL_SOLUCAO_VALIDOS = new Set(['padrao', 'limite10', 'sem']);
+const CLASSIFICACAO_SOLUCAO_VALIDAS = new Set(['produtoSimples', 'requerImplantacao']);
+const GOV_WAIPE_VALIDOS = new Set(['sim', 'nao']);
+const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
+
+/** Um agente proposto (pré-alinhamento) — só nome/frente/entrega; o resto da estrutura se preenche no Alinhamento, como já acontece hoje. */
+function sanearAgenteProposto(a) {
+  if (!a || typeof a !== 'object') return null;
+  const nome = texto(a.nome, 120);
+  if (!nome) return null;
+  return { nome, frente: texto(a.frente, 120), entrega: sanearListaTexto(a.entrega, 20, 200) };
+}
+
+/** Uma "outra solução" (Gestor/Simplaz/Unique/BIME APP/Outro) proposta pelo simulador. */
+function sanearOutraSolucao(o) {
+  if (!o || typeof o !== 'object') return null;
+  const produto = typeof o.produto === 'string' && PRODUTOS_SOLUCAO_VALIDOS.has(o.produto) ? o.produto : null;
+  if (!produto) return null;
+  return {
+    produto,
+    planoSugerido: texto(o.planoSugerido, 80),
+    variante: typeof o.variante === 'string' && VARIANTES_SOLUCAO_VALIDAS.has(o.variante) ? o.variante : null,
+    motivo: texto(o.motivo, 400),
+    quantidade: inteiroEntre(o.quantidade, 1, 500, 1),
+    valorTabela: numeroOuNulo(o.valorTabela, 0, 999999),
+    valorManual: numeroOuNulo(o.valorManual, 0, 999999) ?? 0,
+    pol: typeof o.pol === 'string' && POL_SOLUCAO_VALIDOS.has(o.pol) ? o.pol : null,
+    descontoPercent: numeroOuNulo(o.descontoPercent, 0, 100) ?? 0,
+    incluir: !!o.incluir,
+  };
+}
+
+/** Diagnóstico Waipe calculado no simulador (mesma faixa de valores de api/ia.js), mais o plano/valor já calculados — nunca recalculado aqui. */
+function sanearDiagnosticoWaipeProposto(d) {
+  if (!d || typeof d !== 'object') return null;
+  return {
+    usuarios: inteiroEntre(d.usuarios, 1, 500, 1),
+    empresas: inteiroEntre(d.empresas, 1, 500, 1),
+    governanca: typeof d.governanca === 'string' && GOV_WAIPE_VALIDOS.has(d.governanca) ? d.governanca : 'nao',
+    auditoria: typeof d.auditoria === 'string' && GOV_WAIPE_VALIDOS.has(d.auditoria) ? d.auditoria : 'nao',
+    automacao: typeof d.automacao === 'string' && AUTOMACAO_WAIPE_VALIDOS.has(d.automacao) ? d.automacao : 'pronta',
+    enterprisePorVolume: typeof d.enterprisePorVolume === 'string' && GOV_WAIPE_VALIDOS.has(d.enterprisePorVolume) ? d.enterprisePorVolume : 'nao',
+    plano: texto(d.plano, 40),
+    valorMensal: numeroOuNulo(d.valorMensal, 0, 999999),
+  };
+}
+
+/** Descrição legível de uma "outra solução" (pra quem abre a subtask direto no ClickUp). */
+function descricaoSolucao(o) {
+  const valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
+  const linhas = [
+    `**Produto:** ${o.produto}${o.planoSugerido ? ' — ' + o.planoSugerido : ''}${o.variante ? ' (' + o.variante + ')' : ''}`,
+    o.motivo ? `**Como ajuda o cliente:** ${o.motivo}` : null,
+    `**Quantidade:** ${o.quantidade}`,
+    `**Valor unitário:** R$ ${valor.toFixed(2)}`,
+    o.descontoPercent ? `**Desconto:** ${o.descontoPercent}%` : null,
+  ].filter(Boolean);
+  return linhas.join('\n\n');
+}
+
 /**
  * Resolve a task-pai (projeto) de um id que tanto pode ser o proprio projeto
  * quanto um agente (subtask) dele. `null` quando a task nao existe ou nao e
@@ -688,7 +784,11 @@ async function listarImplantacoesAcao(res, sessao) {
       etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
       csm: csmDaDescricaoImplantacao(t.description),
       ism: nomesIsm(t.assignees),
-      agentesTotal: Number.isFinite(estado.agentesTotal) ? estado.agentesTotal : 0,
+      // Antes de promovida (etapa "proposta"), ainda não existem subtasks —
+      // conta o que foi proposto pra lista não mostrar "0 itens".
+      agentesTotal: Number.isFinite(estado.agentesTotal)
+        ? estado.agentesTotal
+        : (estado.agentesPropostos?.length || 0) + (estado.outrasSolucoesPropostas?.length || 0),
       agentesConcluidos: Array.isArray(estado.concluidos) ? estado.concluidos.length : 0,
     };
   });
@@ -720,8 +820,26 @@ async function obterImplantacaoAcao(req, res, sessao) {
   const agentes = subtasks
     .map((t) => {
       const e = parseWaipeState(t.description);
+      if (e.tipo === 'solucao') {
+        return {
+          id: t.id,
+          tipo: 'solucao',
+          nome: t.name,
+          status: t.status?.status || '',
+          produto: texto(e.produto, 40),
+          planoSugerido: texto(e.planoSugerido, 80),
+          variante: VARIANTES_SOLUCAO_VALIDAS.has(e.variante) ? e.variante : null,
+          motivo: texto(e.motivo, 400),
+          quantidade: Number.isFinite(e.quantidade) ? e.quantidade : 1,
+          valorTabela: Number.isFinite(e.valorTabela) ? e.valorTabela : null,
+          valorManual: Number.isFinite(e.valorManual) ? e.valorManual : 0,
+          descontoPercent: Number.isFinite(e.descontoPercent) ? e.descontoPercent : 0,
+          classificacao: CLASSIFICACAO_SOLUCAO_VALIDAS.has(e.classificacao) ? e.classificacao : null,
+        };
+      }
       return {
         id: t.id,
+        tipo: 'agente',
         nome: t.name,
         status: t.status?.status || '',
         dueDate: t.due_date || null,
@@ -751,6 +869,16 @@ async function obterImplantacaoAcao(req, res, sessao) {
       prioridade: sanearListaIds(estadoProjeto.prioridade),
       agenteAtualId: typeof estadoProjeto.agenteAtualId === 'string' ? estadoProjeto.agenteAtualId : null,
       concluidos: sanearListaIds(estadoProjeto.concluidos),
+      // Só relevante enquanto etapaAtual === "proposta" (ou como histórico do
+      // que foi proposto, depois de promovido) — arrays vazios/null nos
+      // demais casos.
+      agentesPropostos: Array.isArray(estadoProjeto.agentesPropostos)
+        ? estadoProjeto.agentesPropostos.map(sanearAgenteProposto).filter(Boolean)
+        : [],
+      outrasSolucoesPropostas: Array.isArray(estadoProjeto.outrasSolucoesPropostas)
+        ? estadoProjeto.outrasSolucoesPropostas.map(sanearOutraSolucao).filter(Boolean)
+        : [],
+      diagnosticoWaipe: sanearDiagnosticoWaipeProposto(estadoProjeto.diagnosticoWaipe) || null,
     },
     agentes,
   });
@@ -804,6 +932,7 @@ async function criarImplantacaoAcao(req, res, sessao) {
 
   for (const a of agentes) {
     const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a.estrutura), {
+      tipo: 'agente',
       estrutura: a.estrutura,
       buildChecks: {},
       testChecks: {},
@@ -901,15 +1030,27 @@ async function atualizarAgenteAcao(req, res, sessao) {
   }
 
   const estadoAtual = parseWaipeState(tarefa.description);
-  const novoEstado = {
-    estrutura: sanearAgente(corpo.estrutura) || estadoAtual.estrutura || {},
-    buildChecks: sanearChecks(corpo.buildChecks) ?? (estadoAtual.buildChecks || {}),
-    testChecks: sanearChecks(corpo.testChecks) ?? (estadoAtual.testChecks || {}),
-    entregaChecks: sanearChecks(corpo.entregaChecks) ?? (estadoAtual.entregaChecks || {}),
-    prereqChecks: sanearChecks(corpo.prereqChecks) ?? (estadoAtual.prereqChecks || {}),
-    diagnostico: sanearDiagnostico(corpo.diagnostico) ?? (estadoAtual.diagnostico || {}),
-    validacao: sanearValidacao(corpo.validacao) ?? (estadoAtual.validacao || { status: 'pendente', motivo: '' }),
-  };
+  // Subtask tipo "solucao" (Gestor/Simplaz/Unique/BIME APP fechado) não tem
+  // estrutura de agente — só a classificação (produto simples x requer
+  // implantação) é editável aqui; o resto do estado (produto/plano/valor)
+  // é preservado como veio da promoção da proposta.
+  const novoEstado = estadoAtual.tipo === 'solucao'
+    ? {
+        ...estadoAtual,
+        classificacao: typeof corpo.classificacao === 'string' && CLASSIFICACAO_SOLUCAO_VALIDAS.has(corpo.classificacao)
+          ? corpo.classificacao
+          : (CLASSIFICACAO_SOLUCAO_VALIDAS.has(estadoAtual.classificacao) ? estadoAtual.classificacao : null),
+      }
+    : {
+        tipo: 'agente',
+        estrutura: sanearAgente(corpo.estrutura) || estadoAtual.estrutura || {},
+        buildChecks: sanearChecks(corpo.buildChecks) ?? (estadoAtual.buildChecks || {}),
+        testChecks: sanearChecks(corpo.testChecks) ?? (estadoAtual.testChecks || {}),
+        entregaChecks: sanearChecks(corpo.entregaChecks) ?? (estadoAtual.entregaChecks || {}),
+        prereqChecks: sanearChecks(corpo.prereqChecks) ?? (estadoAtual.prereqChecks || {}),
+        diagnostico: sanearDiagnostico(corpo.diagnostico) ?? (estadoAtual.diagnostico || {}),
+        validacao: sanearValidacao(corpo.validacao) ?? (estadoAtual.validacao || { status: 'pendente', motivo: '' }),
+      };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
   if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
@@ -926,6 +1067,200 @@ async function atualizarAgenteAcao(req, res, sessao) {
 
   await atualizarTask(corpo.taskId, payload);
   return res.status(200).json({ ok: true });
+}
+
+function dataRotuloHoje() {
+  return new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+/**
+ * POST ?action=salvar-proposta-implantacao — cria (ou atualiza, com
+ * `taskIdExistente`) uma task na etapa "proposta" em LISTA_IMPLANTACOES_WAIPE.
+ * Diferente de log-proposta (auditoria, uma task nova a cada clique, sem
+ * estado reaproveitável), esta task guarda o estado completo do que foi
+ * proposto pra o CSM reabrir dias depois — quando o cliente responder — e
+ * editar o que realmente foi fechado, antes de confirmar-fechamento-implantacao.
+ */
+async function salvarPropostaImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const cliente = texto(corpo.cliente, 120);
+  if (!cliente) {
+    return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
+  }
+  const contexto = texto(corpo.contexto, 6000);
+
+  const agentesPropostos = Array.isArray(corpo.agentesPropostos)
+    ? corpo.agentesPropostos.slice(0, MAX_AGENTES).map(sanearAgenteProposto).filter(Boolean)
+    : [];
+  const outrasSolucoesPropostas = Array.isArray(corpo.outrasSolucoesPropostas)
+    ? corpo.outrasSolucoesPropostas.slice(0, MAX_OUTRAS_SOLUCOES).map(sanearOutraSolucao).filter(Boolean)
+    : [];
+  const diagnosticoWaipe = sanearDiagnosticoWaipeProposto(corpo.diagnosticoWaipe);
+
+  const novoEstado = { etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe };
+  const nomeTask = `${cliente} — Proposta — ${dataRotuloHoje()}`;
+
+  if (corpo.taskIdExistente) {
+    if (!taskIdValido(corpo.taskIdExistente)) {
+      return erro(res, 400, 'task_invalida', 'taskIdExistente inválido.');
+    }
+    const resolvido = await resolverImplantacao(corpo.taskIdExistente);
+    if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Proposta não encontrada.');
+    const { tarefa, projeto } = resolvido;
+    if (tarefa.id !== projeto.id) {
+      return erro(res, 400, 'task_invalida', 'taskIdExistente deve ser o projeto, não uma subtask.');
+    }
+    const csm = csmDaDescricaoImplantacao(projeto.description);
+    if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+      return erro(res, 403, 'fora_da_carteira', 'Esta proposta não está na sua carteira.');
+    }
+    const estadoAtual = parseWaipeState(tarefa.description);
+    if (estadoAtual.etapaAtual && estadoAtual.etapaAtual !== 'proposta') {
+      return erro(res, 409, 'ja_promovida', 'Esta proposta já virou um projeto de implantação.');
+    }
+    await atualizarTask(corpo.taskIdExistente, {
+      name: nomeTask,
+      markdown_description: stringifyWaipeState(
+        [`**CSM:** ${csm || texto(sessao.nome, 120) || sessao.csm || sessao.nivel}`, contexto].filter(Boolean).join('\n\n'),
+        novoEstado
+      ),
+    });
+    return res.status(200).json({ ok: true, id: corpo.taskIdExistente });
+  }
+
+  const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
+  const projeto = await criarTaskImplantacao({
+    name: nomeTask,
+    markdown_description: stringifyWaipeState(
+      [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
+      novoEstado
+    ),
+  });
+  return res.status(200).json({ ok: true, id: projeto.id });
+}
+
+/**
+ * POST ?action=confirmar-fechamento-implantacao — promove uma proposta
+ * (etapa "proposta") a projeto de implantação de verdade: cria uma subtask
+ * real por agente/solução marcados como incluídos (já editado pelo CSM pra
+ * refletir o que o cliente realmente fechou) e avança a etapa pra "escopo".
+ */
+async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Proposta não encontrada.');
+  const { tarefa, projeto } = resolvido;
+  if (tarefa.id !== projeto.id) {
+    return erro(res, 400, 'task_invalida', 'Confirme o fechamento a partir da task do projeto, não de uma subtask.');
+  }
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Esta proposta não está na sua carteira.');
+  }
+
+  const estadoAtual = parseWaipeState(tarefa.description);
+  if (estadoAtual.etapaAtual !== 'proposta') {
+    return erro(res, 409, 'ja_promovida', 'Esta proposta já foi confirmada.');
+  }
+
+  const agentesPropostos = Array.isArray(estadoAtual.agentesPropostos)
+    ? estadoAtual.agentesPropostos.map(sanearAgenteProposto).filter(Boolean)
+    : [];
+  const outrasSolucoesPropostas = Array.isArray(estadoAtual.outrasSolucoesPropostas)
+    ? estadoAtual.outrasSolucoesPropostas.map(sanearOutraSolucao).filter((o) => o && o.incluir)
+    : [];
+
+  if (!agentesPropostos.length && !outrasSolucoesPropostas.length) {
+    return erro(res, 400, 'nada_para_promover', 'Marque ao menos um agente ou solução antes de confirmar.');
+  }
+
+  for (const a of agentesPropostos) {
+    const estrutura = {
+      nome: a.nome, frente: a.frente, frequencia: '', canal: '', publico: '',
+      entrega: a.entrega, sistemas: [], prereq: [],
+    };
+    await criarSubtaskAgente(projeto.id, {
+      name: a.nome,
+      markdown_description: stringifyWaipeState(descricaoAgente(estrutura), {
+        tipo: 'agente',
+        estrutura,
+        buildChecks: {},
+        testChecks: {},
+        entregaChecks: {},
+        prereqChecks: {},
+        diagnostico: {},
+        validacao: { status: 'pendente', motivo: '' },
+      }),
+    });
+  }
+
+  for (const o of outrasSolucoesPropostas) {
+    await criarSubtaskAgente(projeto.id, {
+      name: o.produto + (o.planoSugerido ? ` — ${o.planoSugerido}` : ''),
+      markdown_description: stringifyWaipeState(descricaoSolucao(o), {
+        tipo: 'solucao',
+        produto: o.produto,
+        planoSugerido: o.planoSugerido,
+        variante: o.variante,
+        motivo: o.motivo,
+        quantidade: o.quantidade,
+        valorTabela: o.valorTabela,
+        valorManual: o.valorManual,
+        descontoPercent: o.descontoPercent,
+        classificacao: null,
+      }),
+    });
+  }
+
+  const novoEstadoProjeto = {
+    etapaAtual: 'escopo',
+    prioridade: [],
+    agenteAtualId: null,
+    concluidos: [],
+    agentesTotal: agentesPropostos.length + outrasSolucoesPropostas.length,
+    // Histórico do que foi proposto — não usado pelo pipeline a partir daqui.
+    agentesPropostos: estadoAtual.agentesPropostos || [],
+    outrasSolucoesPropostas: estadoAtual.outrasSolucoesPropostas || [],
+    diagnosticoWaipe: estadoAtual.diagnosticoWaipe || null,
+  };
+  await atualizarTask(projeto.id, {
+    markdown_description: stringifyWaipeState(tarefa.description, novoEstadoProjeto),
+  });
+
+  return res.status(200).json({
+    ok: true,
+    id: projeto.id,
+    criados: agentesPropostos.length + outrasSolucoesPropostas.length,
+  });
 }
 
 async function listarComentariosAcao(req, res, sessao) {

@@ -998,6 +998,24 @@
           </button>
         </div>
 
+        <div class="divider"></div>
+
+        <div id="implantacaoWrap">
+          <div class="sub" style="margin-bottom:10px;">Salve a proposta enviada pra reabrir depois — quando o cliente responder, ajuste o que foi fechado aqui mesmo e gere o projeto de implantação.</div>
+          <div id="propostaStatus" style="font-size:13px; color:var(--muted); margin-bottom:10px;">Nenhuma proposta salva nesta simulação ainda.</div>
+          <div class="prop-actions">
+            <button type="button" class="btn-secondary" id="btnSalvarProposta">💾 Salvar proposta enviada</button>
+            <button type="button" class="btn-secondary" id="btnCarregarProposta">📂 Carregar proposta salva</button>
+            <button type="button" class="btn-primary" id="btnConfirmarFechamento" style="margin-top:0" disabled>✅ Confirmar fechamento e criar projeto de implantação</button>
+          </div>
+          <div id="carregarPropostaWrap" style="display:none; margin-top:10px;">
+            <label>Propostas aguardando fechamento</label>
+            <select id="selCarregarProposta" class="sel" style="width:100%; margin-top:4px;"></select>
+            <button type="button" class="btn-secondary" id="btnUsarPropostaSelecionada" style="margin-top:8px;">Usar esta proposta →</button>
+          </div>
+          <div id="implantacaoErro" style="display:none; color:var(--danger, #B91C1C); font-size:13px; margin-top:8px;"></div>
+        </div>
+
         <div class="prop-note">
           O modelo sai com plano, preço e fichas de agente já preenchidos, no layout que vocês usam hoje — revise números, ajuste o tom e confirme os agentes com o cliente antes de enviar. Os cargos dos agentes são denominações comerciais; o desenho final de cada um é definido na implantação.<br><br>
           <strong>Prefira enviar o .html:</strong> abre com um duplo-clique em qualquer navegador (o cliente não precisa de PDF), e o layout sai idêntico ao da pré-visualização, sem os cortes de página que a impressão em PDF pode gerar. Se o e-mail do cliente costuma bloquear anexo .html, use "Copiar HTML" para colar o conteúdo em outro lugar (ex: um link hospedado), em vez de anexar o arquivo.
@@ -2369,6 +2387,7 @@
       recomendacoesState: recomendacoesState,
       additionalItems: extraState.additionalItems,
       lastDiagnostic: lastDiagnostic,
+      propostaSalvaId: propostaSalvaId,
     };
   }
 
@@ -2418,6 +2437,7 @@
     if (Array.isArray(d.additionalItems)) extraState.additionalItems = d.additionalItems;
     if (d.lastDiagnostic) lastDiagnostic = d.lastDiagnostic;
     if (Array.isArray(d.recomendacoesState)) recomendacoesState = d.recomendacoesState;
+    if (d.propostaSalvaId) propostaSalvaId = d.propostaSalvaId;
 
     updatePacoteHint();
     renderAgentCatalog();
@@ -2442,7 +2462,162 @@
     window.location.reload();
   });
 
+  // ---------- Ponte proposta → fechamento → implantação ----------
+  var propostaSalvaId = null;
+
+  function montarAgentesPropostos(){
+    return getProposalContext().agents.map(function(a){
+      return { nome: a.nome, frente: a.area || "", entrega: a.entrega ? [a.entrega] : [] };
+    });
+  }
+
+  function atualizarStatusProposta(){
+    var statusEl = document.getElementById("propostaStatus");
+    var btnConfirmar = document.getElementById("btnConfirmarFechamento");
+    if (propostaSalvaId){
+      statusEl.textContent = "Proposta salva — edite acima o que foi fechado e confirme quando o cliente responder.";
+      btnConfirmar.disabled = false;
+    } else {
+      statusEl.textContent = "Nenhuma proposta salva nesta simulação ainda.";
+      btnConfirmar.disabled = true;
+    }
+  }
+
+  function mostrarErroImplantacao(msg){
+    var el = document.getElementById("implantacaoErro");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function limparErroImplantacao(){
+    document.getElementById("implantacaoErro").style.display = "none";
+  }
+
+  document.getElementById("btnSalvarProposta").addEventListener("click", function(){
+    limparErroImplantacao();
+    var ctx = getProposalContext();
+    if (!ctx.cliente || ctx.cliente === "Cliente"){
+      mostrarErroImplantacao("Preencha o nome do cliente antes de salvar a proposta.");
+      return;
+    }
+    var btn = this;
+    btn.disabled = true;
+    var payload = {
+      cliente: ctx.cliente,
+      contexto: [ctx.segmento, ctx.dores].filter(Boolean).join("\n\n"),
+      agentesPropostos: montarAgentesPropostos(),
+      outrasSolucoesPropostas: recomendacoesState,
+      diagnosticoWaipe: lastDiagnostic ? {
+        usuarios: lastDiagnostic.input.usuarios,
+        empresas: lastDiagnostic.input.empresas,
+        governanca: lastDiagnostic.input.governanca,
+        auditoria: lastDiagnostic.input.auditoria,
+        automacao: lastDiagnostic.input.automacao,
+        enterprisePorVolume: lastDiagnostic.input.enterprisePorVolume,
+        plano: lastDiagnostic.rec.plan,
+        valorMensal: computePricing().total
+      } : null
+    };
+    if (propostaSalvaId) payload.taskIdExistente = propostaSalvaId;
+
+    fetch("/api/clickup?action=salvar-proposta-implantacao", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); })
+      .then(function(resultado){
+        propostaSalvaId = resultado.id;
+        atualizarStatusProposta();
+        salvarRascunho();
+        showToast('Proposta salva — encontrável em "Projetos em Andamento" como Aguardando Fechamento.');
+      }).catch(function(e){
+        mostrarErroImplantacao((e && e.error) || "Não foi possível salvar a proposta agora.");
+      }).finally(function(){
+        btn.disabled = false;
+      });
+  });
+
+  document.getElementById("btnCarregarProposta").addEventListener("click", function(){
+    limparErroImplantacao();
+    var wrap = document.getElementById("carregarPropostaWrap");
+    var sel = document.getElementById("selCarregarProposta");
+    sel.innerHTML = '<option value="">Carregando…</option>';
+    wrap.style.display = "block";
+    fetch("/api/clickup?action=listar-implantacoes")
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); })
+      .then(function(resultado){
+        var propostas = (resultado.tasks || []).filter(function(t){ return t.etapaAtual === "proposta"; });
+        if (!propostas.length){
+          sel.innerHTML = '<option value="">Nenhuma proposta aguardando fechamento</option>';
+          return;
+        }
+        sel.innerHTML = propostas.map(function(p){
+          return '<option value="' + p.id + '">' + escapeHtml(p.cliente) + '</option>';
+        }).join("");
+      }).catch(function(){
+        sel.innerHTML = '<option value="">Não foi possível carregar a lista</option>';
+      });
+  });
+
+  document.getElementById("btnUsarPropostaSelecionada").addEventListener("click", function(){
+    limparErroImplantacao();
+    var id = document.getElementById("selCarregarProposta").value;
+    if (!id) return;
+    var btn = this;
+    btn.disabled = true;
+    fetch("/api/clickup?action=obter-implantacao&id=" + encodeURIComponent(id))
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); })
+      .then(function(resultado){
+        var projeto = resultado.projeto;
+        propostaSalvaId = projeto.id;
+        document.getElementById("p-cliente").value = projeto.cliente || "";
+        if (projeto.diagnosticoWaipe) aplicarWaipeDiagnostico(projeto.diagnosticoWaipe);
+        recomendacoesState = (projeto.outrasSolucoesPropostas || []).map(function(o){
+          return {
+            produto: o.produto, planoSugerido: o.planoSugerido, motivo: o.motivo, atencao: "",
+            incluir: o.incluir, origem: "manual", variante: o.variante,
+            porUsuario: o.produto === "BIME APP", quantidade: o.quantidade,
+            valorTabela: o.valorTabela, valorManual: o.valorManual, pol: o.pol, descontoPercent: o.descontoPercent
+          };
+        });
+        renderRecomendacoes();
+        (projeto.agentesPropostos || []).forEach(function(a){
+          var achou = allAgentsList().filter(function(x){ return normalize(x.nome) === normalize(a.nome); })[0];
+          if (achou) selectedAgentIds[achou.id] = true;
+        });
+        renderAgentCatalog();
+        atualizarStatusProposta();
+        salvarRascunho();
+        document.getElementById("carregarPropostaWrap").style.display = "none";
+        showToast("Proposta carregada — revise o que o cliente fechou e confirme.");
+      }).catch(function(e){
+        mostrarErroImplantacao((e && e.error) || "Não foi possível carregar esta proposta.");
+      }).finally(function(){
+        btn.disabled = false;
+      });
+  });
+
+  document.getElementById("btnConfirmarFechamento").addEventListener("click", function(){
+    limparErroImplantacao();
+    if (!propostaSalvaId) return;
+    if (!window.confirm("Confirmar o fechamento e criar o projeto de implantação com os itens marcados como incluídos?")) return;
+    var btn = this;
+    btn.disabled = true;
+    fetch("/api/clickup?action=confirmar-fechamento-implantacao", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: propostaSalvaId })
+    }).then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); })
+      .then(function(resultado){
+        showToast('Projeto de implantação criado com ' + resultado.criados + ' item(ns) — abra em "Projetos em Andamento".');
+        document.getElementById("propostaStatus").textContent = "Fechamento confirmado — projeto de implantação criado.";
+      }).catch(function(e){
+        mostrarErroImplantacao((e && e.error) || "Não foi possível confirmar o fechamento agora.");
+        btn.disabled = false;
+      });
+  });
+
   restaurarRascunho();
+  atualizarStatusProposta();
 
   // ---------- Proposal HTML builder ----------
   function escapeHtml(s){

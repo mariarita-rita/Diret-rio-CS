@@ -660,8 +660,12 @@
     { id:"testes", label:"Testes", icone:"✅" },
     { id:"entrega", label:"Entrega", icone:"🚀" }
   ];
-  var ETAPA_LABEL = {};
-  ETAPAS.forEach(function(e){ ETAPA_LABEL[e.id] = e.label; });
+  // "proposta" fica fora de ETAPAS de propósito — não é um passo do stepper de
+  // construção (esse pipeline só existe depois que o projeto é promovido), só
+  // precisa de rótulo/ícone pra lista de projetos e pra tela de detalhe.
+  var ETAPA_LABEL = { proposta: "Aguardando Fechamento" };
+  var ETAPA_ICONE = { proposta: "📨" };
+  ETAPAS.forEach(function(e){ ETAPA_LABEL[e.id] = e.label; ETAPA_ICONE[e.id] = e.icone; });
   var STATUS_LABEL = { "pendente": "A iniciar", "in progress": "Em andamento", "concluído": "Concluído" };
 
   // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
@@ -702,6 +706,18 @@
     if (!dadosProjeto) return null;
     for (var i = 0; i < dadosProjeto.agentes.length; i++) if (dadosProjeto.agentes[i].id === id) return dadosProjeto.agentes[i];
     return null;
+  }
+
+  // Subtasks tipo "solucao" (Gestor/Simplaz/Unique/BIME APP fechado) vivem na
+  // mesma lista de subtasks, mas não entram no pipeline de agente Waipe
+  // (escopo→alinhamento→construção→testes→entrega não se aplica a elas).
+  function agentesReais(){
+    if (!dadosProjeto) return [];
+    return dadosProjeto.agentes.filter(function(a){ return a.tipo !== "solucao"; });
+  }
+  function solucoesFechadas(){
+    if (!dadosProjeto) return [];
+    return dadosProjeto.agentes.filter(function(a){ return a.tipo === "solucao"; });
   }
 
   function mensagemErro(e){
@@ -948,7 +964,7 @@
   function renderBacklogStrip(){
     var el = document.getElementById("backlogStrip");
     if (!el || !dadosProjeto) return;
-    el.innerHTML = dadosProjeto.agentes.map(function(a){
+    el.innerHTML = agentesReais().map(function(a){
       var cls = "backlog-chip";
       var rotulo = "pendente";
       if (sim.concluidos.indexOf(a.id) !== -1){ cls += " done"; rotulo = "entregue"; }
@@ -1026,25 +1042,77 @@
     '</div>';
   }
 
+  function fmtBRLSim(v){
+    return "R$" + (Number(v) || 0).toFixed(2).replace(".", ",");
+  }
+
+  // "Tipo de atividade" reflete a mesma distinção binária já documentada nos
+  // processos do time (produto simples -> atividade da Assistente no Moskit;
+  // migração/configuração -> Projeto de Implantação para o ISM) — sem
+  // inventar um checklist detalhado por produto, que ainda não existe.
+  function textoChecklistSolucao(classificacao){
+    if (classificacao === "produtoSimples") return "Solicitar troca de plano/inclusão de produto simples no Moskit (Assistente).";
+    if (classificacao === "requerImplantacao") return "Criar Projeto de Implantação no Moskit para o ISM realizar a implantação.";
+    return "";
+  }
+
+  function cardSolucaoFechada(o){
+    var valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
+    var checklistTexto = textoChecklistSolucao(o.classificacao);
+    return '<div class="card" data-solucao-card="' + esc(o.id) + '">' +
+      '<h2>' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + (o.variante ? " (" + esc(o.variante) + ")" : "") + '</h2>' +
+      (o.motivo ? '<div class="sub">' + esc(o.motivo) + '</div>' : "") +
+      '<div class="sp-k" style="margin-top:8px">Valor</div><div class="sp-v">' + fmtBRLSim(valor) + (o.quantidade > 1 ? " × " + o.quantidade : "") + '/mês</div>' +
+      '<div class="sp-k" style="margin-top:10px">Tipo de atividade</div>' +
+      '<div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap;">' +
+        '<button type="button" class="' + (o.classificacao === "produtoSimples" ? "btn-flow" : "btn-flow-secondary") + '" data-classificar="' + esc(o.id) + '" data-valor="produtoSimples">Produto simples (Assistente)</button>' +
+        '<button type="button" class="' + (o.classificacao === "requerImplantacao" ? "btn-flow" : "btn-flow-secondary") + '" data-classificar="' + esc(o.id) + '" data-valor="requerImplantacao">Requer implantação (ISM)</button>' +
+      '</div>' +
+      (checklistTexto ? '<div class="build-check" style="margin-top:10px"><span>' + esc(checklistTexto) + '</span></div>' : "") +
+    '</div>';
+  }
+
   function renderEscopo(){
     var p = dadosProjeto.projeto;
-    var agentes = dadosProjeto.agentes;
+    var agentes = agentesReais();
+    var solucoes = solucoesFechadas();
     var html = '<div class="card">' +
       '<h2>' + esc(p.cliente) + '</h2><div class="sub">CSM: ' + esc(p.csm || "—") + '</div>' +
       '<div class="sp-k" style="margin-top:8px">Contexto do projeto</div>' +
       '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
       '<div id="ismProjetoWrap"></div>' +
     '</div>' +
-    '<div id="comentariosProjetoWrap"></div>' +
-    '<div class="card">' +
-      '<h2>Painel de agentes — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</h2><div class="sub">Status de cada agente do backlog. Nenhum agente é removido daqui — só muda o rótulo.</div>' +
-      '<div class="agent-pick-grid">' + agentes.map(statusCardAgente).join("") + '</div>' +
-    '</div>' +
-    '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento">Ir para o Alinhamento →</button></div>';
+    '<div id="comentariosProjetoWrap"></div>';
+    if (solucoes.length){
+      html += '<div class="card">' +
+        '<h2>Outras soluções fechadas — ' + solucoes.length + '</h2>' +
+        '<div class="sub">Gestor/Simplaz/Unique/BIME APP que o cliente fechou junto — marque o tipo de atividade pra saber quem executa.</div>' +
+        solucoes.map(cardSolucaoFechada).join("") +
+      '</div>';
+    }
+    if (agentes.length){
+      html += '<div class="card">' +
+        '<h2>Painel de agentes — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</h2><div class="sub">Status de cada agente do backlog. Nenhum agente é removido daqui — só muda o rótulo.</div>' +
+        '<div class="agent-pick-grid">' + agentes.map(statusCardAgente).join("") + '</div>' +
+      '</div>' +
+      '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento">Ir para o Alinhamento →</button></div>';
+    }
     document.getElementById("stepContent").innerHTML = html;
     renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
     renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
-    document.getElementById("btnIrAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
+    document.querySelectorAll("[data-classificar]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-classificar");
+        var classificacao = btn.getAttribute("data-valor");
+        var o = agentePorId(id);
+        if (o) o.classificacao = classificacao;
+        apiPost("atualizar-agente", { taskId: id, classificacao: classificacao })
+          .then(function(){ renderEscopo(); })
+          .catch(function(){ showSimToast("Não deu para salvar o tipo de atividade."); });
+      });
+    });
+    var btnIrAlinhamento = document.getElementById("btnIrAlinhamento");
+    if (btnIrAlinhamento) btnIrAlinhamento.addEventListener("click", function(){ irParaEtapa("alinhamento"); });
   }
 
   function cardAlinhamentoAgente(a){
@@ -1152,12 +1220,12 @@
   }
 
   function renderAlinhamento(){
-    var candidatos = dadosProjeto.agentes.filter(function(a){
+    var candidatos = agentesReais().filter(function(a){
       var st = (a.validacao || {}).status || "pendente";
       return st === "pendente" || st === "adiado";
     });
-    var validados = dadosProjeto.agentes.filter(function(a){ return (a.validacao || {}).status === "validado"; });
-    var cancelados = dadosProjeto.agentes.filter(function(a){ return (a.validacao || {}).status === "cancelado"; });
+    var validados = agentesReais().filter(function(a){ return (a.validacao || {}).status === "validado"; });
+    var cancelados = agentesReais().filter(function(a){ return (a.validacao || {}).status === "cancelado"; });
 
     var html = '<div class="callout"><div class="dot"></div><div>Nesta reunião, revise a estrutura de cada agente com o cliente — pode editar horário, canal, público etc. Responda o que se aplicar e marque <b>Validado</b>, <b>Adiar</b> ou <b>Cancelar</b>.</div></div>';
 
@@ -1314,7 +1382,7 @@
     // Toda a prioridade validada já foi entregue: nao ha mais "agente atual" —
     // quem prioriza o proximo e o Alinhamento (botao Validado), nao um grid aqui.
     if (!sim.agenteAtual){
-      var pendentes = dadosProjeto.agentes.filter(function(ag){
+      var pendentes = agentesReais().filter(function(ag){
         var st = (ag.validacao || {}).status || "pendente";
         return st === "pendente" || st === "adiado";
       });
@@ -1371,6 +1439,7 @@
 
   function renderSimulador(){
     if (!dadosProjeto) return;
+    if (sim.etapa === "proposta"){ renderAguardandoFechamento(); return; }
     renderBacklogStrip();
     renderStepper();
     if (sim.etapa === "escopo") renderEscopo();
@@ -1378,6 +1447,35 @@
     else if (sim.etapa === "construcao") renderConstrucao();
     else if (sim.etapa === "testes") renderTestes();
     else if (sim.etapa === "entrega") renderEntrega();
+  }
+
+  // Etapa anterior ao pipeline de construção — projeto ainda não promovido
+  // (nenhuma subtask real existe ainda). A edição de "o que foi fechado"
+  // acontece no simulador de proposta, não aqui — só mostramos um resumo.
+  function renderAguardandoFechamento(){
+    document.getElementById("backlogStrip").innerHTML = "";
+    document.getElementById("stepper").innerHTML = "";
+    var p = dadosProjeto.projeto;
+    var agentes = p.agentesPropostos || [];
+    var solucoes = p.outrasSolucoesPropostas || [];
+    var html = '<div class="callout"><div class="dot"></div><div>📨 <b>Proposta enviada, aguardando o cliente fechar.</b> Quando ele responder, edite o que foi fechado no simulador de proposta ("Arquitetura de Solução" → aba "Gerar Proposta") e confirme o fechamento por lá — isso cria o projeto de implantação de verdade aqui, com uma subtask por agente/solução.</div></div>' +
+      '<div class="card"><h2>' + esc(p.cliente) + '</h2><div class="sub">CSM: ' + esc(p.csm || "—") + '</div>';
+    if (agentes.length){
+      html += '<div class="sp-k" style="margin-top:10px">Agentes Waipe propostos (' + agentes.length + ')</div><ul>' +
+        agentes.map(function(a){ return '<li>' + esc(a.nome) + (a.frente ? " — " + esc(a.frente) : "") + '</li>'; }).join("") + '</ul>';
+    }
+    if (solucoes.length){
+      html += '<div class="sp-k" style="margin-top:10px">Outras soluções propostas (' + solucoes.length + ')</div><ul>' +
+        solucoes.map(function(o){
+          var rotulo = esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "");
+          return '<li>' + rotulo + (o.incluir ? "" : ' <em style="color:var(--muted)">(desmarcado — não incluído no fechamento por enquanto)</em>') + '</li>';
+        }).join("") + '</ul>';
+    }
+    if (!agentes.length && !solucoes.length){
+      html += '<div class="sub" style="margin-top:10px">Nada foi registrado nesta proposta ainda.</div>';
+    }
+    html += '</div>';
+    document.getElementById("stepContent").innerHTML = html;
   }
 
   // ==================== ASSISTENTE DE NOVO PROJETO (extração por IA) ====================
