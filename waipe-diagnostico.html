@@ -1950,6 +1950,14 @@
 
   var recomendacoesState = [];
 
+  var PLANOS_POR_PRODUTO = {
+    "Gestor": ["Básico", "Intermediário", "Avançado"],
+    "Simplaz Gestor": ["Bronze", "Prata", "Ouro"],
+    "Simplaz Unique": ["Bronze", "Prata", "Ouro"],
+    "Unique": ["Light", "Plus", "Premium", "Empresarial"],
+  };
+  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Outro"];
+
   function novoItemRecomendacao(r){
     var variante = r.produto === "Gestor" ? "Nuvem" : null;
     var match = precoEcossistema(r.produto, r.planoSugerido, variante);
@@ -1959,6 +1967,7 @@
       motivo: r.motivo || "",
       atencao: r.atencao || "",
       incluir: true,
+      origem: "ia",
       variante: variante,
       porUsuario: match ? !!match.porUsuario : false,
       quantidade: r.quantidadeSugerida || 1,
@@ -1967,6 +1976,35 @@
       pol: match ? match.pol : null,
       descontoPercent: 0,
     };
+  }
+
+  /** Linha em branco pro CSM montar manualmente — mesmo pipeline de preço/proposta das sugestões da IA. */
+  function novoItemManual(){
+    return {
+      produto: "Gestor",
+      planoSugerido: "",
+      motivo: "",
+      atencao: "",
+      incluir: true,
+      origem: "manual",
+      variante: "Nuvem",
+      porUsuario: false,
+      quantidade: 1,
+      valorTabela: null,
+      valorManual: 0,
+      pol: null,
+      descontoPercent: 0,
+    };
+  }
+
+  /** Reaplica o lookup de preço depois de trocar produto, plano ou ambiente. */
+  function recalcularPrecoItem(item){
+    if (item.produto !== "Gestor") item.variante = null;
+    else if (!item.variante) item.variante = "Nuvem";
+    var match = precoEcossistema(item.produto, item.planoSugerido, item.variante);
+    item.valorTabela = match ? match.valor : null;
+    item.pol = match ? match.pol : null;
+    item.porUsuario = match ? !!match.porUsuario : false;
   }
 
   function valorUnitItem(item){
@@ -1996,57 +2034,116 @@
 
   function renderAnaliseIa(resultado){
     var recs = resultado.recomendacoes || [];
-    recomendacoesState = recs.map(novoItemRecomendacao);
+    var manuais = recomendacoesState.filter(function(item){ return item.origem === "manual"; });
+    recomendacoesState = recs.map(novoItemRecomendacao).concat(manuais);
     renderRecomendacoes();
   }
 
   function renderRecomendacoes(){
     var wrap = document.getElementById("analiseIaResultado");
-    if (!recomendacoesState.length){ wrap.style.display = "none"; wrap.innerHTML = ""; refreshPropSummary(); return; }
     wrap.style.display = "block";
-    wrap.innerHTML = '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b><br>' +
-      '<span style="font-weight:400; font-size:12.5px;">Já entram na proposta com o valor de tabela calculado — revise quantidade e desconto antes de gerar.</span></div></div>' +
-      recomendacoesState.map(function(item, i){
-        var calc = subtotalItem(item);
-        var aviso = item.atencao
-          ? '<div style="margin-top:6px; color:#B45309;"><b>⚠ ' + escapeHtml(item.atencao) + '</b></div>'
-          : "";
-        var campo = function(rotulo, inner){
-          return '<label style="display:block; font-size:11px; color:var(--muted); margin-bottom:3px;">' + rotulo + inner + '</label>';
-        };
-        var varianteHtml = item.produto === "Gestor"
-          ? campo("Ambiente", '<select data-rec-variante="' + i + '" class="sel" style="display:block; margin-top:2px;">' +
-              '<option value="Nuvem"' + (item.variante === "Nuvem" ? " selected" : "") + '>Nuvem</option>' +
-              '<option value="Local"' + (item.variante === "Local" ? " selected" : "") + '>Local</option>' +
-            '</select>')
-          : "";
-        var qtdHtml = item.porUsuario
-          ? campo("Usuários", '<input type="number" min="1" step="1" class="num-input tabular" data-rec-qtd="' + i + '" value="' + item.quantidade + '" style="display:block; margin-top:2px; width:80px;">')
-          : "";
-        var valorHtml = item.valorTabela != null
-          ? '<div><span style="font-size:11px; color:var(--muted); display:block;">Valor de tabela</span>' + fmtBRL(item.valorTabela) + (item.porUsuario ? "/usuário" : "/mês") + '</div>'
-          : campo("Valor de tabela (não encontrado — informe)", '<input type="number" min="0" step="0.01" class="num-input tabular" data-rec-valor="' + i + '" placeholder="0,00" value="' + (item.valorManual || "") + '" style="display:block; margin-top:2px; width:110px;">');
-        var descontoHtml = item.pol === "sem"
-          ? '<div style="font-size:12px; color:var(--muted); max-width:160px;">' + alcadaHint(item.pol) + '</div>'
-          : campo("Desconto %", '<input type="number" min="0" step="1" class="num-input tabular" data-rec-desconto="' + i + '" value="' + item.descontoPercent + '" style="display:block; margin-top:2px; width:70px;">') +
-            '<div style="font-size:11px; color:var(--muted); margin-top:2px; max-width:160px;">' + alcadaHint(item.pol) + '</div>';
 
-        return '<div style="padding:12px 0; border-top:1px solid var(--border, #E2E7F5);">' +
-          '<div style="display:flex; align-items:flex-start; gap:10px;">' +
-            '<input type="checkbox" data-rec-incluir="' + i + '"' + (item.incluir ? " checked" : "") + ' style="width:16px; height:16px; accent-color:var(--ink); margin-top:2px; flex:0 0 auto;">' +
-            '<div style="flex:1;">' +
-              '<b>' + escapeHtml(item.produto) + (item.planoSugerido ? " — " + escapeHtml(item.planoSugerido) : "") + '</b>' +
-              '<div style="font-size:13px; color:var(--muted, #5C6180); margin-top:2px;">' + escapeHtml(item.motivo) + '</div>' +
-              aviso +
-            '</div>' +
-          '</div>' +
-          '<div style="display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 0 26px;">' +
-            varianteHtml + qtdHtml + valorHtml + '<div>' + descontoHtml + '</div>' +
-            '<div><span style="font-size:11px; color:var(--muted); display:block;">Subtotal</span><b data-rec-subtotal="' + i + '">' + fmtBRL(calc.total) + '/mês</b></div>' +
-          '</div>' +
-        '</div>';
-      }).join("");
+    var cabecalho = recomendacoesState.length
+      ? '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b><br>' +
+        '<span style="font-weight:400; font-size:12.5px;">Já entram na proposta com o valor de tabela calculado — revise, edite ou remova antes de gerar.</span></div></div>'
+      : "";
 
+    var linhas = recomendacoesState.map(function(item, i){
+      var calc = subtotalItem(item);
+      var aviso = item.atencao
+        ? '<div style="margin-top:6px; color:#B45309;"><b>⚠ ' + escapeHtml(item.atencao) + '</b></div>'
+        : "";
+      var campo = function(rotulo, inner){
+        return '<label style="display:block; font-size:11px; color:var(--muted); margin-bottom:3px;">' + rotulo + inner + '</label>';
+      };
+
+      var produtoHtml = campo("Produto", '<select data-rec-produto="' + i + '" class="sel" style="display:block; margin-top:2px; min-width:150px;">' +
+        PRODUTOS_SELECIONAVEIS.map(function(p){ return '<option value="' + escapeHtml(p) + '"' + (item.produto === p ? " selected" : "") + '>' + escapeHtml(p) + '</option>'; }).join("") +
+      '</select>');
+
+      var tiers = PLANOS_POR_PRODUTO[item.produto];
+      var planoHtml = tiers
+        ? campo("Plano", '<select data-rec-plano="' + i + '" class="sel" style="display:block; margin-top:2px;">' +
+            '<option value="">Selecione...</option>' +
+            tiers.map(function(t){ return '<option value="' + escapeHtml(t) + '"' + (item.planoSugerido === t ? " selected" : "") + '>' + escapeHtml(t) + '</option>'; }).join("") +
+          '</select>')
+        : (item.produto === "BIME APP" ? "" : campo("Plano / descrição do item", '<input type="text" class="num-input" data-rec-plano-texto="' + i + '" value="' + escapeHtml(item.planoSugerido) + '" placeholder="ex: Ativação do Simples" style="display:block; margin-top:2px; width:170px;">'));
+
+      var varianteHtml = item.produto === "Gestor"
+        ? campo("Ambiente", '<select data-rec-variante="' + i + '" class="sel" style="display:block; margin-top:2px;">' +
+            '<option value="Nuvem"' + (item.variante === "Nuvem" ? " selected" : "") + '>Nuvem</option>' +
+            '<option value="Local"' + (item.variante === "Local" ? " selected" : "") + '>Local</option>' +
+          '</select>')
+        : "";
+      var qtdHtml = item.porUsuario
+        ? campo("Usuários", '<input type="number" min="1" step="1" class="num-input tabular" data-rec-qtd="' + i + '" value="' + item.quantidade + '" style="display:block; margin-top:2px; width:80px;">')
+        : "";
+      var valorHtml = item.valorTabela != null
+        ? '<div><span style="font-size:11px; color:var(--muted); display:block;">Valor de tabela</span>' + fmtBRL(item.valorTabela) + (item.porUsuario ? "/usuário" : "/mês") + '</div>'
+        : campo("Valor (não encontrado — informe)", '<input type="number" min="0" step="0.01" class="num-input tabular" data-rec-valor="' + i + '" placeholder="0,00" value="' + (item.valorManual || "") + '" style="display:block; margin-top:2px; width:110px;">');
+      var descontoHtml = item.pol === "sem"
+        ? '<div style="font-size:12px; color:var(--muted); max-width:160px;">' + alcadaHint(item.pol) + '</div>'
+        : campo("Desconto %", '<input type="number" min="0" step="1" class="num-input tabular" data-rec-desconto="' + i + '" value="' + item.descontoPercent + '" style="display:block; margin-top:2px; width:70px;">') +
+          '<div style="font-size:11px; color:var(--muted); margin-top:2px; max-width:160px;">' + alcadaHint(item.pol) + '</div>';
+
+      return '<div style="padding:12px 0; border-top:1px solid var(--border, #E2E7F5);">' +
+        '<div style="display:flex; align-items:flex-start; gap:10px;">' +
+          '<input type="checkbox" data-rec-incluir="' + i + '"' + (item.incluir ? " checked" : "") + ' style="width:16px; height:16px; accent-color:var(--ink); margin-top:8px; flex:0 0 auto;">' +
+          '<div style="flex:1;">' +
+            '<div style="display:flex; gap:18px; flex-wrap:wrap;">' + produtoHtml + planoHtml + '</div>' +
+            campo("Como isso ajuda este cliente", '<textarea data-rec-motivo="' + i + '" class="ta" style="display:block; margin-top:2px; min-height:44px; font-size:13px;" placeholder="Descreva o que esse item resolve para o cliente...">' + escapeHtml(item.motivo) + '</textarea>') +
+            aviso +
+          '</div>' +
+          '<button type="button" class="btn-remove" data-rec-remover="' + i + '" aria-label="Remover" style="flex:0 0 auto;">✕</button>' +
+        '</div>' +
+        '<div style="display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 0 26px;">' +
+          varianteHtml + qtdHtml + valorHtml + '<div>' + descontoHtml + '</div>' +
+          '<div><span style="font-size:11px; color:var(--muted); display:block;">Subtotal</span><b data-rec-subtotal="' + i + '">' + fmtBRL(calc.total) + '/mês</b></div>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+
+    var btnAdicionar = '<button type="button" class="btn-add-small" id="btnAddRecomendacao" style="margin-top:10px;">+ Adicionar solução</button>';
+
+    wrap.innerHTML = cabecalho + linhas + btnAdicionar;
+
+    document.getElementById("btnAddRecomendacao").addEventListener("click", function(){
+      recomendacoesState.push(novoItemManual());
+      renderRecomendacoes();
+    });
+    wrap.querySelectorAll("[data-rec-remover]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        recomendacoesState.splice(parseInt(btn.getAttribute("data-rec-remover"), 10), 1);
+        renderRecomendacoes();
+      });
+    });
+    wrap.querySelectorAll("[data-rec-produto]").forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var item = recomendacoesState[parseInt(sel.getAttribute("data-rec-produto"), 10)];
+        item.produto = sel.value;
+        item.planoSugerido = "";
+        recalcularPrecoItem(item);
+        renderRecomendacoes();
+      });
+    });
+    wrap.querySelectorAll("[data-rec-plano]").forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var item = recomendacoesState[parseInt(sel.getAttribute("data-rec-plano"), 10)];
+        item.planoSugerido = sel.value;
+        recalcularPrecoItem(item);
+        renderRecomendacoes();
+      });
+    });
+    wrap.querySelectorAll("[data-rec-plano-texto]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        recomendacoesState[parseInt(inp.getAttribute("data-rec-plano-texto"), 10)].planoSugerido = inp.value;
+      });
+    });
+    wrap.querySelectorAll("[data-rec-motivo]").forEach(function(ta){
+      ta.addEventListener("input", function(){
+        recomendacoesState[parseInt(ta.getAttribute("data-rec-motivo"), 10)].motivo = ta.value;
+      });
+    });
     wrap.querySelectorAll("[data-rec-incluir]").forEach(function(cb){
       cb.addEventListener("change", function(){
         recomendacoesState[parseInt(cb.getAttribute("data-rec-incluir"), 10)].incluir = cb.checked;
@@ -2057,9 +2154,7 @@
       sel.addEventListener("change", function(){
         var item = recomendacoesState[parseInt(sel.getAttribute("data-rec-variante"), 10)];
         item.variante = sel.value;
-        var match = precoEcossistema(item.produto, item.planoSugerido, item.variante);
-        item.valorTabela = match ? match.valor : null;
-        item.pol = match ? match.pol : null;
+        recalcularPrecoItem(item);
         renderRecomendacoes();
       });
     });
@@ -2246,6 +2341,7 @@
   renderPriceSim();
   renderHorasSim();
   renderImplantacaoSim();
+  renderRecomendacoes();
   refreshPropSummary();
 
   // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
