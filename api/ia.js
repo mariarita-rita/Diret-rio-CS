@@ -109,9 +109,9 @@ REGRAS DO DIAGNÓSTICO WAIPE (Individual/Time/Enterprise — preencha "waipeDiag
 const INSTRUCOES = `Você vai ler a transcrição de uma reunião de consultoria da Londrisoft com um cliente e ajudar o time de Customer Success a montar a arquitetura de solução: qual o plano Waipe ideal, quais outros produtos/planos ofertar, e por quê.
 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código markdown), neste formato exato:
-{"cliente":"nome do cliente/empresa mencionado, ou string vazia se não identificado","segmento":"segmento/ramo de atuação, ou string vazia","dores":"resumo em texto simples (não markdown) das dores e do contexto do cliente hoje, como uma nota de CSM — até 800 caracteres","waipeDiagnostico":{"usuarios":1,"empresas":1,"governanca":"sim|nao","auditoria":"sim|nao","automacao":"pronta|personalizada","enterprisePorVolume":"sim|nao"},"recomendacoes":[{"produto":"Gestor|Simplaz Gestor|Simplaz Unique|Unique|BIME APP","planoSugerido":"nome do plano/tier","motivo":"por que esse produto/plano resolve uma dor especifica mencionada","atencao":"presente SO no caso do Modulo Industria ou outra ressalva que precise checagem manual — omita nos outros casos"}]}
+{"cliente":"nome do cliente/empresa mencionado, ou string vazia se não identificado","segmento":"segmento/ramo de atuação, ou string vazia","dores":"resumo em texto simples (não markdown) das dores e do contexto do cliente hoje, como uma nota de CSM — até 800 caracteres","waipeDiagnostico":{"usuarios":1,"empresas":1,"governanca":"sim|nao","auditoria":"sim|nao","automacao":"pronta|personalizada","enterprisePorVolume":"sim|nao"},"recomendacoes":[{"produto":"Gestor|Simplaz Gestor|Simplaz Unique|Unique|BIME APP","planoSugerido":"nome do plano/tier","motivo":"por que esse produto/plano resolve uma dor especifica mencionada","atencao":"presente SO no caso do Modulo Industria ou outra ressalva que precise checagem manual — omita nos outros casos","quantidadeSugerida":"numero de usuarios/vendedores, SOMENTE quando a transcricao citar uma quantidade clara para um produto cobrado por usuario (hoje so o BIME APP) — null nos demais casos"}]}
 
-Regras gerais: só recomende um produto se a transcrição realmente sugerir a necessidade dele — não invente; "recomendacoes" pode ser array vazio; nunca recomende o Módulo Indústria como oferta pronta.
+Regras gerais: só recomende um produto se a transcrição realmente sugerir a necessidade dele — não invente; "recomendacoes" pode ser array vazio; nunca recomende o Módulo Indústria como oferta pronta; "quantidadeSugerida" só quando a transcrição der um número explícito, senão null (não estime nem arredonde).
 
 ${REGRAS_WAIPE}
 
@@ -146,6 +146,14 @@ function inteiroEntre(v, min, max, padrao) {
   return n;
 }
 
+/** Como inteiroEntre, mas devolve null (não um padrão) quando o dado não é confiável — usado em campos opcionais onde "sem informação" é diferente de um valor default. */
+function inteiroOuNulo(v, min, max) {
+  if (v === null || v === undefined) return null;
+  const n = Math.trunc(Number(v));
+  if (!Number.isFinite(n) || n < min || n > max) return null;
+  return n;
+}
+
 /** Valor dentro de um conjunto fechado, ou o padrão. */
 function enumOuPadrao(v, validos, padrao) {
   return typeof v === 'string' && validos.has(v) ? v : padrao;
@@ -171,11 +179,13 @@ function sanearResultado(bruto) {
     .map((r) => {
       const produto = typeof r?.produto === 'string' ? r.produto.trim() : '';
       if (!PRODUTOS_VALIDOS.has(produto)) return null;
+      const quantidadeSugerida = inteiroOuNulo(r?.quantidadeSugerida, 1, 500);
       return {
         produto,
         planoSugerido: texto(r?.planoSugerido, 80),
         motivo: texto(r?.motivo, 400),
         ...(texto(r?.atencao, 300) ? { atencao: texto(r?.atencao, 300) } : {}),
+        ...(quantidadeSugerida !== null ? { quantidadeSugerida } : {}),
       };
     })
     .filter(Boolean);

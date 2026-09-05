@@ -28,6 +28,7 @@
     --sgestor:#CA8A04;
     --scontador:#16A34A;
     --waipe:#DC2626;
+    --bime:#7C3AED;
     font-size:16px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -253,7 +254,7 @@
     <ul>
       <li><strong>Alçada padrão do CSM: 15%</strong> de desconto sobre o preço de tabela. <strong>Descontos acima do limite de cada plano exigem autorização da Coordenação de CS.</strong></li>
       <li><strong>Simplaz</strong> (Bronze, Prata e Ouro): limite de desconto de <strong>10%</strong>. Planos <strong>Ouro Personalizado</strong> não têm valor mínimo — <strong>descontos sob consulta</strong> com a Coordenação de CS.</li>
-      <li><strong>Sem desconto:</strong> Usuário adicional Gestor Local (R$ 19,90), Usuário adicional Gestor Nuvem (R$ 29,85) e Unique Light (R$ 238,70).</li>
+      <li><strong>Sem desconto:</strong> Usuário adicional Gestor Local (R$ 19,90), Usuário adicional Gestor Nuvem (R$ 29,85), Unique Light (R$ 238,70) e BIME APP — usuário/vendedor externo (R$ 69,90).</li>
       <li><strong>Valores mínimos fixos:</strong> Plano NF-e Local <strong>R$ 130,00</strong> · Plano NF-e Nuvem <strong>R$ 148,00</strong>.</li>
     </ul>
     <h3>Waipe — regras comerciais</h3>
@@ -282,6 +283,7 @@ const PRODUTOS = [
   {id:"SIMPLAZ GESTOR", cor:"var(--sgestor)"},
   {id:"SIMPLAZ CONTADOR", cor:"var(--scontador)"},
   {id:"WAIPE", cor:"var(--waipe)"},
+  {id:"BIME APP", cor:"var(--bime)"},
 ];
 
 /*
@@ -347,6 +349,9 @@ const DADOS = [
   {p:"WAIPE", plano:"Time — Usuário adicional", det:"4–10: R$ 79 · 11–25: R$ 55 · 26+: R$ 35 (faixas decrescentes)", per:"Mensal", preco:null, pol:"faixas"},
   {p:"WAIPE", plano:"Time — Empresa adicional", det:"Por empresa do grupo econômico", per:"Mensal", preco:149.00, pol:"sem"},
   {p:"WAIPE", plano:"Excedente de tokens", det:"Por milhão de tokens · tolerância de 20% da franquia", per:"Mensal", preco:19.90, pol:"sem"},
+
+  // BIME APP
+  {p:"BIME APP", plano:"Usuário (vendedor externo)", det:"Cobrança por usuário ativo", per:"Mensal", preco:69.90, pol:"sem"},
 ];
 
 const fmt = v => v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});

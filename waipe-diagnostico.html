@@ -1903,22 +1903,182 @@
     if (btnCalcular) btnCalcular.click();
   }
 
+  // Espelha tabela-precos-cs.html (período Anual — a mensalidade mais baixa).
+  // Mantenha os dois arquivos em sincronia se a tabela oficial mudar.
+  var PRECOS_ECOSSISTEMA = [
+    { produto: "Gestor", variante: "Nuvem", tokens: ["basico"], valor: 299.00, pol: "padrao" },
+    { produto: "Gestor", variante: "Nuvem", tokens: ["intermediario"], valor: 419.00, pol: "padrao" },
+    { produto: "Gestor", variante: "Nuvem", tokens: ["avancado"], valor: 719.00, pol: "padrao" },
+    { produto: "Gestor", variante: "Local", tokens: ["basico"], valor: 259.00, pol: "padrao" },
+    { produto: "Gestor", variante: "Local", tokens: ["intermediario"], valor: 360.00, pol: "padrao" },
+    { produto: "Gestor", variante: "Local", tokens: ["avancado"], valor: 636.00, pol: "padrao" },
+    { produto: "Unique", variante: null, tokens: ["light"], valor: 238.70, pol: "sem" },
+    { produto: "Unique", variante: null, tokens: ["plus"], valor: 447.00, pol: "padrao" },
+    { produto: "Unique", variante: null, tokens: ["premium"], valor: 677.00, pol: "padrao" },
+    { produto: "Unique", variante: null, tokens: ["empresarial"], valor: 447.00, pol: "padrao" },
+    { produto: "Simplaz Gestor", variante: null, tokens: ["bronze"], valor: 47.90, pol: "limite10" },
+    { produto: "Simplaz Gestor", variante: null, tokens: ["prata"], valor: 95.90, pol: "limite10" },
+    { produto: "Simplaz Gestor", variante: null, tokens: ["ouro"], valor: 167.90, pol: "limite10" },
+    { produto: "BIME APP", variante: null, tokens: [], valor: 69.90, pol: "sem", porUsuario: true },
+  ];
+
+  /** Casa produto+plano sugerido pela IA com um preço de tabela conhecido — nunca inventa um valor. */
+  function precoEcossistema(produto, planoSugerido, variante){
+    var candidatos = PRECOS_ECOSSISTEMA.filter(function(p){ return p.produto === produto; });
+    if (!candidatos.length) return null;
+    if (produto === "BIME APP") return candidatos[0];
+    var alvo = normalize(planoSugerido || "");
+    var porVariante = candidatos.filter(function(p){ return (p.variante || "Nuvem") === (variante || "Nuvem"); });
+    var achou = porVariante.filter(function(p){ return p.tokens.some(function(t){ return alvo.indexOf(t) !== -1; }); })[0];
+    return achou || null;
+  }
+
+  function alcadaHint(pol){
+    if (pol === "padrao") return "Alçada padrão: até 15% sem autorização da Coordenação.";
+    if (pol === "limite10") return "Simplaz: até 10% sem autorização da Coordenação.";
+    if (pol === "sem") return "Sem desconto para este item.";
+    return "";
+  }
+
+  var recomendacoesState = [];
+
+  function novoItemRecomendacao(r){
+    var variante = r.produto === "Gestor" ? "Nuvem" : null;
+    var match = precoEcossistema(r.produto, r.planoSugerido, variante);
+    return {
+      produto: r.produto,
+      planoSugerido: r.planoSugerido || "",
+      motivo: r.motivo || "",
+      atencao: r.atencao || "",
+      incluir: true,
+      variante: variante,
+      porUsuario: match ? !!match.porUsuario : false,
+      quantidade: r.quantidadeSugerida || 1,
+      valorTabela: match ? match.valor : null,
+      valorManual: 0,
+      pol: match ? match.pol : null,
+      descontoPercent: 0,
+    };
+  }
+
+  function valorUnitItem(item){
+    return item.valorTabela != null ? item.valorTabela : (parseFloat(item.valorManual) || 0);
+  }
+
+  function subtotalItem(item){
+    var qtd = item.porUsuario ? (parseInt(item.quantidade, 10) || 1) : 1;
+    var unit = valorUnitItem(item);
+    var base = unit * qtd;
+    var desconto = base * ((parseFloat(item.descontoPercent) || 0) / 100);
+    if (desconto < 0) desconto = 0;
+    if (desconto > base) desconto = base;
+    return { qtd: qtd, unit: unit, base: base, desconto: desconto, total: base - desconto };
+  }
+
+  /** Itens marcados p/ incluir, já com o cálculo de preço — usado tanto no resumo quanto na proposta gerada. */
+  function computeOutrosProdutos(){
+    return recomendacoesState.filter(function(item){ return item.incluir; }).map(function(item){
+      var calc = subtotalItem(item);
+      var out = {};
+      for (var k in item) out[k] = item[k];
+      out.qtd = calc.qtd; out.unit = calc.unit; out.base = calc.base; out.desconto = calc.desconto; out.total = calc.total;
+      return out;
+    });
+  }
+
   function renderAnaliseIa(resultado){
-    var wrap = document.getElementById("analiseIaResultado");
     var recs = resultado.recomendacoes || [];
-    if (!recs.length){ wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+    recomendacoesState = recs.map(novoItemRecomendacao);
+    renderRecomendacoes();
+  }
+
+  function renderRecomendacoes(){
+    var wrap = document.getElementById("analiseIaResultado");
+    if (!recomendacoesState.length){ wrap.style.display = "none"; wrap.innerHTML = ""; return; }
     wrap.style.display = "block";
-    wrap.innerHTML = '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b></div></div>' +
-      recs.map(function(r){
-        var aviso = r.atencao
-          ? '<div style="margin-top:4px; color:#B45309;"><b>⚠ ' + escapeHtml(r.atencao) + '</b></div>'
+    wrap.innerHTML = '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b><br>' +
+      '<span style="font-weight:400; font-size:12.5px;">Já entram na proposta com o valor de tabela calculado — revise quantidade e desconto antes de gerar.</span></div></div>' +
+      recomendacoesState.map(function(item, i){
+        var calc = subtotalItem(item);
+        var aviso = item.atencao
+          ? '<div style="margin-top:6px; color:#B45309;"><b>⚠ ' + escapeHtml(item.atencao) + '</b></div>'
           : "";
-        return '<div style="padding:10px 0; border-top:1px solid var(--border, #E2E7F5);">' +
-          '<b>' + escapeHtml(r.produto) + (r.planoSugerido ? " — " + escapeHtml(r.planoSugerido) : "") + '</b>' +
-          '<div style="font-size:13px; color:var(--muted, #5C6180); margin-top:2px;">' + escapeHtml(r.motivo) + '</div>' +
-          aviso +
+        var campo = function(rotulo, inner){
+          return '<label style="display:block; font-size:11px; color:var(--muted); margin-bottom:3px;">' + rotulo + inner + '</label>';
+        };
+        var varianteHtml = item.produto === "Gestor"
+          ? campo("Ambiente", '<select data-rec-variante="' + i + '" class="sel" style="display:block; margin-top:2px;">' +
+              '<option value="Nuvem"' + (item.variante === "Nuvem" ? " selected" : "") + '>Nuvem</option>' +
+              '<option value="Local"' + (item.variante === "Local" ? " selected" : "") + '>Local</option>' +
+            '</select>')
+          : "";
+        var qtdHtml = item.porUsuario
+          ? campo("Usuários", '<input type="number" min="1" step="1" class="num-input tabular" data-rec-qtd="' + i + '" value="' + item.quantidade + '" style="display:block; margin-top:2px; width:80px;">')
+          : "";
+        var valorHtml = item.valorTabela != null
+          ? '<div><span style="font-size:11px; color:var(--muted); display:block;">Valor de tabela</span>' + fmtBRL(item.valorTabela) + (item.porUsuario ? "/usuário" : "/mês") + '</div>'
+          : campo("Valor de tabela (não encontrado — informe)", '<input type="number" min="0" step="0.01" class="num-input tabular" data-rec-valor="' + i + '" placeholder="0,00" value="' + (item.valorManual || "") + '" style="display:block; margin-top:2px; width:110px;">');
+        var descontoHtml = item.pol === "sem"
+          ? '<div style="font-size:12px; color:var(--muted); max-width:160px;">' + alcadaHint(item.pol) + '</div>'
+          : campo("Desconto %", '<input type="number" min="0" step="1" class="num-input tabular" data-rec-desconto="' + i + '" value="' + item.descontoPercent + '" style="display:block; margin-top:2px; width:70px;">') +
+            '<div style="font-size:11px; color:var(--muted); margin-top:2px; max-width:160px;">' + alcadaHint(item.pol) + '</div>';
+
+        return '<div style="padding:12px 0; border-top:1px solid var(--border, #E2E7F5);">' +
+          '<div style="display:flex; align-items:flex-start; gap:10px;">' +
+            '<input type="checkbox" data-rec-incluir="' + i + '"' + (item.incluir ? " checked" : "") + ' style="width:16px; height:16px; accent-color:var(--ink); margin-top:2px; flex:0 0 auto;">' +
+            '<div style="flex:1;">' +
+              '<b>' + escapeHtml(item.produto) + (item.planoSugerido ? " — " + escapeHtml(item.planoSugerido) : "") + '</b>' +
+              '<div style="font-size:13px; color:var(--muted, #5C6180); margin-top:2px;">' + escapeHtml(item.motivo) + '</div>' +
+              aviso +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 0 26px;">' +
+            varianteHtml + qtdHtml + valorHtml + '<div>' + descontoHtml + '</div>' +
+            '<div><span style="font-size:11px; color:var(--muted); display:block;">Subtotal</span><b data-rec-subtotal="' + i + '">' + fmtBRL(calc.total) + '/mês</b></div>' +
+          '</div>' +
         '</div>';
       }).join("");
+
+    wrap.querySelectorAll("[data-rec-incluir]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        recomendacoesState[parseInt(cb.getAttribute("data-rec-incluir"), 10)].incluir = cb.checked;
+      });
+    });
+    wrap.querySelectorAll("[data-rec-variante]").forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var item = recomendacoesState[parseInt(sel.getAttribute("data-rec-variante"), 10)];
+        item.variante = sel.value;
+        var match = precoEcossistema(item.produto, item.planoSugerido, item.variante);
+        item.valorTabela = match ? match.valor : null;
+        item.pol = match ? match.pol : null;
+        renderRecomendacoes();
+      });
+    });
+    var atualizarSubtotal = function(i){
+      var el = wrap.querySelector('[data-rec-subtotal="' + i + '"]');
+      if (el) el.textContent = fmtBRL(subtotalItem(recomendacoesState[i]).total) + "/mês";
+    };
+    wrap.querySelectorAll("[data-rec-qtd]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        var i = parseInt(inp.getAttribute("data-rec-qtd"), 10);
+        recomendacoesState[i].quantidade = inp.value;
+        atualizarSubtotal(i);
+      });
+    });
+    wrap.querySelectorAll("[data-rec-valor]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        var i = parseInt(inp.getAttribute("data-rec-valor"), 10);
+        recomendacoesState[i].valorManual = inp.value;
+        atualizarSubtotal(i);
+      });
+    });
+    wrap.querySelectorAll("[data-rec-desconto]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        var i = parseInt(inp.getAttribute("data-rec-desconto"), 10);
+        recomendacoesState[i].descontoPercent = inp.value;
+        atualizarSubtotal(i);
+      });
+    });
   }
 
   document.getElementById("btnAnalisarIa").addEventListener("click", function(){
@@ -2173,6 +2333,25 @@
     return html;
   }
 
+  function buildOutrosProdutosSection(outros){
+    return outros.map(function(o){
+      var titulo = escapeHtml(o.produto) + (o.planoSugerido ? " — " + escapeHtml(o.planoSugerido) : "") + (o.variante ? " (" + o.variante + ")" : "");
+      var aviso = o.atencao ? '<div class="callout warn"><span class="lbl">Atenção</span>' + escapeHtml(o.atencao) + '</div>' : "";
+      var linhaItem = o.porUsuario
+        ? '<tr><td>' + escapeHtml(o.produto) + ' — ' + o.qtd + ' usuário(s) × ' + fmtBRL(o.unit) + '</td><td class="num">' + fmtBRL(o.base) + '</td></tr>'
+        : '<tr><td>' + titulo + '</td><td class="num">' + fmtBRL(o.base) + '</td></tr>';
+      var linhaDesconto = o.desconto > 0
+        ? '<tr><td>Desconto (' + o.descontoPercent + '%)</td><td class="num">-' + fmtBRL(o.desconto) + '</td></tr>'
+        : "";
+      return '<div class="pricebox" style="margin-bottom:18px;">' +
+        '<div class="tier">' + titulo + '</div>' +
+        '<div class="val">' + fmtBRL(o.total) + ' <small>/ mês</small></div>' +
+        '<p style="margin-top:10px;">' + escapeHtml(o.motivo) + '</p>' +
+        '<table><tr><th>Item</th><th style="text-align:right">Valor</th></tr>' + linhaItem + linhaDesconto + '</table>' +
+      '</div>' + aviso;
+    }).join("");
+  }
+
   function buildHorasSection(horas){
     if (!horas.rows.length){
       return '<p class="muted">Nenhum agente selecionado nesta simulação — volte à aba Gerar Proposta para estimar as horas devolvidas.</p>';
@@ -2231,6 +2410,7 @@
     var ctx = getProposalContext();
     var diag = lastDiagnostic;
     var pricing = computePricing();
+    var outros = computeOutrosProdutos();
     var planNome = diag ? diag.rec.plan : "a definir";
     var dataHoje = new Date().toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
     var anoAtual = new Date().getFullYear();
@@ -2357,9 +2537,9 @@
     '<div class="cover">' + NETWORK_SVG +
       '<div class="glow"></div>' +
       '<div class="brandword">' + londrisoftLogo("#fff") + '</div>' +
-      '<div class="kicker">Proposta Comercial · Waipe ' + escapeHtml(planNome) + '</div>' +
-      '<h1>O Time Digital ' + escapeHtml(ctx.cliente) + '</h1>' +
-      '<div class="sub">Um time de agentes de inteligência artificial — funcionários digitais com função fixa — que assumem tarefas manuais e entregam o resultado pronto no WhatsApp de quem precisa agir.</div>' +
+      '<div class="kicker">' + (outros.length ? "Proposta Comercial · Arquitetura de Soluções" : "Proposta Comercial · Waipe " + escapeHtml(planNome)) + '</div>' +
+      '<h1>Soluções sob medida para ' + escapeHtml(ctx.cliente) + '</h1>' +
+      '<div class="sub">Uma arquitetura de soluções pensada para os desafios específicos da sua operação — do atendimento com inteligência artificial aos sistemas certos para cada etapa do negócio.</div>' +
       '<div class="meta">' +
         '<div><span>Cliente</span>' + escapeHtml(ctx.cliente) + (ctx.segmento ? "<br>" + escapeHtml(ctx.segmento) : "") + '</div>' +
         (ctx.contato ? '<div><span>A/C</span>' + escapeHtml(ctx.contato) + '</div>' : "") +
@@ -2372,18 +2552,39 @@
       var isEnterprise = diag && diag.rec.plan === "Enterprise";
       var impl = isEnterprise ? computeImplantacao() : null;
 
+      var resumoTotalHtml = "";
+      if (outros.length){
+        var linhasResumo = '<tr><td>Waipe ' + escapeHtml(planNome) + '</td><td class="num">' + fmtBRL(pricing.total) + '</td></tr>';
+        var totalGeral = pricing.total;
+        outros.forEach(function(o){
+          var rotulo = o.produto + (o.planoSugerido ? " — " + o.planoSugerido : "") + (o.variante ? " (" + o.variante + ")" : "");
+          linhasResumo += '<tr><td>' + escapeHtml(rotulo) + '</td><td class="num">' + fmtBRL(o.total) + '</td></tr>';
+          totalGeral += o.total;
+        });
+        linhasResumo += '<tr><td><strong>Investimento total mensal</strong></td><td class="num"><strong>' + fmtBRL(totalGeral) + '</strong></td></tr>';
+        resumoTotalHtml = '<div class="callout" style="margin-top:22px;"><span class="lbl">Resumo do Investimento Total</span>' +
+          '<table><tr><th>Solução</th><th style="text-align:right">Valor mensal</th></tr>' + linhasResumo + '</table></div>';
+      }
+
       var sections = [
         { header: true, title: "Contexto e Dores do Cliente",
           body: doresHtml + '<div class="callout"><span class="lbl">Sobre este documento</span>Este é um modelo de proposta gerado a partir da simulação de plano e dos agentes selecionados pelo CSM. Revise cada seção, ajuste o texto ao tom da conversa com o cliente e confirme os números antes de enviar.</div>' },
         { title: "O Time Digital Proposto",
           body: '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' + fichasHtml },
         { title: "Tempo Devolvido à Gestão",
-          body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml },
-        { title: "Plano Recomendado e Investimento",
-          body: (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
-            commercialHtml +
-            (isEnterprise ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. O trabalho de desenho e construção dos fluxos está detalhado na próxima seção.</div>' : "") }
+          body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml }
       ];
+
+      if (outros.length){
+        sections.push({ title: "Outras Soluções Recomendadas",
+          body: '<p>Além do Waipe, a conversa com o cliente indicou as seguintes oportunidades no ecossistema Londrisoft:</p>' + buildOutrosProdutosSection(outros) });
+      }
+
+      sections.push({ title: "Plano Recomendado e Investimento",
+        body: (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
+          commercialHtml +
+          (isEnterprise ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. O trabalho de desenho e construção dos fluxos está detalhado na próxima seção.</div>' : "") +
+          resumoTotalHtml });
 
       if (isEnterprise && impl.hasPacote){
         sections.push({ title: "Implantação Enterprise", body: buildImplantacaoSection(impl) });

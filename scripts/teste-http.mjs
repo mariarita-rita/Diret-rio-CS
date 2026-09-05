@@ -1976,7 +1976,8 @@ console.log('\n[35] api/ia.js — analisar-transcricao: sessao, saneamento e con
           recomendacoes: [
             { produto: 'Gestor', planoSugerido: 'Avançado', motivo: 'Precisa de multi-filial.', atencao: 'Verificar disponibilidade do Módulo Indústria.' },
             { produto: 'Produto Inventado', planoSugerido: 'X', motivo: 'Nao deveria sobreviver.' },
-            { produto: 'BIME APP', planoSugerido: '', motivo: 'Vendedor externo lançando pedido.' },
+            { produto: 'BIME APP', planoSugerido: '', motivo: 'Vendedor externo lançando pedido.', quantidadeSugerida: 4 },
+            { produto: 'BIME APP', planoSugerido: '', motivo: 'Quantidade fora de faixa.', quantidadeSugerida: 9999 },
           ],
         }) }],
       }),
@@ -1985,9 +1986,12 @@ console.log('\n[35] api/ia.js — analisar-transcricao: sessao, saneamento e con
   const ok = await chamarIa(GESTAO, { transcricao: 'x'.repeat(50) });
   checar('chamada ok: 200', ok.code, 200);
   checar('  cliente/segmento/dores repassados', [ok.corpo.cliente, ok.corpo.segmento, ok.corpo.dores], ['Cliente Teste', 'Varejo', 'Inadimplência alta.']);
-  checar('  2 recomendacoes sobrevivem (produto invalido descartado)', ok.corpo.recomendacoes.length, 2);
+  checar('  3 recomendacoes sobrevivem (produto invalido descartado)', ok.corpo.recomendacoes.length, 3);
   checar('  Gestor mantem o campo atencao', ok.corpo.recomendacoes[0].atencao, 'Verificar disponibilidade do Módulo Indústria.');
   checar('  BIME APP sem atencao (campo omitido)', Object.hasOwn(ok.corpo.recomendacoes[1], 'atencao'), false);
+  checar('  quantidadeSugerida valida sobrevive', ok.corpo.recomendacoes[1].quantidadeSugerida, 4);
+  checar('  quantidadeSugerida fora de faixa (1-500) e omitida', Object.hasOwn(ok.corpo.recomendacoes[2], 'quantidadeSugerida'), false);
+  checar('  Gestor sem quantidadeSugerida (campo omitido)', Object.hasOwn(ok.corpo.recomendacoes[0], 'quantidadeSugerida'), false);
   globalThis.fetch = fetchOriginal;
 
   // waipeDiagnostico: campos validos passam, campos invalidos/fora de faixa caem no padrao seguro.
