@@ -82,9 +82,9 @@ GESTOR (ERP) — 4 planos, por funcionalidade, cada um inclui o anterior:
 - Intermediário: adiciona código de barras, simulação de preço, contratos, financeiro mais completo, integração com Mercado Livre.
 - Avançado: multi-filial/multi-empresa, gerente de conta dedicado, consolidação financeira entre filiais. Inclui também o Módulo Indústria (produção, ordem de fabricação, ficha técnica) — MAS esse módulo não tem mais manutenção ativa: NUNCA recomende como oferta pronta; se o perfil do cliente parecer precisar dele, use o campo "atencao" pedindo pra verificar disponibilidade com a coordenação antes de ofertar.
 
-SIMPLAZ GESTOR (empresários, gestão de notas fiscais) — Bronze/Silver/Gold: a diferença entre os planos é volume de XMLs processados por mês e número de usuários, não funcionalidade.
+SIMPLAZ GESTOR (empresários, gestão de notas fiscais) — Bronze/Prata/Ouro: a diferença entre os planos é volume de XMLs processados por mês e número de usuários, não funcionalidade.
 
-SIMPLAZ UNIQUE (contadores, gestão de notas fiscais de vários clientes) — Bronze/Silver/Gold: volume de manifestos e usuários, MAIS a Integração Unique, que só existe a partir do plano Silver — é o gatilho de feature real desta linha.
+SIMPLAZ UNIQUE (contadores, gestão de notas fiscais de vários clientes) — Bronze/Prata/Ouro: volume de manifestos e usuários, MAIS a Integração Unique, que só existe a partir do plano Prata — é o gatilho de feature real desta linha.
 
 UNIQUE (software contábil completo — folha, fiscal, contábil) — 4 planos:
 - Light: até 6 empresas geridas, 1 usuário grátis, só os módulos essenciais.
@@ -111,7 +111,7 @@ const INSTRUCOES = `Você vai ler a transcrição de uma reunião de consultoria
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código markdown), neste formato exato:
 {"cliente":"nome do cliente/empresa mencionado, ou string vazia se não identificado","segmento":"segmento/ramo de atuação, ou string vazia","dores":"resumo em texto simples (não markdown) das dores e do contexto do cliente hoje, como uma nota de CSM — até 800 caracteres","waipeDiagnostico":{"usuarios":1,"empresas":1,"governanca":"sim|nao","auditoria":"sim|nao","automacao":"pronta|personalizada","enterprisePorVolume":"sim|nao"},"recomendacoes":[{"produto":"Gestor|Simplaz Gestor|Simplaz Unique|Unique|BIME APP","planoSugerido":"nome do plano/tier","motivo":"por que esse produto/plano resolve uma dor especifica mencionada","atencao":"presente SO no caso do Modulo Industria ou outra ressalva que precise checagem manual — omita nos outros casos","quantidadeSugerida":"numero de usuarios/vendedores, SOMENTE quando a transcricao citar uma quantidade clara para um produto cobrado por usuario (hoje so o BIME APP) — null nos demais casos"}]}
 
-Regras gerais: só recomende um produto se a transcrição realmente sugerir a necessidade dele — não invente; "recomendacoes" pode ser array vazio; nunca recomende o Módulo Indústria como oferta pronta; "quantidadeSugerida" só quando a transcrição der um número explícito, senão null (não estime nem arredonde).
+Regras gerais: só recomende um produto se a transcrição realmente sugerir a necessidade dele — não invente; "recomendacoes" pode ser array vazio; nunca recomende o Módulo Indústria como oferta pronta; "quantidadeSugerida" só quando a transcrição der um número explícito, senão null (não estime nem arredonde); "planoSugerido" usa exatamente os nomes de plano do catálogo abaixo (ex: "Básico"/"Intermediário"/"Avançado", "Bronze"/"Prata"/"Ouro", "Light"/"Plus"/"Premium"/"Empresarial") — nunca traduza ou invente uma variação em inglês desses nomes.
 
 ${REGRAS_WAIPE}
 

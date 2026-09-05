@@ -968,7 +968,7 @@
             <div class="v" id="propPlanStat">—</div>
           </div>
           <div class="prop-stat">
-            <div class="k">Investimento</div>
+            <div class="k">Investimento total</div>
             <div class="v tabular" id="propPriceStat">—</div>
           </div>
           <div class="prop-stat">
@@ -991,6 +991,10 @@
           <button type="button" class="btn-secondary" id="btnPrompt">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             Copiar prompt para o Gemini (Gem do Waipe)
+          </button>
+          <button type="button" class="btn-secondary" id="btnLimparFormulario" style="margin-top:14px; color:var(--muted);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
+            Limpar formulário desta simulação
           </button>
         </div>
 
@@ -1917,8 +1921,12 @@
     { produto: "Unique", variante: null, tokens: ["premium"], valor: 677.00, pol: "padrao" },
     { produto: "Unique", variante: null, tokens: ["empresarial"], valor: 447.00, pol: "padrao" },
     { produto: "Simplaz Gestor", variante: null, tokens: ["bronze"], valor: 47.90, pol: "limite10" },
-    { produto: "Simplaz Gestor", variante: null, tokens: ["prata"], valor: 95.90, pol: "limite10" },
-    { produto: "Simplaz Gestor", variante: null, tokens: ["ouro"], valor: 167.90, pol: "limite10" },
+    { produto: "Simplaz Gestor", variante: null, tokens: ["prata", "silver"], valor: 95.90, pol: "limite10" },
+    { produto: "Simplaz Gestor", variante: null, tokens: ["ouro", "gold"], valor: 167.90, pol: "limite10" },
+    // "Simplaz Unique" é o nome da linha pra contadores — mesma tabela de preço de "SIMPLAZ CONTADOR" em tabela-precos-cs.html.
+    { produto: "Simplaz Unique", variante: null, tokens: ["bronze"], valor: 120.00, pol: "limite10" },
+    { produto: "Simplaz Unique", variante: null, tokens: ["prata", "silver"], valor: 240.00, pol: "limite10" },
+    { produto: "Simplaz Unique", variante: null, tokens: ["ouro", "gold"], valor: 480.00, pol: "limite10" },
     { produto: "BIME APP", variante: null, tokens: [], valor: 69.90, pol: "sem", porUsuario: true },
   ];
 
@@ -1994,7 +2002,7 @@
 
   function renderRecomendacoes(){
     var wrap = document.getElementById("analiseIaResultado");
-    if (!recomendacoesState.length){ wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+    if (!recomendacoesState.length){ wrap.style.display = "none"; wrap.innerHTML = ""; refreshPropSummary(); return; }
     wrap.style.display = "block";
     wrap.innerHTML = '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b><br>' +
       '<span style="font-weight:400; font-size:12.5px;">Já entram na proposta com o valor de tabela calculado — revise quantidade e desconto antes de gerar.</span></div></div>' +
@@ -2042,6 +2050,7 @@
     wrap.querySelectorAll("[data-rec-incluir]").forEach(function(cb){
       cb.addEventListener("change", function(){
         recomendacoesState[parseInt(cb.getAttribute("data-rec-incluir"), 10)].incluir = cb.checked;
+        refreshPropSummary();
       });
     });
     wrap.querySelectorAll("[data-rec-variante]").forEach(function(sel){
@@ -2057,6 +2066,7 @@
     var atualizarSubtotal = function(i){
       var el = wrap.querySelector('[data-rec-subtotal="' + i + '"]');
       if (el) el.textContent = fmtBRL(subtotalItem(recomendacoesState[i]).total) + "/mês";
+      refreshPropSummary();
     };
     wrap.querySelectorAll("[data-rec-qtd]").forEach(function(inp){
       inp.addEventListener("input", function(){
@@ -2079,6 +2089,8 @@
         atualizarSubtotal(i);
       });
     });
+
+    refreshPropSummary();
   }
 
   document.getElementById("btnAnalisarIa").addEventListener("click", function(){
@@ -2118,17 +2130,26 @@
   });
 
   function refreshPropSummary(){
+    if (typeof salvarRascunho === "function") salvarRascunho();
     var planStat = document.getElementById("propPlanStat");
     var priceStat = document.getElementById("propPriceStat");
     var agentsStat = document.getElementById("propAgentsStat");
     var warnBox = document.getElementById("propPlanWarn");
     if (!planStat) return;
 
+    var outros = computeOutrosProdutos();
+    var outrosTotal = outros.reduce(function(s, o){ return s + o.total; }, 0);
+
     if (lastDiagnostic){
-      planStat.textContent = lastDiagnostic.rec.plan;
+      planStat.textContent = lastDiagnostic.rec.plan + (outros.length ? " + " + outros.length + (outros.length > 1 ? " soluções" : " solução") : "");
       var p = computePricing();
-      priceStat.textContent = fmtBRL(p.total) + "/mês" + ((p.discountAmount > 0 || p.additionalTotal !== 0) ? " (ajustado)" : "");
+      var total = p.total + outrosTotal;
+      priceStat.textContent = fmtBRL(total) + "/mês" + ((p.discountAmount > 0 || p.additionalTotal !== 0 || outrosTotal > 0) ? " (ajustado)" : "");
       warnBox.innerHTML = "";
+    } else if (outros.length){
+      planStat.textContent = "—";
+      priceStat.textContent = fmtBRL(outrosTotal) + "/mês";
+      warnBox.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico Waipe" (ou cole a transcrição acima) pra trazer o plano e o preço do Waipe também.</span></div>';
     } else {
       planStat.textContent = "—";
       priceStat.textContent = "—";
@@ -2227,6 +2248,106 @@
   renderImplantacaoSim();
   refreshPropSummary();
 
+  // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
+  var CHAVE_RASCUNHO = "waipeArquiteturaSolucao.rascunho.v1";
+  var CAMPOS_RASCUNHO = ["p-transcricao", "p-cliente", "p-segmento", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
+    "f-usuarios", "f-empresas", "f-conversas", "f-execucoes",
+    "p-desc-tipo", "p-desc-valor", "p-ent-base",
+    "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento"];
+
+  function coletarRascunho(){
+    var campos = {};
+    CAMPOS_RASCUNHO.forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      campos[id] = el.type === "checkbox" ? el.checked : el.value;
+    });
+    var automacaoEl = document.querySelector('input[name="automacao"]:checked');
+    return {
+      v: 1,
+      campos: campos,
+      automacao: automacaoEl ? automacaoEl.value : null,
+      segState: segState,
+      selectedAgentIds: selectedAgentIds,
+      horasProposta: horasProposta,
+      recomendacoesState: recomendacoesState,
+      additionalItems: extraState.additionalItems,
+      lastDiagnostic: lastDiagnostic,
+    };
+  }
+
+  var salvarRascunho = (function(){
+    var pendente = null;
+    return function(){
+      clearTimeout(pendente);
+      pendente = setTimeout(function(){
+        try { localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify(coletarRascunho())); } catch (e) { /* localStorage indisponível — ignora */ }
+      }, 400);
+    };
+  })();
+
+  function limparRascunho(){
+    try { localStorage.removeItem(CHAVE_RASCUNHO); } catch (e) { /* ignora */ }
+  }
+
+  function restaurarRascunho(){
+    var bruto;
+    try { bruto = localStorage.getItem(CHAVE_RASCUNHO); } catch (e) { return; }
+    if (!bruto) return;
+    var d;
+    try { d = JSON.parse(bruto); } catch (e) { return; }
+    if (!d || d.v !== 1) return;
+
+    Object.keys(d.campos || {}).forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (el.type === "checkbox") el.checked = !!d.campos[id];
+      else el.value = d.campos[id];
+    });
+
+    if (d.segState){
+      Object.keys(d.segState).forEach(function(grupo){
+        var btn = document.querySelector('.seg[data-group="' + grupo + '"] button[data-val="' + d.segState[grupo] + '"]');
+        if (btn) btn.click();
+      });
+    }
+    if (d.automacao){
+      var opt = document.querySelector('input[name="automacao"][value="' + d.automacao + '"]');
+      opt = opt ? opt.closest(".radio-opt") : null;
+      if (opt) opt.click();
+    }
+
+    if (d.selectedAgentIds) selectedAgentIds = d.selectedAgentIds;
+    if (d.horasProposta) horasProposta = d.horasProposta;
+    if (Array.isArray(d.additionalItems)) extraState.additionalItems = d.additionalItems;
+    if (d.lastDiagnostic) lastDiagnostic = d.lastDiagnostic;
+    if (Array.isArray(d.recomendacoesState)) recomendacoesState = d.recomendacoesState;
+
+    updatePacoteHint();
+    renderAgentCatalog();
+    renderHorasSim();
+    renderAddlItems();
+    renderPriceSim();
+    renderImplantacaoSim();
+    renderRecomendacoes();
+    refreshPropSummary();
+  }
+
+  // Delegado: qualquer digitação/seleção nas abas "Gerar Proposta" e "Diagnóstico Waipe" salva o rascunho —
+  // só um refresh manual do navegador ou o botão abaixo apagam de fato.
+  document.getElementById("panel-prop").addEventListener("input", salvarRascunho);
+  document.getElementById("panel-prop").addEventListener("change", salvarRascunho);
+  document.getElementById("panel-diag").addEventListener("input", salvarRascunho);
+  document.getElementById("panel-diag").addEventListener("change", salvarRascunho);
+
+  document.getElementById("btnLimparFormulario").addEventListener("click", function(){
+    if (!window.confirm("Limpar todos os campos preenchidos nesta simulação (transcrição, dados do cliente, agentes, diagnóstico e sugestões)? Essa ação não pode ser desfeita.")) return;
+    limparRascunho();
+    window.location.reload();
+  });
+
+  restaurarRascunho();
+
   // ---------- Proposal HTML builder ----------
   function escapeHtml(s){
     return (s || "").replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]; });
@@ -2306,7 +2427,7 @@
 
   function buildCommercialSection(pricing, diag, ctx){
     if (!pricing.hasDiag){
-      return '<p class="muted">Plano ainda não calculado nesta simulação — volte à aba Diagnóstico.</p>';
+      return '<p class="muted">Investimento a confirmar com o seu Gerente de Contas.</p>';
     }
     var rows = "";
     pricing.baseRows.forEach(function(r){ rows += '<tr><td>' + escapeHtml(r.label) + '</td><td class="num">' + fmtBRL(r.value) + '</td></tr>'; });
@@ -2333,10 +2454,12 @@
     return html;
   }
 
+  // Nota: "atencao" (ex: checar disponibilidade do Módulo Indústria) é um sinal
+  // interno pro CSM revisar antes de ofertar — nunca aparece no documento que
+  // vai pro cliente. Fica só no painel editável (renderRecomendacoes).
   function buildOutrosProdutosSection(outros){
     return outros.map(function(o){
       var titulo = escapeHtml(o.produto) + (o.planoSugerido ? " — " + escapeHtml(o.planoSugerido) : "") + (o.variante ? " (" + o.variante + ")" : "");
-      var aviso = o.atencao ? '<div class="callout warn"><span class="lbl">Atenção</span>' + escapeHtml(o.atencao) + '</div>' : "";
       var linhaItem = o.porUsuario
         ? '<tr><td>' + escapeHtml(o.produto) + ' — ' + o.qtd + ' usuário(s) × ' + fmtBRL(o.unit) + '</td><td class="num">' + fmtBRL(o.base) + '</td></tr>'
         : '<tr><td>' + titulo + '</td><td class="num">' + fmtBRL(o.base) + '</td></tr>';
@@ -2348,13 +2471,13 @@
         '<div class="val">' + fmtBRL(o.total) + ' <small>/ mês</small></div>' +
         '<p style="margin-top:10px;">' + escapeHtml(o.motivo) + '</p>' +
         '<table><tr><th>Item</th><th style="text-align:right">Valor</th></tr>' + linhaItem + linhaDesconto + '</table>' +
-      '</div>' + aviso;
+      '</div>';
     }).join("");
   }
 
   function buildHorasSection(horas){
     if (!horas.rows.length){
-      return '<p class="muted">Nenhum agente selecionado nesta simulação — volte à aba Gerar Proposta para estimar as horas devolvidas.</p>';
+      return '<p class="muted">Os agentes de IA e o tempo devolvido à gestão serão detalhados junto com o time de atendimento.</p>';
     }
     var rows = horas.rows.map(function(r){
       return '<tr><td>' + escapeHtml(r.substitui || r.nome) + '</td><td>' + escapeHtml(r.nome) + '</td><td class="num">' + r.horas + 'h</td></tr>';
@@ -2418,7 +2541,7 @@
     var doresList = ctx.dores ? ctx.dores.split(/\n|;|•/).map(function(s){ return s.trim(); }).filter(Boolean) : [];
     var doresHtml = doresList.length
       ? '<ul class="clean">' + doresList.map(function(d){ return '<li>' + escapeHtml(d) + '</li>'; }).join("") + '</ul>'
-      : '<p class="muted">Dores do cliente não descritas nesta simulação — preencha antes de enviar.</p>';
+      : '<p class="muted">O contexto e as necessidades específicas desta operação serão detalhados junto ao seu Gerente de Contas.</p>';
 
     var fichasHtml = ctx.agents.length
       ? ctx.agents.map(buildAgentFicha).join("")
@@ -2567,8 +2690,8 @@
       }
 
       var sections = [
-        { header: true, title: "Contexto e Dores do Cliente",
-          body: doresHtml + '<div class="callout"><span class="lbl">Sobre este documento</span>Este é um modelo de proposta gerado a partir da simulação de plano e dos agentes selecionados pelo CSM. Revise cada seção, ajuste o texto ao tom da conversa com o cliente e confirme os números antes de enviar.</div>' },
+        { header: true, title: "Contexto e Desafios Identificados",
+          body: doresHtml },
         { title: "O Time Digital Proposto",
           body: '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' + fichasHtml },
         { title: "Tempo Devolvido à Gestão",
@@ -2577,7 +2700,7 @@
 
       if (outros.length){
         sections.push({ title: "Outras Soluções Recomendadas",
-          body: '<p>Além do Waipe, a conversa com o cliente indicou as seguintes oportunidades no ecossistema Londrisoft:</p>' + buildOutrosProdutosSection(outros) });
+          body: '<p>Além do Waipe, identificamos as seguintes oportunidades para complementar a operação:</p>' + buildOutrosProdutosSection(outros) });
       }
 
       sections.push({ title: "Plano Recomendado e Investimento",
@@ -2591,7 +2714,7 @@
       }
 
       sections.push({ title: "Próximos Passos",
-        body: '<ul class="clean"><li>Validar com o cliente as dores mapeadas e os agentes propostos.</li><li>Ajustar turnos, destinatários e regras de cada agente ao processo real do cliente.</li><li>Confirmar plano, usuários e empresas para fechar a proposta comercial.</li></ul>' +
+        body: '<ul class="clean"><li>Alinhamento fino de turnos, destinatários e regras de cada agente com o time.</li><li>Confirmação de usuários, empresas e das demais soluções para formalização comercial.</li><li>Planejamento conjunto do go-live.</li></ul>' +
           '<div class="footer">Londrisoft © ' + anoAtual + ' — Documento confidencial, preparado para ' + escapeHtml(ctx.cliente) + '.<br>Nomes de cargo dos agentes são denominações comerciais desta proposta; o desenho final de cada agente é definido em conjunto na implantação.</div>' });
 
       return sections.map(function(s, i){
