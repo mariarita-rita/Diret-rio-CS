@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Diagnóstico de Planos Waipe</title>
+<title>Arquitetura de Solução</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -428,21 +428,21 @@
       <span class="brand-name" style="color:var(--ink)">waipe</span>
     </div>
     <div class="header-title">
-      <h1>Diagnóstico de Planos</h1>
-      <p>Ferramenta interna do time de CS — indique o plano certo e consulte a precificação completa</p>
+      <h1>Arquitetura de Solução</h1>
+      <p>Ferramenta interna do time de CS — monte a arquitetura de solução do cliente (Waipe e o resto do ecossistema) e consulte a precificação completa</p>
     </div>
     <div class="header-meta">Baseado em<br>Planos e Precificação — Waipe 2026</div>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Seções">
-    <button class="tab-btn active" data-tab="diag" role="tab" aria-selected="true">Diagnóstico do Cliente</button>
+    <button class="tab-btn active" data-tab="prop" role="tab" aria-selected="true">Gerar Proposta</button>
+    <button class="tab-btn" data-tab="diag" role="tab" aria-selected="false">Diagnóstico Waipe</button>
     <button class="tab-btn" data-tab="cmp" role="tab" aria-selected="false">Comparativo de Planos</button>
     <button class="tab-btn" data-tab="vendas" role="tab" aria-selected="false">Vendas &amp; FAQ</button>
-    <button class="tab-btn" data-tab="prop" role="tab" aria-selected="false">Gerar Proposta</button>
   </nav>
 
   <!-- ===================== DIAGNÓSTICO ===================== -->
-  <section class="panel active" id="panel-diag">
+  <section class="panel" id="panel-diag">
 
     <div class="callout">
       <div class="dot"></div>
@@ -887,11 +887,11 @@
   </section>
 
   <!-- ===================== GERAR PROPOSTA ===================== -->
-  <section class="panel" id="panel-prop">
+  <section class="panel active" id="panel-prop">
 
     <div class="prop-warn">
       <div>
-        <b>Sobre esta aba:</b> ainda não existe uma conexão que faça uma IA escrever a proposta inteira dentro desta página. O que este gerador faz agora: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação (no visual que vocês já usam), e monta um <b>prompt pronto</b> para colar no Gem do Waipe que os CSMs já usam no Gemini — sem precisar redigitar o contexto do cliente.
+        <b>Sobre esta aba:</b> cole a transcrição da consultoria e a IA preenche cliente/segmento/dores, calcula o diagnóstico Waipe (aba ao lado) e aponta outras oportunidades do ecossistema (Gestor, Simplaz, Unique, BIME APP) — mas ela ainda não escreve a proposta inteira. O que este gerador faz: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação (no visual que vocês já usam), e monta um <b>prompt pronto</b> para colar no Gem do Waipe que os CSMs já usam no Gemini — sem precisar redigitar o contexto do cliente.
       </div>
     </div>
 
@@ -899,7 +899,18 @@
       <!-- FORM -->
       <div class="card">
         <h2>Contexto do cliente para a proposta</h2>
-        <div class="sub">Estas informações + o plano calculado na aba Diagnóstico alimentam o modelo de proposta e o prompt do Gemini.</div>
+        <div class="sub">Estas informações + o plano calculado na aba Diagnóstico Waipe alimentam o modelo de proposta e o prompt do Gemini.</div>
+
+        <div class="field" style="margin-bottom:14px;">
+          <label for="p-transcricao">✨ Colar transcrição da consultoria (opcional)</label>
+          <textarea id="p-transcricao" class="ta" placeholder="Cole aqui a transcrição da reunião — a IA preenche cliente, segmento e dores, e aponta outras oportunidades (Gestor, Simplaz, Unique, BIME APP)."></textarea>
+          <div class="hint">Não recomenda agentes do Waipe — isso continua sendo sugerido automaticamente a partir do campo "dores" abaixo.</div>
+          <button type="button" class="btn-secondary" id="btnAnalisarIa" style="margin-top:8px;">Analisar com IA</button>
+          <div id="analiseIaErro" style="display:none; font-size:12.5px; color:#B91C1C; margin-top:8px;"></div>
+          <div id="analiseIaResultado" style="display:none; margin-top:12px;"></div>
+        </div>
+
+        <div class="divider"></div>
 
         <div class="field-row">
           <div class="field">
@@ -927,7 +938,7 @@
           <label for="p-erp">ERP utilizado pelo cliente</label>
           <select id="p-erp" class="sel">
             <option value="Gestor">Gestor</option>
-            <option value="Bime">Bime</option>
+            <option value="Bime APP">Bime APP</option>
             <option value="Unique">Unique</option>
             <option value="Simplaz">Simplaz</option>
             <option value="Outro">Outro / não informado</option>
@@ -1600,7 +1611,7 @@
 
   // ---------- Implantação Enterprise (guia "Como Funciona a Precificação de Implantação Enterprise") ----------
   var PACOTES_IMPLANTACAO = [
-    { id: "padrao", nome: "Padrão", setup: 7900, horasRef: 22, indicado: "Poucos fluxos simples, majoritariamente leitura, dentro do stack Londrisoft (Gestor, Bime, Unique, Simplaz, Waipe)." },
+    { id: "padrao", nome: "Padrão", setup: 7900, horasRef: 22, indicado: "Poucos fluxos simples, majoritariamente leitura, dentro do stack Londrisoft (Gestor, Bime APP, Unique, Simplaz, Waipe)." },
     { id: "intermediario", nome: "Intermediário", setup: 14900, horasRef: 42, indicado: "Mais processos, regras de negócio, aprovações, escrita no ERP ou human-in-the-loop." },
     { id: "avancado", nome: "Avançado", setup: 24900, horasRef: 70, indicado: "Múltiplas áreas, maior complexidade ou integração com sistema externo." }
   ];
@@ -1717,7 +1728,7 @@
     var p = computePricing();
 
     if (!diag){
-      baseWrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico do Cliente" para trazer o valor base do plano.</span></div>';
+      baseWrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico Waipe" para trazer o valor base do plano.</span></div>';
     } else {
       baseWrap.innerHTML = p.baseRows.map(function(r){
         return '<div class="pricesim-row"><span class="lbl">' + escapeHtml(r.label) + '</span><span class="val tabular">' + fmtBRL(r.value) + '</span></div>';
@@ -1879,6 +1890,76 @@
     doresDebounce = setTimeout(runAutoSuggest, 500);
   });
 
+  // ---- Analisar transcrição com IA (cliente/segmento/dores + outros produtos) ----
+  function aplicarWaipeDiagnostico(wd){
+    if (!wd) return;
+    document.getElementById("f-usuarios").value = wd.usuarios;
+    document.getElementById("f-empresas").value = wd.empresas;
+    ["governanca", "auditoria", "enterprisePorVolume"].forEach(function(grupo){
+      var btn = document.querySelector('.seg[data-group="' + grupo + '"] button[data-val="' + wd[grupo] + '"]');
+      if (btn) btn.click();
+    });
+    var opt = document.querySelector('input[name="automacao"][value="' + wd.automacao + '"]');
+    opt = opt ? opt.closest(".radio-opt") : null;
+    if (opt) opt.click();
+    var btnCalcular = document.getElementById("btnCalcular");
+    if (btnCalcular) btnCalcular.click();
+  }
+
+  function renderAnaliseIa(resultado){
+    var wrap = document.getElementById("analiseIaResultado");
+    var recs = resultado.recomendacoes || [];
+    if (!recs.length){ wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+    wrap.style.display = "block";
+    wrap.innerHTML = '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b></div></div>' +
+      recs.map(function(r){
+        var aviso = r.atencao
+          ? '<div style="margin-top:4px; color:#B45309;"><b>⚠ ' + escapeHtml(r.atencao) + '</b></div>'
+          : "";
+        return '<div style="padding:10px 0; border-top:1px solid var(--border, #E2E7F5);">' +
+          '<b>' + escapeHtml(r.produto) + (r.planoSugerido ? " — " + escapeHtml(r.planoSugerido) : "") + '</b>' +
+          '<div style="font-size:13px; color:var(--muted, #5C6180); margin-top:2px;">' + escapeHtml(r.motivo) + '</div>' +
+          aviso +
+        '</div>';
+      }).join("");
+  }
+
+  document.getElementById("btnAnalisarIa").addEventListener("click", function(){
+    var btn = this;
+    var erroEl = document.getElementById("analiseIaErro");
+    var transcricao = document.getElementById("p-transcricao").value.trim();
+    erroEl.style.display = "none";
+    if (!transcricao){ erroEl.textContent = "Cole a transcrição da reunião antes de analisar."; erroEl.style.display = "block"; return; }
+
+    btn.disabled = true;
+    var textoOriginal = btn.textContent;
+    btn.textContent = "Analisando…";
+
+    fetch("/api/ia?action=analisar-transcricao", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcricao: transcricao })
+    }).then(function(r){
+      return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+    }).then(function(resultado){
+      if (resultado.cliente) document.getElementById("p-cliente").value = resultado.cliente;
+      if (resultado.segmento) document.getElementById("p-segmento").value = resultado.segmento;
+      if (resultado.dores){
+        document.getElementById("p-dores").value = resultado.dores;
+        runAutoSuggest();
+      }
+      aplicarWaipeDiagnostico(resultado.waipeDiagnostico);
+      renderAnaliseIa(resultado);
+      showToast("Análise concluída — revise os campos preenchidos e o diagnóstico Waipe calculado.");
+    }).catch(function(e){
+      erroEl.textContent = (e && e.error) || "Não foi possível analisar agora. Preencha os campos manualmente.";
+      erroEl.style.display = "block";
+    }).finally(function(){
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    });
+  });
+
   function refreshPropSummary(){
     var planStat = document.getElementById("propPlanStat");
     var priceStat = document.getElementById("propPriceStat");
@@ -1894,7 +1975,7 @@
     } else {
       planStat.textContent = "—";
       priceStat.textContent = "—";
-      warnBox.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na primeira aba antes de gerar a proposta, para trazer o plano e o preço certos.</span></div>';
+      warnBox.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico Waipe" (ou cole a transcrição acima) antes de gerar a proposta, para trazer o plano e o preço certos.</span></div>';
     }
     agentsStat.textContent = Object.keys(selectedAgentIds).length;
   }
@@ -2375,7 +2456,7 @@
 
   // ---------- Log de proposta gerada (ClickUp, quando disponível) ----------
   // So funciona quando a pagina roda na mesma origem do Dashboard de carteiras
-  // (a aba "Diagnóstico Waipe"), onde existe sessao logada e /api/clickup
+  // (a aba "Arquitetura de Solução"), onde existe sessao logada e /api/clickup
   // responde. Em qualquer outro contexto (arquivo local, link direto do
   // Artifact) a chamada falha e e silenciosamente ignorada — nunca bloqueia
   // download/copia por causa disso.

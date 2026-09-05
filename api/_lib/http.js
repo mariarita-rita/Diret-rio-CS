@@ -184,10 +184,14 @@ function comoObjetoJson(texto) {
  * inválido, Content-Type ausente ou errado, corpo vazio, corpo acima do limite,
  * erro de leitura do stream — sai como ErroCorpo, que os endpoints traduzem em
  * 400 `corpo_invalido`.
+ *
+ * `limiteBytes` sobe o teto padrão de 100KB para endpoints que legitimamente
+ * recebem corpo maior (hoje só `api/ia.js`, que recebe transcrição de reunião
+ * inteira) — o padrão sem esse argumento continua sendo o teto de sempre.
  */
-export async function lerCorpo(req) {
+export async function lerCorpo(req, { limiteBytes = LIMITE_CORPO } = {}) {
   const declarado = Number(req.headers['content-length']);
-  if (Number.isFinite(declarado) && declarado > LIMITE_CORPO) {
+  if (Number.isFinite(declarado) && declarado > limiteBytes) {
     throw new ErroCorpo('Corpo da requisição muito grande.');
   }
   if (!RE_JSON.test(req.headers['content-type'] || '')) {
@@ -201,12 +205,12 @@ export async function lerCorpo(req) {
   // Buffer antes de objeto: Buffer também é objeto.
   if (Buffer.isBuffer(body)) {
     if (!body.length) throw new ErroCorpo('Corpo da requisição vazio.');
-    if (body.length > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
+    if (body.length > limiteBytes) throw new ErroCorpo('Corpo da requisição muito grande.');
     return comoObjetoJson(body.toString('utf8'));
   }
   if (typeof body === 'string') {
     if (!body.trim()) throw new ErroCorpo('Corpo da requisição vazio.');
-    if (body.length > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
+    if (body.length > limiteBytes) throw new ErroCorpo('Corpo da requisição muito grande.');
     return comoObjetoJson(body);
   }
   if (body && typeof body === 'object') {
@@ -220,7 +224,7 @@ export async function lerCorpo(req) {
   try {
     for await (const pedaco of req) {
       total += pedaco.length;
-      if (total > LIMITE_CORPO) throw new ErroCorpo('Corpo da requisição muito grande.');
+      if (total > limiteBytes) throw new ErroCorpo('Corpo da requisição muito grande.');
       pedacos.push(pedaco);
     }
   } catch (e) {

@@ -1925,6 +1925,100 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   globalThis.fetch = fetchOriginal;
 }
 
+console.log('\n[35] api/ia.js — analisar-transcricao: sessao, saneamento e configuracao ausente');
+{
+  const ia = await carregar('api/ia.js');
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+
+  const chamarIa = async (perfil, body) => {
+    const r = res();
+    await ia({
+      method: 'POST',
+      headers: cabecalhos(perfil ? { cookie: cookieDe(perfil) } : {}),
+      query: { action: 'analisar-transcricao' },
+      body,
+    }, r);
+    return r;
+  };
+
+  // Sem ANTHROPIC_API_KEY: 500 nao_configurado, nao derruba.
+  delete process.env.ANTHROPIC_API_KEY;
+  const semChave = await chamarIa(GESTAO, { transcricao: 'x'.repeat(50) });
+  checar('sem ANTHROPIC_API_KEY: nao derruba', semChave.corpo != null, true);
+  checar('sem ANTHROPIC_API_KEY: 500 nao_configurado', [semChave.code, semChave.corpo.code], [500, 'nao_configurado']);
+
+  // Gates de sessao/perfil, antes de qualquer chamada externa.
+  const semSessao = await chamarIa(null, { transcricao: 'x'.repeat(50) });
+  checar('sem cookie: 401', semSessao.code, 401);
+  const comoConsulta = await chamarIa(CONSULTA, { transcricao: 'x'.repeat(50) });
+  checar('consulta: 403 somente_leitura', [comoConsulta.code, comoConsulta.corpo.code], [403, 'somente_leitura']);
+
+  // Corpo invalido e transcricao curta demais — com a chave presente, pra passar do gate de config.
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-teste';
+  const corpoVazio = await chamarIa(GESTAO, '');
+  checar('corpo vazio: 400 corpo_invalido', [corpoVazio.code, corpoVazio.corpo.code], [400, 'corpo_invalido']);
+  const transcricaoCurta = await chamarIa(GESTAO, { transcricao: 'oi' });
+  checar('transcricao curta: 400 transcricao_invalida', [transcricaoCurta.code, transcricaoCurta.corpo.code], [400, 'transcricao_invalida']);
+
+  // Chamada real (mockada) — saneamento: produto fora da allowlist descartado, campos truncados.
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    checar('  chama a Claude API', String(url), 'https://api.anthropic.com/v1/messages');
+    return {
+      ok: true, status: 200,
+      json: async () => ({
+        content: [{ type: 'text', text: JSON.stringify({
+          cliente: 'Cliente Teste',
+          segmento: 'Varejo',
+          dores: 'Inadimplência alta.',
+          recomendacoes: [
+            { produto: 'Gestor', planoSugerido: 'Avançado', motivo: 'Precisa de multi-filial.', atencao: 'Verificar disponibilidade do Módulo Indústria.' },
+            { produto: 'Produto Inventado', planoSugerido: 'X', motivo: 'Nao deveria sobreviver.' },
+            { produto: 'BIME APP', planoSugerido: '', motivo: 'Vendedor externo lançando pedido.' },
+          ],
+        }) }],
+      }),
+    };
+  };
+  const ok = await chamarIa(GESTAO, { transcricao: 'x'.repeat(50) });
+  checar('chamada ok: 200', ok.code, 200);
+  checar('  cliente/segmento/dores repassados', [ok.corpo.cliente, ok.corpo.segmento, ok.corpo.dores], ['Cliente Teste', 'Varejo', 'Inadimplência alta.']);
+  checar('  2 recomendacoes sobrevivem (produto invalido descartado)', ok.corpo.recomendacoes.length, 2);
+  checar('  Gestor mantem o campo atencao', ok.corpo.recomendacoes[0].atencao, 'Verificar disponibilidade do Módulo Indústria.');
+  checar('  BIME APP sem atencao (campo omitido)', Object.hasOwn(ok.corpo.recomendacoes[1], 'atencao'), false);
+  globalThis.fetch = fetchOriginal;
+
+  // waipeDiagnostico: campos validos passam, campos invalidos/fora de faixa caem no padrao seguro.
+  const fetchOriginal2 = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    json: async () => ({
+      content: [{ type: 'text', text: JSON.stringify({
+        cliente: 'X', segmento: 'Y', dores: 'Z',
+        waipeDiagnostico: { usuarios: 7, empresas: 9999, governanca: 'sim', auditoria: 'talvez', automacao: 'personalizada', enterprisePorVolume: 'sim' },
+        recomendacoes: [],
+      }) }],
+    }),
+  });
+  const comWd = await chamarIa(GESTAO, { transcricao: 'x'.repeat(50) });
+  checar('waipeDiagnostico: usuarios valido preservado', comWd.corpo.waipeDiagnostico.usuarios, 7);
+  checar('waipeDiagnostico: empresas fora da faixa (1-500) cai no padrao', comWd.corpo.waipeDiagnostico.empresas, 1);
+  checar('waipeDiagnostico: governanca valida preservada', comWd.corpo.waipeDiagnostico.governanca, 'sim');
+  checar('waipeDiagnostico: auditoria invalida cai no padrao "nao"', comWd.corpo.waipeDiagnostico.auditoria, 'nao');
+  checar('waipeDiagnostico: automacao valida preservada', comWd.corpo.waipeDiagnostico.automacao, 'personalizada');
+  globalThis.fetch = async () => ({
+    ok: true, status: 200,
+    json: async () => ({ content: [{ type: 'text', text: JSON.stringify({ cliente: 'X', recomendacoes: [] }) }] }),
+  });
+  const semWd = await chamarIa(GESTAO, { transcricao: 'x'.repeat(50) });
+  checar('waipeDiagnostico ausente: usa o padrao seguro inteiro', semWd.corpo.waipeDiagnostico, { usuarios: 1, empresas: 1, governanca: 'nao', auditoria: 'nao', automacao: 'pronta', enterprisePorVolume: 'nao' });
+  globalThis.fetch = fetchOriginal2;
+
+  delete process.env.ANTHROPIC_API_KEY;
+}
+
 console.log(`\n${total - falhas}/${total} passaram`);
 if (falhas) {
   console.error(`${falhas} FALHA(S)`);
