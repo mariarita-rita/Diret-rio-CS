@@ -202,7 +202,11 @@ async function chamarClaude(transcricao) {
     },
     body: JSON.stringify({
       model: MODELO,
-      max_tokens: 2000,
+      max_tokens: 4096,
+      // Sem isso o modelo gasta a maior parte do orçamento de max_tokens
+      // "pensando" (thinking_tokens) e corta a resposta em JSON antes de
+      // fechar — não precisamos do raciocínio exposto, só do JSON final.
+      thinking: { type: 'disabled' },
       system: [{ type: 'text', text: INSTRUCOES, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: `Transcrição da reunião:\n\n${transcricao}` }],
     }),
@@ -215,7 +219,10 @@ async function chamarClaude(transcricao) {
   const corpo = await r.json();
   const respostaTexto = corpo?.content?.find((b) => b.type === 'text')?.text || '';
   const parsed = jsonTolerante(respostaTexto);
-  if (!parsed) throw new Error('resposta_nao_json');
+  if (!parsed) {
+    console.error(`[ia] resposta_nao_json (stop_reason=${corpo?.stop_reason}): ${respostaTexto.slice(0, 500)}`);
+    throw new Error('resposta_nao_json');
+  }
   return sanearResultado(parsed);
 }
 
