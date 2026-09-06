@@ -1974,7 +1974,7 @@
     "Simplaz Unique": ["Bronze", "Prata", "Ouro"],
     "Unique": ["Light", "Plus", "Premium", "Empresarial"],
   };
-  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Outro"];
+  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Treinamento", "Outro"];
 
   function novoItemRecomendacao(r){
     var variante = r.produto === "Gestor" ? "Nuvem" : null;
@@ -1984,6 +1984,8 @@
       planoSugerido: r.planoSugerido || "",
       motivo: r.motivo || "",
       atencao: r.atencao || "",
+      observacoes: "",
+      ambienteMuda: false,
       incluir: true,
       origem: "ia",
       variante: variante,
@@ -2003,6 +2005,8 @@
       planoSugerido: "",
       motivo: "",
       atencao: "",
+      observacoes: "",
+      ambienteMuda: false,
       incluir: true,
       origem: "manual",
       variante: "Nuvem",
@@ -2093,6 +2097,12 @@
             '<option value="Local"' + (item.variante === "Local" ? " selected" : "") + '>Local</option>' +
           '</select>')
         : "";
+      var ambienteMudaHtml = (item.produto === "Gestor" || item.produto === "Unique")
+        ? '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:6px;">' +
+            '<input type="checkbox" data-rec-ambiente-muda="' + i + '"' + (item.ambienteMuda ? " checked" : "") + ' style="width:14px; height:14px; accent-color:var(--ink);">' +
+            'Envolve troca de ambiente (Local ↔ Nuvem)' +
+          '</label>'
+        : "";
       var qtdHtml = item.porUsuario
         ? campo("Usuários", '<input type="number" min="1" step="1" class="num-input tabular" data-rec-qtd="' + i + '" value="' + item.quantidade + '" style="display:block; margin-top:2px; width:80px;">')
         : "";
@@ -2109,7 +2119,9 @@
           '<input type="checkbox" data-rec-incluir="' + i + '"' + (item.incluir ? " checked" : "") + ' style="width:16px; height:16px; accent-color:var(--ink); margin-top:8px; flex:0 0 auto;">' +
           '<div style="flex:1;">' +
             '<div style="display:flex; gap:18px; flex-wrap:wrap;">' + produtoHtml + planoHtml + '</div>' +
+            ambienteMudaHtml +
             campo("Como isso ajuda este cliente", '<textarea data-rec-motivo="' + i + '" class="ta" style="display:block; margin-top:2px; min-height:44px; font-size:13px;" placeholder="Descreva o que esse item resolve para o cliente...">' + escapeHtml(item.motivo) + '</textarea>') +
+            campo("Observações para a implantação (opcional)", '<textarea data-rec-observacoes="' + i + '" class="ta" style="display:block; margin-top:2px; min-height:36px; font-size:13px;" placeholder="ex: cliente pediu para zerar a base, duplicar dados de outra empresa, horário específico...">' + escapeHtml(item.observacoes || "") + '</textarea>') +
             aviso +
           '</div>' +
           '<button type="button" class="btn-remove" data-rec-remover="' + i + '" aria-label="Remover" style="flex:0 0 auto;">✕</button>' +
@@ -2160,6 +2172,16 @@
     wrap.querySelectorAll("[data-rec-motivo]").forEach(function(ta){
       ta.addEventListener("input", function(){
         recomendacoesState[parseInt(ta.getAttribute("data-rec-motivo"), 10)].motivo = ta.value;
+      });
+    });
+    wrap.querySelectorAll("[data-rec-observacoes]").forEach(function(ta){
+      ta.addEventListener("input", function(){
+        recomendacoesState[parseInt(ta.getAttribute("data-rec-observacoes"), 10)].observacoes = ta.value;
+      });
+    });
+    wrap.querySelectorAll("[data-rec-ambiente-muda]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        recomendacoesState[parseInt(cb.getAttribute("data-rec-ambiente-muda"), 10)].ambienteMuda = cb.checked;
       });
     });
     wrap.querySelectorAll("[data-rec-incluir]").forEach(function(cb){
@@ -2574,6 +2596,7 @@
         recomendacoesState = (projeto.outrasSolucoesPropostas || []).map(function(o){
           return {
             produto: o.produto, planoSugerido: o.planoSugerido, motivo: o.motivo, atencao: "",
+            observacoes: o.observacoes || "", ambienteMuda: !!o.ambienteMuda,
             incluir: o.incluir, origem: "manual", variante: o.variante,
             porUsuario: o.produto === "BIME APP", quantidade: o.quantidade,
             valorTabela: o.valorTabela, valorManual: o.valorManual, pol: o.pol, descontoPercent: o.descontoPercent

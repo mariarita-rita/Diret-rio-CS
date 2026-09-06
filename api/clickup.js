@@ -695,12 +695,29 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Treinamento', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
 const POL_SOLUCAO_VALIDOS = new Set(['padrao', 'limite10', 'sem']);
-const CLASSIFICACAO_SOLUCAO_VALIDAS = new Set(['produtoSimples', 'requerImplantacao']);
 const GOV_WAIPE_VALIDOS = new Set(['sim', 'nao']);
 const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
+
+// Jornada (checklist) por produto — passos concretos, documentados pelo
+// time (nao mais o binario generico produtoSimples/requerImplantacao).
+// null = ainda sem passo a passo definido (ex: "Outro", ou Gestor/Unique
+// com troca de ambiente — o material chega depois, entao so sinaliza).
+const JORNADA_TEMPLATES = {
+  'BIME APP': ['Ativar usuários no workspace do cliente', 'Enviar e-mail com instruções de uso', 'Finalizar'],
+  'Simplaz Gestor': ['Adicionar o plano no Núcleo', 'Configurar certificado digital (se ainda não enviado)', 'Enviar e-mail com instruções de uso', 'Finalizar'],
+  'Simplaz Unique': ['Adicionar o plano no Núcleo', 'Configurar certificado digital (se ainda não enviado)', 'Enviar e-mail com instruções de uso', 'Finalizar'],
+  'Treinamento': ['Agendar o treinamento', 'Confirmar participantes', 'Realizar o treinamento na data agendada'],
+};
+
+/** Gestor/Unique tem 2 fluxos: mesmo ambiente e so trocar o plano; troca de
+ * ambiente (Local<->Nuvem) ainda nao tem passo a passo aqui. */
+function jornadaPara(produto, ambienteMuda) {
+  if (produto === 'Gestor' || produto === 'Unique') return ambienteMuda ? null : ['Alterar o plano no Núcleo'];
+  return JORNADA_TEMPLATES[produto] || null;
+}
 
 /** Um agente proposto (pré-alinhamento) — só nome/frente/entrega; o resto da estrutura se preenche no Alinhamento, como já acontece hoje. */
 function sanearAgenteProposto(a) {
@@ -710,7 +727,7 @@ function sanearAgenteProposto(a) {
   return { nome, frente: texto(a.frente, 120), entrega: sanearListaTexto(a.entrega, 20, 200) };
 }
 
-/** Uma "outra solução" (Gestor/Simplaz/Unique/BIME APP/Outro) proposta pelo simulador. */
+/** Uma "outra solução" (Gestor/Simplaz/Unique/BIME APP/Treinamento/Outro) proposta pelo simulador. */
 function sanearOutraSolucao(o) {
   if (!o || typeof o !== 'object') return null;
   const produto = typeof o.produto === 'string' && PRODUTOS_SOLUCAO_VALIDOS.has(o.produto) ? o.produto : null;
@@ -720,6 +737,8 @@ function sanearOutraSolucao(o) {
     planoSugerido: texto(o.planoSugerido, 80),
     variante: typeof o.variante === 'string' && VARIANTES_SOLUCAO_VALIDAS.has(o.variante) ? o.variante : null,
     motivo: texto(o.motivo, 400),
+    observacoes: texto(o.observacoes, 500),
+    ambienteMuda: !!o.ambienteMuda,
     quantidade: inteiroEntre(o.quantidade, 1, 500, 1),
     valorTabela: numeroOuNulo(o.valorTabela, 0, 999999),
     valorManual: numeroOuNulo(o.valorManual, 0, 999999) ?? 0,
@@ -753,6 +772,7 @@ function descricaoSolucao(o) {
     `**Quantidade:** ${o.quantidade}`,
     `**Valor unitário:** R$ ${valor.toFixed(2)}`,
     o.descontoPercent ? `**Desconto:** ${o.descontoPercent}%` : null,
+    o.observacoes ? `**Observações para a implantação:** ${o.observacoes}` : null,
   ].filter(Boolean);
   return linhas.join('\n\n');
 }
@@ -830,11 +850,14 @@ async function obterImplantacaoAcao(req, res, sessao) {
           planoSugerido: texto(e.planoSugerido, 80),
           variante: VARIANTES_SOLUCAO_VALIDAS.has(e.variante) ? e.variante : null,
           motivo: texto(e.motivo, 400),
+          observacoes: texto(e.observacoes, 500),
+          ambienteMuda: !!e.ambienteMuda,
           quantidade: Number.isFinite(e.quantidade) ? e.quantidade : 1,
           valorTabela: Number.isFinite(e.valorTabela) ? e.valorTabela : null,
           valorManual: Number.isFinite(e.valorManual) ? e.valorManual : 0,
           descontoPercent: Number.isFinite(e.descontoPercent) ? e.descontoPercent : 0,
-          classificacao: CLASSIFICACAO_SOLUCAO_VALIDAS.has(e.classificacao) ? e.classificacao : null,
+          checklist: Array.isArray(e.checklist) ? sanearListaTexto(e.checklist, 20, 200) : null,
+          checklistChecks: sanearChecks(e.checklistChecks) || {},
         };
       }
       return {
@@ -869,6 +892,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
       prioridade: sanearListaIds(estadoProjeto.prioridade),
       agenteAtualId: typeof estadoProjeto.agenteAtualId === 'string' ? estadoProjeto.agenteAtualId : null,
       concluidos: sanearListaIds(estadoProjeto.concluidos),
+      camada1Checks: sanearChecks(estadoProjeto.camada1Checks) || {},
       // Só relevante enquanto etapaAtual === "proposta" (ou como histórico do
       // que foi proposto, depois de promovido) — arrays vazios/null nos
       // demais casos.
@@ -988,6 +1012,15 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     agenteAtualId: typeof corpo.agenteAtualId === 'string' ? texto(corpo.agenteAtualId, 60) : null,
     concluidos: sanearListaIds(corpo.concluidos),
     agentesTotal: Number.isFinite(estadoAtual.agentesTotal) ? estadoAtual.agentesTotal : 0,
+    // Camada 1 (Núcleo + usuários liberados) só existe quando o projeto tem
+    // agentes Waipe reais — mesmo padrão de sanearChecks já usado no agente.
+    camada1Checks: sanearChecks(corpo.camada1Checks) ?? (estadoAtual.camada1Checks || {}),
+    // Histórico do que foi proposto (só existe em projetos que passaram pela
+    // etapa "proposta") — precisa ser preservado aqui, senão qualquer
+    // atualizar-implantacao normal do dia a dia apaga esse registro.
+    agentesPropostos: estadoAtual.agentesPropostos || [],
+    outrasSolucoesPropostas: estadoAtual.outrasSolucoesPropostas || [],
+    diagnosticoWaipe: estadoAtual.diagnosticoWaipe || null,
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
@@ -1030,16 +1063,14 @@ async function atualizarAgenteAcao(req, res, sessao) {
   }
 
   const estadoAtual = parseWaipeState(tarefa.description);
-  // Subtask tipo "solucao" (Gestor/Simplaz/Unique/BIME APP fechado) não tem
-  // estrutura de agente — só a classificação (produto simples x requer
-  // implantação) é editável aqui; o resto do estado (produto/plano/valor)
-  // é preservado como veio da promoção da proposta.
+  // Subtask tipo "solucao" (Gestor/Simplaz/Unique/BIME APP/Treinamento
+  // fechado) não tem estrutura de agente — só o progresso do checklist
+  // (checklistChecks) é editável aqui; o resto do estado (produto/plano/
+  // valor/checklist/observações) é preservado como veio da promoção.
   const novoEstado = estadoAtual.tipo === 'solucao'
     ? {
         ...estadoAtual,
-        classificacao: typeof corpo.classificacao === 'string' && CLASSIFICACAO_SOLUCAO_VALIDAS.has(corpo.classificacao)
-          ? corpo.classificacao
-          : (CLASSIFICACAO_SOLUCAO_VALIDAS.has(estadoAtual.classificacao) ? estadoAtual.classificacao : null),
+        checklistChecks: sanearChecks(corpo.checklistChecks) ?? (estadoAtual.checklistChecks || {}),
       }
     : {
         tipo: 'agente',
@@ -1232,11 +1263,14 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
         planoSugerido: o.planoSugerido,
         variante: o.variante,
         motivo: o.motivo,
+        observacoes: o.observacoes,
+        ambienteMuda: o.ambienteMuda,
         quantidade: o.quantidade,
         valorTabela: o.valorTabela,
         valorManual: o.valorManual,
         descontoPercent: o.descontoPercent,
-        classificacao: null,
+        checklist: jornadaPara(o.produto, o.ambienteMuda),
+        checklistChecks: {},
       }),
     });
   }

@@ -2033,8 +2033,10 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
     etapaAtual: 'proposta',
     agentesPropostos: [{ nome: 'Agente Novo', frente: 'Comercial', entrega: ['Resumo diário'] }],
     outrasSolucoesPropostas: [
-      { produto: 'Gestor', planoSugerido: 'Avançado', variante: 'Nuvem', motivo: 'Multi-filial.', quantidade: 1, valorTabela: 719, valorManual: 0, pol: 'padrao', descontoPercent: 0, incluir: true },
+      { produto: 'Gestor', planoSugerido: 'Avançado', variante: 'Nuvem', motivo: 'Multi-filial.', observacoes: 'Cliente pediu para zerar a base antes de migrar.', ambienteMuda: false, quantidade: 1, valorTabela: 719, valorManual: 0, pol: 'padrao', descontoPercent: 0, incluir: true },
       { produto: 'BIME APP', planoSugerido: '', variante: null, motivo: 'Recusado pelo cliente.', quantidade: 4, valorTabela: 69.9, valorManual: 0, pol: 'sem', descontoPercent: 0, incluir: false },
+      { produto: 'Unique', planoSugerido: 'Plus', variante: null, motivo: 'Troca de plano com migração de ambiente.', ambienteMuda: true, quantidade: 1, valorTabela: 447, valorManual: 0, pol: 'padrao', descontoPercent: 0, incluir: true },
+      { produto: 'Treinamento', planoSugerido: '', variante: null, motivo: 'Nunca usou o módulo financeiro.', quantidade: 1, valorTabela: null, valorManual: 0, pol: null, descontoPercent: 0, incluir: true },
     ],
     diagnosticoWaipe: { usuarios: 3, empresas: 1, governanca: 'nao', auditoria: 'nao', automacao: 'pronta', enterprisePorVolume: 'nao', plano: 'Time', valorMensal: 249 },
   };
@@ -2049,6 +2051,16 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
     id: 'tPromovida', name: 'Cliente Z — Implantação Waipe', list: { id: LISTA },
     status: { status: 'pendente' }, parent: null, subtasks: [],
     description: descProposta({ etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: 1 }),
+  });
+  const taskSolucaoExistente = () => ({
+    id: 'tSolucao1', name: 'Gestor — Avançado', list: { id: LISTA }, parent: 'tPromovida',
+    status: { status: 'pendente' },
+    description: descProposta({
+      tipo: 'solucao', produto: 'Gestor', planoSugerido: 'Avançado', variante: 'Nuvem',
+      motivo: 'Multi-filial.', observacoes: 'Zerar a base antes.', quantidade: 1,
+      valorTabela: 719, valorManual: 0, descontoPercent: 0,
+      checklist: ['Alterar o plano no Núcleo'], checklistChecks: {},
+    }),
   });
 
   function ok(corpo) {
@@ -2066,11 +2078,16 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
       escritas.push({ alvo: 'proposta', body: JSON.parse(init.body) });
       return ok({});
     }
+    if (metodo === 'PUT' && u.endsWith('/task/tSolucao1')) {
+      escritas.push({ alvo: 'solucao1', body: JSON.parse(init.body) });
+      return ok({});
+    }
     if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
       escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
       return ok({ id: 'tSubtaskNova' });
     }
     if (u.includes('/task/tProposta')) return ok(taskPropostaProjeto());
+    if (u.includes('/task/tSolucao1')) return ok(taskSolucaoExistente());
     if (u.includes('/task/tPromovida')) return ok(taskJaPromovida());
     return ok({});
   };
@@ -2125,15 +2142,22 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   const salvarJaPromovida = await chamarAcao(GIAN, 'salvar-proposta-implantacao', { cliente: 'Cliente Z', taskIdExistente: 'tPromovida' });
   checar('salvar-proposta: ja promovida -> 409', [salvarJaPromovida.code, salvarJaPromovida.corpo.code], [409, 'ja_promovida']);
 
-  // confirmar-fechamento-implantacao: promove so os itens incluidos, avanca etapa
+  // confirmar-fechamento-implantacao: promove so os itens incluidos, avanca etapa,
+  // resolve a jornada (checklist) por produto — null so quando Gestor/Unique envolve troca de ambiente.
   escritas.length = 0;
   const confirmarOk = await chamarAcao(GIAN, 'confirmar-fechamento-implantacao', { id: 'tProposta' });
   checar('confirmar-fechamento: 200', [confirmarOk.code, confirmarOk.corpo.ok], [200, true]);
-  checar('  cria 1 agente + 1 solucao incluida (BIME APP recusado fica de fora)', confirmarOk.corpo.criados, 2);
+  checar('  cria 1 agente + 3 solucoes incluidas (BIME APP recusado fica de fora)', confirmarOk.corpo.criados, 4);
   const criadas = escritas.filter((e) => e.alvo === 'criar').map((e) => e.body);
   checar('  subtask do agente', criadas.some((c) => c.name === 'Agente Novo'), true);
-  checar('  subtask da solucao incluida', criadas.some((c) => c.name === 'Gestor — Avançado'), true);
   checar('  solucao recusada NAO virou subtask', criadas.some((c) => c.name.includes('BIME APP')), false);
+  const gestorBody = criadas.find((c) => c.name === 'Gestor — Avançado');
+  checar('  Gestor sem troca de ambiente: checklist de 1 passo', gestorBody.markdown_description.includes('"checklist":["Alterar o plano no Núcleo"]'), true);
+  checar('  Gestor: observacoes gravada', gestorBody.markdown_description.includes('Cliente pediu para zerar a base'), true);
+  const uniqueBody = criadas.find((c) => c.name === 'Unique — Plus');
+  checar('  Unique COM troca de ambiente: checklist null (a detalhar)', uniqueBody.markdown_description.includes('"checklist":null'), true);
+  const treinoBody = criadas.find((c) => c.name === 'Treinamento');
+  checar('  Treinamento: jornada própria', treinoBody.markdown_description.includes('"checklist":["Agendar o treinamento","Confirmar participantes","Realizar o treinamento na data agendada"]'), true);
   const escritaProjeto = escritas.find((e) => e.alvo === 'proposta');
   checar('  projeto avanca pra etapa escopo', escritaProjeto.body.markdown_description.includes('"etapaAtual":"escopo"'), true);
 
@@ -2143,6 +2167,27 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('confirmar-fechamento: ja promovida -> 409', [confirmarJaPromovida.code, confirmarJaPromovida.corpo.code], [409, 'ja_promovida']);
   const confirmarInvalida = await chamarAcao(GESTAO, 'confirmar-fechamento-implantacao', { id: 'zzz!!' });
   checar('confirmar-fechamento: id invalido -> 400', [confirmarInvalida.code, confirmarInvalida.corpo.code], [400, 'task_invalida']);
+
+  // atualizar-agente numa subtask tipo "solucao": so o checklistChecks e editavel,
+  // o resto do estado (produto/plano/valor/checklist/observacoes) e preservado.
+  escritas.length = 0;
+  const marcarChecklist = await chamarAcao(GIAN, 'atualizar-agente', { taskId: 'tSolucao1', checklistChecks: { 0: true } });
+  checar('atualizar-agente (solucao): 200', [marcarChecklist.code, marcarChecklist.corpo.ok], [200, true]);
+  const escritaSolucao = escritas.find((e) => e.alvo === 'solucao1');
+  checar('  checklistChecks gravado', escritaSolucao.body.markdown_description.includes('"checklistChecks":{"0":true}'), true);
+  checar('  checklist (jornada) preservado', escritaSolucao.body.markdown_description.includes('"checklist":["Alterar o plano no Núcleo"]'), true);
+  checar('  observacoes preservada', escritaSolucao.body.markdown_description.includes('Zerar a base antes.'), true);
+  checar('  produto preservado', escritaSolucao.body.markdown_description.includes('"produto":"Gestor"'), true);
+
+  // atualizar-implantacao: camada1Checks (ativacao Waipe) e gravado e preserva o historico da proposta
+  escritas.length = 0;
+  const salvarCamada1 = await chamarAcao(GIAN, 'atualizar-implantacao', {
+    id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], camada1Checks: { 0: true, 1: false },
+  });
+  checar('atualizar-implantacao: camada1Checks 200', [salvarCamada1.code, salvarCamada1.corpo.ok], [200, true]);
+  const escritaCamada1 = escritas.find((e) => e.alvo === 'proposta');
+  checar('  camada1Checks gravado', escritaCamada1.body.markdown_description.includes('"camada1Checks":{"0":true,"1":false}'), true);
+  checar('  historico da proposta preservado (nao apaga agentesPropostos/outrasSolucoesPropostas)', escritaCamada1.body.markdown_description.includes('"nome":"Agente Novo"'), true);
 
   globalThis.fetch = fetchOriginal;
 }

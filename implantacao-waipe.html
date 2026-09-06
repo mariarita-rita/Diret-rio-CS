@@ -700,7 +700,7 @@
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
-  var sim = { etapa:"escopo", prioridade:[], concluidos:[], agenteAtual:null };
+  var sim = { etapa:"escopo", prioridade:[], concluidos:[], agenteAtual:null, camada1Checks:{} };
 
   function agentePorId(id){
     if (!dadosProjeto) return null;
@@ -800,7 +800,8 @@
         etapa: resp.projeto.etapaAtual,
         prioridade: resp.projeto.prioridade.slice(),
         concluidos: resp.projeto.concluidos.slice(),
-        agenteAtual: resp.projeto.agenteAtualId
+        agenteAtual: resp.projeto.agenteAtualId,
+        camada1Checks: Object.assign({}, resp.projeto.camada1Checks || {})
       };
       renderProjetosPanel();
     }).catch(function(e){
@@ -820,7 +821,8 @@
       etapaAtual: sim.etapa,
       prioridade: sim.prioridade,
       agenteAtualId: sim.agenteAtual,
-      concluidos: sim.concluidos
+      concluidos: sim.concluidos,
+      camada1Checks: sim.camada1Checks
     }).then(function(){
       if (projetosCache){
         var row = projetosCache.filter(function(x){ return x.id === dadosProjeto.projeto.id; })[0];
@@ -1046,29 +1048,23 @@
     return "R$" + (Number(v) || 0).toFixed(2).replace(".", ",");
   }
 
-  // "Tipo de atividade" reflete a mesma distinção binária já documentada nos
-  // processos do time (produto simples -> atividade da Assistente no Moskit;
-  // migração/configuração -> Projeto de Implantação para o ISM) — sem
-  // inventar um checklist detalhado por produto, que ainda não existe.
-  function textoChecklistSolucao(classificacao){
-    if (classificacao === "produtoSimples") return "Solicitar troca de plano/inclusão de produto simples no Moskit (Assistente).";
-    if (classificacao === "requerImplantacao") return "Criar Projeto de Implantação no Moskit para o ISM realizar a implantação.";
-    return "";
-  }
-
   function cardSolucaoFechada(o){
     var valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
-    var checklistTexto = textoChecklistSolucao(o.classificacao);
+    var checklist = Array.isArray(o.checklist) ? o.checklist : null;
+    var checks = o.checklistChecks || {};
+    var checklistHtml = checklist
+      ? checklist.map(function(passo, idx){
+          var done = !!checks[idx];
+          return '<div class="build-check' + (done ? " done" : "") + '"><input type="checkbox" data-solucao-check="' + esc(o.id) + '" data-idx="' + idx + '"' + (done ? " checked" : "") + '><span>' + esc(passo) + '</span></div>';
+        }).join("")
+      : '<div class="callout warn" style="margin-top:8px"><div class="dot"></div><div>Procedimento técnico a detalhar com a coordenação (envolve troca de ambiente Local ↔ Nuvem).</div></div>';
     return '<div class="card" data-solucao-card="' + esc(o.id) + '">' +
       '<h2>' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + (o.variante ? " (" + esc(o.variante) + ")" : "") + '</h2>' +
       (o.motivo ? '<div class="sub">' + esc(o.motivo) + '</div>' : "") +
       '<div class="sp-k" style="margin-top:8px">Valor</div><div class="sp-v">' + fmtBRLSim(valor) + (o.quantidade > 1 ? " × " + o.quantidade : "") + '/mês</div>' +
-      '<div class="sp-k" style="margin-top:10px">Tipo de atividade</div>' +
-      '<div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap;">' +
-        '<button type="button" class="' + (o.classificacao === "produtoSimples" ? "btn-flow" : "btn-flow-secondary") + '" data-classificar="' + esc(o.id) + '" data-valor="produtoSimples">Produto simples (Assistente)</button>' +
-        '<button type="button" class="' + (o.classificacao === "requerImplantacao" ? "btn-flow" : "btn-flow-secondary") + '" data-classificar="' + esc(o.id) + '" data-valor="requerImplantacao">Requer implantação (ISM)</button>' +
-      '</div>' +
-      (checklistTexto ? '<div class="build-check" style="margin-top:10px"><span>' + esc(checklistTexto) + '</span></div>' : "") +
+      (o.observacoes ? '<div class="sp-k" style="margin-top:10px">Observações para a implantação</div><div class="sp-v" style="white-space:pre-wrap;">' + esc(o.observacoes) + '</div>' : "") +
+      '<div class="sp-k" style="margin-top:10px">Checklist</div>' +
+      checklistHtml +
     '</div>';
   }
 
@@ -1086,33 +1082,56 @@
     if (solucoes.length){
       html += '<div class="card">' +
         '<h2>Outras soluções fechadas — ' + solucoes.length + '</h2>' +
-        '<div class="sub">Gestor/Simplaz/Unique/BIME APP que o cliente fechou junto — marque o tipo de atividade pra saber quem executa.</div>' +
+        '<div class="sub">Gestor/Simplaz/Unique/BIME APP/Treinamento que o cliente fechou junto — siga o checklist de cada item.</div>' +
         solucoes.map(cardSolucaoFechada).join("") +
       '</div>';
     }
+    var camada1Pronta = !!(sim.camada1Checks && sim.camada1Checks["0"] && sim.camada1Checks["1"]);
     if (agentes.length){
       html += '<div class="card">' +
+        '<h2>Camada 1 — Ativação do Waipe</h2>' +
+        '<div class="sub">Pré-requisito antes do Alinhamento — só depois disso o time começa a validar os agentes com o cliente.</div>' +
+        '<div class="build-check' + (sim.camada1Checks["0"] ? " done" : "") + '"><input type="checkbox" id="camada1_0"' + (sim.camada1Checks["0"] ? " checked" : "") + '><span>Adicionar o serviço Waipe no Núcleo</span></div>' +
+        '<div class="build-check' + (sim.camada1Checks["1"] ? " done" : "") + '"><input type="checkbox" id="camada1_1"' + (sim.camada1Checks["1"] ? " checked" : "") + '><span>Liberar os usuários</span></div>' +
+      '</div>' +
+      '<div class="card">' +
         '<h2>Painel de agentes — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</h2><div class="sub">Status de cada agente do backlog. Nenhum agente é removido daqui — só muda o rótulo.</div>' +
         '<div class="agent-pick-grid">' + agentes.map(statusCardAgente).join("") + '</div>' +
       '</div>' +
-      '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento">Ir para o Alinhamento →</button></div>';
+      '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento"' + (camada1Pronta ? "" : " disabled") + '>Ir para o Alinhamento →</button></div>';
     }
     document.getElementById("stepContent").innerHTML = html;
     renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
     renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
-    document.querySelectorAll("[data-classificar]").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        var id = btn.getAttribute("data-classificar");
-        var classificacao = btn.getAttribute("data-valor");
+    document.querySelectorAll("[data-solucao-check]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var id = cb.getAttribute("data-solucao-check");
+        var idx = cb.getAttribute("data-idx");
         var o = agentePorId(id);
-        if (o) o.classificacao = classificacao;
-        apiPost("atualizar-agente", { taskId: id, classificacao: classificacao })
-          .then(function(){ renderEscopo(); })
-          .catch(function(){ showSimToast("Não deu para salvar o tipo de atividade."); });
+        if (!o) return;
+        o.checklistChecks = o.checklistChecks || {};
+        o.checklistChecks[idx] = cb.checked;
+        cb.closest(".build-check").classList.toggle("done", cb.checked);
+        apiPost("atualizar-agente", { taskId: id, checklistChecks: o.checklistChecks })
+          .catch(function(){ showSimToast("Não deu para salvar o checklist."); });
+      });
+    });
+    ["0", "1"].forEach(function(idx){
+      var cb = document.getElementById("camada1_" + idx);
+      if (!cb) return;
+      cb.addEventListener("change", function(){
+        sim.camada1Checks[idx] = cb.checked;
+        cb.closest(".build-check").classList.toggle("done", cb.checked);
+        var btn = document.getElementById("btnIrAlinhamento");
+        if (btn) btn.disabled = !(sim.camada1Checks["0"] && sim.camada1Checks["1"]);
+        persistirProjeto();
       });
     });
     var btnIrAlinhamento = document.getElementById("btnIrAlinhamento");
-    if (btnIrAlinhamento) btnIrAlinhamento.addEventListener("click", function(){ irParaEtapa("alinhamento"); });
+    if (btnIrAlinhamento) btnIrAlinhamento.addEventListener("click", function(){
+      if (btnIrAlinhamento.disabled) return;
+      irParaEtapa("alinhamento");
+    });
   }
 
   function cardAlinhamentoAgente(a){
