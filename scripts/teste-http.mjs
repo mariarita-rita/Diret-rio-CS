@@ -2049,7 +2049,8 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   });
   const taskJaPromovida = () => ({
     id: 'tPromovida', name: 'Cliente Z — Implantação Waipe', list: { id: LISTA },
-    status: { status: 'pendente' }, parent: null, subtasks: [],
+    status: { status: 'pendente' }, parent: null,
+    subtasks: [{ id: 'tSolucao1' }, { id: 'tSolucaoAntiga' }],
     description: descProposta({ etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: 1 }),
   });
   const taskSolucaoExistente = () => ({
@@ -2060,6 +2061,20 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
       motivo: 'Multi-filial.', observacoes: 'Zerar a base antes.', quantidade: 1,
       valorTabela: 719, valorManual: 0, descontoPercent: 0,
       checklist: ['Alterar o plano no Núcleo'], checklistChecks: {},
+    }),
+  });
+  // Fechada ANTES da jornada por produto existir (ou com o template ainda
+  // nao definido na epoca): checklist ficou gravado como null. Depois que a
+  // jornada do BIME APP foi documentada, obter-implantacao precisa recalcular
+  // em vez de repetir pra sempre o aviso de "a detalhar".
+  const taskSolucaoAntigaSemChecklist = () => ({
+    id: 'tSolucaoAntiga', name: 'BIME APP', list: { id: LISTA }, parent: 'tPromovida',
+    status: { status: 'pendente' },
+    description: descProposta({
+      tipo: 'solucao', produto: 'BIME APP', planoSugerido: '', variante: null,
+      motivo: '', observacoes: '', quantidade: 1,
+      valorTabela: 69.9, valorManual: 0, descontoPercent: 0,
+      checklist: null, checklistChecks: {},
     }),
   });
 
@@ -2088,6 +2103,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
     }
     if (u.includes('/task/tProposta')) return ok(taskPropostaProjeto());
     if (u.includes('/task/tSolucao1')) return ok(taskSolucaoExistente());
+    if (u.includes('/task/tSolucaoAntiga')) return ok(taskSolucaoAntigaSemChecklist());
     if (u.includes('/task/tPromovida')) return ok(taskJaPromovida());
     return ok({});
   };
@@ -2188,6 +2204,18 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   const escritaCamada1 = escritas.find((e) => e.alvo === 'proposta');
   checar('  camada1Checks gravado', escritaCamada1.body.markdown_description.includes('"camada1Checks":{"0":true,"1":false}'), true);
   checar('  historico da proposta preservado (nao apaga agentesPropostos/outrasSolucoesPropostas)', escritaCamada1.body.markdown_description.includes('"nome":"Agente Novo"'), true);
+
+  // obter-implantacao: solucao fechada ANTES da jornada por produto existir
+  // ficou com checklist:null gravado — precisa recalcular pelo template
+  // atual (BIME APP ja tem jornada definida), nao repetir o aviso "a detalhar".
+  const obterPromovida = await (async () => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(GIAN) }), query: { action: 'obter-implantacao', id: 'tPromovida' } }, r);
+    return r;
+  })();
+  const itemAntigo = obterPromovida.corpo.agentes.find((a) => a.id === 'tSolucaoAntiga');
+  checar('obter-implantacao: 200 com as 2 solucoes', [obterPromovida.code, obterPromovida.corpo.agentes.length], [200, 2]);
+  checar('  BIME APP sem checklist gravado recalcula pelo template atual', itemAntigo?.checklist, ['Ativar usuários no workspace do cliente', 'Enviar e-mail com instruções de uso', 'Finalizar']);
 
   globalThis.fetch = fetchOriginal;
 }

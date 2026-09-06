@@ -841,22 +841,31 @@ async function obterImplantacaoAcao(req, res, sessao) {
     .map((t) => {
       const e = parseWaipeState(t.description);
       if (e.tipo === 'solucao') {
+        const produto = texto(e.produto, 40);
+        const ambienteMuda = !!e.ambienteMuda;
+        // Itens fechados antes da jornada por produto existir (ou com o
+        // template ainda não definido na época) ficaram com checklist nulo
+        // gravado; recalcula pelo template atual em vez de repetir pra
+        // sempre um aviso de "a detalhar" que já não é verdade.
+        const checklist = Array.isArray(e.checklist)
+          ? sanearListaTexto(e.checklist, 20, 200)
+          : jornadaPara(produto, ambienteMuda);
         return {
           id: t.id,
           tipo: 'solucao',
           nome: t.name,
           status: t.status?.status || '',
-          produto: texto(e.produto, 40),
+          produto,
           planoSugerido: texto(e.planoSugerido, 80),
           variante: VARIANTES_SOLUCAO_VALIDAS.has(e.variante) ? e.variante : null,
           motivo: texto(e.motivo, 400),
           observacoes: texto(e.observacoes, 500),
-          ambienteMuda: !!e.ambienteMuda,
+          ambienteMuda,
           quantidade: Number.isFinite(e.quantidade) ? e.quantidade : 1,
           valorTabela: Number.isFinite(e.valorTabela) ? e.valorTabela : null,
           valorManual: Number.isFinite(e.valorManual) ? e.valorManual : 0,
           descontoPercent: Number.isFinite(e.descontoPercent) ? e.descontoPercent : 0,
-          checklist: Array.isArray(e.checklist) ? sanearListaTexto(e.checklist, 20, 200) : null,
+          checklist,
           checklistChecks: sanearChecks(e.checklistChecks) || {},
         };
       }
