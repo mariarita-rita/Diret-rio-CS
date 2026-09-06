@@ -245,115 +245,41 @@
     </div>
     <div class="header-title">
       <h1>Implantação de Soluções</h1>
-      <p>Passos, cronograma, escopo técnico e pontos de atenção — do Waipe e do resto do ecossistema (Gestor, Simplaz, Unique, BIME APP) — para o time interno e para o cliente</p>
+      <p>Passos, cronograma, escopo técnico e pontos de atenção do ecossistema Londrisoft (Waipe, Gestor, Simplaz, Unique, BIME APP) — para o time interno e para o cliente</p>
     </div>
-    <div class="header-meta">Baseado em<br><a href="https://docs.londrisoft.com.br/waipe/central-do-cliente/como-funciona-a-implantacao-do-waipe" target="_blank" rel="noopener">docs.londrisoft.com.br › Como funciona a implantação</a></div>
+    <div class="header-meta">Fontes<br><a href="https://docs.londrisoft.com.br/waipe/central-do-cliente/como-funciona-a-implantacao-do-waipe" target="_blank" rel="noopener">docs.londrisoft.com.br › Implantação do Waipe</a></div>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Seções">
-    <button class="tab-btn active" data-tab="visao">Visão Geral</button>
-    <button class="tab-btn" data-tab="projetos">📁 Projetos em Andamento</button>
-    <button class="tab-btn" data-tab="runbook">🛠️ Runbook (Time Interno)</button>
+    <button class="tab-btn active" data-tab="projetos">📁 Projetos em Andamento</button>
+    <button class="tab-btn" data-tab="entregues">✅ Projetos Entregues</button>
     <button class="tab-btn" data-tab="cliente">👤 Jornada do Cliente</button>
     <button class="tab-btn" data-tab="escopo">Escopo Técnico</button>
+    <button class="tab-btn" data-tab="apoio">🛠️ Materiais de Apoio</button>
     <button class="tab-btn" data-tab="faq">FAQ</button>
+    <button class="tab-btn" data-tab="indicadores">📊 Indicadores</button>
   </nav>
 
-  <!-- ===================== VISÃO GERAL ===================== -->
-  <section class="panel active" id="panel-visao">
-
-    <div class="callout">
-      <div class="dot"></div>
-      <div><b>Regra central:</b> a proposta comercial define o serviço contratado (Ativação, Projeto de Implantação ou Deploy) e quem constrói a Camada 2. Todo desalinhamento de expectativa nasce de não confirmar isso antes do kickoff.</div>
-    </div>
-
-    <h2 class="section-title">As três camadas do Waipe</h2>
-    <p class="section-sub">Toda solicitação do cliente se encaixa em uma destas camadas — identificar qual evita prometer o que não está no escopo contratado.</p>
-    <div class="layer-grid">
-      <div class="layer-card l1">
-        <div class="lk">Camada 1 · Plataforma</div>
-        <h4>Sempre entregue pela Londrisoft</h4>
-        <p>Ambiente, usuários, perfis, permissões, conectores Londrisoft e governança.</p>
-      </div>
-      <div class="layer-card l2">
-        <div class="lk">Camada 2 · Configuração</div>
-        <h4>Cliente ou Londrisoft, conforme contrato</h4>
-        <p>Assistentes, skills, consultas, painéis do Data Lab, relatórios e fluxos no Flow.</p>
-      </div>
-      <div class="layer-card l3">
-        <div class="lk">Camada 3 · Terceiros</div>
-        <h4>Sempre contratada e paga pelo cliente</h4>
-        <p>WhatsApp, e-mail, SMS, assinatura digital — qualquer ação fora da plataforma.</p>
-      </div>
-    </div>
-    <div class="callout warn">
-      <div class="dot"></div>
-      <div><b>O Waipe não substitui ferramentas de execução final.</b> Ele não é provedor de WhatsApp, e-mail, assinatura digital ou gateway de pagamento. Exemplo: um fluxo identifica um boleto vencido e prepara a mensagem — o envio ocorre na conta de WhatsApp ou e-mail do próprio cliente.</div>
-    </div>
-
-    <h2 class="section-title">Os três serviços, lado a lado</h2>
-    <div class="table-wrap">
-      <table class="cmp">
-        <thead><tr><th>Aspecto</th><th>Ativação</th><th>Projeto de Implantação</th><th>Londrisoft Deploy</th></tr></thead>
-        <tbody>
-          <tr><th>Quem constrói a Camada 2</th><td>Seu time</td><td>Londrisoft</td><td>Londrisoft</td></tr>
-          <tr><th>Escopo</th><td>Plataforma liberada e time capacitado</td><td>Fechado na proposta</td><td>Aberto e evolutivo</td></tr>
-          <tr><th>Data de fim</th><td class="yes">Sim</td><td class="yes">Sim, com aceite formal</td><td class="no">Não</td></tr>
-          <tr><th>Ritmo</th><td>Sessões do kickoff</td><td>Cronograma do projeto</td><td>Cadência contratada</td></tr>
-          <tr><th>Entrega</th><td>Ambiente pronto e time treinado</td><td>Configuração em produção + relatório de fechamento</td><td>Entregas por ciclo + direcionamento ao time</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="section-sub">Os três serviços estão disponíveis em todos os planos — a negociação comercial define a contratação. <b>Projeto seguido de Deploy é o caminho mais comum.</b></p>
-  </section>
-
   <!-- ===================== PROJETOS EM ANDAMENTO ===================== -->
-  <section class="panel" id="panel-projetos">
+  <section class="panel active" id="panel-projetos">
     <div id="projetosRoot"></div>
   </section>
 
-  <!-- ===================== RUNBOOK (TIME INTERNO) ===================== -->
-  <section class="panel" id="panel-runbook">
-
-    <div class="callout">
-      <div class="dot"></div>
-      <div>Checklist operacional para conduzir um <b>Projeto de Implantação</b> (o caminho mais comum). O progresso fica salvo neste navegador — use "Reiniciar checklist" ao começar uma implantação nova.</div>
-    </div>
-
-    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-      <button type="button" class="btn-reset" id="btnResetChecklist">↺ Reiniciar checklist</button>
-    </div>
-
-    <div id="phasesWrap"></div>
-
-    <h2 class="section-title">Pontos de atenção críticos</h2>
-    <div class="callout danger">
-      <div class="dot"></div>
-      <div><b>Ferramentas de terceiros atrasam o cronograma se não estiverem prontas.</b> Se a ferramenta (WhatsApp Business API, SMTP, assinatura digital...) não estiver ativa no prazo acordado, a entrega dependente dela fica pendente — e essa pendência é do cliente, não da Londrisoft.</div>
-    </div>
-    <div class="callout warn">
-      <div class="dot"></div>
-      <div><b>Suporte Londrisoft não configura Camada 2 após a entrega.</b> Mudança de processo, novo assistente ou novo fluxo depois do go-live exige um novo Projeto ou Deploy — não é atendimento de suporte.</div>
-    </div>
-    <div class="callout warn">
-      <div class="dot"></div>
-      <div><b>Escopo crescendo no meio do projeto?</b> Apresente 3 caminhos ao cliente antes de executar: reduzir/fasear a demanda, contratar esforço adicional, ou migrar de pacote. Nunca deixe para discutir estouro de escopo no final.</div>
-    </div>
-    <div class="callout">
-      <div class="dot"></div>
-      <div><b>Integração com sistema externo</b> exige API documentada e acessível, credenciais válidas e licenças contratadas pelo cliente. A Londrisoft não solicita acessos em nome do cliente nem responde por instabilidade da API de terceiros.</div>
-    </div>
+  <!-- ===================== PROJETOS ENTREGUES ===================== -->
+  <section class="panel" id="panel-entregues">
+    <div id="projetosEntreguesRoot"></div>
   </section>
 
-  <!-- ===================== JORNADA DO CLIENTE ===================== -->
+  <!-- ===================== JORNADA DO CLIENTE (POR PRODUTO) ===================== -->
   <section class="panel" id="panel-cliente">
+    <h2 class="section-title" style="margin-top:0">Jornada do cliente, por produto</h2>
+    <p class="section-sub">Linha do tempo de referência pra cada produto do ecossistema — os prazos variam conforme o pacote contratado.</p>
 
+    <h3 style="margin-top:8px">🧭 Waipe</h3>
     <div class="callout">
       <div class="dot"></div>
       <div>Linha do tempo de referência para um <b>Projeto de Implantação</b>. Os prazos variam conforme o pacote contratado — Padrão, Intermediário ou Avançado.</div>
     </div>
-
-    <h2 class="section-title">Sua jornada, do kickoff ao go-live</h2>
     <div class="timeline">
       <div class="tl-item">
         <div class="tlw">Antes de começar</div>
@@ -392,8 +318,8 @@
       </div>
     </div>
 
-    <h2 class="section-title">O que sua empresa precisa preparar</h2>
-    <p class="section-sub">Ferramentas de terceiros são sempre contratadas e pagas pela sua empresa, em qualquer serviço — a Londrisoft indica parceiros, mas não revende, repassa ou fornece essas contas.</p>
+    <h4 style="margin-top:18px; font-size:14px;">O que a empresa do cliente precisa preparar</h4>
+    <p class="section-sub">Ferramentas de terceiros são sempre contratadas e pagas pela empresa do cliente, em qualquer serviço — a Londrisoft indica parceiros, mas não revende, repassa ou fornece essas contas.</p>
     <div class="prep-grid">
       <div class="prep-item"><div class="pk">📱 Envio de mensagem no WhatsApp</div><div class="pv">Conta ativa na API oficial do WhatsApp Business, com um provedor.</div></div>
       <div class="prep-item"><div class="pk">✉️ Envio de e-mail</div><div class="pv">Provedor de e-mail transacional ou SMTP corporativo.</div></div>
@@ -406,12 +332,25 @@
       <div class="dot"></div>
       <div>O plano <b>não inclui</b> uma conta de WhatsApp. Se a ferramenta não estiver ativa no prazo combinado, a entrega que depende dela fica pendente — e isso impacta o cronograma do projeto.</div>
     </div>
+
+    <h3 style="margin-top:28px">Gestor</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>Simplaz (Gestor e Unique)</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>Unique</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>BIME APP</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>Treinamento</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
   </section>
 
-  <!-- ===================== ESCOPO TÉCNICO ===================== -->
+  <!-- ===================== ESCOPO TÉCNICO (POR PRODUTO) ===================== -->
   <section class="panel" id="panel-escopo">
+    <h2 class="section-title" style="margin-top:0">Escopo técnico, por produto</h2>
+    <p class="section-sub">O que a Londrisoft entrega (Camada 1) e o que é configuração (Camada 2) em cada recurso — e quando precisa de ferramenta de terceiro.</p>
 
-    <h2 class="section-title" style="margin-top:0">Escopo por recurso</h2>
+    <h3 style="margin-top:8px">🧭 Waipe</h3>
     <div class="table-wrap">
       <table class="cmp">
         <thead><tr><th>Recurso</th><th>Camada 1 — Londrisoft entrega</th><th>Camada 2 — configuração</th><th>Precisa de terceiro?</th></tr></thead>
@@ -428,6 +367,65 @@
       </table>
     </div>
     <p class="section-sub">Ferramentas de terceiros só entram quando o fluxo age fora da plataforma. Uso analítico e conversacional nunca exige terceiro.</p>
+
+    <h3 style="margin-top:28px">Gestor</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>Simplaz (Gestor e Unique)</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>Unique</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>BIME APP</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+    <h3>Treinamento</h3>
+    <div class="callout"><div class="dot"></div><div>Conteúdo em documentação — em breve.</div></div>
+  </section>
+
+  <!-- ===================== MATERIAIS DE APOIO ===================== -->
+  <section class="panel" id="panel-apoio">
+
+    <div class="callout">
+      <div class="dot"></div>
+      <div><b>Regra central:</b> a proposta comercial define o serviço contratado (Ativação, Projeto de Implantação ou Deploy) e quem constrói a Camada 2. Todo desalinhamento de expectativa nasce de não confirmar isso antes do kickoff.</div>
+    </div>
+
+    <h2 class="section-title">As três camadas de responsabilidade</h2>
+    <p class="section-sub">Toda solicitação do cliente se encaixa em uma destas camadas — identificar qual evita prometer o que não está no escopo contratado. Vale pra qualquer produto do ecossistema (Waipe, Gestor, Simplaz, Unique, BIME APP).</p>
+    <div class="layer-grid">
+      <div class="layer-card l1">
+        <div class="lk">Camada 1 · Plataforma</div>
+        <h4>Sempre entregue pela Londrisoft</h4>
+        <p>Ambiente, usuários, perfis, permissões, conectores Londrisoft e governança.</p>
+      </div>
+      <div class="layer-card l2">
+        <div class="lk">Camada 2 · Configuração</div>
+        <h4>Cliente ou Londrisoft, conforme contrato</h4>
+        <p>Recursos de configuração do produto — no Waipe: assistentes, skills, consultas, painéis do Data Lab, fluxos no Flow; nos demais produtos: planos, cadastros e parâmetros da operação.</p>
+      </div>
+      <div class="layer-card l3">
+        <div class="lk">Camada 3 · Terceiros</div>
+        <h4>Sempre contratada e paga pelo cliente</h4>
+        <p>WhatsApp, e-mail, SMS, assinatura digital — qualquer ação fora da plataforma.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div><b>A plataforma não substitui ferramentas de execução final.</b> Nenhum produto Londrisoft é provedor de WhatsApp, e-mail, assinatura digital ou gateway de pagamento. Exemplo: um fluxo identifica um boleto vencido e prepara a mensagem — o envio ocorre na conta de WhatsApp ou e-mail do próprio cliente.</div>
+    </div>
+
+    <h2 class="section-title">Os três serviços, lado a lado</h2>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th>Aspecto</th><th>Ativação</th><th>Projeto de Implantação</th><th>Londrisoft Deploy</th></tr></thead>
+        <tbody>
+          <tr><th>Quem constrói a Camada 2</th><td>Seu time</td><td>Londrisoft</td><td>Londrisoft</td></tr>
+          <tr><th>Escopo</th><td>Plataforma liberada e time capacitado</td><td>Fechado na proposta</td><td>Aberto e evolutivo</td></tr>
+          <tr><th>Data de fim</th><td class="yes">Sim</td><td class="yes">Sim, com aceite formal</td><td class="no">Não</td></tr>
+          <tr><th>Ritmo</th><td>Sessões do kickoff</td><td>Cronograma do projeto</td><td>Cadência contratada</td></tr>
+          <tr><th>Entrega</th><td>Ambiente pronto e time treinado</td><td>Configuração em produção + relatório de fechamento</td><td>Entregas por ciclo + direcionamento ao time</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="section-sub">Os três serviços estão disponíveis em todos os planos — a negociação comercial define a contratação. <b>Projeto seguido de Deploy é o caminho mais comum.</b></p>
 
     <h2 class="section-title">Matriz de responsabilidades</h2>
     <div class="table-wrap">
@@ -458,40 +456,87 @@
       <li>As ferramentas de terceiros necessárias</li>
       <li>As pessoas treinadas e responsáveis pela operação</li>
     </ul>
+
+    <h2 class="section-title">Runbook operacional</h2>
+    <div class="callout">
+      <div class="dot"></div>
+      <div>Checklist operacional para conduzir um <b>Projeto de Implantação</b> (o caminho mais comum, vale pra qualquer produto). O progresso fica salvo neste navegador — use "Reiniciar checklist" ao começar uma implantação nova.</div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button type="button" class="btn-reset" id="btnResetChecklist">↺ Reiniciar checklist</button>
+    </div>
+
+    <div id="phasesWrap"></div>
+
+    <h2 class="section-title">Pontos de atenção críticos</h2>
+    <div class="callout danger">
+      <div class="dot"></div>
+      <div><b>Ferramentas de terceiros atrasam o cronograma se não estiverem prontas.</b> Se a ferramenta (WhatsApp Business API, SMTP, assinatura digital...) não estiver ativa no prazo acordado, a entrega dependente dela fica pendente — e essa pendência é do cliente, não da Londrisoft.</div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div><b>Suporte Londrisoft não configura Camada 2 após a entrega.</b> Mudança de processo, novo assistente ou novo fluxo depois do go-live exige um novo Projeto ou Deploy — não é atendimento de suporte.</div>
+    </div>
+    <div class="callout warn">
+      <div class="dot"></div>
+      <div><b>Escopo crescendo no meio do projeto?</b> Apresente 3 caminhos ao cliente antes de executar: reduzir/fasear a demanda, contratar esforço adicional, ou migrar de pacote. Nunca deixe para discutir estouro de escopo no final.</div>
+    </div>
+    <div class="callout">
+      <div class="dot"></div>
+      <div><b>Integração com sistema externo</b> exige API documentada e acessível, credenciais válidas e licenças contratadas pelo cliente. A Londrisoft não solicita acessos em nome do cliente nem responde por instabilidade da API de terceiros.</div>
+    </div>
   </section>
 
   <!-- ===================== FAQ ===================== -->
   <section class="panel" id="panel-faq">
     <h2 class="section-title" style="margin-top:0">Perguntas frequentes</h2>
+
+    <h3 style="margin-top:8px">Geral</h3>
+    <div>
+      <details class="faq-item">
+        <summary>O ambiente será entregue como na demonstração?</summary>
+        <div class="a">Depende do serviço contratado. Na Ativação, o time do cliente configura os recursos após o treinamento. No Projeto, a Londrisoft entrega os itens descritos na proposta. No Deploy, a construção acontece por ciclos.</div>
+      </details>
+      <details class="faq-item">
+        <summary>A Londrisoft constrói qualquer item solicitado, além do que foi contratado?</summary>
+        <div class="a">Não. A proposta descreve os itens incluídos. Antes de executar uma solicitação adicional, a Londrisoft avalia o escopo e solicita aprovação do cliente.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Ferramentas de terceiro (WhatsApp, e-mail, SMS, assinatura...) estão incluídas no plano?</summary>
+        <div class="a">Não, em nenhum produto. O contrato e o custo dessas ferramentas são sempre da empresa do cliente — a Londrisoft indica parceiros, mas não revende, repassa ou fornece essas contas.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Qual é a diferença entre Projeto de Implantação e Deploy?</summary>
+        <div class="a">O Projeto entrega um conjunto definido até uma data, com aceite formal. O Deploy é contínuo e evolui a operação na cadência contratada, sem data de fim.</div>
+      </details>
+    </div>
+
+    <h3 style="margin-top:24px">🧭 Waipe</h3>
     <div>
       <details class="faq-item">
         <summary>Preciso contratar uma ferramenta de terceiro para usar chat e Data Lab?</summary>
         <div class="a">Não. O uso analítico e conversacional ocorre dentro do Waipe, com dados dos sistemas Londrisoft. Ferramentas de terceiros são necessárias somente para ações externas.</div>
       </details>
       <details class="faq-item">
-        <summary>O WhatsApp está incluído no meu plano?</summary>
-        <div class="a">Não. Para enviar mensagens, sua empresa precisa de uma conta ativa na API oficial do WhatsApp Business. A Londrisoft indica parceiros, mas o contrato e o custo são da sua empresa.</div>
-      </details>
-      <details class="faq-item">
-        <summary>O ambiente será entregue como na demonstração?</summary>
-        <div class="a">Depende do serviço contratado. Na Ativação, o time do cliente configura os recursos após o treinamento. No Projeto, a Londrisoft entrega os itens descritos na proposta. No Deploy, a construção acontece por ciclos.</div>
-      </details>
-      <details class="faq-item">
         <summary>O cliente contratou a Ativação. A Londrisoft cria os assistentes dele?</summary>
         <div class="a">Durante o treinamento, a Londrisoft cria recursos junto com o time do cliente para fins didáticos. Assistentes, skills, painéis ou fluxos de produção sob demanda exigem Projeto ou Deploy.</div>
-      </details>
-      <details class="faq-item">
-        <summary>O cliente contratou o Projeto. A Londrisoft constrói qualquer item solicitado?</summary>
-        <div class="a">Não. A proposta descreve os itens incluídos. Antes de executar uma solicitação adicional, a Londrisoft avalia o escopo e solicita aprovação do cliente.</div>
       </details>
       <details class="faq-item">
         <summary>O cliente pode integrar o Waipe ao sistema atual dele?</summary>
         <div class="a">Sim, se o sistema oferecer uma API documentada. O cliente também precisa fornecer credenciais válidas e autorização de uso.</div>
       </details>
-      <details class="faq-item">
-        <summary>Qual é a diferença entre Projeto de Implantação e Deploy?</summary>
-        <div class="a">O Projeto entrega um conjunto definido até uma data, com aceite formal. O Deploy é contínuo e evolui a operação na cadência contratada, sem data de fim.</div>
-      </details>
+    </div>
+
+    <h3 style="margin-top:24px">Gestor, Simplaz, Unique, BIME APP</h3>
+    <div class="callout"><div class="dot"></div><div>Ainda sem perguntas específicas destes produtos — manda as que forem chegando do time.</div></div>
+  </section>
+
+  <!-- ===================== INDICADORES ===================== -->
+  <section class="panel" id="panel-indicadores">
+    <div class="callout">
+      <div class="dot"></div>
+      <div><b>Em construção.</b> Em breve: indicadores de projetos por etapa, tempo médio de implantação e outras métricas do funil de implantação.</div>
     </div>
   </section>
 
@@ -508,19 +553,30 @@
   // ---------- Tabs ----------
   var tabBtns = document.querySelectorAll(".tab-btn");
   var panels = {
-    visao: document.getElementById("panel-visao"),
     projetos: document.getElementById("panel-projetos"),
-    runbook: document.getElementById("panel-runbook"),
+    entregues: document.getElementById("panel-entregues"),
     cliente: document.getElementById("panel-cliente"),
     escopo: document.getElementById("panel-escopo"),
-    faq: document.getElementById("panel-faq")
+    apoio: document.getElementById("panel-apoio"),
+    faq: document.getElementById("panel-faq"),
+    indicadores: document.getElementById("panel-indicadores")
   };
   tabBtns.forEach(function(btn){
     btn.addEventListener("click", function(){
       tabBtns.forEach(function(b){ b.classList.remove("active"); });
       btn.classList.add("active");
       Object.keys(panels).forEach(function(k){ panels[k].classList.remove("active"); });
-      panels[btn.getAttribute("data-tab")].classList.add("active");
+      var tab = btn.getAttribute("data-tab");
+      panels[tab].classList.add("active");
+      // "Projetos em Andamento"/"Projetos Entregues" são a mesma lista,
+      // só filtrada — trocar de aba sempre volta pra lista (não fica
+      // preso num projeto/wizard aberto na aba errada).
+      if (tab === "projetos" || tab === "entregues"){
+        filtroProjetosAtivo = tab === "entregues" ? "entregues" : "andamento";
+        projetoAtualId = null;
+        wizard = null;
+        if (typeof renderProjetosPanel === "function") renderProjetosPanel();
+      }
     });
   });
 
@@ -541,7 +597,7 @@
       { id: "k-5", tag: "londrisoft", titulo: "Conectar conectores Londrisoft e validar acesso", desc: "" }
     ]},
     { id: "build", nome: "Fase 2 — Construção", meta: "Duração conforme o pacote (Padrão / Intermediário / Avançado)", steps: [
-      { id: "b-1", tag: "londrisoft", titulo: "Construir a Camada 2 conforme escopo aprovado", desc: "Assistentes, skills, painéis do Data Lab, fluxos no Flow." },
+      { id: "b-1", tag: "londrisoft", titulo: "Construir a Camada 2 conforme escopo aprovado", desc: "Recursos de configuração do produto — no Waipe: assistentes, skills, painéis do Data Lab, fluxos no Flow." },
       { id: "b-2", tag: "cliente", titulo: "Cliente contrata e configura as ferramentas de terceiros", desc: "Em paralelo à construção — é o item que mais atrasa cronograma quando fica para depois." },
       { id: "b-3", tag: "cliente", titulo: "Cliente fornece credenciais/API de sistemas externos, se houver integração", desc: "API documentada, credenciais válidas e licenças contratadas pelo fornecedor." },
       { id: "b-4", tag: "londrisoft", titulo: "Monitorar consumo de horas internas contra o pacote contratado", desc: "Se a estimativa passar de 80% das horas do pacote antes do fechamento, reavaliar escopo, preço ou pacote." }
@@ -696,11 +752,17 @@
   }
 
   // ---- Estado ----
-  var projetosCache = null;   // lista de listar-implantacoes
+  var projetosCache = null;   // lista de listar-implantacoes (nao filtrada — a mesma pras 2 abas)
+  var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
+  var itemAtual = null;       // null = lista unificada de itens; "__waipe__" = fluxo Waipe; ou id de uma subtask solucao
   var sim = { etapa:"escopo", prioridade:[], concluidos:[], agenteAtual:null, camada1Checks:{} };
+
+  function projetosRootAtivo(){
+    return document.getElementById(filtroProjetosAtivo === "entregues" ? "projetosEntreguesRoot" : "projetosRoot");
+  }
 
   function agentePorId(id){
     if (!dadosProjeto) return null;
@@ -739,8 +801,11 @@
   }
 
   // ---- Dispatcher do painel ----
+  // "Projetos em Andamento" e "Projetos Entregues" são a mesma lista/estado
+  // (projetosCache, projetoAtualId, dadosProjeto, wizard) — só o mount div e
+  // o filtro mudam conforme filtroProjetosAtivo.
   function renderProjetosPanel(){
-    var root = document.getElementById("projetosRoot");
+    var root = projetosRootAtivo();
     if (!root) return;
     if (wizard){ renderWizard(root); return; }
     if (projetoAtualId){ renderProjetoDetalhe(root); return; }
@@ -749,11 +814,16 @@
 
   // ---- Lista de projetos ----
   function renderListaProjetos(root){
+    var entregues = filtroProjetosAtivo === "entregues";
+    var introTexto = entregues
+      ? "Projetos de implantação já entregues — agentes Waipe e outras soluções do ecossistema concluídos."
+      : "Lista de projetos de implantação em andamento — agentes Waipe e outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) fechadas junto. Clique num projeto para abrir o fluxo (escopo → alinhamento → construção → testes → entrega).";
     root.innerHTML =
-      '<div class="callout"><div class="dot"></div><div>Lista de projetos de implantação em andamento — agentes Waipe e outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) fechadas junto. Clique num projeto para abrir o fluxo (escopo → alinhamento → construção → testes → entrega). Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
-      '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>' +
-      '<div id="listaProjetosWrap"><div class="sub">Carregando…</div></div>';
-    document.getElementById("btnNovoProjeto").addEventListener("click", function(){
+      '<div class="callout"><div class="dot"></div><div>' + introTexto + ' Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
+      (entregues ? "" : '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>') +
+      '<div data-lista-wrap><div class="sub">Carregando…</div></div>';
+    var btnNovo = document.getElementById("btnNovoProjeto");
+    if (btnNovo) btnNovo.addEventListener("click", function(){
       wizard = { step: "colar", cliente: "", textoColado: "", erro: "" };
       renderProjetosPanel();
     });
@@ -766,19 +836,27 @@
       projetosCache = resp.tasks || [];
       renderListaProjetosWrap();
     }).catch(function(e){
-      var wrap = document.getElementById("listaProjetosWrap");
+      var root = projetosRootAtivo();
+      var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
       if (wrap) wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para carregar os projetos (' + esc(mensagemErro(e)) + '). Esta aba só funciona publicada no Dashboard de carteiras, com sessão ativa.</div></div>';
     });
   }
 
   function renderListaProjetosWrap(){
-    var wrap = document.getElementById("listaProjetosWrap");
+    var root = projetosRootAtivo();
+    var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
     if (!wrap) return;
-    if (!projetosCache || !projetosCache.length){
-      wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>Nenhum projeto ainda. Clique em "+ Novo projeto" para criar o primeiro.</div></div>';
+    var entregues = filtroProjetosAtivo === "entregues";
+    var lista = (projetosCache || []).filter(function(p){
+      return entregues ? p.status === "concluído" : p.status !== "concluído";
+    });
+    if (!lista.length){
+      wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>' +
+        (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.') +
+        '</div></div>';
       return;
     }
-    wrap.innerHTML = projetosCache.map(function(p){
+    wrap.innerHTML = lista.map(function(p){
       var tagCls = p.status === "concluído" ? "ambos" : (p.status === "in progress" ? "londrisoft" : "cliente");
       return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
         '<div class="proj-card-top"><h3>' + esc(p.cliente) + '</h3><span class="tag ' + tagCls + '">' + esc(STATUS_LABEL[p.status] || p.status || "—") + '</span></div>' +
@@ -793,6 +871,7 @@
   function abrirProjeto(id){
     projetoAtualId = id;
     dadosProjeto = null;
+    itemAtual = null;
     renderProjetosPanel();
     apiGet("obter-implantacao", { id: id }).then(function(resp){
       dadosProjeto = resp;
@@ -805,7 +884,7 @@
       };
       renderProjetosPanel();
     }).catch(function(e){
-      var root = document.getElementById("projetosRoot");
+      var root = projetosRootAtivo();
       if (!root) return;
       root.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para abrir este projeto (' + esc(mensagemErro(e)) + ').</div></div>' +
         '<div class="flow-actions"><button type="button" class="btn-flow-secondary" id="btnVoltarLista2">← Voltar aos projetos</button></div>';
@@ -958,9 +1037,24 @@
     document.getElementById("btnVoltarLista").addEventListener("click", function(){
       projetoAtualId = null;
       dadosProjeto = null;
+      itemAtual = null;
       renderProjetosPanel();
     });
-    renderSimulador();
+    renderConteudoProjeto();
+  }
+
+  // Dispatcher de 2º nível, dentro de um projeto já aberto: lista unificada
+  // de itens (Gestor/Simplaz/Treinamento/BIME APP/Waipe, todos irmãos) ou,
+  // se um item foi aberto, o detalhe dele — o fluxo completo do Waipe
+  // (escopo→alinhamento→...→entrega, intocado) quando itemAtual==="__waipe__",
+  // ou o checklist da solução quando itemAtual é o id de uma subtask.
+  function renderConteudoProjeto(){
+    if (sim.etapa === "proposta"){ renderAguardandoFechamento(); return; }
+    if (itemAtual === "__waipe__"){ renderSimulador(); return; }
+    document.getElementById("backlogStrip").innerHTML = "";
+    document.getElementById("stepper").innerHTML = "";
+    if (itemAtual === null) renderListaItens();
+    else renderItemSolucao(itemAtual);
   }
 
   function renderBacklogStrip(){
@@ -1068,7 +1162,17 @@
     '</div>';
   }
 
-  function renderEscopo(){
+  // Resumo de status do "item Waipe" na lista unificada — Camada 1 pendente,
+  // ou a etapa atual do fluxo (Alinhamento/Construção/Testes/Entrega).
+  function resumoItemWaipe(){
+    var camada1Pronta = !!(sim.camada1Checks && sim.camada1Checks["0"] && sim.camada1Checks["1"]);
+    if (!camada1Pronta) return "Camada 1 pendente";
+    return ETAPA_LABEL[sim.etapa] || sim.etapa;
+  }
+
+  // Lista única de itens do projeto (Gestor/Simplaz/Treinamento/BIME APP são
+  // itens irmãos do Waipe — abrir cada um leva ao detalhe dele).
+  function renderListaItens(){
     var p = dadosProjeto.projeto;
     var agentes = agentesReais();
     var solucoes = solucoesFechadas();
@@ -1078,17 +1182,61 @@
       '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
       '<div id="ismProjetoWrap"></div>' +
     '</div>' +
-    '<div id="comentariosProjetoWrap"></div>';
-    if (solucoes.length){
-      html += '<div class="card">' +
-        '<h2>Outras soluções fechadas — ' + solucoes.length + '</h2>' +
-        '<div class="sub">Gestor/Simplaz/Unique/BIME APP/Treinamento que o cliente fechou junto — siga o checklist de cada item.</div>' +
-        solucoes.map(cardSolucaoFechada).join("") +
-      '</div>';
-    }
+    '<div id="comentariosProjetoWrap"></div>' +
+    '<div class="card">' +
+      '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
+      '<div class="agent-pick-grid">' +
+        solucoes.map(function(o){
+          var total = Array.isArray(o.checklist) ? o.checklist.length : 0;
+          var checks = o.checklistChecks || {};
+          var feitos = total ? o.checklist.filter(function(_, i){ return !!checks[i]; }).length : 0;
+          var progresso = total ? (feitos + "/" + total + " no checklist") : "checklist a detalhar";
+          return '<div class="agent-pick" data-item="' + esc(o.id) + '"><div class="apname">' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + '</div><div class="apmeta">' + progresso + '</div></div>';
+        }).join("") +
+        (agentes.length ? '<div class="agent-pick" data-item="__waipe__"><div class="apname">Waipe — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</div><div class="apmeta">' + esc(resumoItemWaipe()) + '</div></div>' : "") +
+      '</div>' +
+    '</div>';
+    document.getElementById("stepContent").innerHTML = html;
+    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
+    renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
+    document.querySelectorAll("[data-item]").forEach(function(el){
+      el.addEventListener("click", function(){
+        itemAtual = el.getAttribute("data-item");
+        renderConteudoProjeto();
+      });
+    });
+  }
+
+  // Detalhe de um item tipo "solução" (Gestor/Simplaz/Unique/BIME APP/Treinamento).
+  function renderItemSolucao(id){
+    var o = agentePorId(id);
+    if (!o){ itemAtual = null; renderConteudoProjeto(); return; }
+    var html = '<div class="flow-actions" style="margin-bottom:14px;"><button type="button" class="btn-flow-secondary" id="btnVoltarItens">← Voltar aos itens do projeto</button></div>' +
+      cardSolucaoFechada(o);
+    document.getElementById("stepContent").innerHTML = html;
+    document.getElementById("btnVoltarItens").addEventListener("click", function(){ itemAtual = null; renderConteudoProjeto(); });
+    document.querySelectorAll("[data-solucao-check]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var cid = cb.getAttribute("data-solucao-check");
+        var idx = cb.getAttribute("data-idx");
+        var oo = agentePorId(cid);
+        if (!oo) return;
+        oo.checklistChecks = oo.checklistChecks || {};
+        oo.checklistChecks[idx] = cb.checked;
+        cb.closest(".build-check").classList.toggle("done", cb.checked);
+        apiPost("atualizar-agente", { taskId: cid, checklistChecks: oo.checklistChecks })
+          .catch(function(){ showSimToast("Não deu para salvar o checklist."); });
+      });
+    });
+  }
+
+  // Entrada do fluxo Waipe (item "__waipe__") — Camada 1 + Painel de agentes.
+  // O resto do fluxo (alinhamento→construção→testes→entrega) é inalterado.
+  function renderEscopo(){
+    var agentes = agentesReais();
     var camada1Pronta = !!(sim.camada1Checks && sim.camada1Checks["0"] && sim.camada1Checks["1"]);
-    if (agentes.length){
-      html += '<div class="card">' +
+    var html = '<div class="flow-actions" style="margin-bottom:14px;"><button type="button" class="btn-flow-secondary" id="btnVoltarItens">← Voltar aos itens do projeto</button></div>' +
+      '<div class="card">' +
         '<h2>Camada 1 — Ativação do Waipe</h2>' +
         '<div class="sub">Pré-requisito antes do Alinhamento — só depois disso o time começa a validar os agentes com o cliente.</div>' +
         '<div class="build-check' + (sim.camada1Checks["0"] ? " done" : "") + '"><input type="checkbox" id="camada1_0"' + (sim.camada1Checks["0"] ? " checked" : "") + '><span>Adicionar o serviço Waipe no Núcleo</span></div>' +
@@ -1099,23 +1247,8 @@
         '<div class="agent-pick-grid">' + agentes.map(statusCardAgente).join("") + '</div>' +
       '</div>' +
       '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamento"' + (camada1Pronta ? "" : " disabled") + '>Ir para o Alinhamento →</button></div>';
-    }
     document.getElementById("stepContent").innerHTML = html;
-    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
-    renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
-    document.querySelectorAll("[data-solucao-check]").forEach(function(cb){
-      cb.addEventListener("change", function(){
-        var id = cb.getAttribute("data-solucao-check");
-        var idx = cb.getAttribute("data-idx");
-        var o = agentePorId(id);
-        if (!o) return;
-        o.checklistChecks = o.checklistChecks || {};
-        o.checklistChecks[idx] = cb.checked;
-        cb.closest(".build-check").classList.toggle("done", cb.checked);
-        apiPost("atualizar-agente", { taskId: id, checklistChecks: o.checklistChecks })
-          .catch(function(){ showSimToast("Não deu para salvar o checklist."); });
-      });
-    });
+    document.getElementById("btnVoltarItens").addEventListener("click", function(){ itemAtual = null; renderConteudoProjeto(); });
     ["0", "1"].forEach(function(idx){
       var cb = document.getElementById("camada1_" + idx);
       if (!cb) return;
