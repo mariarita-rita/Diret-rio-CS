@@ -2031,6 +2031,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
 
   const estadoProposta = {
     etapaAtual: 'proposta',
+    faseProjetoManual: 'aguardando_cliente',
     agentesPropostos: [{ nome: 'Agente Novo', frente: 'Comercial', entrega: ['Resumo diário'] }],
     outrasSolucoesPropostas: [
       { produto: 'Gestor', planoSugerido: 'Avançado', variante: 'Nuvem', motivo: 'Multi-filial.', observacoes: 'Cliente pediu para zerar a base antes de migrar.', ambienteMuda: false, quantidade: 1, valorTabela: 719, valorManual: 0, pol: 'padrao', descontoPercent: 0, incluir: true },
@@ -2132,7 +2133,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
 
   escritas.length = 0;
   const salvarNovo = await chamarAcao(GESTAO, 'salvar-proposta-implantacao', {
-    cliente: 'Cliente Y', contexto: 'Consultoria de ontem',
+    cliente: 'Cliente Y', contexto: 'Consultoria de ontem', csm: 'Ana Paula Souza',
     agentesPropostos: [{ nome: 'Agente Novo', frente: 'Comercial', entrega: ['Resumo diário'] }],
     outrasSolucoesPropostas: estadoProposta.outrasSolucoesPropostas,
     diagnosticoWaipe: estadoProposta.diagnosticoWaipe,
@@ -2142,6 +2143,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('  etapaAtual "proposta" no estado embutido', criarBody.markdown_description.includes('"etapaAtual":"proposta"'), true);
   checar('  agentesPropostos gravado', criarBody.markdown_description.includes('"nome":"Agente Novo"'), true);
   checar('  outrasSolucoesPropostas gravado (produto invalido seria descartado, aqui os 2 sao validos)', criarBody.markdown_description.includes('"produto":"BIME APP"'), true);
+  checar('  CSM do formulario prevalece sobre quem esta logado', criarBody.markdown_description.includes('**CSM:** Ana Paula Souza'), true);
 
   // salvar-proposta-implantacao: taskIdExistente ATUALIZA a mesma task (nao cria outra)
   escritas.length = 0;
@@ -2195,6 +2197,11 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('  observacoes preservada', escritaSolucao.body.markdown_description.includes('Zerar a base antes.'), true);
   checar('  produto preservado', escritaSolucao.body.markdown_description.includes('"produto":"Gestor"'), true);
 
+  // atualizar-agente (solucao): fase tambem e editavel, com o mesmo padrao de preservar o resto
+  escritas.length = 0;
+  const marcarFase = await chamarAcao(GIAN, 'atualizar-agente', { taskId: 'tSolucao1', fase: 'entregue' });
+  checar('atualizar-agente (solucao): fase gravada', [marcarFase.code, escritas.find((e) => e.alvo === 'solucao1')?.body.markdown_description.includes('"fase":"entregue"')], [200, true]);
+
   // atualizar-implantacao: camada1Checks (ativacao Waipe) e gravado e preserva o historico da proposta
   escritas.length = 0;
   const salvarCamada1 = await chamarAcao(GIAN, 'atualizar-implantacao', {
@@ -2204,6 +2211,20 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   const escritaCamada1 = escritas.find((e) => e.alvo === 'proposta');
   checar('  camada1Checks gravado', escritaCamada1.body.markdown_description.includes('"camada1Checks":{"0":true,"1":false}'), true);
   checar('  historico da proposta preservado (nao apaga agentesPropostos/outrasSolucoesPropostas)', escritaCamada1.body.markdown_description.includes('"nome":"Agente Novo"'), true);
+  checar('  faseProjetoManual preservado quando o campo nao vem no corpo', escritaCamada1.body.markdown_description.includes('"faseProjetoManual":"aguardando_cliente"'), true);
+
+  // atualizar-implantacao: faseProjetoManual e gravavel, e null explicito volta pro automatico
+  escritas.length = 0;
+  const setarFaseManual = await chamarAcao(GIAN, 'atualizar-implantacao', {
+    id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], faseProjetoManual: 'entregue',
+  });
+  checar('atualizar-implantacao: faseProjetoManual definido', [setarFaseManual.code, escritas.find((e) => e.alvo === 'proposta')?.body.markdown_description.includes('"faseProjetoManual":"entregue"')], [200, true]);
+
+  escritas.length = 0;
+  const limparFaseManual = await chamarAcao(GIAN, 'atualizar-implantacao', {
+    id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], faseProjetoManual: null,
+  });
+  checar('atualizar-implantacao: faseProjetoManual null volta pro automatico', [limparFaseManual.code, escritas.find((e) => e.alvo === 'proposta')?.body.markdown_description.includes('"faseProjetoManual":null')], [200, true]);
 
   // obter-implantacao: solucao fechada ANTES da jornada por produto existir
   // ficou com checklist:null gravado — precisa recalcular pelo template
@@ -2216,6 +2237,9 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   const itemAntigo = obterPromovida.corpo.agentes.find((a) => a.id === 'tSolucaoAntiga');
   checar('obter-implantacao: 200 com as 2 solucoes', [obterPromovida.code, obterPromovida.corpo.agentes.length], [200, 2]);
   checar('  BIME APP sem checklist gravado recalcula pelo template atual', itemAntigo?.checklist, ['Ativar usuários no workspace do cliente', 'Enviar e-mail com instruções de uso', 'Finalizar']);
+  checar('  item sem fase gravada default pra "nao_iniciado"', itemAntigo?.fase, 'nao_iniciado');
+  checar('  projeto sem faseProjetoManual e sem itens entregues deriva "nao_iniciado"', [obterPromovida.corpo.projeto.faseProjetoManual, obterPromovida.corpo.projeto.faseProjetoDerivada], [null, 'nao_iniciado']);
+  checar('  sem agentes Waipe reais, faseWaipe e null (nao entra na derivacao)', obterPromovida.corpo.projeto.faseWaipe, null);
 
   globalThis.fetch = fetchOriginal;
 }

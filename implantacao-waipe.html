@@ -116,6 +116,8 @@
   .tag.londrisoft{background:var(--tag-londrisoft-bg); color:var(--tag-londrisoft);}
   .tag.cliente{background:var(--tag-cliente-bg); color:var(--tag-cliente);}
   .tag.ambos{background:var(--tag-ambos-bg); color:var(--tag-ambos);}
+  .tag.neutro{background:var(--surface-2); color:var(--muted);}
+  .tag.perigo{background:var(--danger-bg); color:var(--danger);}
 
   /* Runbook checklist */
   .phase{border:1px solid var(--border); border-radius:16px; margin-bottom:14px; overflow:hidden; background:var(--surface);}
@@ -724,6 +726,18 @@
   ETAPAS.forEach(function(e){ ETAPA_LABEL[e.id] = e.label; ETAPA_ICONE[e.id] = e.icone; });
   var STATUS_LABEL = { "pendente": "A iniciar", "in progress": "Em andamento", "concluído": "Concluído" };
 
+  // Fase de acompanhamento (item da lista unificada, ou o projeto como um
+  // todo) — mesmo vocabulário nos dois níveis.
+  var FASE_LABEL = {
+    nao_iniciado: "Não iniciado", aguardando_cliente: "Aguardando cliente",
+    aguardando_interno: "Aguardando interno", cancelado: "Cancelado", entregue: "Entregue"
+  };
+  var FASE_TAG_CLASS = {
+    nao_iniciado: "neutro", aguardando_cliente: "cliente",
+    aguardando_interno: "londrisoft", cancelado: "perigo", entregue: "ambos"
+  };
+  var FASES_ORDEM = ["nao_iniciado", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
+
   // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
   function apiGet(action, params){
     var qs = "";
@@ -754,6 +768,7 @@
   // ---- Estado ----
   var projetosCache = null;   // lista de listar-implantacoes (nao filtrada — a mesma pras 2 abas)
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
+  var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
@@ -847,24 +862,46 @@
     var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
     if (!wrap) return;
     var entregues = filtroProjetosAtivo === "entregues";
+    var todasCsm = Array.from(new Set((projetosCache || []).map(function(p){ return p.csm; }).filter(Boolean)))
+      .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var lista = (projetosCache || []).filter(function(p){
-      return entregues ? p.status === "concluído" : p.status !== "concluído";
+      if (entregues ? p.status !== "concluído" : p.status === "concluído") return false;
+      if (filtroCsmAtivo && p.csm !== filtroCsmAtivo) return false;
+      return true;
     });
+    // Só mostra o filtro quando faz diferença — 1 CSM só ou nenhum não precisa.
+    var filtroHtml = todasCsm.length > 1
+      ? '<div style="margin-bottom:12px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por CSM</label>' +
+        '<select id="filtroCsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value=""' + (filtroCsmAtivo ? "" : " selected") + '>Todos</option>' +
+        todasCsm.map(function(c){ return '<option value="' + esc(c) + '"' + (c === filtroCsmAtivo ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") +
+        '</select></div>'
+      : "";
     if (!lista.length){
-      wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>' +
-        (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.') +
+      wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
+        (filtroCsmAtivo ? "Nenhum projeto desse CSM aqui." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
         '</div></div>';
-      return;
+    } else {
+      wrap.innerHTML = filtroHtml + lista.map(function(p){
+        var tagCls = p.status === "concluído" ? "ambos" : (p.status === "in progress" ? "londrisoft" : "cliente");
+        var diasAberto = p.dataCriacao ? Math.max(0, Math.floor((Date.now() - p.dataCriacao) / 86400000)) : null;
+        var faseTag = p.faseProjetoManual
+          ? ' <span class="tag ' + (FASE_TAG_CLASS[p.faseProjetoManual] || "neutro") + '">' + esc(FASE_LABEL[p.faseProjetoManual] || p.faseProjetoManual) + '</span>'
+          : "";
+        return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
+          '<div class="proj-card-top"><h3>' + esc(p.cliente) + '</h3><span class="tag ' + tagCls + '">' + esc(STATUS_LABEL[p.status] || p.status || "—") + '</span>' + faseTag + '</div>' +
+          '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) + ' · ' + p.agentesConcluidos + '/' + p.agentesTotal + ' agentes entregues' +
+          (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
+        '</div>';
+      }).join("");
     }
-    wrap.innerHTML = lista.map(function(p){
-      var tagCls = p.status === "concluído" ? "ambos" : (p.status === "in progress" ? "londrisoft" : "cliente");
-      return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
-        '<div class="proj-card-top"><h3>' + esc(p.cliente) + '</h3><span class="tag ' + tagCls + '">' + esc(STATUS_LABEL[p.status] || p.status || "—") + '</span></div>' +
-        '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) + ' · ' + p.agentesConcluidos + '/' + p.agentesTotal + ' agentes entregues</div>' +
-      '</div>';
-    }).join("");
     wrap.querySelectorAll("[data-proj]").forEach(function(card){
       card.addEventListener("click", function(){ abrirProjeto(card.getAttribute("data-proj")); });
+    });
+    var selCsm = document.getElementById("filtroCsmProjetos");
+    if (selCsm) selCsm.addEventListener("change", function(){
+      filtroCsmAtivo = selCsm.value;
+      renderListaProjetosWrap();
     });
   }
 
@@ -1142,6 +1179,14 @@
     return "R$" + (Number(v) || 0).toFixed(2).replace(".", ",");
   }
 
+  // Tag + seletor de fase reaproveitado no item e no projeto (mesmo vocabulário).
+  function seletorFase(dataAttr, id, faseAtual){
+    return '<span class="tag ' + (FASE_TAG_CLASS[faseAtual] || "neutro") + '">' + esc(FASE_LABEL[faseAtual] || faseAtual) + '</span>' +
+      '<select ' + dataAttr + '="' + esc(id) + '" class="form-input" style="width:auto; display:inline-block; margin-left:8px; font-size:12px; padding:4px 8px;">' +
+      FASES_ORDEM.map(function(f){ return '<option value="' + f + '"' + (f === faseAtual ? " selected" : "") + '>' + FASE_LABEL[f] + '</option>'; }).join("") +
+      '</select>';
+  }
+
   function cardSolucaoFechada(o){
     var valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
     var checklist = Array.isArray(o.checklist) ? o.checklist : null;
@@ -1153,7 +1198,10 @@
         }).join("")
       : '<div class="callout warn" style="margin-top:8px"><div class="dot"></div><div>Procedimento técnico a detalhar com a coordenação (envolve troca de ambiente Local ↔ Nuvem).</div></div>';
     return '<div class="card" data-solucao-card="' + esc(o.id) + '">' +
-      '<h2>' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + (o.variante ? " (" + esc(o.variante) + ")" : "") + '</h2>' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">' +
+        '<h2 style="margin:0;">' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + (o.variante ? " (" + esc(o.variante) + ")" : "") + '</h2>' +
+        '<div>' + seletorFase("data-solucao-fase", o.id, o.fase || "nao_iniciado") + '</div>' +
+      '</div>' +
       (o.motivo ? '<div class="sub">' + esc(o.motivo) + '</div>' : "") +
       '<div class="sp-k" style="margin-top:8px">Valor</div><div class="sp-v">' + fmtBRLSim(valor) + (o.quantidade > 1 ? " × " + o.quantidade : "") + '/mês</div>' +
       (o.observacoes ? '<div class="sp-k" style="margin-top:10px">Observações para a implantação</div><div class="sp-v" style="white-space:pre-wrap;">' + esc(o.observacoes) + '</div>' : "") +
@@ -1170,6 +1218,30 @@
     return ETAPA_LABEL[sim.etapa] || sim.etapa;
   }
 
+  // Seletor de fase do PROJETO — automático (derivado dos itens), com opção
+  // de forçar manualmente ou voltar pro automático.
+  function seletorFaseProjeto(p){
+    var manual = !!p.faseProjetoManual;
+    var valorEfetivo = p.faseProjetoManual || p.faseProjetoDerivada;
+    return '<span class="tag ' + (FASE_TAG_CLASS[valorEfetivo] || "neutro") + '">' + esc(FASE_LABEL[valorEfetivo] || valorEfetivo) + (manual ? "" : " · automático") + '</span>' +
+      '<select data-projeto-fase class="form-input" style="width:auto; display:inline-block; margin-left:8px; font-size:12px; padding:4px 8px;">' +
+      '<option value=""' + (manual ? "" : " selected") + '>Automático (' + esc(FASE_LABEL[p.faseProjetoDerivada] || p.faseProjetoDerivada) + ')</option>' +
+      FASES_ORDEM.map(function(f){ return '<option value="' + f + '"' + (manual && f === p.faseProjetoManual ? " selected" : "") + '>Forçar: ' + FASE_LABEL[f] + '</option>'; }).join("") +
+      '</select>';
+  }
+
+  function persistirFaseProjeto(faseProjetoManual){
+    if (!dadosProjeto) return;
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
+      faseProjetoManual: faseProjetoManual
+    }).then(function(){
+      dadosProjeto.projeto.faseProjetoManual = faseProjetoManual;
+      renderListaItens();
+    }).catch(function(){ showSimToast("Não deu para salvar a fase do projeto."); });
+  }
+
   // Lista única de itens do projeto (Gestor/Simplaz/Treinamento/BIME APP são
   // itens irmãos do Waipe — abrir cada um leva ao detalhe dele).
   function renderListaItens(){
@@ -1177,7 +1249,11 @@
     var agentes = agentesReais();
     var solucoes = solucoesFechadas();
     var html = '<div class="card">' +
-      '<h2>' + esc(p.cliente) + '</h2><div class="sub">CSM: ' + esc(p.csm || "—") + '</div>' +
+      '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">' +
+        '<h2 style="margin:0;">' + esc(p.cliente) + '</h2>' +
+        '<div>' + seletorFaseProjeto(p) + '</div>' +
+      '</div>' +
+      '<div class="sub">CSM: ' + esc(p.csm || "—") + '</div>' +
       '<div class="sp-k" style="margin-top:8px">Contexto do projeto</div>' +
       '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
       '<div id="ismProjetoWrap"></div>' +
@@ -1191,9 +1267,13 @@
           var checks = o.checklistChecks || {};
           var feitos = total ? o.checklist.filter(function(_, i){ return !!checks[i]; }).length : 0;
           var progresso = total ? (feitos + "/" + total + " no checklist") : "checklist a detalhar";
-          return '<div class="agent-pick" data-item="' + esc(o.id) + '"><div class="apname">' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + '</div><div class="apmeta">' + progresso + '</div></div>';
+          var fase = o.fase || "nao_iniciado";
+          return '<div class="agent-pick" data-item="' + esc(o.id) + '"><div class="apname">' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + '</div><div class="apmeta">' + progresso + '</div>' +
+            '<div style="margin-top:6px"><span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span></div></div>';
         }).join("") +
-        (agentes.length ? '<div class="agent-pick" data-item="__waipe__"><div class="apname">Waipe — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</div><div class="apmeta">' + esc(resumoItemWaipe()) + '</div></div>' : "") +
+        (agentes.length ? '<div class="agent-pick" data-item="__waipe__"><div class="apname">Waipe — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</div><div class="apmeta">' + esc(resumoItemWaipe()) + '</div>' +
+          (p.faseWaipe ? '<div style="margin-top:6px"><span class="tag ' + (FASE_TAG_CLASS[p.faseWaipe] || "neutro") + '">' + esc(FASE_LABEL[p.faseWaipe] || p.faseWaipe) + '</span></div>' : "") +
+        '</div>' : "") +
       '</div>' +
     '</div>';
     document.getElementById("stepContent").innerHTML = html;
@@ -1204,6 +1284,10 @@
         itemAtual = el.getAttribute("data-item");
         renderConteudoProjeto();
       });
+    });
+    var selFaseProjeto = document.querySelector("[data-projeto-fase]");
+    if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
+      persistirFaseProjeto(selFaseProjeto.value || null);
     });
   }
 
@@ -1226,6 +1310,17 @@
         cb.closest(".build-check").classList.toggle("done", cb.checked);
         apiPost("atualizar-agente", { taskId: cid, checklistChecks: oo.checklistChecks })
           .catch(function(){ showSimToast("Não deu para salvar o checklist."); });
+      });
+    });
+    document.querySelectorAll("[data-solucao-fase]").forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var cid = sel.getAttribute("data-solucao-fase");
+        var oo = agentePorId(cid);
+        if (!oo) return;
+        oo.fase = sel.value;
+        apiPost("atualizar-agente", { taskId: cid, fase: oo.fase })
+          .then(function(){ renderItemSolucao(id); })
+          .catch(function(){ showSimToast("Não deu para salvar a fase."); });
       });
     });
   }

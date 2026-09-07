@@ -701,6 +701,37 @@ const POL_SOLUCAO_VALIDOS = new Set(['padrao', 'limite10', 'sem']);
 const GOV_WAIPE_VALIDOS = new Set(['sim', 'nao']);
 const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
 
+// Fase de acompanhamento de um item da lista unificada (solucao fechada) —
+// tag manual editada pelo CSM, independente do checklist. FASE_ITEM_PADRAO
+// entra em todo item novo; "cancelado" nao conta como pendencia pro derivado
+// do projeto (ver derivarFaseProjeto).
+const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'aguardando_cliente', 'aguardando_interno', 'cancelado', 'entregue']);
+const FASE_ITEM_PADRAO = 'nao_iniciado';
+
+/**
+ * Fase do PROJETO como um todo: automatica (derivada das fases dos itens +
+ * do estagio do Waipe), mas com override manual (faseProjetoManual) sempre
+ * que o CSM quiser forcar um valor diferente do calculado.
+ */
+function derivarFaseProjeto(fases) {
+  if (!fases.length) return FASE_ITEM_PADRAO;
+  const relevantes = fases.filter((f) => f !== 'cancelado');
+  if (relevantes.length && relevantes.every((f) => f === 'entregue')) return 'entregue';
+  if (fases.some((f) => f === 'aguardando_cliente')) return 'aguardando_cliente';
+  if (fases.some((f) => f === 'aguardando_interno')) return 'aguardando_interno';
+  if (!relevantes.length || relevantes.every((f) => f === FASE_ITEM_PADRAO)) return FASE_ITEM_PADRAO;
+  return 'aguardando_interno';
+}
+
+/** Fase do "item Waipe" (sintetico — nao e uma subtask propria) a partir da Camada 1 + progresso de entrega, pra entrar na derivacao acima. */
+function faseWaipeDerivada(estadoProjeto, totalAgentes) {
+  if (!totalAgentes) return null;
+  const camada1Pronta = !!(estadoProjeto.camada1Checks && estadoProjeto.camada1Checks['0'] && estadoProjeto.camada1Checks['1']);
+  if (!camada1Pronta) return FASE_ITEM_PADRAO;
+  const concluidos = Array.isArray(estadoProjeto.concluidos) ? estadoProjeto.concluidos.length : 0;
+  return concluidos >= totalAgentes ? 'entregue' : 'aguardando_interno';
+}
+
 // Jornada (checklist) por produto — passos concretos, documentados pelo
 // time (nao mais o binario generico produtoSimples/requerImplantacao).
 // null = ainda sem passo a passo definido (ex: "Outro", ou Gestor/Unique
@@ -810,6 +841,12 @@ async function listarImplantacoesAcao(res, sessao) {
         ? estado.agentesTotal
         : (estado.agentesPropostos?.length || 0) + (estado.outrasSolucoesPropostas?.length || 0),
       agentesConcluidos: Array.isArray(estado.concluidos) ? estado.concluidos.length : 0,
+      // Fase manual do projeto, se o CSM já tiver definido uma — a lista não
+      // busca subtasks (custaria 1 chamada por projeto), então só reflete o
+      // override manual aqui; a fase derivada dos itens só existe na tela
+      // do projeto aberto (obter-implantacao), que já busca as subtasks.
+      faseProjetoManual: FASES_ITEM_VALIDAS.has(estado.faseProjetoManual) ? estado.faseProjetoManual : null,
+      dataCriacao: Number.isFinite(Number(t.date_created)) ? Number(t.date_created) : null,
     };
   });
   const visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
@@ -867,6 +904,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
           descontoPercent: Number.isFinite(e.descontoPercent) ? e.descontoPercent : 0,
           checklist,
           checklistChecks: sanearChecks(e.checklistChecks) || {},
+          fase: FASES_ITEM_VALIDAS.has(e.fase) ? e.fase : FASE_ITEM_PADRAO,
         };
       }
       return {
@@ -888,6 +926,14 @@ async function obterImplantacaoAcao(req, res, sessao) {
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
+  // Fase do projeto: automatica (itens da lista unificada + estagio do
+  // Waipe), com override manual quando o CSM define um valor explicito.
+  const totalAgentesWaipe = agentes.filter((a) => a.tipo === 'agente').length;
+  const fasesItens = agentes.filter((a) => a.tipo === 'solucao').map((a) => a.fase);
+  const faseWaipe = faseWaipeDerivada(estadoProjeto, totalAgentesWaipe);
+  if (faseWaipe) fasesItens.push(faseWaipe);
+  const faseProjetoManual = FASES_ITEM_VALIDAS.has(estadoProjeto.faseProjetoManual) ? estadoProjeto.faseProjetoManual : null;
+
   return res.status(200).json({
     projeto: {
       id: pai.id,
@@ -902,6 +948,12 @@ async function obterImplantacaoAcao(req, res, sessao) {
       agenteAtualId: typeof estadoProjeto.agenteAtualId === 'string' ? estadoProjeto.agenteAtualId : null,
       concluidos: sanearListaIds(estadoProjeto.concluidos),
       camada1Checks: sanearChecks(estadoProjeto.camada1Checks) || {},
+      // Fase sintética do "item Waipe" (não é uma subtask própria — deriva de
+      // camada1Checks + progresso de entrega) pra mostrar a mesma etiqueta
+      // usada nas soluções também na lista unificada.
+      faseWaipe,
+      faseProjetoManual,
+      faseProjetoDerivada: derivarFaseProjeto(fasesItens),
       // Só relevante enquanto etapaAtual === "proposta" (ou como histórico do
       // que foi proposto, depois de promovido) — arrays vazios/null nos
       // demais casos.
@@ -1030,6 +1082,13 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     agentesPropostos: estadoAtual.agentesPropostos || [],
     outrasSolucoesPropostas: estadoAtual.outrasSolucoesPropostas || [],
     diagnosticoWaipe: estadoAtual.diagnosticoWaipe || null,
+    // Override manual da fase do projeto — só muda quando o campo vem no
+    // corpo (mesmo se vier null/inválido, o que significa "voltar a
+    // automático"); se nem vier, preserva o que já estava gravado, senão
+    // qualquer atualizar-implantacao do dia a dia (camada1Checks etc.) apaga.
+    faseProjetoManual: 'faseProjetoManual' in corpo
+      ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
+      : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
@@ -1080,6 +1139,7 @@ async function atualizarAgenteAcao(req, res, sessao) {
     ? {
         ...estadoAtual,
         checklistChecks: sanearChecks(corpo.checklistChecks) ?? (estadoAtual.checklistChecks || {}),
+        fase: FASES_ITEM_VALIDAS.has(corpo.fase) ? corpo.fase : (estadoAtual.fase || FASE_ITEM_PADRAO),
       }
     : {
         tipo: 'agente',
@@ -1140,6 +1200,11 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
   }
   const contexto = texto(corpo.contexto, 6000);
+  // CSM responsável: o campo "CSM / gerente de contas" do formulário é a
+  // fonte preferida (a proposta pode ser preenchida por outra pessoa em
+  // nome do CSM que de fato atende o cliente) — cai pra sessão só se vier
+  // vazio.
+  const csmFormulario = texto(corpo.csm, 120);
 
   const agentesPropostos = Array.isArray(corpo.agentesPropostos)
     ? corpo.agentesPropostos.slice(0, MAX_AGENTES).map(sanearAgenteProposto).filter(Boolean)
@@ -1173,14 +1238,14 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     await atualizarTask(corpo.taskIdExistente, {
       name: nomeTask,
       markdown_description: stringifyWaipeState(
-        [`**CSM:** ${csm || texto(sessao.nome, 120) || sessao.csm || sessao.nivel}`, contexto].filter(Boolean).join('\n\n'),
+        [`**CSM:** ${csmFormulario || csm || texto(sessao.nome, 120) || sessao.csm || sessao.nivel}`, contexto].filter(Boolean).join('\n\n'),
         novoEstado
       ),
     });
     return res.status(200).json({ ok: true, id: corpo.taskIdExistente });
   }
 
-  const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
+  const csmNome = csmFormulario || texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
   const projeto = await criarTaskImplantacao({
     name: nomeTask,
     markdown_description: stringifyWaipeState(
@@ -1280,6 +1345,7 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
         descontoPercent: o.descontoPercent,
         checklist: jornadaPara(o.produto, o.ambienteMuda),
         checklistChecks: {},
+        fase: FASE_ITEM_PADRAO,
       }),
     });
   }

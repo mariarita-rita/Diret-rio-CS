@@ -2536,6 +2536,7 @@
     var ctx = getProposalContext();
     var payload = {
       cliente: ctx.cliente,
+      csm: ctx.csm,
       contexto: [ctx.segmento, ctx.dores].filter(Boolean).join("\n\n"),
       agentesPropostos: montarAgentesPropostos(),
       outrasSolucoesPropostas: recomendacoesState,
