@@ -298,8 +298,7 @@
   footer.page-footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--border); font-size:12px; color:var(--muted-2); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
 
   /* Gerar Proposta tab */
-  .prop-grid{display:grid; grid-template-columns:minmax(0,460px) minmax(0,1fr); gap:22px; align-items:start;}
-  @media (max-width:900px){ .prop-grid{grid-template-columns:1fr;} }
+  .prop-grid{display:flex; flex-direction:column; gap:22px;}
   textarea.ta{
     width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border-strong);
     background:var(--bg); color:var(--ink); font-family:inherit; font-size:13.5px; resize:vertical; min-height:84px; line-height:1.5;
@@ -898,17 +897,6 @@
         <h2>Contexto do cliente para a proposta</h2>
         <div class="sub">Estas informações + o plano calculado na aba Diagnóstico Waipe alimentam o modelo de proposta e o prompt do Gemini.</div>
 
-        <div class="field" style="margin-bottom:14px;">
-          <label for="p-transcricao">✨ Colar transcrição da consultoria (opcional)</label>
-          <textarea id="p-transcricao" class="ta" placeholder="Cole aqui a transcrição da reunião — a IA preenche cliente, segmento e dores, e aponta outras oportunidades (Gestor, Simplaz, Unique, BIME APP)."></textarea>
-          <div class="hint">Não recomenda agentes do Waipe — isso continua sendo sugerido automaticamente a partir do campo "dores" abaixo.</div>
-          <button type="button" class="btn-secondary" id="btnAnalisarIa" style="margin-top:8px;">Analisar com IA</button>
-          <div id="analiseIaErro" style="display:none; font-size:12.5px; color:#B91C1C; margin-top:8px;"></div>
-          <div id="analiseIaResultado" style="display:none; margin-top:12px;"></div>
-        </div>
-
-        <div class="divider"></div>
-
         <div class="field-row">
           <div class="field">
             <label for="p-cliente">Nome do cliente</label>
@@ -930,6 +918,19 @@
             <input type="text" id="p-csm" class="num-input" placeholder="Seu nome">
           </div>
         </div>
+
+        <div class="divider"></div>
+
+        <div class="field" style="margin-bottom:14px;">
+          <label for="p-transcricao">✨ Colar transcrição da consultoria (opcional)</label>
+          <textarea id="p-transcricao" class="ta" placeholder="Cole aqui a transcrição da reunião — a IA preenche cliente, segmento e dores, e aponta outras oportunidades (Gestor, Simplaz, Unique, BIME APP)."></textarea>
+          <div class="hint">Não recomenda agentes do Waipe — isso continua sendo sugerido automaticamente a partir do campo "dores" abaixo.</div>
+          <button type="button" class="btn-secondary" id="btnAnalisarIa" style="margin-top:8px;">Analisar com IA</button>
+          <div id="analiseIaErro" style="display:none; font-size:12.5px; color:#B91C1C; margin-top:8px;"></div>
+          <div id="analiseIaResultado" style="display:none; margin-top:12px;"></div>
+        </div>
+
+        <div class="divider"></div>
 
         <div class="field">
           <label for="p-erp">ERP utilizado pelo cliente</label>
@@ -1205,6 +1206,19 @@
     <div style="padding:14px 22px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; flex-shrink:0;">
       <button type="button" class="btn-secondary" id="btnCancelNewAgent" style="width:auto;">Cancelar</button>
       <button type="button" class="btn-primary" id="btnSaveNewAgent" style="width:auto; margin-top:0;">Salvar agente</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sucessoModalOverlay">
+  <div class="modal-box" style="height:auto; max-width:440px;">
+    <div style="padding:26px 24px 22px; text-align:center;">
+      <div style="font-size:32px; margin-bottom:8px;">✅</div>
+      <strong style="display:block; font-size:15px; margin-bottom:8px;" id="sucessoModalTitulo">Sucesso</strong>
+      <div style="font-size:13.5px; color:var(--muted); line-height:1.5;" id="sucessoModalMsg"></div>
+    </div>
+    <div style="padding:0 22px 22px; display:flex; justify-content:center;">
+      <button type="button" class="btn-primary" id="sucessoModalOk" style="width:auto; padding:10px 32px; margin-top:0;">OK</button>
     </div>
   </div>
 </div>
@@ -2514,15 +2528,12 @@
     document.getElementById("implantacaoErro").style.display = "none";
   }
 
-  document.getElementById("btnSalvarProposta").addEventListener("click", function(){
-    limparErroImplantacao();
+  // Monta o payload de "salvar proposta" a partir do estado atual do
+  // formulário — usado tanto pelo botão de salvar quanto (antes de
+  // confirmar) pelo fechamento, pra garantir que edições feitas depois do
+  // último salvamento (ex: observações, itens incluídos) não se percam.
+  function montarPayloadProposta(){
     var ctx = getProposalContext();
-    if (!ctx.cliente || ctx.cliente === "Cliente"){
-      mostrarErroImplantacao("Preencha o nome do cliente antes de salvar a proposta.");
-      return;
-    }
-    var btn = this;
-    btn.disabled = true;
     var payload = {
       cliente: ctx.cliente,
       contexto: [ctx.segmento, ctx.dores].filter(Boolean).join("\n\n"),
@@ -2540,17 +2551,36 @@
       } : null
     };
     if (propostaSalvaId) payload.taskIdExistente = propostaSalvaId;
+    return payload;
+  }
 
-    fetch("/api/clickup?action=salvar-proposta-implantacao", {
+  function salvarPropostaNoServidor(payload){
+    return fetch("/api/clickup?action=salvar-proposta-implantacao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    }).then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); })
+    }).then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); });
+  }
+
+  document.getElementById("btnSalvarProposta").addEventListener("click", function(){
+    limparErroImplantacao();
+    var ctx = getProposalContext();
+    if (!ctx.cliente || ctx.cliente === "Cliente"){
+      mostrarErroImplantacao("Preencha o nome do cliente antes de salvar a proposta.");
+      return;
+    }
+    var btn = this;
+    btn.disabled = true;
+    salvarPropostaNoServidor(montarPayloadProposta())
       .then(function(resultado){
         propostaSalvaId = resultado.id;
         atualizarStatusProposta();
         salvarRascunho();
-        showToast('Proposta salva — encontrável em "Projetos em Andamento" como Aguardando Fechamento.');
+        mostrarModalSucesso(
+          "Proposta salva",
+          'Encontrável em "Projetos em Andamento" como Aguardando Fechamento. O formulário desta simulação vai ser limpo pra começar a próxima.',
+          function(){ limparRascunho(); window.location.reload(); }
+        );
       }).catch(function(e){
         mostrarErroImplantacao((e && e.error) || "Não foi possível salvar a proposta agora.");
       }).finally(function(){
@@ -2625,16 +2655,27 @@
     if (!window.confirm("Confirmar o fechamento e criar o projeto de implantação com os itens marcados como incluídos?")) return;
     var btn = this;
     btn.disabled = true;
-    fetch("/api/clickup?action=confirmar-fechamento-implantacao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: propostaSalvaId })
-    }).then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); })
+    // Reenvia o estado atual do formulário antes de confirmar — "confirmar"
+    // só lê o que já está salvo no ClickUp, então qualquer edição feita
+    // depois do último "Salvar proposta" (observações, itens marcados/
+    // desmarcados) precisa ir junto aqui, senão se perde.
+    salvarPropostaNoServidor(montarPayloadProposta())
+      .then(function(){
+        return fetch("/api/clickup?action=confirmar-fechamento-implantacao", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: propostaSalvaId })
+        }).then(function(r){ return r.json().then(function(j){ if (!r.ok) throw j; return j; }); });
+      })
       .then(function(resultado){
-        showToast('Projeto de implantação criado com ' + resultado.criados + ' item(ns) — abra em "Projetos em Andamento".');
         document.getElementById("propostaStatus").textContent = "Fechamento confirmado — projeto de implantação criado.";
+        mostrarModalSucesso(
+          "Projeto de implantação criado",
+          'Criado com ' + resultado.criados + ' item(ns) — abra em "Projetos em Andamento" pra continuar.'
+        );
       }).catch(function(e){
         mostrarErroImplantacao((e && e.error) || "Não foi possível confirmar o fechamento agora.");
+      }).finally(function(){
         btn.disabled = false;
       });
   });
@@ -3039,6 +3080,26 @@
     t.classList.add("show");
     setTimeout(function(){ t.classList.remove("show"); }, 2200);
   }
+
+  // Modal de sucesso — pra passos demorados (criar proposta/projeto no ClickUp)
+  // onde um toast no rodapé passa despercebido e o CSM fica em dúvida se deu certo.
+  var aoFecharSucessoModal = null;
+  function mostrarModalSucesso(titulo, msg, aoFechar){
+    document.getElementById("sucessoModalTitulo").textContent = titulo;
+    document.getElementById("sucessoModalMsg").textContent = msg;
+    aoFecharSucessoModal = typeof aoFechar === "function" ? aoFechar : null;
+    document.getElementById("sucessoModalOverlay").classList.add("show");
+  }
+  function fecharModalSucesso(){
+    document.getElementById("sucessoModalOverlay").classList.remove("show");
+    var cb = aoFecharSucessoModal;
+    aoFecharSucessoModal = null;
+    if (cb) cb();
+  }
+  document.getElementById("sucessoModalOk").addEventListener("click", fecharModalSucesso);
+  document.getElementById("sucessoModalOverlay").addEventListener("click", function(e){
+    if (e.target === document.getElementById("sucessoModalOverlay")) fecharModalSucesso();
+  });
 
   function copyToClipboard(text){
     if (navigator.clipboard && navigator.clipboard.writeText){
