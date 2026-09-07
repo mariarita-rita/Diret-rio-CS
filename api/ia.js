@@ -82,9 +82,9 @@ GESTOR (ERP) — 4 planos, por funcionalidade, cada um inclui o anterior:
 - Intermediário: adiciona código de barras, simulação de preço, contratos, financeiro mais completo, integração com Mercado Livre.
 - Avançado: multi-filial/multi-empresa, gerente de conta dedicado, consolidação financeira entre filiais. Inclui também o Módulo Indústria (produção, ordem de fabricação, ficha técnica) — MAS esse módulo não tem mais manutenção ativa: NUNCA recomende como oferta pronta; se o perfil do cliente parecer precisar dele, use o campo "atencao" pedindo pra verificar disponibilidade com a coordenação antes de ofertar.
 
-SIMPLAZ GESTOR (empresários, gestão de notas fiscais) — Bronze/Prata/Ouro: a diferença entre os planos é volume de XMLs processados por mês e número de usuários, não funcionalidade.
+SIMPLAZ GESTOR (empresários que já usam o Gestor) — NÃO emite nota fiscal (quem emite é o próprio Gestor, desde o plano NF-e); o Simplaz importa automaticamente o XML de saída do Gestor (sem precisar mandar por e-mail pro contador) e manifesta as notas fiscais de ENTRADA. Bronze/Prata/Ouro: a diferença é o volume de manifestação de entrada por mês (Bronze até 20 XML/mês, Prata até 150, Ouro até 300) e número de usuários — nunca confunda com o volume de notas que o cliente emite, nem com armazenamento (que é igual nos 3 planos).
 
-SIMPLAZ UNIQUE (contadores, gestão de notas fiscais de vários clientes) — Bronze/Prata/Ouro: volume de manifestos e usuários, MAIS a Integração Unique, que só existe a partir do plano Prata — é o gatilho de feature real desta linha.
+SIMPLAZ UNIQUE (mesma função do Simplaz Gestor — manifestação de notas de ENTRADA, nunca emissão —, mas pra contadores que atendem vários clientes) — Bronze/Prata/Ouro: mesma lógica, aqui medida em notas por mês (Bronze até 1.000, Prata até 2.000, Ouro até 4.000) e usuários, MAIS a Integração Unique, que só existe a partir do plano Prata — é o gatilho de feature real desta linha.
 
 UNIQUE (software contábil completo — folha, fiscal, contábil) — 4 planos:
 - Light: até 6 empresas geridas, 1 usuário grátis, só os módulos essenciais.
