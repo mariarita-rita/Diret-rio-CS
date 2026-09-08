@@ -47,7 +47,20 @@ const CF = {
   CAMP_VENDIDOS: '4a4400e7-6bfd-423e-9467-9c6f11c458c9',
   CAMP_CORTESIA: '62514802-d199-462a-9a44-9e8389c74951',
   CAMP_VALOR: '748dbd02-1c2f-4f31-a5f7-5cc82bcd3cb0',
+  CAMP_2025: '0ca6b980-8de1-47e6-bb87-1157e54d2525',
+  OBS_EVENTO: '1089289b-c7e8-4ffa-97fc-02448d9ab909',
 };
+
+/**
+ * Opcoes do campo Camp 2025 🔁, historico do evento do ano passado — importado uma
+ * vez a partir da lista de check-in da Huggy, ver scripts/importar-camp2025.mjs.
+ * Mesmo padrao de EVENTO_CAMP_OPCOES: front precisa do rotulo, allowlist precisa do id.
+ */
+export const CAMP_2025_OPCOES = [
+  { id: '0f29ee16-418f-4c69-869d-2fc434b23fdd', rotulo: 'Participou ✨' },
+  { id: 'c0b68e9d-54d4-47d1-bbe3-875ba8e1cc11', rotulo: 'Não compareceu 🚫' },
+  { id: '587fc5e9-3ce8-472c-9e93-c6f18dc839d2', rotulo: 'Não podia na data 🗓️' },
+];
 
 /**
  * Opcoes do campo 📅 Evento: Camp 2026. Ficam aqui porque o front precisa dos
@@ -205,6 +218,20 @@ export const CAMPOS_ESCRITA = {
     nome: 'Camp 2026 - Valor vendido (R$)',
     tipo: 'numero',
     max: 999999,
+  },
+  // Historico do evento do ano passado, importado do check-in da Huggy. Editavel pelo
+  // CSM depois da importacao pra corrigir um cruzamento errado, mesmo esquema de
+  // permissao dos outros campos da campanha — sem `limpavel`, como eles: corrigir e
+  // escolher outra opcao, nao apagar.
+  [CF.CAMP_2025]: {
+    nome: 'Camp 2025',
+    tipo: 'opcao',
+    opcoes: new Set(CAMP_2025_OPCOES.map((o) => o.id)),
+  },
+  [CF.OBS_EVENTO]: {
+    nome: 'Observação do evento',
+    tipo: 'texto',
+    max: 500,
   },
   [CF.ALERTAS]: {
     nome: 'Alertas',
@@ -447,6 +474,9 @@ function mapTask(t) {
     campVendidos: Number(cfVal(t, CF.CAMP_VENDIDOS)) || 0,
     campCortesia: Number(cfVal(t, CF.CAMP_CORTESIA)) || 0,
     campValor: Number(cfVal(t, CF.CAMP_VALOR)) || 0,
+    camp2025: cfVal(t, CF.CAMP_2025),
+    camp2025Id: cfOpcaoId(t, CF.CAMP_2025),
+    obsEvento: cfVal(t, CF.OBS_EVENTO),
   };
 }
 
@@ -954,6 +984,21 @@ export function refletirEscrita(taskId, fieldId, valor) {
   }
   if (fieldId === CF.CAMP_VALOR) {
     alvo.linha.campValor = valor;
+    return;
+  }
+
+  if (fieldId === CF.CAMP_2025) {
+    const rotulo = rotulosAprendidos.get(valor);
+    if (!rotulo) {
+      invalidarCarteira();
+      return;
+    }
+    alvo.linha.camp2025 = rotulo;
+    alvo.linha.camp2025Id = valor;
+    return;
+  }
+  if (fieldId === CF.OBS_EVENTO) {
+    alvo.linha.obsEvento = valor;
     return;
   }
 

@@ -484,6 +484,16 @@ tr:not(.row-cancelado):hover td{background:var(--brand-bg);cursor:pointer}
         <option value="Não Vai 🚫">Não Vai</option>
         <option value="Participou ✨">Participou</option>
       </select>
+      <!-- Mesmo padrão do filtro Camp 2026: compara por rótulo, "sem" cobre quem não
+           foi cruzado na importação de 2025 (ver scripts/importar-camp2025.mjs). Critério
+           que o time usa pra decidir quem convidar este ano. -->
+      <select class="ctrl-select" id="filter-camp2025" onchange="applyFilters()" title="Camp 2025">
+        <option value="">Camp 2025 (todos)</option>
+        <option value="sem">— sem marcação —</option>
+        <option value="Participou ✨">Participou</option>
+        <option value="Não compareceu 🚫">Não compareceu</option>
+        <option value="Não podia na data 🗓️">Não podia na data</option>
+      </select>
     </div>
   </div>
 
@@ -532,6 +542,16 @@ const EVENTO_CAMP=[
   {id:'8ceeca28-bc44-4f86-b3ff-f6205c316dda',rotulo:'Participou ✨',cor:'#854D0E',bg:'#FEF9C3'},
 ];
 const CAMPO_EVENTO_CAMP='54ee7ad4-4689-4d79-bec7-5ac1373d96e9';
+
+// Histórico do Camp 2025, importado uma vez do check-in da Huggy (ver
+// scripts/importar-camp2025.mjs) — aqui só para exibir e permitir correção manual.
+const CAMP_2025=[
+  {id:'0f29ee16-418f-4c69-869d-2fc434b23fdd',rotulo:'Participou ✨',cor:'#065F46',bg:'#D1FAE5'},
+  {id:'c0b68e9d-54d4-47d1-bbe3-875ba8e1cc11',rotulo:'Não compareceu 🚫',cor:'#991B1B',bg:'#FEE2E2'},
+  {id:'587fc5e9-3ce8-472c-9e93-c6f18dc839d2',rotulo:'Não podia na data 🗓️',cor:'#854D0E',bg:'#FEF9C3'},
+];
+const CAMPO_CAMP_2025='0ca6b980-8de1-47e6-bb87-1157e54d2525';
+const CAMPO_OBS_EVENTO='1089289b-c7e8-4ffa-97fc-02448d9ab909';
 
 // Campos numéricos da campanha Camp 2026. Mesma allowlist em api/_lib/clickup.js —
 // a suíte prova que os dois lados batem.
@@ -1073,6 +1093,7 @@ function applyFilters(){
   const fSrv=document.getElementById('filter-servico')?.value||'';
   const fCid=document.getElementById('filter-cidade')?.value||'';
   const fCamp=document.getElementById('filter-camp')?.value||'';
+  const fCamp2025=document.getElementById('filter-camp2025')?.value||'';
 
   // Cancelados sempre incluídos (para consulta/reativação), mas excluídos dos cálculos
   filtered=allData.filter(r=>{
@@ -1086,7 +1107,8 @@ function applyFilters(){
     const cidNorm=normTxt(r.cidade);
     const cidOk=!fCid||(fCid===CIDADE_VAZIA?!cidNorm:cidNorm===fCid);
     const campOk=!fCamp||(fCamp==='sem'?!r.eventoCampId:r.eventoCamp===fCamp);
-    return csmOk&&qOk&&stOk&&finOk&&alOk&&srvOk&&cidOk&&campOk;
+    const camp2025Ok=!fCamp2025||(fCamp2025==='sem'?!r.camp2025Id:r.camp2025===fCamp2025);
+    return csmOk&&qOk&&stOk&&finOk&&alOk&&srvOk&&cidOk&&campOk&&camp2025Ok;
   });
   applySort();
 }
@@ -1897,6 +1919,11 @@ function campBadge(r){
   if(!o)return'<span style="color:var(--neutral-400);font-size:11px">—</span>';
   return`<span class="badge" style="background:${o.bg};color:${o.cor};font-size:10px;white-space:nowrap">${o.rotulo}</span>`;
 }
+function camp2025Badge(r){
+  const o=CAMP_2025.find(x=>x.id===r.camp2025Id);
+  if(!o)return'<span style="color:var(--neutral-400);font-size:11px">—</span>';
+  return`<span class="badge" style="background:${o.bg};color:${o.cor};font-size:10px;white-space:nowrap">${o.rotulo}</span>`;
+}
 
 function renderPagination(){
   const tot=Math.ceil(filtered.length/PAGE_SIZE);
@@ -1960,6 +1987,8 @@ function openDetail(rStr,showMRR){
       ${drow('Critério',r.criterio||'—')}
       ${r.motivoPerda?drow('Motivo cancelamento',r.motivoPerda):''}
       ${drow('Camp 2026',campBadge(r))}
+      ${drow('Camp 2025',camp2025Badge(r))}
+      ${r.obsEvento?drow('Obs. evento 2025',esc(r.obsEvento)):''}
     </div>
     ${session.nivel==='consulta'?'':`
     <div class="detail-section-title">📅 Evento: Camp 2026</div>
@@ -1988,7 +2017,21 @@ function openDetail(rStr,showMRR){
           value="${r.campValor||0}" onchange="salvarCampoNumero(this,CAMPO_CAMP_VALOR,'campValor')">
       </div>
     </div>
-    <span id="camp-num-estado" style="font-size:11px"></span>`}
+    <span id="camp-num-estado" style="font-size:11px"></span>
+    <div class="detail-section-title" style="margin-top:14px">🔁 Camp 2025 (histórico)</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <select id="camp2025-select" class="ctrl-select" style="flex:1" onchange="salvarCamp2025(this)">
+        <option value=""${r.camp2025Id?'':' selected'} disabled>— sem marcação —</option>
+        ${CAMP_2025.map(o=>`<option value="${o.id}"${o.id===r.camp2025Id?' selected':''}>${o.rotulo}</option>`).join('')}
+      </select>
+      <span id="camp2025-estado" style="font-size:11px;min-width:80px"></span>
+    </div>
+    <div style="margin-top:8px">
+      <label style="font-size:10px;color:var(--neutral-500)">Observação do evento</label>
+      <input type="text" id="obs-evento" class="ctrl-select" maxlength="500" style="width:100%"
+        value="${esc(r.obsEvento||'')}" onchange="salvarCampoTexto(this,CAMPO_OBS_EVENTO,'obsEvento',500)">
+    </div>
+    <span id="obs-evento-estado" style="font-size:11px"></span>`}
     ${r.outrosSrv?.length?`
       <div class="detail-section-title">🛠️ Outros serviços</div>
       <div class="detail-tags">${r.outrosSrv.map(s=>`<span class="badge badge-outro" style="font-size:11px;padding:3px 9px">${s}</span>`).join('')}</div>`:''}
@@ -2078,6 +2121,71 @@ async function salvarCampoNumero(input,fieldId,prop){
     estado.style.color='var(--green)';
     estado.textContent='✓ salvo';
     renderCampanha();
+  }catch(e){
+    if(e.message==='sessao')return;
+    input.value=anterior;
+    estado.style.color='var(--red)';
+    estado.textContent='✕ não salvou';
+    estado.title=e.message||'Falha ao gravar';
+  }finally{
+    input.disabled=false;
+  }
+}
+
+/**
+ * Grava o Camp 2025 do cliente aberto no modal. Igual a salvarEventoCamp, exceto que
+ * este campo NÃO é limpável no servidor (histórico importado, não faz sentido apagar
+ * — corrigir é escolher outra opção) — por isso a opção "sem marcação" fica desabilitada
+ * e o clique nela nem chega a chamar a API.
+ */
+async function salvarCamp2025(sel){
+  const r=_currentDetailCliente;
+  const estado=document.getElementById('camp2025-estado');
+  if(!r||!estado)return;
+  const anterior=r.camp2025Id||'';
+  const novo=sel.value;
+  if(!novo||novo===anterior){sel.value=anterior;return;}
+
+  sel.disabled=true;
+  estado.style.color='var(--neutral-500)';
+  estado.textContent='salvando…';
+  try{
+    await apiPost('/api/clickup?action=set-field',{taskId:r.id,fieldId:CAMPO_CAMP_2025,value:novo});
+    const rotulo=CAMP_2025.find(o=>o.id===novo)?.rotulo||null;
+    r.camp2025Id=novo;r.camp2025=rotulo;
+    const naTabela=allData.find(x=>x.id===r.id);
+    if(naTabela){naTabela.camp2025Id=novo;naTabela.camp2025=rotulo;}
+    estado.style.color='var(--green)';
+    estado.textContent='✓ salvo';
+  }catch(e){
+    if(e.message==='sessao')return;
+    sel.value=anterior;
+    estado.style.color='var(--red)';
+    estado.textContent='✕ não salvou';
+    estado.title=e.message||'Falha ao gravar';
+  }finally{
+    sel.disabled=false;
+  }
+}
+/** Grava um campo de texto livre (hoje só Observação do evento). Mesmo padrão otimista. */
+async function salvarCampoTexto(input,fieldId,prop,max){
+  const r=_currentDetailCliente;
+  const estado=document.getElementById('obs-evento-estado');
+  if(!r||!estado)return;
+  const anterior=r[prop]||'';
+  const novo=input.value;
+  if(novo.length>max||novo===anterior)return;
+
+  input.disabled=true;
+  estado.style.color='var(--neutral-500)';
+  estado.textContent='salvando…';
+  try{
+    await apiPost('/api/clickup?action=set-field',{taskId:r.id,fieldId,value:novo});
+    r[prop]=novo;
+    const naTabela=allData.find(x=>x.id===r.id);
+    if(naTabela)naTabela[prop]=novo;
+    estado.style.color='var(--green)';
+    estado.textContent='✓ salvo';
   }catch(e){
     if(e.message==='sessao')return;
     input.value=anterior;

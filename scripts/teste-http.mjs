@@ -1288,8 +1288,9 @@ console.log('\n[30] Evento: Camp 2026 — allowlist explicita, escopo e reflexo'
   checar('  e os ids sao os da lista exportada',
          lib.EVENTO_CAMP_OPCOES.map((o) => o.id).every((id) => lib.CAMPOS_ESCRITA[CAMPO].opcoes.has(id)), true);
   // Nenhuma regra generica de "qualquer drop_down": a allowlist segue fechada.
-  // 5 + os 3 campos numericos da campanha (vendidos/cortesia/valor vendido).
-  checar('total de campos na allowlist continua enumeravel', Object.keys(lib.CAMPOS_ESCRITA).length, 8);
+  // 5 + os 3 campos numericos da campanha (vendidos/cortesia/valor vendido) + os 2
+  // do historico Camp 2025 (status/observacao).
+  checar('total de campos na allowlist continua enumeravel', Object.keys(lib.CAMPOS_ESCRITA).length, 10);
 
   // Front e servidor tem de usar os MESMOS ids.
   const front = ler('dashboard_carteiras.html');
