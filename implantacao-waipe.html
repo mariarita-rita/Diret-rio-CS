@@ -865,6 +865,10 @@
     var todasCsm = Array.from(new Set((projetosCache || []).map(function(p){ return p.csm; }).filter(Boolean)))
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var lista = (projetosCache || []).filter(function(p){
+      // Proposta ainda nao fechada nao e projeto de implantacao de verdade
+      // ainda — so aparece/edita pelo simulador ("Carregar proposta salva"),
+      // pra nao confundir com o que ja foi fechado com o cliente.
+      if (p.etapaAtual === "proposta") return false;
       if (entregues ? p.status !== "concluído" : p.status === "concluído") return false;
       if (filtroCsmAtivo && p.csm !== filtroCsmAtivo) return false;
       return true;
@@ -1242,6 +1246,124 @@
     }).catch(function(){ showSimToast("Não deu para salvar a fase do projeto."); });
   }
 
+  function fmtDataHoraSim(ms){
+    if (!ms) return "";
+    try {
+      return new Date(Number(ms)).toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+      });
+    } catch(e){ return ""; }
+  }
+
+  // Reservas de agenda dos ISMs (Camada 1/Treinamento/reunião) — cria uma
+  // task em LISTA_RESERVAS_AGENDA com data/hora, que sincroniza sozinha pra
+  // Google Calendar de quem já tem a conta conectada no ClickUp. O link do
+  // Google Meet continua manual: cria a reunião lá (ClickUp ou Google
+  // Calendar), cola o link aqui depois.
+  function reservaHtml(r){
+    var linkHtml = r.linkReuniao
+      ? '<div class="apmeta" style="margin-top:4px">Link: <a href="' + esc(r.linkReuniao) + '" target="_blank" rel="noopener">' + esc(r.linkReuniao) + '</a></div>'
+      : '<div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">' +
+          '<input type="text" class="form-input" data-link-input="' + esc(r.id) + '" placeholder="Cole aqui o link do Meet depois de criar a reunião" style="flex:1; min-width:200px; font-size:12px; padding:6px 8px;">' +
+          '<button type="button" class="btn-flow-secondary" data-salvar-link="' + esc(r.id) + '" style="width:auto; padding:6px 12px;">Salvar link</button>' +
+        '</div>';
+    return '<div class="build-check" style="align-items:flex-start; flex-direction:column;">' +
+      '<div style="display:flex; justify-content:space-between; width:100%; align-items:flex-start; gap:8px;">' +
+        '<span><b>' + esc(r.titulo) + '</b> — ' + esc(r.ismNome || "—") + '<br><span style="font-size:11px; color:var(--muted)">' + fmtDataHoraSim(r.inicio) + ' até ' + fmtDataHoraSim(r.fim) + '</span></span>' +
+        '<button type="button" class="btn-reset" data-cancelar-reserva="' + esc(r.id) + '" style="color:var(--danger); flex:0 0 auto;">Cancelar</button>' +
+      '</div>' +
+      linkHtml +
+    '</div>';
+  }
+
+  function formNovaReservaHtml(){
+    return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
+      '<div class="sp-k">Nova reserva</div>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
+        '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
+        '<select class="form-input" id="novaReservaIsm" style="width:auto;">' +
+          ISM_OPCOES.map(function(o){ return '<option value="' + o.id + '">' + esc(o.nome) + '</option>'; }).join("") +
+        '</select>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center;">' +
+        '<input type="date" class="form-input" id="novaReservaData" style="width:auto;">' +
+        '<input type="time" class="form-input" id="novaReservaHoraIni" style="width:auto;">' +
+        '<span style="font-size:12px; color:var(--muted);">até</span>' +
+        '<input type="time" class="form-input" id="novaReservaHoraFim" style="width:auto;">' +
+        '<button type="button" class="btn-flow-secondary" id="btnReservarHorario" style="width:auto;">Reservar horário</button>' +
+      '</div>' +
+      '<div id="reservaErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
+    '</div>';
+  }
+
+  function wireAgenda(projetoId, container){
+    container.querySelectorAll("[data-cancelar-reserva]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        if (!window.confirm("Cancelar esta reserva? O horário fica livre de novo.")) return;
+        apiPost("cancelar-reserva", { id: btn.getAttribute("data-cancelar-reserva") })
+          .then(function(){ renderAgenda(projetoId, container); })
+          .catch(function(){ showSimToast("Não deu para cancelar a reserva."); });
+      });
+    });
+    container.querySelectorAll("[data-salvar-link]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-salvar-link");
+        var input = container.querySelector('[data-link-input="' + id + '"]');
+        var link = input ? input.value.trim() : "";
+        if (!link) return;
+        apiPost("atualizar-reserva", { id: id, linkReuniao: link })
+          .then(function(){ renderAgenda(projetoId, container); })
+          .catch(function(){ showSimToast("Não deu para salvar o link."); });
+      });
+    });
+    var btnReservar = container.querySelector("#btnReservarHorario");
+    if (btnReservar) btnReservar.addEventListener("click", function(){
+      var erroEl = container.querySelector("#reservaErro");
+      erroEl.style.display = "none";
+      var titulo = container.querySelector("#novaReservaTitulo").value.trim();
+      var ismId = parseInt(container.querySelector("#novaReservaIsm").value, 10);
+      var data = container.querySelector("#novaReservaData").value;
+      var horaIni = container.querySelector("#novaReservaHoraIni").value;
+      var horaFim = container.querySelector("#novaReservaHoraFim").value;
+      if (!titulo || !data || !horaIni || !horaFim){
+        erroEl.textContent = "Preencha título, data e os dois horários.";
+        erroEl.style.display = "block";
+        return;
+      }
+      var inicio = new Date(data + "T" + horaIni + ":00").getTime();
+      var fim = new Date(data + "T" + horaFim + ":00").getTime();
+      btnReservar.disabled = true;
+      apiPost("criar-reserva", { projetoId: projetoId, titulo: titulo, ismId: ismId, inicio: inicio, fim: fim })
+        .then(function(){ renderAgenda(projetoId, container); })
+        .catch(function(e){
+          if (e && e.code === "conflito_horario" && e.conflito){
+            erroEl.textContent = "Conflito: \"" + e.conflito.titulo + "\" já reservado nesse horário (" + fmtDataHoraSim(e.conflito.inicio) + " até " + fmtDataHoraSim(e.conflito.fim) + ").";
+          } else {
+            erroEl.textContent = mensagemErro(e);
+          }
+          erroEl.style.display = "block";
+        })
+        .finally(function(){ btnReservar.disabled = false; });
+    });
+  }
+
+  function renderAgenda(projetoId, container){
+    if (!container) return;
+    container.innerHTML = '<div class="card"><h2>📅 Agenda</h2><div class="sub">Carregando…</div></div>';
+    apiGet("listar-reservas").then(function(resp){
+      var reservas = (resp.reservas || []).filter(function(r){ return r.projetoId === projetoId; })
+        .sort(function(a, b){ return (a.inicio || 0) - (b.inicio || 0); });
+      container.innerHTML = '<div class="card"><h2>📅 Agenda</h2>' +
+        '<div class="sub">Reserva o horário do ISM — sincroniza sozinho pra Google Calendar dele. O link do Meet é colado depois, à mão.</div>' +
+        (reservas.length ? reservas.map(reservaHtml).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário reservado ainda.</div>') +
+        formNovaReservaHtml() +
+      '</div>';
+      wireAgenda(projetoId, container);
+    }).catch(function(){
+      container.innerHTML = '<div class="card"><h2>📅 Agenda</h2><div class="sub">Não deu para carregar a agenda.</div></div>';
+    });
+  }
+
   // Lista única de itens do projeto (Gestor/Simplaz/Treinamento/BIME APP são
   // itens irmãos do Waipe — abrir cada um leva ao detalhe dele).
   function renderListaItens(){
@@ -1259,6 +1381,7 @@
       '<div id="ismProjetoWrap"></div>' +
     '</div>' +
     '<div id="comentariosProjetoWrap"></div>' +
+    '<div id="agendaProjetoWrap"></div>' +
     '<div class="card">' +
       '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
       '<div class="agent-pick-grid">' +
@@ -1279,6 +1402,7 @@
     document.getElementById("stepContent").innerHTML = html;
     renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
     renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
+    renderAgenda(p.id, document.getElementById("agendaProjetoWrap"));
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");

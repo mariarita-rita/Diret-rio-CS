@@ -80,6 +80,12 @@ const stubClickup = `
   export function stringifyWaipeState(description) { return description || ''; }
   export function contextoSemEstado(description) { return description || ''; }
   export function csmDaDescricaoImplantacao() { return ''; }
+  export const LISTA_RESERVAS_AGENDA = '901329017742';
+  export async function criarReserva() { return { id: 'stub-reserva' }; }
+  export async function listarReservas() { return []; }
+  export async function excluirTask() { return {}; }
+  export function projetoDaDescricaoReserva() { return ''; }
+  export function linkDaDescricaoReserva() { return ''; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -2241,6 +2247,125 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('  item sem fase gravada default pra "nao_iniciado"', itemAntigo?.fase, 'nao_iniciado');
   checar('  projeto sem faseProjetoManual e sem itens entregues deriva "nao_iniciado"', [obterPromovida.corpo.projeto.faseProjetoManual, obterPromovida.corpo.projeto.faseProjetoDerivada], [null, 'nao_iniciado']);
   checar('  sem agentes Waipe reais, faseWaipe e null (nao entra na derivacao)', obterPromovida.corpo.projeto.faseWaipe, null);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link do Meet colado depois');
+{
+  const fetchOriginal = globalThis.fetch;
+  const escritas = [];
+  const LISTA_RESERVAS = '901329017742';
+  const BRUNO = 118125102;
+  const ERICA = 48933858;
+  const INICIO = Date.UTC(2026, 8, 15, 13, 0); // 15/09/2026 13:00 UTC
+  const UMA_HORA = 60 * 60 * 1000;
+
+  const reservaBruno = () => ({
+    id: 'tReservaBruno', name: 'Camada 1 — Cliente X', list: { id: LISTA_RESERVAS },
+    assignees: [{ id: BRUNO }], start_date: String(INICIO), due_date: String(INICIO + UMA_HORA),
+    description: '**Projeto:** tProjetoX',
+  });
+  const reservaForaDaLista = () => ({
+    id: 'tOutraLista', name: 'Task de outra lista', list: { id: '999' }, assignees: [],
+  });
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_RESERVAS}/task`)) {
+      escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
+      return ok({ id: 'tNovaReserva' });
+    }
+    if (u.includes(`/list/${LISTA_RESERVAS}/task?`)) return ok({ tasks: [reservaBruno()], last_page: true });
+    if (metodo === 'PUT' && u.endsWith('/task/tReservaBruno')) {
+      escritas.push({ alvo: 'atualizar', body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'DELETE' && u.endsWith('/task/tReservaBruno')) {
+      escritas.push({ alvo: 'cancelar' });
+      return ok({});
+    }
+    if (u.includes('/task/tReservaBruno')) return ok(reservaBruno());
+    if (u.includes('/task/tOutraLista')) return ok(reservaForaDaLista());
+    return ok({});
+  };
+
+  const libUrl = libClickupUnica('reservas');
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+
+  const chamarAcao = async (perfil, method, action, body) => {
+    const r = res();
+    const headers = cabecalhos({ cookie: cookieDe(perfil) });
+    await cu({ method, headers, query: { action }, body: body ? JSON.stringify(body) : undefined }, r);
+    return r;
+  };
+
+  const criarConsulta = await chamarAcao(CONSULTA, 'POST', 'criar-reserva', { titulo: 'X', ismId: BRUNO, inicio: INICIO, fim: INICIO + UMA_HORA });
+  checar('criar-reserva: consulta -> 403', [criarConsulta.code, criarConsulta.corpo.code], [403, 'somente_leitura']);
+
+  const semTitulo = await chamarAcao(GESTAO, 'POST', 'criar-reserva', { ismId: BRUNO, inicio: INICIO, fim: INICIO + UMA_HORA });
+  checar('criar-reserva: sem titulo -> 400', [semTitulo.code, semTitulo.corpo.code], [400, 'titulo_invalido']);
+
+  const ismInvalido = await chamarAcao(GESTAO, 'POST', 'criar-reserva', { titulo: 'X', ismId: 999, inicio: INICIO, fim: INICIO + UMA_HORA });
+  checar('criar-reserva: ism invalido -> 400', [ismInvalido.code, ismInvalido.corpo.code], [400, 'ism_invalido']);
+
+  const fimAntesDoInicio = await chamarAcao(GESTAO, 'POST', 'criar-reserva', { titulo: 'X', ismId: ERICA, inicio: INICIO, fim: INICIO - 1000 });
+  checar('criar-reserva: fim antes do inicio -> 400', [fimAntesDoInicio.code, fimAntesDoInicio.corpo.code], [400, 'horario_invalido']);
+
+  const duracaoDemais = await chamarAcao(GESTAO, 'POST', 'criar-reserva', { titulo: 'X', ismId: ERICA, inicio: INICIO, fim: INICIO + 25 * UMA_HORA });
+  checar('criar-reserva: duracao > 24h -> 400', [duracaoDemais.code, duracaoDemais.corpo.code], [400, 'horario_invalido']);
+
+  // Conflito: mesmo ISM (Bruno), horario se sobrepondo ao que ja existe (13h-14h)
+  const conflito = await chamarAcao(GESTAO, 'POST', 'criar-reserva', { titulo: 'Treinamento', ismId: BRUNO, inicio: INICIO + 30 * 60 * 1000, fim: INICIO + 90 * 60 * 1000 });
+  checar('criar-reserva: conflito de horario -> 409', [conflito.code, conflito.corpo.code], [409, 'conflito_horario']);
+  checar('  devolve a reserva conflitante', conflito.corpo.conflito?.id, 'tReservaBruno');
+
+  // Sem conflito: outro ISM (Erica) no mesmo horario que o Bruno ja tem
+  escritas.length = 0;
+  const semConflito = await chamarAcao(GESTAO, 'POST', 'criar-reserva', {
+    titulo: 'Treinamento Financeiro', ismId: ERICA, inicio: INICIO, fim: INICIO + UMA_HORA, projetoId: 'tProjetoY',
+  });
+  checar('criar-reserva: 200 sem conflito (outro ISM)', [semConflito.code, semConflito.corpo.ok], [200, true]);
+  const criada = escritas.find((e) => e.alvo === 'criar')?.body;
+  checar('  start_date_time/due_date_time marcados (sincroniza com hora, nao dia inteiro)', [criada.start_date_time, criada.due_date_time], [true, true]);
+  checar('  projeto gravado na descricao', criada.markdown_description.includes('**Projeto:** tProjetoY'), true);
+
+  // listar-reservas: mapeia ismNome/projetoId/linkReuniao a partir da task crua
+  const listar = await chamarAcao(GESTAO, 'GET', 'listar-reservas');
+  const linha = listar.corpo.reservas?.[0];
+  checar('listar-reservas: 200 com ismNome resolvido', [listar.code, linha?.ismNome, linha?.projetoId], [200, 'Bruno Vaz', 'tProjetoX']);
+
+  // atualizar-reserva: cola o link do Meet, preserva o projeto ja gravado
+  escritas.length = 0;
+  const colarLink = await chamarAcao(GESTAO, 'POST', 'atualizar-reserva', { id: 'tReservaBruno', linkReuniao: 'https://meet.google.com/abc-defg-hij' });
+  checar('atualizar-reserva: 200', [colarLink.code, colarLink.corpo.ok], [200, true]);
+  const atualizada = escritas.find((e) => e.alvo === 'atualizar')?.body;
+  checar('  projeto preservado + link gravado', [atualizada.markdown_description.includes('**Projeto:** tProjetoX'), atualizada.markdown_description.includes('**Link:** https://meet.google.com/abc-defg-hij')], [true, true]);
+
+  const atualizarForaDaLista = await chamarAcao(GESTAO, 'POST', 'atualizar-reserva', { id: 'tOutraLista', linkReuniao: 'x' });
+  checar('atualizar-reserva: task de outra lista -> 404', [atualizarForaDaLista.code, atualizarForaDaLista.corpo.code], [404, 'nao_encontrado']);
+
+  // cancelar-reserva: DELETE de verdade (libera o horario), com o mesmo portao de ownership
+  escritas.length = 0;
+  const cancelar = await chamarAcao(GESTAO, 'POST', 'cancelar-reserva', { id: 'tReservaBruno' });
+  checar('cancelar-reserva: 200 e chama DELETE', [cancelar.code, escritas.some((e) => e.alvo === 'cancelar')], [200, true]);
+
+  const cancelarForaDaLista = await chamarAcao(GESTAO, 'POST', 'cancelar-reserva', { id: 'tOutraLista' });
+  checar('cancelar-reserva: task de outra lista -> 404', [cancelarForaDaLista.code, cancelarForaDaLista.corpo.code], [404, 'nao_encontrado']);
 
   globalThis.fetch = fetchOriginal;
 }

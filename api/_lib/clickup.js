@@ -23,6 +23,17 @@ export const LISTA_PROPOSTAS_WAIPE = '901328973414';
  */
 export const LISTA_IMPLANTACOES_WAIPE = '901328976497';
 
+/**
+ * Reservas de agenda dos ISMs (Camada 1/Treinamento/reuniao) — cada task e
+ * um horario reservado, com start_date/due_date com hora, que sincroniza
+ * sozinho pra Google Calendar de quem ja tem a conta conectada no ClickUp
+ * (nao precisa de nenhuma integracao OAuth propria). O link do Google Meet
+ * continua manual: a API do ClickUp nao gera isso, so a UI de Calendario
+ * deles (ou o proprio Google Calendar) — por isso a reserva guarda so o
+ * link depois de colado, nao o cria.
+ */
+export const LISTA_RESERVAS_AGENDA = '901329017742';
+
 // Campos da lista Carteira
 const CF = {
   ID_NUCLEO: '6126a50b-7afb-40fd-8654-26a687f34258',
@@ -797,6 +808,24 @@ export async function atualizarTask(taskId, payload) {
   });
 }
 
+/** Cria uma reserva de agenda em LISTA_RESERVAS_AGENDA. */
+export async function criarReserva(payload) {
+  return cu(`/list/${LISTA_RESERVAS_AGENDA}/task`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Todas as reservas de agenda — lista pequena (so os horarios marcados), 1 chamada basta. */
+export async function listarReservas() {
+  return buscarPaginado(LISTA_RESERVAS_AGENDA, '', 1);
+}
+
+/** DELETE /task/{id} — usado pra cancelar uma reserva. Responde 200 com corpo vazio. */
+export async function excluirTask(taskId) {
+  return cu(`/task/${taskId}`, { method: 'DELETE' }, { semCorpo: true });
+}
+
 /** GET de uma task sozinha, sem subtasks. `null` se o ClickUp disser 404/400. */
 export async function obterTask(taskId) {
   try {
@@ -910,6 +939,18 @@ export function stringifyWaipeState(description, state) {
  */
 export function csmDaDescricaoImplantacao(description) {
   const m = /\*{0,2}CSM:\*{0,2}\s*(.+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Mesma tecnica de extracao por linha, pra reserva de agenda: qual projeto ela referencia. */
+export function projetoDaDescricaoReserva(description) {
+  const m = /\*{0,2}Projeto:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Idem, pro link do Google Meet colado depois que a reserva foi criada. */
+export function linkDaDescricaoReserva(description) {
+  const m = /\*{0,2}Link:\*{0,2}\s*(\S+)/.exec(String(description || ''));
   return m ? m[1].trim() : '';
 }
 

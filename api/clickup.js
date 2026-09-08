@@ -17,6 +17,12 @@
 //        CSM reabre dias depois pra editar o que o cliente fechou)
 //   POST /api/clickup?action=confirmar-fechamento-implantacao { id } -> promove
 //        a proposta a projeto de implantacao de verdade (cria as subtasks)
+//   GET  /api/clickup?action=listar-reservas       lista 901329017742 (agenda dos ISMs)
+//   POST /api/clickup?action=criar-reserva         { projetoId?, titulo, ismId, inicio, fim }
+//        -> 409 'conflito_horario' se o ISM ja tiver reserva nesse intervalo
+//   POST /api/clickup?action=atualizar-reserva     { id, linkReuniao } — cola o
+//        link do Meet depois que a reuniao foi criada (a API do ClickUp nao gera isso)
+//   POST /api/clickup?action=cancelar-reserva      { id } -> libera o horario
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -40,6 +46,7 @@ import {
   CAMPOS_ESCRITA,
   contextoSemEstado,
   criarComentario,
+  criarReserva,
   criarSubtaskAgente,
   criarTaskImplantacao,
   criarTaskPropostaWaipe,
@@ -47,19 +54,24 @@ import {
   EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
+  excluirTask,
   getCarteira,
   getMetas,
   gravarCampo,
   ISM_OPCOES,
   lerClienteFresco,
   limparCampo,
+  linkDaDescricaoReserva,
   LISTA_IMPLANTACOES_WAIPE,
+  LISTA_RESERVAS_AGENDA,
   listarComentarios,
   listarImplantacoes,
+  listarReservas,
   localizarTask,
   obterTask,
   obterTaskComSubtasks,
   parseWaipeState,
+  projetoDaDescricaoReserva,
   refletirEscrita,
   STATUS_MES_ATUAL,
   stringifyWaipeState,
@@ -111,13 +123,18 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'confirmar-fechamento-implantacao') {
       return await confirmarFechamentoImplantacaoAcao(req, res, sessao);
     }
+    if (req.method === 'GET' && acao === 'listar-reservas') return await listarReservasAcao(res, sessao);
+    if (req.method === 'POST' && acao === 'criar-reserva') return await criarReservaAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'atualizar-reserva') return await atualizarReservaAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'cancelar-reserva') return await cancelarReservaAcao(req, res, sessao);
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
       'listar-comentarios', 'salvar-proposta-implantacao',
-      'confirmar-fechamento-implantacao',
+      'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
+      'atualizar-reserva', 'cancelar-reserva',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -1374,6 +1391,171 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     id: projeto.id,
     criados: agentesPropostos.length + outrasSolucoesPropostas.length,
   });
+}
+
+// ── Reservas de agenda (Camada 1/Treinamento/reunião) ──────────────────────
+// Lista à parte (LISTA_RESERVAS_AGENDA), sem o formato WAIPE_STATE — o
+// projeto e o link do Meet ficam em 2 linhas simples na descrição
+// (**Projeto:**/**Link:**), extraídas por projetoDaDescricaoReserva/
+// linkDaDescricaoReserva. Não há filtro por carteira aqui: agenda dos ISMs
+// é recurso compartilhado do time, não de um CSM.
+
+const RESERVA_DURACAO_MAX_MS = 24 * 60 * 60 * 1000;
+const RESERVA_JANELA_MS = 5 * 365 * 24 * 60 * 60 * 1000; // +/- 5 anos, só pra barrar lixo
+
+/** Epoch (ms) dentro de uma janela sã, ou null se vier algo fora do esperado. */
+function epocaOuNula(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const agora = Date.now();
+  if (n < agora - RESERVA_JANELA_MS || n > agora + RESERVA_JANELA_MS) return null;
+  return n;
+}
+
+function reservaParaFora(t) {
+  return {
+    id: t.id,
+    titulo: t.name,
+    ismId: Number(t.assignees?.[0]?.id) || null,
+    ismNome: nomesIsm(t.assignees)[0] || '',
+    inicio: Number(t.start_date) || null,
+    fim: Number(t.due_date) || null,
+    projetoId: projetoDaDescricaoReserva(t.description) || null,
+    linkReuniao: linkDaDescricaoReserva(t.description) || '',
+  };
+}
+
+async function listarReservasAcao(res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const tasks = await listarReservas();
+  return res.status(200).json({ reservas: tasks.map(reservaParaFora) });
+}
+
+async function criarReservaAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const titulo = texto(corpo.titulo, 200);
+  if (!titulo) return erro(res, 400, 'titulo_invalido', 'Título da reserva é obrigatório.');
+
+  const ismId = Number(corpo.ismId);
+  if (!ISM_IDS_VALIDOS.has(ismId)) {
+    return erro(res, 400, 'ism_invalido', 'Selecione um ISM válido.');
+  }
+
+  const inicio = epocaOuNula(corpo.inicio);
+  const fim = epocaOuNula(corpo.fim);
+  if (inicio === null || fim === null || fim <= inicio) {
+    return erro(res, 400, 'horario_invalido', 'Início e fim precisam ser válidos, com fim depois do início.');
+  }
+  if (fim - inicio > RESERVA_DURACAO_MAX_MS) {
+    return erro(res, 400, 'horario_invalido', 'Reserva não pode passar de 24h.');
+  }
+
+  let projetoId = null;
+  if (corpo.projetoId) {
+    if (!taskIdValido(corpo.projetoId)) {
+      return erro(res, 400, 'task_invalida', 'projetoId inválido.');
+    }
+    projetoId = corpo.projetoId;
+  }
+
+  // Conflito: mesma pessoa, intervalos que se cruzam. Checa contra a lista
+  // inteira de reservas (é pequena — só os horários já marcados).
+  const existentes = await listarReservas();
+  const conflito = existentes
+    .filter((t) => Number(t.assignees?.[0]?.id) === ismId)
+    .find((t) => Number(t.start_date) < fim && Number(t.due_date) > inicio);
+  if (conflito) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(409).json({
+      error: 'Este ISM já tem reserva nesse horário.',
+      code: 'conflito_horario',
+      conflito: reservaParaFora(conflito),
+    });
+  }
+
+  const nova = await criarReserva({
+    name: titulo,
+    start_date: inicio,
+    start_date_time: true,
+    due_date: fim,
+    due_date_time: true,
+    assignees: [ismId],
+    markdown_description: projetoId ? `**Projeto:** ${projetoId}` : '',
+  });
+  return res.status(200).json({ ok: true, id: nova.id });
+}
+
+async function atualizarReservaAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const tarefa = await obterTask(corpo.id);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
+    return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
+  }
+
+  const projetoId = projetoDaDescricaoReserva(tarefa.description);
+  const linkReuniao = texto(corpo.linkReuniao, 300);
+  const linhas = [
+    projetoId ? `**Projeto:** ${projetoId}` : null,
+    linkReuniao ? `**Link:** ${linkReuniao}` : null,
+  ].filter(Boolean);
+
+  await atualizarTask(corpo.id, { markdown_description: linhas.join('\n\n') });
+  return res.status(200).json({ ok: true });
+}
+
+async function cancelarReservaAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const tarefa = await obterTask(corpo.id);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
+    return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
+  }
+
+  await excluirTask(corpo.id);
+  return res.status(200).json({ ok: true });
 }
 
 async function listarComentariosAcao(req, res, sessao) {
