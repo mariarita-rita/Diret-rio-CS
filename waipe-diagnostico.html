@@ -432,105 +432,9 @@
 
   <nav class="tabs" role="tablist" aria-label="Seções">
     <button class="tab-btn active" data-tab="prop" role="tab" aria-selected="true">Gerar Proposta</button>
-    <button class="tab-btn" data-tab="diag" role="tab" aria-selected="false">Diagnóstico Waipe</button>
     <button class="tab-btn" data-tab="cmp" role="tab" aria-selected="false">Comparativo de Planos</button>
     <button class="tab-btn" data-tab="vendas" role="tab" aria-selected="false">Vendas &amp; FAQ</button>
   </nav>
-
-  <!-- ===================== DIAGNÓSTICO ===================== -->
-  <section class="panel" id="panel-diag">
-
-    <div class="callout">
-      <div class="dot"></div>
-      <div><b>Regra comercial central:</b> o Individual não expande em usuário nem empresa. Quando o cliente precisa de segundo usuário, segunda empresa, controle de acesso ou relatório por pessoa, o caminho correto é migrar para o Time. O Enterprise não é plano de volume — é indicado apenas quando existe necessidade real de integrar sistemas externos ou construir automação personalizada.</div>
-    </div>
-
-    <div class="diag-grid">
-      <!-- FORM -->
-      <form class="card" id="diagForm">
-        <h2>Especificações do cliente</h2>
-        <div class="sub">Responda com base na conversa de diagnóstico com o cliente.</div>
-
-        <div class="field">
-          <label for="f-usuarios">Quantas pessoas vão usar a plataforma?</label>
-          <input type="number" id="f-usuarios" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
-          <div class="hint">Inclua todos os usuários que precisam de acesso individual ao Waipe.</div>
-        </div>
-
-        <div class="field">
-          <label for="f-empresas">Quantas empresas do grupo econômico precisam consultar dados?</label>
-          <input type="number" id="f-empresas" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
-        </div>
-
-        <div class="field">
-          <label>Precisam controlar quem acessa o quê (permissões por usuário)?</label>
-          <div class="seg" data-group="governanca">
-            <button type="button" data-val="nao" class="on">Não</button>
-            <button type="button" data-val="sim">Sim</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Precisam auditar o uso da ferramenta ou ter relatório por pessoa?</label>
-          <div class="seg" data-group="auditoria">
-            <button type="button" data-val="nao" class="on">Não</button>
-            <button type="button" data-val="sim">Sim</button>
-          </div>
-        </div>
-
-        <div class="field">
-          <fieldset>
-            <legend>O que o cliente precisa fazer com o Waipe Flow (automações)?</legend>
-            <div class="radio-list" data-group="automacao">
-              <label class="radio-opt on">
-                <input type="radio" name="automacao" value="pronta" checked>
-                <span class="txt"><strong>Apenas ativar modelos prontos e ajustar parâmetros</strong><span>Horário, relatório usado, texto da instrução — sem tocar sistemas externos.</span></span>
-              </label>
-              <label class="radio-opt">
-                <input type="radio" name="automacao" value="personalizada">
-                <span class="txt"><strong>Mudar a estrutura da automação ou integrar sistemas externos</strong><span>Construção personalizada pelo Waipe Flow, tocando sistemas do cliente.</span></span>
-              </label>
-            </div>
-          </fieldset>
-        </div>
-
-        <div class="field">
-          <label>O cliente está pedindo Enterprise só por volume, usuários ou empresas?</label>
-          <div class="seg" data-group="enterprisePorVolume">
-            <button type="button" data-val="nao" class="on">Não</button>
-            <button type="button" data-val="sim">Sim</button>
-          </div>
-          <div class="hint">Se sim, isso não justifica Enterprise sozinho — tudo isso escala dentro do Time.</div>
-        </div>
-
-        <details class="opt-block">
-          <summary>Volume estimado de uso (opcional)</summary>
-          <div class="opt-fields">
-            <div class="field" style="margin-bottom:0">
-              <label for="f-conversas">Conversas com IA estimadas / mês</label>
-              <input type="number" id="f-conversas" class="num-input tabular" min="0" step="10" placeholder="ex: 400">
-            </div>
-            <div class="field" style="margin-bottom:0">
-              <label for="f-execucoes">Execuções de Waipe Flow estimadas / mês</label>
-              <input type="number" id="f-execucoes" class="num-input tabular" min="0" step="10" placeholder="ex: 80">
-            </div>
-          </div>
-        </details>
-
-        <button type="button" class="btn-primary" id="btnCalcular">Indicar plano ideal</button>
-      </form>
-
-      <!-- RESULT -->
-      <div id="resultWrap">
-        <div class="result-card">
-          <div class="result-empty" id="resultEmpty">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-            Preencha as especificações ao lado e clique em <b>“Indicar plano ideal”</b> para ver a recomendação, o preço estimado e o argumento de venda.
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <!-- ===================== COMPARATIVO ===================== -->
   <section class="panel" id="panel-cmp">
@@ -767,7 +671,7 @@
   <section class="panel" id="panel-vendas">
 
     <h2 class="section-title" style="margin-top:0">Abordagem diagnóstica</h2>
-    <p class="section-sub">As mesmas perguntas usadas na aba Diagnóstico, para consulta rápida durante a call.</p>
+    <p class="section-sub">As mesmas perguntas usadas no card do Waipe (em "Gerar Proposta"), para consulta rápida durante a call.</p>
     <div class="limits-grid">
       <div class="limit-card"><h4>1 — Quantas pessoas vão usar?</h4><p>1 pessoa → Individual. 2 ou mais → Time.</p></div>
       <div class="limit-card"><h4>2 — Quantas empresas do grupo consultam dados?</h4><p>1 empresa → Individual atende. 2 ou mais → Time.</p></div>
@@ -887,7 +791,7 @@
 
     <div class="prop-warn">
       <div>
-        <b>Sobre esta aba:</b> cole a transcrição da consultoria e a IA preenche cliente/segmento/dores, calcula o diagnóstico Waipe (aba ao lado) e aponta outras oportunidades do ecossistema (Gestor, Simplaz, Unique, BIME APP) — mas ela ainda não escreve a proposta inteira. O que este gerador faz: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação (no visual que vocês já usam), e monta um <b>prompt pronto</b> para colar no Gem do Waipe que os CSMs já usam no Gemini — sem precisar redigitar o contexto do cliente.
+        <b>Sobre esta aba:</b> cole a transcrição da consultoria e a IA preenche cliente/segmento/dores, calcula o diagnóstico e o plano do Waipe e aponta outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) — tudo na seção "Soluções desta proposta" abaixo, cada uma com um "Incluir" independente (o Waipe não é obrigatório: desmarque se o cliente não for fechar). A IA ainda não escreve a proposta inteira. O que este gerador faz: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação (no visual que vocês já usam), e monta um <b>prompt pronto</b> para colar no Gem do Waipe que os CSMs já usam no Gemini — sem precisar redigitar o contexto do cliente.
       </div>
     </div>
 
@@ -895,7 +799,7 @@
       <!-- FORM -->
       <div class="card">
         <h2>Contexto do cliente para a proposta</h2>
-        <div class="sub">Estas informações + o plano calculado na aba Diagnóstico Waipe alimentam o modelo de proposta e o prompt do Gemini.</div>
+        <div class="sub">Estas informações alimentam o modelo de proposta e o prompt do Gemini.</div>
 
         <div class="field-row">
           <div class="field">
@@ -928,13 +832,12 @@
 
         <div class="divider"></div>
 
-        <div class="field" style="margin-bottom:14px;">
+        <div class="field" style="margin-bottom:0;">
           <label for="p-transcricao">✨ Colar transcrição da consultoria (opcional)</label>
-          <textarea id="p-transcricao" class="ta" placeholder="Cole aqui a transcrição da reunião — a IA preenche cliente, segmento e dores, e aponta outras oportunidades (Gestor, Simplaz, Unique, BIME APP)."></textarea>
+          <textarea id="p-transcricao" class="ta" placeholder="Cole aqui a transcrição da reunião — a IA preenche cliente, segmento e dores, o diagnóstico Waipe e aponta outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP)."></textarea>
           <div class="hint">Não recomenda agentes do Waipe — isso continua sendo sugerido automaticamente a partir do campo "dores" abaixo.</div>
           <button type="button" class="btn-secondary" id="btnAnalisarIa" style="margin-top:8px;">Analisar com IA</button>
           <div id="analiseIaErro" style="display:none; font-size:12.5px; color:#B91C1C; margin-top:8px;"></div>
-          <div id="analiseIaResultado" style="display:none; margin-top:12px;"></div>
         </div>
 
         <div class="divider"></div>
@@ -950,21 +853,11 @@
           </select>
         </div>
 
-        <div class="field">
+        <div class="field" style="margin-bottom:0;">
           <label for="p-dores">Dores e contexto do cliente hoje</label>
           <textarea id="p-dores" class="ta" placeholder="ex: inadimplência alta, vendedores sem acompanhamento, ruptura de estoque, retrabalho na digitação de pedidos, falta de visibilidade do caixa..."></textarea>
-          <div class="hint">Ao digitar, o simulador sugere automaticamente agentes relacionados às dores descritas — revise e ajuste a seleção abaixo.</div>
+          <div class="hint">Ao digitar, o simulador sugere automaticamente agentes do Waipe relacionados às dores descritas — revise e ajuste a seleção no card do Waipe, na seção "Soluções desta proposta" abaixo.</div>
         </div>
-
-        <div class="divider"></div>
-
-        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px;">Agentes de IA a incluir na proposta</label>
-        <div class="hint" style="margin-bottom:12px;">Foco das consultorias: funcionários digitais que automatizam tarefas específicas. Marque os que fazem sentido para este cliente.</div>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
-          <button type="button" class="btn-add-small" id="btnNewAgent" style="width:auto; padding:8px 16px;">+ Novo agente</button>
-          <span class="hint" id="dbSyncHint" style="margin:0;"></span>
-        </div>
-        <div id="agentCatalog"></div>
       </div>
 
       <!-- SUMMARY / ACTIONS -->
@@ -1031,110 +924,228 @@
       </div>
     </div>
 
-    <!-- SIMULADOR DE PREÇO -->
-    <div class="card" id="priceSimCard" style="margin-top:22px;">
-      <h2>Simulador de Preço</h2>
-      <div class="sub">Ajuste desconto e valores adicionais para este cliente — tudo aqui sai automaticamente na tabela comercial da proposta.</div>
+    <!-- SOLUÇÕES DESTA PROPOSTA -->
+    <div class="card" style="margin-top:22px;">
+      <h2>Soluções desta proposta</h2>
+      <div class="sub">Marque o que o cliente realmente vai fechar — cada solução (Waipe incluso) tem seu próprio plano, motivo, observações e desconto. Desmarcar "Incluir" não apaga o que foi preenchido, só tira do resultado final.</div>
 
-      <div id="priceSimBase"></div>
-
-      <div class="field" id="entBaseField" style="display:none; margin-top:14px;">
-        <label for="p-ent-base">Valor mensal base (Enterprise, sob negociação)</label>
-        <input type="number" id="p-ent-base" class="num-input tabular" min="990" step="10" value="990">
-        <div class="hint">Piso interno de R$990/mês — ajuste conforme a negociação com o cliente.</div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="field">
-        <label>Desconto (só no Waipe)</label>
-        <div class="discount-row">
-          <select id="p-desc-tipo" class="sel">
-            <option value="percent">%</option>
-            <option value="valor">R$</option>
-          </select>
-          <input type="number" id="p-desc-valor" class="num-input tabular" min="0" step="1" value="0">
-        </div>
-        <div class="hint">Cada solução do ecossistema (Gestor, Simplaz, Unique, BIME APP) sugerida acima tem seu próprio campo "Desconto %" na própria linha — este aqui não afeta elas.</div>
-      </div>
-
-      <div class="field">
-        <label>Valores adicionais (setup, módulos extras, usuários avulsos, etc.)</label>
-        <div id="addlItemsWrap"></div>
-        <button type="button" class="btn-add-small" id="btnAddAddl">+ Adicionar valor adicional</button>
-      </div>
-
-      <div class="field" style="margin-bottom:0">
-        <label for="p-obs">Observações comerciais / condição especial</label>
-        <textarea id="p-obs" class="ta" style="min-height:56px" placeholder="ex: setup isento na adesão, condição válida até XX/XX, fidelidade de 12 meses..."></textarea>
-      </div>
-
-      <div class="divider"></div>
-      <div id="priceSimTotal"></div>
-    </div>
-
-    <!-- TEMPO DEVOLVIDO À GESTÃO -->
-    <div class="card" id="horasSimCard" style="margin-top:22px;">
-      <h2>Tempo Devolvido à Gestão</h2>
-      <div class="sub">Para cada agente selecionado, estime quantas horas/mês da tarefa manual ele elimina para este cliente — sai na proposta como uma tabela de horas devolvidas.</div>
-      <div id="horasSimRows"></div>
-      <div class="divider"></div>
-      <div id="horasSimTotal"></div>
-    </div>
-
-    <!-- IMPLANTAÇÃO ENTERPRISE -->
-    <div class="card" id="implantacaoCard" style="margin-top:22px; display:none;">
-      <h2>Implantação Enterprise</h2>
-      <div class="sub">Baseado no guia "Como Funciona a Precificação de Implantação Enterprise" — o cliente compra um pacote fechado, nunca hora avulsa.</div>
-
-      <div class="field">
-        <label for="im-pacote">Pacote de implantação</label>
-        <select id="im-pacote" class="sel">
-          <option value="padrao">Padrão — R$7.900 (até 3 fluxos, leitura)</option>
-          <option value="intermediario" selected>Intermediário — R$14.900 (regras de negócio, escrita no ERP)</option>
-          <option value="avancado">Avançado — R$24.900 (múltiplas áreas, integração externa)</option>
-          <option value="nenhum">Nenhum — implantação fora desta proposta</option>
-        </select>
-        <div class="hint" id="im-pacote-hint"></div>
-      </div>
-
-      <div class="field-row">
-        <div class="field">
-          <label for="im-sistemas">Sistemas externos adicionais</label>
-          <input type="number" id="im-sistemas" class="num-input tabular" min="0" step="1" value="0">
-          <div class="hint">+R$5.600 cada, só disponível em Intermediário/Avançado.</div>
-        </div>
-        <div class="field">
-          <label for="im-horas">Horas adicionais contratadas</label>
-          <input type="number" id="im-horas" class="num-input tabular" min="0" step="1" value="0">
-          <div class="hint">R$450/hora, além da referência interna do pacote.</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label style="display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer;">
-          <input type="checkbox" id="im-isento" style="width:16px; height:16px; accent-color:var(--ink);">
-          Isentar o setup nesta proposta (condição comercial especial)
+      <div id="waipeSolucaoCard" style="background:var(--surface-2); border:1px solid var(--border-strong); border-radius:12px; padding:18px; margin-bottom:18px;">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="waipeIncluidoCheck" checked style="width:16px; height:16px; accent-color:var(--ink); flex:0 0 auto;">
+          <h3 style="font-size:15px; font-weight:700; margin:0;">🧭 Waipe</h3>
         </label>
+
+        <div class="callout" style="margin-top:14px;">
+          <div class="dot"></div>
+          <div><b>Regra comercial central:</b> o Individual não expande em usuário nem empresa. Quando o cliente precisa de segundo usuário, segunda empresa, controle de acesso ou relatório por pessoa, o caminho correto é migrar para o Time. O Enterprise não é plano de volume — é indicado apenas quando existe necessidade real de integrar sistemas externos ou construir automação personalizada.</div>
+        </div>
+
+        <div class="diag-grid" style="margin-top:14px;">
+          <!-- FORM -->
+          <form class="card" id="diagForm">
+            <h2>Especificações do cliente</h2>
+            <div class="sub">A IA já preenche isso a partir da transcrição — revise ou responda manualmente com base na conversa de diagnóstico.</div>
+
+            <div class="field">
+              <label for="f-usuarios">Quantas pessoas vão usar a plataforma?</label>
+              <input type="number" id="f-usuarios" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
+              <div class="hint">Inclua todos os usuários que precisam de acesso individual ao Waipe.</div>
+            </div>
+
+            <div class="field">
+              <label for="f-empresas">Quantas empresas do grupo econômico precisam consultar dados?</label>
+              <input type="number" id="f-empresas" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
+            </div>
+
+            <div class="field">
+              <label>Precisam controlar quem acessa o quê (permissões por usuário)?</label>
+              <div class="seg" data-group="governanca">
+                <button type="button" data-val="nao" class="on">Não</button>
+                <button type="button" data-val="sim">Sim</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Precisam auditar o uso da ferramenta ou ter relatório por pessoa?</label>
+              <div class="seg" data-group="auditoria">
+                <button type="button" data-val="nao" class="on">Não</button>
+                <button type="button" data-val="sim">Sim</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <fieldset>
+                <legend>O que o cliente precisa fazer com o Waipe Flow (automações)?</legend>
+                <div class="radio-list" data-group="automacao">
+                  <label class="radio-opt on">
+                    <input type="radio" name="automacao" value="pronta" checked>
+                    <span class="txt"><strong>Apenas ativar modelos prontos e ajustar parâmetros</strong><span>Horário, relatório usado, texto da instrução — sem tocar sistemas externos.</span></span>
+                  </label>
+                  <label class="radio-opt">
+                    <input type="radio" name="automacao" value="personalizada">
+                    <span class="txt"><strong>Mudar a estrutura da automação ou integrar sistemas externos</strong><span>Construção personalizada pelo Waipe Flow, tocando sistemas do cliente.</span></span>
+                  </label>
+                </div>
+              </fieldset>
+            </div>
+
+            <div class="field">
+              <label>O cliente está pedindo Enterprise só por volume, usuários ou empresas?</label>
+              <div class="seg" data-group="enterprisePorVolume">
+                <button type="button" data-val="nao" class="on">Não</button>
+                <button type="button" data-val="sim">Sim</button>
+              </div>
+              <div class="hint">Se sim, isso não justifica Enterprise sozinho — tudo isso escala dentro do Time.</div>
+            </div>
+
+            <details class="opt-block">
+              <summary>Volume estimado de uso (opcional)</summary>
+              <div class="opt-fields">
+                <div class="field" style="margin-bottom:0">
+                  <label for="f-conversas">Conversas com IA estimadas / mês</label>
+                  <input type="number" id="f-conversas" class="num-input tabular" min="0" step="10" placeholder="ex: 400">
+                </div>
+                <div class="field" style="margin-bottom:0">
+                  <label for="f-execucoes">Execuções de Waipe Flow estimadas / mês</label>
+                  <input type="number" id="f-execucoes" class="num-input tabular" min="0" step="10" placeholder="ex: 80">
+                </div>
+              </div>
+            </details>
+
+            <button type="button" class="btn-primary" id="btnCalcular">Indicar plano ideal</button>
+          </form>
+
+          <!-- RESULT -->
+          <div id="resultWrap">
+            <div class="result-card">
+              <div class="result-empty" id="resultEmpty">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                Preencha as especificações ao lado e clique em <b>“Indicar plano ideal”</b> para ver a recomendação, o preço estimado e o argumento de venda.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px;">Agentes de IA a incluir na proposta</label>
+        <div class="hint" style="margin-bottom:12px;">Foco das consultorias: funcionários digitais que automatizam tarefas específicas. Marque os que fazem sentido para este cliente.</div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+          <button type="button" class="btn-add-small" id="btnNewAgent" style="width:auto; padding:8px 16px;">+ Novo agente</button>
+          <span class="hint" id="dbSyncHint" style="margin:0;"></span>
+        </div>
+        <div id="agentCatalog"></div>
+
+        <div class="divider"></div>
+
+        <div id="priceSimCard">
+          <h3 style="font-size:14px; font-weight:700; margin-bottom:4px;">Simulador de Preço</h3>
+          <div class="sub">Ajuste desconto e valores adicionais para este cliente — tudo aqui sai automaticamente na tabela comercial da proposta.</div>
+
+          <div id="priceSimBase"></div>
+
+          <div class="field" id="entBaseField" style="display:none; margin-top:14px;">
+            <label for="p-ent-base">Valor mensal base (Enterprise, sob negociação)</label>
+            <input type="number" id="p-ent-base" class="num-input tabular" min="990" step="10" value="990">
+            <div class="hint">Piso interno de R$990/mês — ajuste conforme a negociação com o cliente.</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="field">
+            <label>Desconto (só no Waipe)</label>
+            <div class="discount-row">
+              <select id="p-desc-tipo" class="sel">
+                <option value="percent">%</option>
+                <option value="valor">R$</option>
+              </select>
+              <input type="number" id="p-desc-valor" class="num-input tabular" min="0" step="1" value="0">
+            </div>
+            <div class="hint">Cada solução do ecossistema (Gestor, Simplaz, Unique, BIME APP) listada abaixo tem seu próprio campo "Desconto %" na própria linha — este aqui não afeta elas.</div>
+          </div>
+
+          <div class="field">
+            <label>Valores adicionais (setup, módulos extras, usuários avulsos, etc.)</label>
+            <div id="addlItemsWrap"></div>
+            <button type="button" class="btn-add-small" id="btnAddAddl">+ Adicionar valor adicional</button>
+          </div>
+
+          <div class="field" style="margin-bottom:0">
+            <label for="p-obs">Observações comerciais / condição especial</label>
+            <textarea id="p-obs" class="ta" style="min-height:56px" placeholder="ex: setup isento na adesão, condição válida até XX/XX, fidelidade de 12 meses..."></textarea>
+          </div>
+
+          <div class="divider"></div>
+          <div id="priceSimTotal"></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div id="horasSimCard">
+          <h3 style="font-size:14px; font-weight:700; margin-bottom:4px;">Tempo Devolvido à Gestão</h3>
+          <div class="sub">Para cada agente selecionado, estime quantas horas/mês da tarefa manual ele elimina para este cliente — sai na proposta como uma tabela de horas devolvidas.</div>
+          <div id="horasSimRows"></div>
+          <div class="divider"></div>
+          <div id="horasSimTotal"></div>
+        </div>
+
+        <div id="implantacaoCard" style="display:none; margin-top:18px;">
+          <div class="divider"></div>
+          <h3 style="font-size:14px; font-weight:700; margin-bottom:4px;">Implantação Enterprise</h3>
+          <div class="sub">Baseado no guia "Como Funciona a Precificação de Implantação Enterprise" — o cliente compra um pacote fechado, nunca hora avulsa.</div>
+
+          <div class="field">
+            <label for="im-pacote">Pacote de implantação</label>
+            <select id="im-pacote" class="sel">
+              <option value="padrao">Padrão — R$7.900 (até 3 fluxos, leitura)</option>
+              <option value="intermediario" selected>Intermediário — R$14.900 (regras de negócio, escrita no ERP)</option>
+              <option value="avancado">Avançado — R$24.900 (múltiplas áreas, integração externa)</option>
+              <option value="nenhum">Nenhum — implantação fora desta proposta</option>
+            </select>
+            <div class="hint" id="im-pacote-hint"></div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="im-sistemas">Sistemas externos adicionais</label>
+              <input type="number" id="im-sistemas" class="num-input tabular" min="0" step="1" value="0">
+              <div class="hint">+R$5.600 cada, só disponível em Intermediário/Avançado.</div>
+            </div>
+            <div class="field">
+              <label for="im-horas">Horas adicionais contratadas</label>
+              <input type="number" id="im-horas" class="num-input tabular" min="0" step="1" value="0">
+              <div class="hint">R$450/hora, além da referência interna do pacote.</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="im-isento" style="width:16px; height:16px; accent-color:var(--ink);">
+              Isentar o setup nesta proposta (condição comercial especial)
+            </label>
+          </div>
+
+          <div class="field">
+            <label for="im-pagamento">Condição de pagamento do setup</label>
+            <select id="im-pagamento" class="sel">
+              <option value="avista">À vista — 100% na assinatura</option>
+              <option value="metade">50% na assinatura + 50% no go-live</option>
+              <option value="parcelado">Parcelado em até 3x</option>
+            </select>
+          </div>
+
+          <div class="field" style="margin-bottom:0">
+            <label for="im-ganho">Ganho mensal estimado (R$) — para calcular o payback</label>
+            <input type="number" id="im-ganho" class="num-input tabular" min="0" step="100" placeholder="ex: 37200">
+            <div class="hint">Vem do diagnóstico consultivo (receita recuperada, horas economizadas × custo/hora, redução de perdas etc.).</div>
+          </div>
+
+          <div class="divider"></div>
+          <div id="implantacaoBreakdown"></div>
+        </div>
       </div>
 
-      <div class="field">
-        <label for="im-pagamento">Condição de pagamento do setup</label>
-        <select id="im-pagamento" class="sel">
-          <option value="avista">À vista — 100% na assinatura</option>
-          <option value="metade">50% na assinatura + 50% no go-live</option>
-          <option value="parcelado">Parcelado em até 3x</option>
-        </select>
-      </div>
-
-      <div class="field" style="margin-bottom:0">
-        <label for="im-ganho">Ganho mensal estimado (R$) — para calcular o payback</label>
-        <input type="number" id="im-ganho" class="num-input tabular" min="0" step="100" placeholder="ex: 37200">
-        <div class="hint">Vem do diagnóstico consultivo (receita recuperada, horas economizadas × custo/hora, redução de perdas etc.).</div>
-      </div>
-
-      <div class="divider"></div>
-      <div id="implantacaoBreakdown"></div>
+      <div id="analiseIaResultado"></div>
     </div>
   </section>
 
@@ -1239,10 +1250,14 @@
 
   // ---------- Shared state (feeds the "Gerar Proposta" tab) ----------
   var lastDiagnostic = null; // { input, rec, price }
+  // Waipe é só mais uma solução da proposta, com o mesmo tratamento de
+  // "Incluir" que Gestor/Simplaz/etc. já têm — default ligado (é o caso
+  // comum), mas desmarcável quando o cliente não vai fechar Waipe.
+  var waipeIncluido = true;
 
   // ---------- Tabs ----------
   var tabBtns = document.querySelectorAll(".tab-btn");
-  var panels = { diag: document.getElementById("panel-diag"), cmp: document.getElementById("panel-cmp"), vendas: document.getElementById("panel-vendas"), prop: document.getElementById("panel-prop") };
+  var panels = { cmp: document.getElementById("panel-cmp"), vendas: document.getElementById("panel-vendas"), prop: document.getElementById("panel-prop") };
   tabBtns.forEach(function(btn){
     btn.addEventListener("click", function(){
       tabBtns.forEach(function(b){ b.classList.remove("active"); b.setAttribute("aria-selected","false"); });
@@ -1777,7 +1792,7 @@
     var p = computePricing();
 
     if (!diag){
-      baseWrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico Waipe" para trazer o valor base do plano.</span></div>';
+      baseWrap.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico no card do Waipe, acima, para trazer o valor base do plano.</span></div>';
     } else {
       baseWrap.innerHTML = p.baseRows.map(function(r){
         return '<div class="pricesim-row"><span class="lbl">' + escapeHtml(r.label) + '</span><span class="val tabular">' + fmtBRL(r.value) + '</span></div>';
@@ -2096,7 +2111,7 @@
     wrap.style.display = "block";
 
     var cabecalho = recomendacoesState.length
-      ? '<div class="prop-warn" style="margin-top:0;"><div><b>Outras oportunidades identificadas</b><br>' +
+      ? '<div class="prop-warn" style="margin-top:0;"><div><b>Outras soluções do ecossistema</b><br>' +
         '<span style="font-weight:400; font-size:12.5px;">Já entram na proposta com o valor de tabela calculado — revise, edite ou remova antes de gerar.</span></div></div>'
       : "";
 
@@ -2305,14 +2320,14 @@
     var outros = computeOutrosProdutos();
     var outrosTotal = outros.reduce(function(s, o){ return s + o.total; }, 0);
 
-    if (lastDiagnostic){
+    if (lastDiagnostic && waipeIncluido){
       planStat.textContent = lastDiagnostic.rec.plan + (outros.length ? " + " + outros.length + (outros.length > 1 ? " soluções" : " solução") : "");
       var p = computePricing();
       var total = p.total + outrosTotal;
       priceStat.textContent = fmtBRL(total) + "/mês" + ((p.discountAmount > 0 || p.additionalTotal !== 0 || outrosTotal > 0) ? " (ajustado)" : "");
       // Decompõe o total combinado — cada solução tem valor e desconto próprios,
-      // editáveis na sua linha em "Outras oportunidades identificadas" acima
-      // (o campo "Desconto" do Simulador de Preço abaixo só afeta o Waipe).
+      // editáveis na sua linha em "Soluções desta proposta" acima (o campo
+      // "Desconto" do Simulador de Preço do Waipe só afeta o Waipe).
       var breakdownHtml = outros.length
         ? '<div class="hint" style="margin-top:2px;">Waipe: ' + fmtBRL(p.total) + '/mês' +
             outros.map(function(o){ return ' · ' + escapeHtml(o.produto) + (o.planoSugerido ? ' (' + escapeHtml(o.planoSugerido) + ')' : '') + ': ' + fmtBRL(o.total) + '/mês' + (o.desconto > 0 ? ' (' + o.descontoPercent + '% off)' : ''); }).join("") +
@@ -2325,7 +2340,7 @@
       var qtdAgentesAtual = Object.keys(selectedAgentIds).length;
       var planoDesatualizado = "";
       if (lastDiagnostic.rec.plan === "Individual" && qtdAgentesAtual > 1){
-        planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados, mas o plano indicado (Individual) só permite 1 automação — clique em "Indicar plano ideal" de novo na aba Diagnóstico Waipe pra atualizar (deve subir pra Time).</span></div>';
+        planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados, mas o plano indicado (Individual) só permite 1 automação — clique em "Indicar plano ideal" de novo no card do Waipe pra atualizar (deve subir pra Time).</span></div>';
       } else if (lastDiagnostic.rec.plan === "Time" && qtdAgentesAtual > 3){
         planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados ultrapassam os 3 modelos prontos do Time — confirme com a coordenação se cabe como excedente ou se algum agente fica de fora do pacote inicial.</span></div>';
       }
@@ -2333,11 +2348,15 @@
     } else if (outros.length){
       planStat.textContent = "—";
       priceStat.textContent = fmtBRL(outrosTotal) + "/mês";
-      warnBox.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico Waipe" (ou cole a transcrição acima) pra trazer o plano e o preço do Waipe também.</span></div>';
+      warnBox.innerHTML = (lastDiagnostic && !waipeIncluido)
+        ? '<div class="hint" style="margin-top:2px;">Waipe não incluído nesta proposta.</div>'
+        : '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico no card do Waipe (ou cole a transcrição acima) pra trazer o plano e o preço do Waipe também.</span></div>';
     } else {
       planStat.textContent = "—";
       priceStat.textContent = "—";
-      warnBox.innerHTML = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico na aba "Diagnóstico Waipe" (ou cole a transcrição acima) antes de gerar a proposta, para trazer o plano e o preço certos.</span></div>';
+      warnBox.innerHTML = (lastDiagnostic && !waipeIncluido)
+        ? '<div class="hint" style="margin-top:2px;">Waipe não incluído nesta proposta — inclua uma solução acima ou marque "Incluir" no card do Waipe.</div>'
+        : '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico no card do Waipe (ou cole a transcrição acima) antes de gerar a proposta, para trazer o plano e o preço certos.</span></div>';
     }
     agentsStat.textContent = Object.keys(selectedAgentIds).length;
   }
@@ -2349,6 +2368,10 @@
   document.getElementById("p-desc-tipo").addEventListener("change", function(){ renderPriceSim(); refreshPropSummary(); });
   document.getElementById("p-desc-valor").addEventListener("input", function(){ renderPriceSim(); refreshPropSummary(); });
   document.getElementById("p-ent-base").addEventListener("input", function(){ renderPriceSim(); refreshPropSummary(); });
+  document.getElementById("waipeIncluidoCheck").addEventListener("change", function(){
+    waipeIncluido = this.checked;
+    refreshPropSummary();
+  });
 
   // ---------- Implantação Enterprise ----------
   function updatePacoteHint(){
@@ -2436,7 +2459,7 @@
   // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
   var CHAVE_RASCUNHO = "waipeArquiteturaSolucao.rascunho.v1";
   var CAMPOS_RASCUNHO = ["p-transcricao", "p-cliente", "p-segmento", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
-    "f-usuarios", "f-empresas", "f-conversas", "f-execucoes",
+    "waipeIncluidoCheck", "f-usuarios", "f-empresas", "f-conversas", "f-execucoes",
     "p-desc-tipo", "p-desc-valor", "p-ent-base",
     "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento"];
 
@@ -2490,6 +2513,7 @@
       if (el.type === "checkbox") el.checked = !!d.campos[id];
       else el.value = d.campos[id];
     });
+    waipeIncluido = document.getElementById("waipeIncluidoCheck").checked;
 
     if (d.segState){
       Object.keys(d.segState).forEach(function(grupo){
@@ -2520,12 +2544,11 @@
     refreshPropSummary();
   }
 
-  // Delegado: qualquer digitação/seleção nas abas "Gerar Proposta" e "Diagnóstico Waipe" salva o rascunho —
-  // só um refresh manual do navegador ou o botão abaixo apagam de fato.
+  // Delegado: qualquer digitação/seleção na aba "Gerar Proposta" (que agora
+  // inclui o card do Waipe) salva o rascunho — só um refresh manual do
+  // navegador ou o botão abaixo apagam de fato.
   document.getElementById("panel-prop").addEventListener("input", salvarRascunho);
   document.getElementById("panel-prop").addEventListener("change", salvarRascunho);
-  document.getElementById("panel-diag").addEventListener("input", salvarRascunho);
-  document.getElementById("panel-diag").addEventListener("change", salvarRascunho);
 
   document.getElementById("btnLimparFormulario").addEventListener("click", function(){
     if (!window.confirm("Limpar todos os campos preenchidos nesta simulação (transcrição, dados do cliente, agentes, diagnóstico e sugestões)? Essa ação não pode ser desfeita.")) return;
@@ -2569,13 +2592,17 @@
   // último salvamento (ex: observações, itens incluídos) não se percam.
   function montarPayloadProposta(){
     var ctx = getProposalContext();
+    // Waipe desmarcado ("Incluir") nesta proposta = como se o diagnóstico
+    // nunca tivesse rodado e nenhum agente tivesse sido selecionado —
+    // independente do que ainda estiver em cache, pra não precisar
+    // desmarcar cada agente manualmente só porque o Waipe saiu do pacote.
     var payload = {
       cliente: ctx.cliente,
       csm: ctx.csm,
       contexto: [ctx.segmento, ctx.dores].filter(Boolean).join("\n\n"),
-      agentesPropostos: montarAgentesPropostos(),
+      agentesPropostos: waipeIncluido ? montarAgentesPropostos() : [],
       outrasSolucoesPropostas: recomendacoesState,
-      diagnosticoWaipe: lastDiagnostic ? {
+      diagnosticoWaipe: (waipeIncluido && lastDiagnostic) ? {
         usuarios: lastDiagnostic.input.usuarios,
         empresas: lastDiagnostic.input.empresas,
         governanca: lastDiagnostic.input.governanca,
@@ -2658,6 +2685,10 @@
         var projeto = resultado.projeto;
         propostaSalvaId = projeto.id;
         document.getElementById("p-cliente").value = projeto.cliente || "";
+        // Se a proposta foi salva sem diagnóstico Waipe, o CSM não incluiu o
+        // Waipe naquela rodada — o toggle já carrega refletindo isso.
+        waipeIncluido = !!projeto.diagnosticoWaipe;
+        document.getElementById("waipeIncluidoCheck").checked = waipeIncluido;
         if (projeto.diagnosticoWaipe) aplicarWaipeDiagnostico(projeto.diagnosticoWaipe);
         recomendacoesState = (projeto.outrasSolucoesPropostas || []).map(function(o){
           return {
@@ -2902,7 +2933,10 @@
 
   function buildProposalHTML(){
     var ctx = getProposalContext();
-    var diag = lastDiagnostic;
+    // Waipe desmarcado ("Incluir") = trata como se não houvesse diagnóstico
+    // nesta proposta — nenhuma seção de Waipe entra no documento gerado,
+    // mesmo que o card ainda tenha algo preenchido/calculado em cache.
+    var diag = waipeIncluido ? lastDiagnostic : null;
     var pricing = computePricing();
     var outros = computeOutrosProdutos();
     var planNome = diag ? diag.rec.plan : "a definir";
@@ -2921,7 +2955,10 @@
     var horas = computeHoras();
     var horasHtml = buildHorasSection(horas);
 
-    var commercialHtml = buildCommercialSection(pricing, diag, ctx);
+    // Só monta a seção comercial do Waipe quando ele está incluído — senão
+    // `pricing` (que reflete o cache de lastDiagnostic, não o toggle local)
+    // faria buildCommercialSection tentar ler `diag.rec` com `diag` nulo.
+    var commercialHtml = waipeIncluido ? buildCommercialSection(pricing, diag, ctx) : "";
     var docHeader = '<div class="doc-header"><div class="brand">' + londrisoftLogo("#000035") + '</div><div class="docname">Proposta comercial · ' + escapeHtml(ctx.cliente) + '<br>Confidencial · ' + anoAtual + '</div></div>';
     var watermark = '<svg class="wm" width="320" height="320" viewBox="0 0 24 24" fill="none" stroke="#3A86FF" stroke-width="1"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3M12 14.5v1"/></svg>';
 
@@ -3031,7 +3068,7 @@
     '<div class="cover">' + NETWORK_SVG +
       '<div class="glow"></div>' +
       '<div class="brandword">' + londrisoftLogo("#fff") + '</div>' +
-      '<div class="kicker">' + (outros.length ? "Proposta Comercial · Arquitetura de Soluções" : "Proposta Comercial · Waipe " + escapeHtml(planNome)) + '</div>' +
+      '<div class="kicker">' + ((!waipeIncluido || outros.length) ? "Proposta Comercial · Arquitetura de Soluções" : "Proposta Comercial · Waipe " + escapeHtml(planNome)) + '</div>' +
       '<h1>Soluções sob medida para ' + escapeHtml(ctx.cliente) + '</h1>' +
       '<div class="sub">Uma arquitetura de soluções pensada para os desafios específicos da sua operação — do atendimento com inteligência artificial aos sistemas certos para cada etapa do negócio.</div>' +
       '<div class="meta">' +
@@ -3047,7 +3084,7 @@
       var impl = isEnterprise ? computeImplantacao() : null;
 
       var resumoTotalHtml = "";
-      if (outros.length){
+      if (waipeIncluido && outros.length){
         var linhasResumo = '<tr><td>Waipe ' + escapeHtml(planNome) + '</td><td class="num">' + fmtBRL(pricing.total) + '</td></tr>';
         var totalGeral = pricing.total;
         outros.forEach(function(o){
@@ -3062,26 +3099,35 @@
 
       var sections = [
         { header: true, title: "Contexto e Desafios Identificados",
-          body: doresHtml },
-        { title: "O Time Digital Proposto",
-          body: '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' + fichasHtml },
-        { title: "Tempo Devolvido à Gestão",
-          body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml }
+          body: doresHtml }
       ];
 
-      if (outros.length){
-        sections.push({ title: "Outras Soluções Recomendadas",
-          body: '<p>Além do Waipe, identificamos as seguintes oportunidades para complementar a operação:</p>' + buildOutrosProdutosSection(outros) });
+      // Todo o bloco Waipe (time de agentes, horas devolvidas, plano e
+      // investimento, implantação Enterprise) só entra no documento quando
+      // "Incluir" está marcado no card do Waipe — senão a proposta é feita
+      // só das demais soluções.
+      if (waipeIncluido){
+        sections.push({ title: "O Time Digital Proposto",
+          body: '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' + fichasHtml });
+        sections.push({ title: "Tempo Devolvido à Gestão",
+          body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml });
       }
 
-      sections.push({ title: "Plano Recomendado e Investimento",
-        body: (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
-          commercialHtml +
-          (isEnterprise ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. O trabalho de desenho e construção dos fluxos está detalhado na próxima seção.</div>' : "") +
-          resumoTotalHtml });
+      if (outros.length){
+        sections.push({ title: waipeIncluido ? "Outras Soluções Recomendadas" : "Soluções Recomendadas",
+          body: (waipeIncluido ? '<p>Além do Waipe, identificamos as seguintes oportunidades para complementar a operação:</p>' : '<p>Identificamos as seguintes oportunidades para esta operação:</p>') + buildOutrosProdutosSection(outros) });
+      }
 
-      if (isEnterprise && impl.hasPacote){
-        sections.push({ title: "Implantação Enterprise", body: buildImplantacaoSection(impl) });
+      if (waipeIncluido){
+        sections.push({ title: "Plano Recomendado e Investimento",
+          body: (diag ? '<p class="small muted">Usuários considerados: ' + diag.input.usuarios + ' · Empresas: ' + diag.input.empresas + '. Excedentes de conversas de IA, Créditos de Execução e execuções de Waipe Flow seguem a tabela oficial de planos Waipe 2026.</p>' : "") +
+            commercialHtml +
+            (isEnterprise ? '<div class="callout"><span class="lbl">Sobre implantação Enterprise</span>Esta mensalidade cobre acesso, suporte e operação contínua da tecnologia. O trabalho de desenho e construção dos fluxos está detalhado na próxima seção.</div>' : "") +
+            resumoTotalHtml });
+
+        if (isEnterprise && impl.hasPacote){
+          sections.push({ title: "Implantação Enterprise", body: buildImplantacaoSection(impl) });
+        }
       }
 
       sections.push({ title: "Próximos Passos",
@@ -3234,7 +3280,7 @@
 
   document.getElementById("btnPrompt").addEventListener("click", function(){
     var ctx = getProposalContext();
-    var diag = lastDiagnostic;
+    var diag = waipeIncluido ? lastDiagnostic : null;
     var lines = [];
     lines.push("Cliente: " + ctx.cliente + (ctx.segmento ? " (" + ctx.segmento + ")" : ""));
     if (ctx.contato) lines.push("Contato: " + ctx.contato);
