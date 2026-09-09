@@ -1291,22 +1291,29 @@
   function recommend(input){
     var reasons = [];
     var plan;
+    // Nº de agentes/automações prontas selecionados na proposta — o Individual
+    // só permite 1 modelo pronto ativo, o Time até 3 (ver "Comparativo de
+    // Planos"). Sem isso o plano podia sair "Individual" com 3 agentes
+    // marcados, uma proposta contraditória.
+    var qtdAgentes = input.agentesSelecionados || 0;
 
     if (input.automacao === "personalizada"){
       plan = "Enterprise";
       reasons.push("Precisa alterar a estrutura da automação ou integrar o Waipe Flow a sistemas externos do cliente — isso só é possível no Enterprise.");
     } else {
-      var soIndividual = input.usuarios <= 1 && input.empresas <= 1 && input.governanca === "nao" && input.auditoria === "nao";
+      var soIndividual = input.usuarios <= 1 && input.empresas <= 1 && input.governanca === "nao" && input.auditoria === "nao" && qtdAgentes <= 1;
       if (soIndividual){
         plan = "Individual";
-        reasons.push("Apenas 1 usuário e 1 empresa, sem necessidade de controle de acesso ou auditoria por pessoa.");
+        reasons.push("Apenas 1 usuário, 1 empresa e 1 automação pronta ativa, sem necessidade de controle de acesso ou auditoria por pessoa.");
       } else {
         plan = "Time";
         if (input.usuarios > 1) reasons.push("Mais de um usuário (" + input.usuarios + ") — o Individual não permite usuário adicional, então isso já é sinal de migração para o Time.");
         if (input.empresas > 1) reasons.push("Mais de uma empresa do grupo econômico (" + input.empresas + ") — o Individual não permite empresa adicional.");
         if (input.governanca === "sim") reasons.push("Precisa controlar quem acessa o quê — políticas de acesso só existem a partir do Time.");
         if (input.auditoria === "sim") reasons.push("Precisa de auditoria de uso ou relatório por pessoa — recurso exclusivo do Time/Enterprise.");
-        if (reasons.length === 0) reasons.push("O perfil já ultrapassa o escopo fechado do Individual (1 usuário e 1 empresa, sem adicionais).");
+        if (qtdAgentes > 1) reasons.push(qtdAgentes + " agentes/automações selecionados nesta proposta — o Individual só permite 1 modelo pronto ativo; o Time permite até 3.");
+        if (qtdAgentes > 3) reasons.push("Atenção: " + qtdAgentes + " agentes ultrapassam até os 3 modelos prontos do Time — confirme com a coordenação se cabe como excedente ou se algum fica de fora do pacote inicial.");
+        if (reasons.length === 0) reasons.push("O perfil já ultrapassa o escopo fechado do Individual (1 usuário, 1 empresa e 1 automação, sem adicionais).");
       }
     }
     return { plan: plan, reasons: reasons };
@@ -1371,7 +1378,8 @@
       automacao: document.querySelector('input[name="automacao"]:checked').value,
       enterprisePorVolume: segState.enterprisePorVolume,
       conversas: document.getElementById("f-conversas").value === "" ? null : parseFloat(document.getElementById("f-conversas").value),
-      execucoes: document.getElementById("f-execucoes").value === "" ? null : parseFloat(document.getElementById("f-execucoes").value)
+      execucoes: document.getElementById("f-execucoes").value === "" ? null : parseFloat(document.getElementById("f-execucoes").value),
+      agentesSelecionados: Object.keys(selectedAgentIds).length
     };
 
     var rec = recommend(input);
@@ -2298,11 +2306,23 @@
       // Decompõe o total combinado — cada solução tem valor e desconto próprios,
       // editáveis na sua linha em "Outras oportunidades identificadas" acima
       // (o campo "Desconto" do Simulador de Preço abaixo só afeta o Waipe).
-      warnBox.innerHTML = outros.length
+      var breakdownHtml = outros.length
         ? '<div class="hint" style="margin-top:2px;">Waipe: ' + fmtBRL(p.total) + '/mês' +
             outros.map(function(o){ return ' · ' + escapeHtml(o.produto) + (o.planoSugerido ? ' (' + escapeHtml(o.planoSugerido) + ')' : '') + ': ' + fmtBRL(o.total) + '/mês' + (o.desconto > 0 ? ' (' + o.descontoPercent + '% off)' : ''); }).join("") +
           '</div>'
         : "";
+      // O diagnóstico só é recalculado quando "Indicar plano ideal" é clicado —
+      // se os agentes mudarem depois disso (adicionar/remover), o plano exibido
+      // fica desatualizado em relação à quantidade real de automações
+      // selecionadas (Individual = 1, Time = até 3). Confere aqui, ao vivo.
+      var qtdAgentesAtual = Object.keys(selectedAgentIds).length;
+      var planoDesatualizado = "";
+      if (lastDiagnostic.rec.plan === "Individual" && qtdAgentesAtual > 1){
+        planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados, mas o plano indicado (Individual) só permite 1 automação — clique em "Indicar plano ideal" de novo na aba Diagnóstico Waipe pra atualizar (deve subir pra Time).</span></div>';
+      } else if (lastDiagnostic.rec.plan === "Time" && qtdAgentesAtual > 3){
+        planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados ultrapassam os 3 modelos prontos do Time — confirme com a coordenação se cabe como excedente ou se algum agente fica de fora do pacote inicial.</span></div>';
+      }
+      warnBox.innerHTML = planoDesatualizado + breakdownHtml;
     } else if (outros.length){
       planStat.textContent = "—";
       priceStat.textContent = fmtBRL(outrosTotal) + "/mês";
