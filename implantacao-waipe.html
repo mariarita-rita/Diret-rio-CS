@@ -774,6 +774,10 @@
   var wizard = null;          // assistente de novo projeto
   var itemAtual = null;       // null = lista unificada de itens; "__waipe__" = fluxo Waipe; ou id de uma subtask solucao
   var sim = { etapa:"escopo", prioridade:[], concluidos:[], agenteAtual:null, camada1Checks:{} };
+  // Estado de UI puro (não persiste) — controla se, ao entrar em
+  // Construção/Testes/Entrega com mais de 1 agente na prioridade, mostramos
+  // a visão geral do Waipe antes do detalhe de um agente específico.
+  var waipeVisaoGeral = true;
 
   function projetosRootAtivo(){
     return document.getElementById(filtroProjetosAtivo === "entregues" ? "projetosEntreguesRoot" : "projetosRoot");
@@ -887,13 +891,18 @@
         '</div></div>';
     } else {
       wrap.innerHTML = filtroHtml + lista.map(function(p){
-        var tagCls = p.status === "concluído" ? "ambos" : (p.status === "in progress" ? "londrisoft" : "cliente");
         var diasAberto = p.dataCriacao ? Math.max(0, Math.floor((Date.now() - p.dataCriacao) / 86400000)) : null;
-        var faseTag = p.faseProjetoManual
-          ? ' <span class="tag ' + (FASE_TAG_CLASS[p.faseProjetoManual] || "neutro") + '">' + esc(FASE_LABEL[p.faseProjetoManual] || p.faseProjetoManual) + '</span>'
+        // Fase (manual ou derivada) é o rótulo principal do card — Status
+        // nativo do ClickUp já não agrega nada acima dela, então some do
+        // card (continua disponível no detalhe do projeto).
+        var faseEfetiva = p.faseProjetoManual || p.faseProjetoDerivada;
+        var faseTag = faseEfetiva
+          ? ' <span class="tag ' + (FASE_TAG_CLASS[faseEfetiva] || "neutro") + '">' + esc(FASE_LABEL[faseEfetiva] || faseEfetiva) + '</span>'
           : "";
+        var statusCor = p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)");
+        var statusDot = '<span title="Status: ' + esc(STATUS_LABEL[p.status] || p.status || "—") + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
         return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
-          '<div class="proj-card-top"><h3>' + esc(p.cliente) + '</h3><span class="tag ' + tagCls + '">' + esc(STATUS_LABEL[p.status] || p.status || "—") + '</span>' + faseTag + '</div>' +
+          '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + '</div>' +
           '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) + ' · ' + p.agentesConcluidos + '/' + p.agentesTotal + ' agentes entregues' +
           (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
         '</div>';
@@ -1075,7 +1084,8 @@
     root.innerHTML =
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">' +
         '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
-        '<h2 style="font-size:16px">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
+        '<div style="text-align:right"><h2 style="font-size:16px; margin:0;">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
+        '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") + '</div></div>' +
       '</div>' +
       '<div class="backlog-strip" id="backlogStrip"></div>' +
       '<div class="stepper" id="stepper"></div>' +
@@ -1109,10 +1119,20 @@
     el.innerHTML = agentesReais().map(function(a){
       var cls = "backlog-chip";
       var rotulo = "pendente";
+      var abrivel = sim.prioridade.indexOf(a.id) !== -1;
       if (sim.concluidos.indexOf(a.id) !== -1){ cls += " done"; rotulo = "entregue"; }
       else if (sim.agenteAtual === a.id){ cls += " active"; rotulo = "em andamento"; }
-      return '<span class="' + cls + '" title="' + esc(a.nome) + ' — ' + rotulo + '"><span class="dot"></span>' + esc(a.nome.split(" & ")[0].split(" (")[0]) + '</span>';
+      return '<span class="' + cls + '"' + (abrivel ? ' data-agente-chip="' + esc(a.id) + '" style="cursor:pointer"' : "") +
+        ' title="' + esc(a.nome) + ' — ' + rotulo + '"><span class="dot"></span>' + esc(a.nome.split(" & ")[0].split(" (")[0]) + '</span>';
     }).join("");
+    el.querySelectorAll("[data-agente-chip]").forEach(function(chip){
+      chip.addEventListener("click", function(){
+        sim.agenteAtual = chip.getAttribute("data-agente-chip");
+        waipeVisaoGeral = false;
+        persistirProjeto();
+        renderSimulador();
+      });
+    });
   }
 
   function renderStepper(){
@@ -1232,9 +1252,9 @@
   function seletorFaseProjeto(p){
     var manual = !!p.faseProjetoManual;
     var valorEfetivo = p.faseProjetoManual || p.faseProjetoDerivada;
-    return '<span class="tag ' + (FASE_TAG_CLASS[valorEfetivo] || "neutro") + '">' + esc(FASE_LABEL[valorEfetivo] || valorEfetivo) + (manual ? "" : " · automático") + '</span>' +
+    return '<span class="tag ' + (FASE_TAG_CLASS[valorEfetivo] || "neutro") + '">' + esc(FASE_LABEL[valorEfetivo] || valorEfetivo) + (manual ? "" : " · auto") + '</span>' +
       '<select data-projeto-fase class="form-input" style="width:auto; display:inline-block; margin-left:8px; font-size:12px; padding:4px 8px;">' +
-      '<option value=""' + (manual ? "" : " selected") + '>Automático (' + esc(FASE_LABEL[p.faseProjetoDerivada] || p.faseProjetoDerivada) + ')</option>' +
+      '<option value=""' + (manual ? "" : " selected") + '>Automático</option>' +
       FASES_ORDEM.map(function(f){ return '<option value="' + f + '"' + (manual && f === p.faseProjetoManual ? " selected" : "") + '>Forçar: ' + FASE_LABEL[f] + '</option>'; }).join("") +
       '</select>';
   }
@@ -1292,8 +1312,8 @@
 
   function formNovaReservaHtml(){
     return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
+      '<div class="sp-k">Agendar novo horário</div>' +
       agendaGoogleLinksHtml() +
-      '<div class="sp-k">Registrar reserva</div>' +
       '<div class="hint" style="margin-bottom:6px;">Depois de agendar na agenda do Google, registre aqui o horário combinado (fica salvo neste projeto e, quando possível, também vira uma task no ClickUp).</div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
         '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
@@ -1371,6 +1391,7 @@
         .sort(function(a, b){ return (a.inicio || 0) - (b.inicio || 0); });
       container.innerHTML = '<div class="card"><h2>📅 Agenda</h2>' +
         '<div class="sub">Registro dos horários combinados com o ISM para este projeto.</div>' +
+        '<div class="sp-k" style="margin-top:12px">Próximos compromissos</div>' +
         (reservas.length ? reservas.map(reservaHtml).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário registrado ainda.</div>') +
         formNovaReservaHtml() +
       '</div>';
@@ -1388,10 +1409,9 @@
     var solucoes = solucoesFechadas();
     var html = '<div class="card">' +
       '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">' +
-        '<h2 style="margin:0;">' + esc(p.cliente) + '</h2>' +
+        '<div class="sp-k" style="margin:0;">Fase do projeto</div>' +
         '<div>' + seletorFaseProjeto(p) + '</div>' +
       '</div>' +
-      '<div class="sub">CSM: ' + esc(p.csm || "—") + '</div>' +
       '<div class="sp-k" style="margin-top:8px">Contexto do projeto</div>' +
       '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
       '<div id="ismProjetoWrap"></div>' +
@@ -1422,6 +1442,7 @@
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");
+        if (itemAtual === "__waipe__") waipeVisaoGeral = true;
         renderConteudoProjeto();
       });
     });
@@ -1672,16 +1693,41 @@
     "Confirmar que o cliente está recebendo normalmente"
   ];
 
-  function seletorAgenteAtual(){
+  // Link "← Visão geral" que substitui o antigo dropdown de troca de agente
+  // — a troca agora acontece clicando um card na visão geral.
+  function linkVisaoGeralHtml(){
     if (sim.prioridade.length <= 1) return "";
-    return '<div class="field" style="margin-bottom:14px"><label style="font-size:12px; font-weight:600; color:var(--muted); display:block; margin-bottom:6px;">Trabalhando em qual agente da prioridade agora?</label>' +
-      '<select id="seletorAgente" style="width:100%; padding:9px 12px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px;">' +
-      sim.prioridade.map(function(id){
-        var a = agentePorId(id);
-        if (!a) return "";
-        var concluido = sim.concluidos.indexOf(id) !== -1;
-        return '<option value="' + esc(id) + '"' + (id === sim.agenteAtual ? " selected" : "") + '>' + esc(a.nome) + (concluido ? " (já entregue)" : "") + '</option>';
-      }).join("") + '</select></div>';
+    return '<div class="flow-actions" style="margin-bottom:14px; justify-content:flex-start;"><button type="button" class="btn-flow-secondary" id="btnVisaoGeralWaipe">← Visão geral</button></div>';
+  }
+
+  function wireLinkVisaoGeral(){
+    var btn = document.getElementById("btnVisaoGeralWaipe");
+    if (btn) btn.addEventListener("click", function(){ waipeVisaoGeral = true; renderSimulador(); });
+  }
+
+  // Tela intermediária das etapas de detalhe único (Construção/Testes/
+  // Entrega) quando há mais de 1 agente na prioridade — mostra o status de
+  // todos antes de entrar no de um específico (statusCardAgente já calcula
+  // o rótulo certo por etapa, nenhuma lógica nova de status).
+  function renderVisaoGeralWaipe(){
+    var agentes = agentesReais().filter(function(a){ return sim.prioridade.indexOf(a.id) !== -1; });
+    var entregues = agentes.filter(function(a){ return sim.concluidos.indexOf(a.id) !== -1; }).length;
+    var html = '<div class="card">' +
+        '<h2>Waipe — Visão geral</h2>' +
+        '<div class="sub">Etapa atual: ' + esc(ETAPA_LABEL[sim.etapa] || sim.etapa) + ' · ' + entregues + '/' + agentes.length + ' agentes entregues. Clique num agente para abrir.</div>' +
+        '<div class="agent-pick-grid">' + agentes.map(function(a){
+          return '<div data-agente-overview="' + esc(a.id) + '" style="cursor:pointer">' + statusCardAgente(a) + '</div>';
+        }).join("") + '</div>' +
+      '</div>';
+    document.getElementById("stepContent").innerHTML = html;
+    document.querySelectorAll("[data-agente-overview]").forEach(function(el){
+      el.addEventListener("click", function(){
+        sim.agenteAtual = el.getAttribute("data-agente-overview");
+        waipeVisaoGeral = false;
+        persistirProjeto();
+        renderSimulador();
+      });
+    });
   }
 
   function renderChecklist(passos, statePrefix, checksObj){
@@ -1705,10 +1751,11 @@
 
   function renderConstrucao(){
     if (!sim.prioridade.length){ irParaEtapa("alinhamento"); return; }
+    if (waipeVisaoGeral && sim.prioridade.length > 1){ renderVisaoGeralWaipe(); return; }
     if (!sim.agenteAtual) sim.agenteAtual = sim.prioridade[0];
     var a = agentePorId(sim.agenteAtual);
     if (!a){ irParaEtapa("alinhamento"); return; }
-    var html = seletorAgenteAtual() +
+    var html = linkVisaoGeralHtml() +
       buildEstruturaPanel(a) +
       '<div class="card"><h2>Por onde começar — checklist de construção</h2><div class="sub">Agente atual: ' + esc(a.nome) + '</div>' +
       renderChecklist(PASSOS_CONSTRUCAO, "build", a.buildChecks || {}) +
@@ -1734,17 +1781,17 @@
         renderComentarios(a.id, document.getElementById("comentariosConstrucao"), "Comentários deste agente");
       }).catch(function(){ showSimToast("Não deu para salvar o Fluxo."); });
     });
-    var sel = document.getElementById("seletorAgente");
-    if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderConstrucao(); renderBacklogStrip(); });
+    wireLinkVisaoGeral();
     document.getElementById("btnVoltarAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
     document.getElementById("btnIrTestes").addEventListener("click", function(){ irParaEtapa("testes"); });
   }
 
   function renderTestes(){
     if (!sim.agenteAtual){ irParaEtapa("alinhamento"); return; }
+    if (waipeVisaoGeral && sim.prioridade.length > 1){ renderVisaoGeralWaipe(); return; }
     var a = agentePorId(sim.agenteAtual);
     if (!a){ irParaEtapa("alinhamento"); return; }
-    var html = seletorAgenteAtual() +
+    var html = linkVisaoGeralHtml() +
       '<div class="card"><h2>Testes — ' + esc(a.nome) + '</h2><div class="sub">Público a validar: ' + esc((a.estrutura || {}).publico || "—") + '</div>' +
       renderChecklist(PASSOS_TESTE, "test", a.testChecks || {}) +
       '</div>' +
@@ -1756,8 +1803,7 @@
     document.getElementById("stepContent").innerHTML = html;
     wireChecklist("test", a, a.testChecks || (a.testChecks = {}), "testChecks");
     renderComentarios(a.id, document.getElementById("comentariosTestes"), "Comentários deste agente");
-    var sel = document.getElementById("seletorAgente");
-    if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderTestes(); renderBacklogStrip(); });
+    wireLinkVisaoGeral();
     document.getElementById("btnVoltarConstrucao").addEventListener("click", function(){ irParaEtapa("construcao"); });
     document.getElementById("btnIrEntrega").addEventListener("click", function(){ irParaEtapa("entrega"); });
   }
@@ -1765,6 +1811,10 @@
   function renderEntrega(){
     // Nada em prioridade ainda: precisa passar pelo Alinhamento primeiro.
     if (!sim.prioridade.length){ irParaEtapa("alinhamento"); return; }
+    // Só mostra a visão geral quando há um agente ativo — quando
+    // agenteAtual é null o motivo é "tudo entregue"/"nada em construção",
+    // que já tem sua própria tela logo abaixo e não pode ser substituída.
+    if (waipeVisaoGeral && sim.prioridade.length > 1 && sim.agenteAtual){ renderVisaoGeralWaipe(); return; }
 
     // Toda a prioridade validada já foi entregue: nao ha mais "agente atual" —
     // quem prioriza o proximo e o Alinhamento (botao Validado), nao um grid aqui.
@@ -1785,7 +1835,7 @@
     if (!a){ irParaEtapa("alinhamento"); return; }
     var restantesPrioridade = sim.prioridade.filter(function(id){ return sim.concluidos.indexOf(id) === -1 && id !== sim.agenteAtual; });
 
-    var html = seletorAgenteAtual() +
+    var html = linkVisaoGeralHtml() +
       '<div class="card"><h2>Entrega — ' + esc(a.nome) + '</h2>' +
       renderChecklist(PASSOS_ENTREGA, "entrega", a.entregaChecks || {}) +
       '</div>' +
@@ -1798,8 +1848,7 @@
     document.getElementById("stepContent").innerHTML = html;
     wireChecklist("entrega", a, a.entregaChecks || (a.entregaChecks = {}), "entregaChecks");
     renderComentarios(a.id, document.getElementById("comentariosEntrega"), "Comentários deste agente");
-    var sel = document.getElementById("seletorAgente");
-    if (sel) sel.addEventListener("change", function(){ sim.agenteAtual = sel.value; persistirProjeto(); renderEntrega(); renderBacklogStrip(); });
+    wireLinkVisaoGeral();
     document.getElementById("btnVoltarTestes").addEventListener("click", function(){ irParaEtapa("testes"); });
     document.getElementById("btnConcluirAgente").addEventListener("click", function(){
       if (sim.concluidos.indexOf(sim.agenteAtual) === -1) sim.concluidos.push(sim.agenteAtual);
