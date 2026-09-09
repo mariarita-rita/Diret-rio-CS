@@ -1040,7 +1040,7 @@
       <div class="divider"></div>
 
       <div class="field">
-        <label>Desconto</label>
+        <label>Desconto (só no Waipe)</label>
         <div class="discount-row">
           <select id="p-desc-tipo" class="sel">
             <option value="percent">%</option>
@@ -1048,6 +1048,7 @@
           </select>
           <input type="number" id="p-desc-valor" class="num-input tabular" min="0" step="1" value="0">
         </div>
+        <div class="hint">Cada solução do ecossistema (Gestor, Simplaz, Unique, BIME APP) sugerida acima tem seu próprio campo "Desconto %" na própria linha — este aqui não afeta elas.</div>
       </div>
 
       <div class="field">
@@ -2294,7 +2295,14 @@
       var p = computePricing();
       var total = p.total + outrosTotal;
       priceStat.textContent = fmtBRL(total) + "/mês" + ((p.discountAmount > 0 || p.additionalTotal !== 0 || outrosTotal > 0) ? " (ajustado)" : "");
-      warnBox.innerHTML = "";
+      // Decompõe o total combinado — cada solução tem valor e desconto próprios,
+      // editáveis na sua linha em "Outras oportunidades identificadas" acima
+      // (o campo "Desconto" do Simulador de Preço abaixo só afeta o Waipe).
+      warnBox.innerHTML = outros.length
+        ? '<div class="hint" style="margin-top:2px;">Waipe: ' + fmtBRL(p.total) + '/mês' +
+            outros.map(function(o){ return ' · ' + escapeHtml(o.produto) + (o.planoSugerido ? ' (' + escapeHtml(o.planoSugerido) + ')' : '') + ': ' + fmtBRL(o.total) + '/mês' + (o.desconto > 0 ? ' (' + o.descontoPercent + '% off)' : ''); }).join("") +
+          '</div>'
+        : "";
     } else if (outros.length){
       planStat.textContent = "—";
       priceStat.textContent = fmtBRL(outrosTotal) + "/mês";
