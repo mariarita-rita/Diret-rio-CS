@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento CSM — Agosto 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2;
+    --dourado:#92400E; --dourado-cl:#FEF3C7;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:48px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:32px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.azul { color:var(--azul2); }
+  .panel-item .v.cinza-txt { color:var(--cinza); font-weight:600; }
+
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .sub-titulo { font-size:14px; font-weight:700; color:var(--preto); margin:24px 0 10px; }
+
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); }
+  .chip-ok { background:var(--verde-cl); color:var(--verde); }
+  .chip-info { background:var(--azul-cl); color:var(--azul2); }
+
+  .csm-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px; }
+  .csm-card { background:#fff; border:1px solid var(--brd); border-radius:12px; overflow:hidden; }
+  .csm-topo { background:linear-gradient(135deg,var(--azul1),var(--azul2)); padding:14px 16px 12px; display:flex; justify-content:space-between; align-items:flex-start; }
+  .csm-nome { font-size:14px; font-weight:700; color:#fff; line-height:1.2; margin-bottom:6px; }
+  .csm-nivel-chip { display:inline-block; background:rgba(255,255,255,.15); color:rgba(255,255,255,.9); font-size:9px; font-weight:700; padding:3px 9px; border-radius:20px; letter-spacing:.06em; text-transform:uppercase; }
+  .csm-pos { display:flex; flex-direction:column; align-items:center; min-width:44px; }
+  .csm-pos-num { font-size:22px; font-weight:800; color:rgba(255,255,255,.25); line-height:1; }
+  .medalha { font-size:26px; line-height:1; }
+  .pos-label { font-size:9px; font-weight:700; color:rgba(255,255,255,.4); letter-spacing:.06em; text-transform:uppercase; margin-top:2px; }
+  .csm-corpo { padding:14px 16px; }
+  .mrr-bloco { background:var(--cinza-cl); border-radius:8px; padding:10px 12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+  .mrr-bloco-label { font-size:10px; font-weight:600; color:var(--cinza); text-transform:uppercase; letter-spacing:.06em; }
+  .mrr-bloco-val { font-size:20px; font-weight:800; color:var(--azul2); }
+  .mrr-bloco-val.verm { color:var(--verm); }
+  .csm-prog-row { display:flex; justify-content:space-between; font-size:10px; color:var(--cinza); margin-bottom:3px; }
+  .csm-prog { height:5px; background:var(--brd); border-radius:3px; overflow:hidden; margin-bottom:12px; }
+  .csm-prog-fill { height:100%; background:linear-gradient(90deg,var(--azul2),#6366F1); border-radius:3px; }
+  .csm-linha { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid var(--cinza-cl); }
+  .csm-linha:last-child { border-bottom:none; }
+  .csm-linha .k { color:var(--cinza); } .csm-linha .v { font-weight:600; }
+
+  .graf-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0; }
+  .graf-box { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px; }
+  .graf-titulo { font-size:12px; font-weight:600; color:var(--cinza); margin-bottom:10px; }
+
+  .motivos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .motivo-item { background:#fff; border:1px solid var(--brd); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:14px; }
+  .motivo-num { font-size:28px; font-weight:800; min-width:36px; line-height:1; }
+  .motivo-txt b { font-size:13px; font-weight:700; display:block; margin-bottom:1px; }
+  .motivo-txt span { font-size:11px; color:var(--cinza); }
+
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:120px repeat(6,1fr); }
+  .hist-cell { padding:10px 10px; font-size:11px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:10px; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-agosto { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+
+  @media (max-width:700px) {
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .motivos-grid { grid-template-columns:1fr; }
+    .graf-grid { grid-template-columns:1fr; }
+    .hist-row { grid-template-columns:64px repeat(6,1fr); font-size:9px; }
+    .hist-cell { padding:6px 4px; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:34px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="hero-eyebrow">Londrisoft · Customer Success · CSM</p>
+      <h1 class="hero-titulo">Fechamento<span>Agosto 2026</span></h1>
+      <p class="hero-desc">Resultados, desempenho e análise da equipe de Customer Success — referência agosto 2026.</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado da equipe</p>
+      <div class="panel-destaque">
+        <div><p class="dk">MRR incremental líquido</p><p class="dv">R$ 6.182</p></div>
+        <div class="dpct"><strong>146,1%</strong><span>da meta base</span></div>
+      </div>
+      <div class="panel-item"><span class="k">Meta (1,5%) — R$ 4.232</span><span class="v verde">146,1% ✔</span></div>
+      <div class="panel-item"><span class="k">Super meta (3%) — R$ 6.347</span><span class="v cinza-txt">97,4%</span></div>
+      <div class="panel-item"><span class="k">Ultra meta (4%) — R$ 15.000</span><span class="v cinza-txt">41,2%</span></div>
+      <div class="panel-item"><span class="k">Meta especial (6%) — R$ 20.000</span><span class="v cinza-txt">30,9%</span></div>
+      <div class="panel-item"><span class="k">WON totais</span><span class="v">44 negócios</span></div>
+      <div class="panel-item"><span class="k">LOST totais</span><span class="v">31 negócios</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="conteudo">
+
+  <!-- VISÃO GERAL -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Resultado do mês</p><h2 class="sec-titulo">Visão geral</h2></div>
+      <p class="sec-desc">Agosto fecha na meta base, muito próximo da super meta — considerando o downsell do mês, faltaram apenas R$ 165,13. Guilherme, Gian e Lucineia bateram a super meta individual; Patrícia ficou abaixo da meta.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">MRR gerado (líquido)</p><p class="num-val verde">R$ 6.182</p><p class="num-sub">−43,9% vs julho</p></div>
+      <div class="num-card"><p class="num-label">% da meta base</p><p class="num-val azul">146,1%</p><p class="num-sub">faltou R$ 165 p/ super</p></div>
+      <div class="num-card"><p class="num-label">WON</p><p class="num-val">44</p><p class="num-sub">negócios fechados</p></div>
+      <div class="num-card"><p class="num-label">LOST</p><p class="num-val verm">31</p><p class="num-sub">inclui 1 downsell</p></div>
+      <div class="num-card"><p class="num-label">Nível equipe</p><p class="num-val azul">Meta</p><p class="num-sub">97,4% da super meta</p></div>
+    </div>
+    <div class="alerta alerta-laranja"><strong>Super meta perdida por uma margem mínima: R$ 165,13.</strong> O downsell de R$ 399,03 na carteira do Gian foi o fator decisivo — sem ele, a equipe teria batido a super meta.</div>
+    <div class="alerta alerta-laranja"><strong>Além do downsell, três lançamentos incorretos reduziram cerca de R$ 597 na conferência do fechamento:</strong> uma reativação de R$ 514,90 (Guilherme) que foi realizada mas cujo formulário não foi enviado ao Financeiro; uma renovação de R$ 62,30 (Patrícia) marcada como ganha incorretamente, já revertida para perdida; e uma renovação de R$ 20,00 (Lucineia) cujo formulário também não havia sido enviado ao Financeiro. Os dois formulários pendentes foram enviados durante as correções de fechamento, já no início de setembro, e por isso serão contabilizados no fechamento de setembro.</div>
+    <div class="alerta alerta-verde"><strong>Meta base batida com folga confortável (146,1%).</strong> O resultado ficou bem abaixo de julho em valor absoluto, mas dentro do esperado para a meta de agosto, que também foi reduzida.</div>
+  </section>
+
+  <!-- COMPOSIÇÃO DOS GANHOS -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Composição do MRR</p><h2 class="sec-titulo">De onde veio o resultado</h2></div>
+      <p class="sec-desc">Upsell e crossell dominaram o valor gerado em agosto, apesar de representarem menos da metade dos negócios fechados. Renovações seguem sendo a maior parte em volume, mas com ticket bem menor.</p>
+    </div>
+
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Tipo de negócio</th><th class="td-c">Quantidade</th><th class="td-c">% dos negócios</th><th class="td-r">Valor (MRR)</th><th class="td-c">% do MRR</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Upsell</td><td class="td-c">8</td><td class="td-c">18,2%</td><td class="td-r negrito" style="color:var(--azul2);">R$ 2.872,21</td><td class="td-c negrito">43,6%</td></tr>
+          <tr><td class="negrito">Crossell</td><td class="td-c">5</td><td class="td-c">11,4%</td><td class="td-r negrito" style="color:var(--azul2);">R$ 2.187,65</td><td class="td-c negrito">33,2%</td></tr>
+          <tr><td class="negrito">Renovação</td><td class="td-c">30</td><td class="td-c">68,2%</td><td class="td-r">R$ 1.261,49</td><td class="td-c">19,2%</td></tr>
+          <tr><td class="negrito">Reativação</td><td class="td-c">1</td><td class="td-c">2,3%</td><td class="td-r">R$ 259,90</td><td class="td-c">3,9%</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Subtotal ganhos</td><td class="td-c negrito">44</td><td class="td-c">100%</td><td class="td-r negrito">R$ 6.581,25</td><td class="td-c negrito">100%</td></tr>
+          <tr><td class="negrito">Downsell (Gian — CMF Comércio)</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-r negrito" style="color:var(--verm);">− R$ 399,03</td><td class="td-c">—</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Total líquido (equipe)</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-r negrito" style="color:var(--azul1);">R$ 6.182,22</td><td class="td-c">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--cinza);margin:-4px 0 14px;">O downsell da CMF Comércio de Artefatos de Borracha foi motivado por uma solicitação do próprio cliente: ele pediu para migrar do plano e dos usuários da filial CMF para o plano Avançado e os usuários já ativos na filial Alf, consolidando o uso em uma única filial.</p>
+
+    <div class="graf-grid">
+      <div class="graf-box">
+        <p class="graf-titulo">% do MRR bruto por tipo de negócio</p>
+        <div style="position:relative;height:200px;">
+          <canvas id="chartMixValor" role="img" aria-label="Composição do MRR por tipo: Upsell 43,6%; Crossell 33,2%; Renovação 19,2%; Reativação 3,9%">Upsell 43,6%; Crossell 33,2%; Renovação 19,2%; Reativação 3,9%</canvas>
+        </div>
+      </div>
+      <div class="graf-box">
+        <p class="graf-titulo">% dos negócios por tipo (quantidade)</p>
+        <div style="position:relative;height:200px;">
+          <canvas id="chartMixQtd" role="img" aria-label="Composição por quantidade de negócios: Renovação 68,2% (30 negócios); Upsell 18,2% (8 negócios); Crossell 11,4% (5 negócios); Reativação 2,3% (1 negócio)">Renovação 68,2% (30); Upsell 18,2% (8); Crossell 11,4% (5); Reativação 2,3% (1)</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="alerta alerta-azul"><strong>18% dos negócios (upsell) geraram 44% do MRR bruto.</strong> Poucos negócios de alto valor concentram o resultado do mês — dependência de vendas maiores para bater a meta.</div>
+
+    <p class="sub-titulo">Origem das renovações</p>
+    <p class="sec-desc" style="margin-bottom:12px;">5 das 30 renovações do mês vieram de clientes que responderam diretamente ao e-mail de renovação automática, sem intervenção ativa do CSM:</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th class="td-c">Origem</th></tr></thead>
+        <tbody>
+          <tr><td>Marcos Clayton Faqueti Feitosa</td><td class="td-c"><span class="chip chip-info">E-mail automático</span></td></tr>
+          <tr><td>Daupar Ferramentas Ltda</td><td class="td-c"><span class="chip chip-info">E-mail automático</span></td></tr>
+          <tr><td>Mohamad Hemersson Ariss</td><td class="td-c"><span class="chip chip-info">E-mail automático</span></td></tr>
+          <tr><td>Valdecir Giroto</td><td class="td-c"><span class="chip chip-info">E-mail automático</span></td></tr>
+          <tr><td>Comércio de Carnes Agoci Ltda</td><td class="td-c"><span class="chip chip-info">E-mail automático</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:var(--cinza);margin:-4px 0 14px;">As demais 25 renovações são remanescentes das bases que estavam sendo trabalhadas e finalizadas ativamente pelos CSMs ao longo do mês.</p>
+  </section>
+
+  <!-- WAIPE -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Produto em destaque</p><h2 class="sec-titulo">Campanha Waipe e Deploy</h2></div>
+      <p class="sec-desc">A campanha importou 319 oportunidades de crossell Waipe para a base. Apenas 5 negócios fecharam com Waipe no mês — nenhum deles originado diretamente da campanha, que teve conversão zero.</p>
+    </div>
+
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Oportunidades importadas</p><p class="num-val azul">319</p><p class="num-sub">campanha Waipe e Deploy</p></div>
+      <div class="num-card"><p class="num-label">Ainda em aberto</p><p class="num-val" style="color:var(--laranja);">292</p><p class="num-sub">91,5% do total</p></div>
+      <div class="num-card"><p class="num-label">Marcadas como perdidas</p><p class="num-val verm">27</p><p class="num-sub">8,5% do total</p></div>
+      <div class="num-card"><p class="num-label">Conversões da campanha</p><p class="num-val verm">0</p><p class="num-sub">nenhum fechamento direto</p></div>
+    </div>
+
+    <div class="alerta alerta-laranja"><strong>Correção importante:</strong> a leitura inicial de "15 oportunidades abertas e 15 perdidas" estava incompleta. A campanha trouxe 319 oportunidades no total — 292 permanecem em aberto até hoje e 27 foram formalmente marcadas como perdidas. A conversão real da campanha é zero, independente do status registrado.</div>
+
+    <p class="sub-titulo">Volume por CSM: abertas × perdidas</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>CSM</th><th class="td-c">Total recebido</th><th class="td-c">Em aberto</th><th class="td-c">% em aberto</th><th class="td-c">Marcado perdido</th><th class="td-c">% marcado perdido</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Guilherme Camargo</td><td class="td-c">85</td><td class="td-c negrito" style="color:var(--verm);">85</td><td class="td-c negrito" style="color:var(--verm);">100,0%</td><td class="td-c">0</td><td class="td-c">0,0%</td></tr>
+          <tr><td class="negrito">Gian Luca</td><td class="td-c">86</td><td class="td-c negrito" style="color:var(--verm);">82</td><td class="td-c negrito" style="color:var(--verm);">95,3%</td><td class="td-c">4</td><td class="td-c">4,7%</td></tr>
+          <tr><td class="negrito">Lucineia Felix</td><td class="td-c">70</td><td class="td-c">60</td><td class="td-c">85,7%</td><td class="td-c">10</td><td class="td-c">14,3%</td></tr>
+          <tr><td class="negrito">Patrícia Carvalho</td><td class="td-c">78</td><td class="td-c">65</td><td class="td-c">83,3%</td><td class="td-c">13</td><td class="td-c">16,7%</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total</td><td class="td-c negrito">319</td><td class="td-c negrito">292</td><td class="td-c negrito">91,5%</td><td class="td-c negrito">27</td><td class="td-c negrito">8,5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alerta alerta-verm"><strong>Nenhum dos quatro CSMs converteu a campanha.</strong> A diferença está na higienização do pipeline: Lucineia (14,3%) e Patrícia (16,7%) marcaram parte dos negócios sem retorno como perdidos, enquanto Gian (4,7%) e, principalmente, Guilherme (0,0%) deixaram praticamente toda a carteira em aberto sem atualização de status.</div>
+
+    <p class="sub-titulo">Onde as oportunidades estão paradas (apenas em aberto)</p>
+    <p style="font-size:12px;color:var(--cinza);margin:-4px 0 12px;"><strong>Nota:</strong> "Oportunidades - Negociações da Base" é a fase inicial em que a oportunidade entra automaticamente na importação da campanha — ainda não houve contato iniciado pelo CSM. As demais fases (Contato, 2º Contato, Aguardando, Negociação) indicam que houve algum nível de abordagem.</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>CSM</th><th>Fase atual</th><th class="td-c">Qtd</th><th class="td-c">Dias médios na fase</th><th class="td-c">Máximo (dias)</th></tr></thead>
+        <tbody>
+          <tr style="border-left:4px solid #0033CC;"><td class="negrito" style="color:#0033CC;">Gian Luca</td><td>Contato</td><td class="td-c">60</td><td class="td-c">8</td><td class="td-c">8</td></tr>
+          <tr style="border-left:4px solid #0033CC;"><td class="negrito" style="color:#0033CC;">Gian Luca</td><td>Oportunidades - Negociações da Base</td><td class="td-c">12</td><td class="td-c">12</td><td class="td-c">12</td></tr>
+          <tr style="border-left:4px solid #0033CC;"><td class="negrito" style="color:#0033CC;">Gian Luca</td><td>2º Contato</td><td class="td-c">7</td><td class="td-c">12</td><td class="td-c">14</td></tr>
+          <tr style="border-left:4px solid #0033CC;"><td class="negrito" style="color:#0033CC;">Gian Luca</td><td>Aguardando</td><td class="td-c">3</td><td class="td-c">12</td><td class="td-c">14</td></tr>
+          <tr style="border-left:4px solid #4338CA;"><td class="negrito" style="color:#4338CA;">Guilherme Camargo</td><td>Oportunidades - Negociações da Base</td><td class="td-c">54</td><td class="td-c">13</td><td class="td-c negrito" style="color:var(--verm);">34</td></tr>
+          <tr style="border-left:4px solid #4338CA;"><td class="negrito" style="color:#4338CA;">Guilherme Camargo</td><td>Contato</td><td class="td-c">31</td><td class="td-c negrito" style="color:var(--laranja);">27</td><td class="td-c">27</td></tr>
+          <tr style="border-left:4px solid #0A7C4E;"><td class="negrito" style="color:#0A7C4E;">Lucineia Felix</td><td>Contato</td><td class="td-c">28</td><td class="td-c">14</td><td class="td-c">28</td></tr>
+          <tr style="border-left:4px solid #0A7C4E;"><td class="negrito" style="color:#0A7C4E;">Lucineia Felix</td><td>Oportunidades - Negociações da Base</td><td class="td-c">28</td><td class="td-c">12</td><td class="td-c">12</td></tr>
+          <tr style="border-left:4px solid #0A7C4E;"><td class="negrito" style="color:#0A7C4E;">Lucineia Felix</td><td>2º Contato</td><td class="td-c">4</td><td class="td-c">10</td><td class="td-c">14</td></tr>
+          <tr style="border-left:4px solid #B45309;"><td class="negrito" style="color:#B45309;">Patrícia Carvalho</td><td>Contato</td><td class="td-c">62</td><td class="td-c">13</td><td class="td-c">28</td></tr>
+          <tr style="border-left:4px solid #B45309;"><td class="negrito" style="color:#B45309;">Patrícia Carvalho</td><td>2º Contato</td><td class="td-c">2</td><td class="td-c">1</td><td class="td-c">1</td></tr>
+          <tr style="border-left:4px solid #B45309;"><td class="negrito" style="color:#B45309;">Patrícia Carvalho</td><td>Negociação</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alerta alerta-laranja"><strong>Guilherme concentra o maior tempo parado:</strong> 54 oportunidades em "Negociações da Base" há até 34 dias, e 31 em fase de "Contato" há até 27 dias, sem nenhuma marcada como perdida — indicando falta de higienização de pipeline, não necessariamente falta de contato inicial.</div>
+
+    <p class="sub-titulo">Motivos de perda — apenas campanha Waipe e Deploy (27 casos)</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Motivo</th><th class="td-c">Gian</th><th class="td-c">Guilherme</th><th class="td-c">Lucineia</th><th class="td-c">Patrícia</th><th class="td-c">Total</th></tr></thead>
+        <tbody>
+          <tr><td>Cliente cancelado</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">5</td><td class="td-c negrito">9</td></tr>
+          <tr><td>Interesse futuro</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c">—</td><td class="td-c negrito">4</td></tr>
+          <tr><td>Contratou outro software</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">2</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Sem retorno</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Não há mais demanda</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Sem contato</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Cliente já foi renovado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Não quis especificar o motivo</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Contrato inativo</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">1</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total</td><td class="td-c negrito">4</td><td class="td-c negrito">0</td><td class="td-c negrito">10</td><td class="td-c negrito">13</td><td class="td-c negrito">27</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Fechamentos com Waipe — plano contratado</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>CSM</th><th>Cliente</th><th>Plano Waipe</th><th>Tipo</th><th class="td-r">Valor do negócio</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Gian Luca</td><td>Alf Comércio de Correias e Mangueiras</td><td><span class="chip chip-ultra">Enterprise</span></td><td>Renovação + Upsell + Crossell</td><td class="td-r">R$ 1.745,75</td></tr>
+          <tr><td class="negrito">Lucineia Felix</td><td>Serlimp Comércio e Industrialização</td><td><span class="chip chip-ultra">Enterprise</span></td><td>Crossell (Waipe puro)</td><td class="td-r">R$ 1.200,00</td></tr>
+          <tr><td class="negrito">Guilherme Camargo</td><td>Cite Nacibe Comércio de Conservas</td><td><span class="chip chip-ok">Time</span></td><td>Upsell + Crossell</td><td class="td-r">R$ 715,90</td></tr>
+          <tr><td class="negrito">Guilherme Camargo</td><td>Ivan Alex Manduca</td><td><span class="chip chip-ok">Time</span></td><td>Upsell + Crossell</td><td class="td-r">R$ 625,60</td></tr>
+          <tr><td class="negrito">Lucineia Felix</td><td>Martins & Trovo Materiais Elétricos</td><td><span class="chip chip-ok">Time</span></td><td>Upsell (individual → time)</td><td class="td-r">R$ 150,00</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="graf-grid" style="grid-template-columns:1fr;">
+      <div class="graf-box">
+        <p class="graf-titulo">Fechamentos por tipo de plano Waipe</p>
+        <div style="position:relative;height:180px;">
+          <canvas id="chartWaipePlano" role="img" aria-label="Fechamentos Waipe por plano: Enterprise 2; Time 3; Individual 0">Enterprise 2; Time 3; Individual 0</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="alerta alerta-verde"><strong>5 fechamentos com Waipe no mês, nenhum plano Individual</strong> — 3 fecharam no plano Time (Cite Nacibe, Ivan Alex, Martins & Trovo) e 2 no Enterprise (Alf, Serlimp), os dois maiores tickets do grupo. Todos vieram de negociações orgânicas de upsell/crossell/renovação, não da campanha dedicada.</div>
+  </section>
+
+  <!-- RANKING -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Ranking dos CSMs</h2></div>
+      <p class="sec-desc">Guilherme lidera o mês. Gian mantém a super meta mesmo após o downsell registrado na carteira. Patrícia foi a única a ficar abaixo da meta individual.</p>
+    </div>
+
+    <div class="csm-grid">
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Guilherme Camargo</p><span class="csm-nivel-chip">Super meta · 3%</span></div>
+          <div class="csm-pos"><span class="medalha">🥇</span><span class="pos-label">1° lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR incremental</span><span class="mrr-bloco-val">R$ 2.006,85</span></div>
+          <div class="csm-prog-row"><span>Super meta R$ 1.587</span><span>127%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">13 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 154,37</span></div>
+          <div class="csm-linha"><span class="k">Maior deal</span><span class="v">R$ 715,90</span></div>
+        </div>
+      </div>
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Gian Luca</p><span class="csm-nivel-chip">Super meta · 3%</span></div>
+          <div class="csm-pos"><span class="medalha">🥈</span><span class="pos-label">2° lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR líquido</span><span class="mrr-bloco-val">R$ 1.951,45</span></div>
+          <div class="csm-prog-row"><span>Super meta R$ 1.587</span><span>123%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">12 negócios</span></div>
+          <div class="csm-linha"><span class="k">Downsell</span><span class="v" style="color:var(--verm);">−R$ 399,03</span></div>
+          <div class="csm-linha"><span class="k">Maior deal</span><span class="v">R$ 1.745,75</span></div>
+        </div>
+      </div>
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Lucineia Felix</p><span class="csm-nivel-chip">Super meta · 3%</span></div>
+          <div class="csm-pos"><span class="medalha">🥉</span><span class="pos-label">3° lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR incremental</span><span class="mrr-bloco-val">R$ 1.818,60</span></div>
+          <div class="csm-prog-row"><span>Super meta R$ 1.587</span><span>115%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">9 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 202,07</span></div>
+          <div class="csm-linha"><span class="k">Maior deal</span><span class="v">R$ 1.200,00</span></div>
+        </div>
+      </div>
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Patrícia Carvalho</p><span class="csm-nivel-chip">Abaixo da meta</span></div>
+          <div class="csm-pos"><span class="csm-pos-num">4°</span><span class="pos-label">lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR incremental</span><span class="mrr-bloco-val">R$ 405,32</span></div>
+          <div class="csm-prog-row"><span>Meta R$ 1.058</span><span>38%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:38%;background:var(--verm);"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">10 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 40,53</span></div>
+          <div class="csm-linha"><span class="k">Mix</span><span class="v">100% renovação</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="alerta alerta-verde"><strong>Gian teve o maior deal do mês</strong> (R$ 1.745,75 — Alf Comércio) e manteve a super meta mesmo com o downsell de R$ 399,03 na carteira.</div>
+    <div class="alerta alerta-laranja"><strong>Patrícia ficou abaixo da meta individual (38%)</strong> — mês sem nenhum upsell ou crossell, apenas renovações de baixo ticket (R$ 40,53 em média). Também teve o maior número de perdidos da equipe (11), a maioria ligada à campanha Waipe e Deploy — mas, ao contrário de Gian e Guilherme, foi quem mais higienizou a própria base marcando os negócios sem retorno como perdidos.</div>
+  </section>
+
+  <!-- PERDIDOS -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Pipeline</p><h2 class="sec-titulo">Negócios perdidos</h2></div>
+      <p class="sec-desc">31 perdidos no mês — quase a metade (15) vem da campanha Waipe e Deploy, que segue com 292 oportunidades em aberto sem resolução (ver seção dedicada acima).</p>
+    </div>
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Total</p><p class="num-val verm">31</p><p class="num-sub">44 WON no período</p></div>
+      <div class="num-card"><p class="num-label">Contratou outro software</p><p class="num-val verm">8</p><p class="num-sub">maior motivo</p></div>
+      <div class="num-card"><p class="num-label">Cliente cancelado</p><p class="num-val" style="color:var(--laranja);">5</p><p class="num-sub">irreversível</p></div>
+      <div class="num-card"><p class="num-label">Campanha Waipe (agosto)</p><p class="num-val verm">15</p><p class="num-sub">de 319 importadas — ver seção acima</p></div>
+    </div>
+
+    <p class="sub-titulo">Motivos de perda por CSM</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead>
+          <tr><th>Motivo</th><th class="td-c">Guilherme</th><th class="td-c">Gian</th><th class="td-c">Lucineia</th><th class="td-c">Patrícia</th><th class="td-c">Total</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Contratou outro software</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">2</td><td class="td-c">4</td><td class="td-c negrito">8</td></tr>
+          <tr><td>Cliente cancelado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">4</td><td class="td-c negrito">5</td></tr>
+          <tr><td>Sem retorno</td><td class="td-c">2</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Interesse futuro</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Preço alto</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Cliente já foi renovado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Não quis especificar o motivo</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Sem contato</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Downsell</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Não há mais demanda</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">1</td></tr>
+          <tr><td>CNPJ será baixado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Contrato inativo</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">1</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total de perdidos</td><td class="td-c negrito">2</td><td class="td-c negrito">7</td><td class="td-c negrito">11</td><td class="td-c negrito">11</td><td class="td-c negrito">31</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="alerta alerta-verm"><strong>Lucineia e Patrícia concentram 22 dos 31 perdidos (71%)</strong> — a maior parte ligada à campanha Waipe e Deploy, que teve conversão zero para ambas.</div>
+      <div class="alerta alerta-verde"><strong>Guilherme teve apenas 2 perdidos no mês</strong> — a menor taxa de perda da equipe, com a maior eficiência de conversão entre os CSMs.</div>
+    </div>
+  </section>
+
+  <!-- HISTÓRICO -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Histórico — março a agosto</h2></div>
+      <p class="sec-desc">Agosto interrompe a curva de crescimento contínuo observada desde março — primeira queda de MRR do período.</p>
+    </div>
+    <div class="hist-wrap">
+      <div class="hist-row">
+        <div class="hist-cell hist-head">Indicador</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Março</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Abril</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Maio</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Junho</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Julho</div>
+        <div class="hist-cell hist-head" style="text-align:center;">Agosto</div>
+      </div>
+      <div class="hist-row"><div class="hist-cell hist-mes">MRR equipe</div><div class="hist-cell hist-val">R$ 4.589</div><div class="hist-cell hist-val">R$ 7.592</div><div class="hist-cell hist-val">R$ 7.928</div><div class="hist-cell hist-val">R$ 10.897</div><div class="hist-cell hist-val">R$ 11.029</div><div class="hist-cell hist-val hist-agosto" style="color:var(--verm);">R$ 6.182</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">Nível</div><div class="hist-cell td-c"><span class="chip chip-info">Meta</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ok">Super</span></div><div class="hist-cell td-c hist-agosto"><span class="chip chip-info">Meta</span></div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">WON</div><div class="hist-cell hist-val">109</div><div class="hist-cell hist-val">204</div><div class="hist-cell hist-val">196</div><div class="hist-cell hist-val">244</div><div class="hist-cell hist-val">179</div><div class="hist-cell hist-val hist-agosto">44</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">LOST</div><div class="hist-cell hist-val">48</div><div class="hist-cell hist-val">29</div><div class="hist-cell hist-val">63</div><div class="hist-cell hist-val">33</div><div class="hist-cell hist-val">40</div><div class="hist-cell hist-val hist-agosto">31</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">Meta base equipe</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 3.564</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 2.968</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 2.861</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 3.710</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 6.918</div><div class="hist-cell hist-val hist-agosto" style="color:var(--cinza);">R$ 4.232</div></div>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="alerta alerta-laranja"><strong>Primeira queda de MRR desde o início do programa de metas.</strong> Volume de negócios caiu de 179 para 44 — uma redução muito maior que a de MRR, sugerindo concentração em negócios de maior valor (upsell/crossell) e menos volume de renovações no período.</div>
+      <div class="alerta alerta-azul"><strong>A meta base de agosto (R$ 4.232) é menor que a de julho (R$ 6.918)</strong> — ajuste que amorteceu o impacto da queda de volume sobre o nível de equipe atingido.</div>
+    </div>
+  </section>
+
+</div>
+<div class="rodape">Londrisoft Customer Success · Fechamento Mensal CSM · Agosto 2026 · Uso interno</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  const gridColor = '#E2E8F0';
+  const tickColor = '#64748B';
+
+  new Chart(document.getElementById('chartMixValor'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Upsell', 'Crossell', 'Renovação', 'Reativação'],
+      datasets: [{ data: [43.6, 33.2, 19.2, 3.9], backgroundColor: ['#0033CC','#4338CA','#94A3B8','#0A7C4E'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10 } }, tooltip: { callbacks: { label: c => c.label + ': ' + c.raw + '%' } } }
+    }
+  });
+
+  new Chart(document.getElementById('chartMixQtd'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Renovação', 'Upsell', 'Crossell', 'Reativação'],
+      datasets: [{ data: [30, 8, 5, 1], backgroundColor: ['#94A3B8','#0033CC','#4338CA','#0A7C4E'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10,
+            generateLabels: (chart) => {
+              const data = chart.data;
+              const total = data.datasets[0].data.reduce((a,b) => a+b, 0);
+              return data.labels.map((label, i) => {
+                const val = data.datasets[0].data[i];
+                const pct = (val/total*100).toFixed(1);
+                return {
+                  text: `${label}: ${val} (${pct}%)`,
+                  fillStyle: data.datasets[0].backgroundColor[i],
+                  index: i
+                };
+              });
+            }
+          }
+        },
+        tooltip: { callbacks: { label: c => { const total = c.dataset.data.reduce((a,b)=>a+b,0); return c.label + ': ' + c.raw + ' negócios (' + (c.raw/total*100).toFixed(1) + '%)'; } } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartWaipePlano'), {
+    type: 'bar',
+    data: {
+      labels: ['Enterprise', 'Time', 'Individual'],
+      datasets: [{ data: [2, 3, 0], backgroundColor: ['#4338CA', '#0033CC', '#94A3B8'], borderRadius: 4, maxBarThickness: 40 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw + ' fechamento' + (c.raw === 1 ? '' : 's') } } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, stepSize: 1 }, beginAtZero: true },
+        y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 12 } } }
+      }
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento Atendimento — Agosto 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2; --branco:#FFFFFF;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .back-link{ display:inline-block; font-size:12px; color:rgba(255,255,255,.55); text-decoration:none; margin-bottom:16px; }
+  .back-link:hover{ color:#fff; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:44px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:30px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.azul { color:var(--azul2); }
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); } .chip-ok { background:var(--verde-cl); color:var(--verde); } .chip-info { background:var(--azul-cl); color:var(--azul2); }
+  .motivos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .motivo-item { background:#fff; border:1px solid var(--brd); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:14px; }
+  .motivo-num { font-size:28px; font-weight:800; min-width:36px; line-height:1; }
+  .motivo-txt b { font-size:13px; font-weight:700; display:block; margin-bottom:1px; }
+  .motivo-txt span { font-size:11px; color:var(--cinza); }
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:170px repeat(3,1fr); }
+  .hist-cell { padding:10px 14px; font-size:12px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:11px; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-junho { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+  .chip { display:inline-block; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; vertical-align:middle; }
+  .chip-laranja{ background:var(--lar-cl); color:var(--laranja); }
+  .chip-verm{ background:var(--verm-cl); color:var(--verm); }
+  .chip-alta{ background:var(--verm-cl); color:var(--verm); }
+  .chip-media{ background:var(--lar-cl); color:var(--laranja); }
+  .chip-baixa{ background:var(--azul-cl); color:var(--azul2); }
+  .evento-box{ margin-top:12px; padding:10px 12px; background:var(--lar-cl); border-left:3px solid var(--laranja); border-radius:6px; font-size:11.5px; color:#78350F; line-height:1.5; }
+  .reco-check{ width:16px; height:16px; cursor:pointer; accent-color: var(--azul2); }
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+  /* --- ranking bars (novo para Atendimento) --- */
+  .rank-box{ background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px 18px; }
+  .rank-box-titulo{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cinza); margin-bottom:12px; }
+  .rank-row{ display:grid; grid-template-columns:98px 1fr 56px; align-items:center; gap:10px; margin-bottom:9px; }
+  .rank-row:last-child{ margin-bottom:0; }
+  .rank-nome{ font-size:12px; font-weight:600; color:var(--preto); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rank-track{ background:var(--cinza-cl); border-radius:4px; height:10px; overflow:hidden; }
+  .rank-fill{ height:100%; border-radius:4px; background:linear-gradient(90deg,var(--azul2),#6366F1); }
+  .rank-fill.verm{ background:linear-gradient(90deg,#DC2626,#F87171); }
+  .rank-val{ text-align:right; font-size:12px; font-weight:700; color:var(--preto); font-variant-numeric:tabular-nums; }
+  .rank-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  /* --- quote cards --- */
+  .quote-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .quote-card{ background:#fff; border:1px solid var(--brd); border-radius:10px; padding:13px 16px; border-left:3px solid var(--azul2); }
+  .quote-card.satisfeito{ border-left-color:var(--verde); }
+  .quote-card.insatisfeito{ border-left-color:var(--verm); }
+  .quote-autor{ font-size:12px; font-weight:700; color:var(--azul2); margin-bottom:5px; }
+  .quote-card.satisfeito .quote-autor{ color:var(--verde); }
+  .quote-card.insatisfeito .quote-autor{ color:var(--verm); }
+  .quote-texto{ font-size:12.5px; color:var(--preto); line-height:1.55; }
+  /* --- bar chart vertical --- */
+  .bar-chart{ display:flex; align-items:flex-end; gap:10px; height:150px; padding:16px 8px 0; border-bottom:1px solid var(--brd); background:#fff; border:1px solid var(--brd); border-top:none; border-radius:0 0 10px 10px; }
+  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .bar-fill{ width:100%; max-width:34px; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#6366F1,var(--azul2)); }
+  .bar-val{ font-size:10px; font-weight:700; color:var(--preto); margin-bottom:4px; }
+  .bar-wrap{ background:linear-gradient(90deg,var(--azul1),var(--azul2)); border-radius:10px 10px 0 0; padding:8px 14px; }
+  .bar-wrap-titulo{ font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.06em; }
+  .bar-labels{ display:flex; gap:10px; padding:6px 8px 0; }
+  .bar-label-col{ flex:1; text-align:center; font-size:10px; color:var(--cinza); }
+  @media(max-width:700px) {
+    .hist-row { grid-template-columns:100px repeat(3,1fr); font-size:11px; }
+    .hist-cell { padding:8px 8px; }
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .motivos-grid { grid-template-columns:1fr; }
+    .rank-grid2 { grid-template-columns:1fr; }
+    .quote-grid { grid-template-columns:1fr; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:30px; }
+  }
+</style>
+<style>
+.tag-ausencia{display:inline-block;padding:2px 8px;border-radius:4px;font-size:7.5pt;font-weight:700;background:#FEF3C7;color:#92400E;margin-right:4px}
+.tag-inst{display:inline-block;padding:2px 8px;border-radius:4px;font-size:7.5pt;font-weight:700;background:#FEE2E2;color:#7B1010;margin-right:4px}
+.aus-card{border:1px solid #E8EDF2;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.aus-nome{font-size:10pt;font-weight:700;color:#1F4E79;margin-bottom:4px}
+.aus-dias{font-size:8pt;color:#6B7280;line-height:1.6}
+.aus-impacto{background:#FFFBEB;border:.5px solid #FCD34D;border-radius:4px;padding:5px 8px;font-size:7.5pt;color:#78350F;margin-top:6px}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <a href="https://diretoriocs.vercel.app/fechamentos.html" class="back-link">← Voltar aos Fechamentos</a>
+      <p class="hero-eyebrow">Londrisoft · Atendimento</p>
+      <h1 class="hero-titulo">Fechamento<span>Agosto 2026</span></h1>
+      <p class="hero-desc">Mês marcado por ausências simultâneas e instabilidade do Servidor Zero. Menor volume de chat em 5 meses.</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado do mês</p>
+      <div class="panel-destaque">
+        <div><span class="dk">CSAT geral</span><div class="dv">89,0%</div></div>
+        <div class="dpct"><strong>equipe completa</strong><span>chat + telefone</span></div>
+      </div>
+      <div class="panel-item"><span>Chat válidos</span><strong>1.052</strong></div>
+      <div class="panel-item"><span>Ligações recebidas (base)</span><strong>187</strong></div>
+      <div class="panel-item"><span>Taxa atendimento telefone</span><strong>80,7%</strong></div>
+      <div class="panel-item"><span>TMA chat / TME agente</span><strong>38min 54s / 1min 30s*</strong></div>
+      <div class="evento-box">⚠ <strong>Agosto:</strong> 9 ausências-dia no mês (Thalyta 5x, Jaqueline 3x, Alexsandro 1x) e instabilidade Servidor Zero em 03/08.</div>
+    </div>
+  </div>
+</section>
+
+<main class="conteudo">
+
+<!-- ── 1. COMPARATIVO ──────────────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Evolução mensal — abril a agosto</h2></div>
+    <p class="sec-desc">Agosto registra o menor volume de chat em 5 meses (1.052 conv.) e queda no CSAT (89,0% vs 92,4% em julho). O TMA continua abaixo de 40min para a maioria. A queda é explicada pelas ausências acumuladas e a instabilidade do dia 03/08.</p>
+  </div>
+
+  <div class="hist-wrap">
+    <div class="hist-row" style="grid-template-columns:170px repeat(5,1fr)">
+      <div class="hist-cell hist-head">Indicador</div>
+      <div class="hist-cell hist-head">Abril</div>
+      <div class="hist-cell hist-head">Maio</div>
+      <div class="hist-cell hist-head">Junho</div>
+      <div class="hist-cell hist-head">Julho</div>
+      <div class="hist-cell hist-head hist-julho">Agosto ★</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:170px repeat(5,1fr)">
+      <div class="hist-cell hist-mes">CSAT geral</div>
+      <div class="hist-cell hist-val">89,1%</div>
+      <div class="hist-cell hist-val">90,5%</div>
+      <div class="hist-cell hist-val">88,2%</div>
+      <div class="hist-cell hist-val">92,4%</div>
+      <div class="hist-cell hist-val hist-julho">89,0% ▼</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:170px repeat(5,1fr)">
+      <div class="hist-cell hist-mes">TMA chat</div>
+      <div class="hist-cell hist-val">59min 51s</div>
+      <div class="hist-cell hist-val">43min</div>
+      <div class="hist-cell hist-val">1h 52min ⚠</div>
+      <div class="hist-cell hist-val">44min</div>
+      <div class="hist-cell hist-val hist-julho">38min 54s ▲</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:170px repeat(5,1fr)">
+      <div class="hist-cell hist-mes">TME agente</div>
+      <div class="hist-cell hist-val">1min 28s</div>
+      <div class="hist-cell hist-val">5min 09s</div>
+      <div class="hist-cell hist-val">1min 26s</div>
+      <div class="hist-cell hist-val">1min 24s</div>
+      <div class="hist-cell hist-val hist-julho">~1min 30s</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:170px repeat(5,1fr)">
+      <div class="hist-cell hist-mes">Chat válidos</div>
+      <div class="hist-cell hist-val">1.392</div>
+      <div class="hist-cell hist-val">1.192</div>
+      <div class="hist-cell hist-val">1.460</div>
+      <div class="hist-cell hist-val">1.178</div>
+      <div class="hist-cell hist-val hist-julho">1.052 ▼</div>
+    </div>
+  </div>
+  <p style="font-size:11px;color:var(--cinza);margin-top:5px">* TME agente = média ponderada do tempo de 1ª resposta individual. TME total (fila + agente) = 12min 26s segundo Octadesk.</p>
+  <div class="evento-box" style="margin-top:8px">⚠ Volume caiu 126 conversas vs julho. Com 9 ausências-dia redistribuídas (~99 conversas), equipe operou abaixo da capacidade total por aproximadamente 10 dias no mês.</div>
+</section>
+
+<!-- ── 2. CHAT POR ATENDENTE ──────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Chat — conversas por atendente</h2></div>
+    <p class="sec-desc">1.052 conversas. Jaqueline lidera com o melhor TMA (27min), seguida de Daniel Vitor (31min) — ambos dentro da meta de &lt;40min. Daniel tem o menor TME (43s). Alexsandro com TMA elevado (56min), possivelmente absorbendo complexidade adicional durante ausências dos colegas.</p>
+  </div>
+
+  <div class="rank-grid2" style="margin-bottom:16px">
+    <div class="rank-box">
+      <p class="rank-box-titulo">Volume de conversas</p>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">312</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline <span style="font-size:9px;color:#B45309">3 aus.</span></span><div class="rank-track"><div class="rank-fill" style="width:87%"></div></div><span class="rank-val">271</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro <span style="font-size:9px;color:#B45309">1 aus.</span></span><div class="rank-track"><div class="rank-fill" style="width:80%"></div></div><span class="rank-val">250</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta <span style="font-size:9px;color:#B45309">5 aus.</span></span><div class="rank-track"><div class="rank-fill" style="width:66%;background:var(--laranja)"></div></div><span class="rank-val">206</span></div>
+    </div>
+    <div class="rank-box">
+      <p class="rank-box-titulo">TMA por atendente</p>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:51%;background:var(--verde)"></div></div><span class="rank-val" style="color:var(--verde)">31min</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:70%"></div></div><span class="rank-val">43min</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:44%;background:var(--verde)"></div></div><span class="rank-val" style="color:var(--verde)">27min</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:93%;background:var(--verm)"></div></div><span class="rank-val" style="color:var(--verm)">56min</span></div>
+    </div>
+  </div>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead><tr><th>Atendente</th><th>Conversas</th><th>%</th><th>TMA agente</th><th>TME (1ª resp.)</th><th>CSAT</th></tr></thead>
+      <tbody>
+        <tr><td class="negrito">Daniel Vitor</td><td class="td-r">312</td><td class="td-r">29,66%</td><td class="td-r" style="color:var(--verde)">31min 09s ✓</td><td class="td-r">0min 43s</td><td class="td-r"><span class="chip chip-wn">88,98%</span></td></tr>
+        <tr><td class="negrito">Jaqueline <span class="tag-ausencia">3 dias</span></td><td class="td-r">271</td><td class="td-r">25,76%</td><td class="td-r" style="color:var(--verde)">27min ✓</td><td class="td-r">1min 39s</td><td class="td-r"><span class="chip chip-ok">93,26%</span></td></tr>
+        <tr><td class="negrito">Alexsandro <span class="tag-ausencia">1 dia</span></td><td class="td-r">250</td><td class="td-r">23,76%</td><td class="td-r" style="color:var(--verm)">56min 51s ⚠</td><td class="td-r">1min 22s</td><td class="td-r"><span class="chip chip-er">81,33%</span></td></tr>
+        <tr><td class="negrito">Thalyta <span class="tag-ausencia">5 dias</span></td><td class="td-r">206</td><td class="td-r">19,58%</td><td class="td-r">42min 38s</td><td class="td-r">2min 40s</td><td class="td-r"><span class="chip chip-ok">92,06%</span></td></tr>
+        <tr style="background:var(--cinza-cl)"><td class="negrito">TOTAL / MÉDIA</td><td class="td-r">1.052</td><td class="td-r">100%</td><td class="td-r negrito">38min 54s</td><td class="td-r negrito">~1min 30s</td><td class="td-r"><span class="chip chip-wn">89,02%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerta alerta-laranja" style="margin-top:8px">
+    ⚠ <strong>Alexsandro — TMA 56min e CSAT 81,33%:</strong> pior desempenho individual do mês. Provavelmente resultado direto de sobrecarga durante ausências simultâneas (17/08: ele e Thalyta ausentes na mesma semana que Jaqueline saiu). Com 3 agentes operando e mais carga por cabeça, os casos complexos ficaram com ele. CSAT de 81,33% é o único abaixo de 90% no mês.
+  </div>
+</section>
+
+<!-- ── 3. TELEFONE ────────────────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Canal telefone</p><h2 class="sec-titulo">Telefone — Issabel</h2></div>
+    <p class="sec-desc">Taxa de atendimento de 80,7% — queda em relação a julho (91,1%). Os dias de ausência simultânea foram os de maior impacto no telefone, com taxas caindo até 67%.</p>
+  </div>
+
+  <div class="rank-grid2" style="margin-bottom:14px">
+    <div class="rank-box">
+      <p class="rank-box-titulo">Atendidas por agente</p>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">40</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:67%"></div></div><span class="rank-val">27</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:65%"></div></div><span class="rank-val">26</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:65%"></div></div><span class="rank-val">26</span></div>
+    </div>
+    <div class="rank-box">
+      <p class="rank-box-titulo">TMA telefone por agente</p>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:50%;background:var(--verde)"></div></div><span class="rank-val" style="color:var(--verde)">9:58</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:70%"></div></div><span class="rank-val">13:53</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:96%;background:var(--laranja)"></div></div><span class="rank-val" style="color:var(--laranja)">19:03</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:97%;background:var(--laranja)"></div></div><span class="rank-val" style="color:var(--laranja)">19:08</span></div>
+    </div>
+  </div>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead><tr><th>Classificação</th><th class="td-r">Qtd</th><th class="td-r">% base</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Atendidas</strong></td><td class="td-r" style="color:var(--laranja);font-weight:700">151</td><td class="td-r">80,7%</td></tr>
+        <tr><td>Desistência por fila (≥30s)</td><td class="td-r">10</td><td class="td-r">5,3%</td></tr>
+        <tr><td>Não atendidas</td><td class="td-r">26</td><td class="td-r">13,9%</td></tr>
+        <tr><td>Desistência imediata (&lt;30s) — excluída</td><td class="td-r">374</td><td class="td-r">—</td></tr>
+        <tr style="background:var(--cinza-cl)"><td class="negrito">Base de cálculo</td><td class="td-r negrito">187</td><td class="td-r">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerta alerta-laranja" style="margin-top:8px">
+    ⚠ Taxa de atendimento caiu de 91,1% (julho) para 80,7% (agosto). TMA de Jaqueline (19:03) e Thalyta (19:08) estão acima da meta de 15min — provavelmente reflexo de casos mais complexos chegando ao telefone quando o chat estava sobrecarregado.
+  </div>
+</section>
+
+<!-- ── 4. AUSÊNCIAS ───────────────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Gestão de equipe</p><h2 class="sec-titulo">Ausências — impacto operacional</h2></div>
+    <p class="sec-desc">Agosto teve 9 ausências-dia distribuídas entre 3 atendentes, com dois episódios críticos de ausência simultânea (17/08 e semana de 19–21/08). Impacto estimado de ~99 conversas redistribuídas.</p>
+  </div>
+
+  <div class="num-grid" style="margin-bottom:14px">
+    <div class="num-card"><p class="num-label">Total ausências-dia</p><p class="num-val wn">9</p><p class="num-sub">mês de 24 dias úteis</p></div>
+    <div class="num-card"><p class="num-label">Thalyta</p><p class="num-val verm">5 dias</p><p class="num-sub">07, 10, 17, 26, 27/08</p></div>
+    <div class="num-card"><p class="num-label">Jaqueline</p><p class="num-val wn">3 dias</p><p class="num-sub">19, 20, 21/08 (consecutivos)</p></div>
+    <div class="num-card"><p class="num-label">Alexsandro</p><p class="num-val">1 dia + 1h</p><p class="num-sub">17/08 dayoff + 26/08 exame</p></div>
+    <div class="num-card"><p class="num-label">Daniel Vitor</p><p class="num-val">2h</p><p class="num-sub">25/08 exame médico</p></div>
+    <div class="num-card"><p class="num-label">Conversas redistribuídas</p><p class="num-val wn">~99</p><p class="num-sub">estimativa sobre capacidade</p></div>
+  </div>
+
+  <!-- Linha do tempo de ausências -->
+  <div class="rank-box" style="margin-bottom:12px">
+    <p class="rank-box-titulo">Calendário de ausências — agosto 2026</p>
+    <table style="font-size:8pt;margin:0">
+      <thead><tr><th>Data</th><th class="al">Tipo</th><th class="al">Quem</th><th class="al">Agentes disponíveis</th><th class="td-r">Impacto tel. (tx. atend.)</th></tr></thead>
+      <tbody>
+        <tr><td>07/08 (sex)</td><td class="al"><span class="tag-ausencia">Justificada</span></td><td class="al">Thalyta</td><td class="al">Daniel, Jaqueline, Alexsandro</td><td class="td-r">—</td></tr>
+        <tr><td>10/08 (seg)</td><td class="al"><span class="tag-ausencia">Dayoff</span></td><td class="al">Thalyta</td><td class="al">Daniel, Jaqueline, Alexsandro</td><td class="td-r">—</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>17/08 (seg)</strong></td><td class="al"><span class="tag-ausencia">Dayoff+Falta</span></td><td class="al"><strong>Alexsandro + Thalyta</strong></td><td class="al">Daniel, Jaqueline — apenas 2 agentes</td><td class="td-r" style="color:var(--verde)">100% (12/12) ✓</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>19/08 (qua)</strong></td><td class="al"><span class="tag-ausencia">Justificada</span></td><td class="al"><strong>Jaqueline</strong></td><td class="al">Daniel, Alexsandro, Thalyta</td><td class="td-r" style="color:var(--laranja)">88% (14/16)</td></tr>
+        <tr style="background:#FEE2E2"><td><strong>20/08 (qui)</strong></td><td class="al"><span class="tag-ausencia">Justificada</span></td><td class="al"><strong>Jaqueline</strong></td><td class="al">Daniel, Alexsandro, Thalyta</td><td class="td-r" style="color:var(--verm)">67% (4/6) ⚠</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>21/08 (sex)</strong></td><td class="al"><span class="tag-ausencia">Justificada</span></td><td class="al"><strong>Jaqueline</strong></td><td class="al">Daniel, Alexsandro, Thalyta</td><td class="td-r" style="color:var(--laranja)">75% (6/8)</td></tr>
+        <tr><td>25/08 (ter)</td><td class="al"><span class="tag-ausencia">Médico 2h</span></td><td class="al">Daniel Vitor</td><td class="al">3 agentes (parcial)</td><td class="td-r">—</td></tr>
+        <tr><td>26/08 (qua)</td><td class="al"><span class="tag-ausencia">Médico 1h + Just.</span></td><td class="al">Alexsandro (1h) + Thalyta</td><td class="al">Daniel, Jaqueline (parcial)</td><td class="td-r">—</td></tr>
+        <tr><td>27/08 (qui)</td><td class="al"><span class="tag-ausencia">Justificada</span></td><td class="al">Thalyta</td><td class="al">Daniel, Jaqueline, Alexsandro</td><td class="td-r">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="alerta alerta-azul">
+    <strong>📊 Análise do impacto:</strong><br>
+    <strong>17/08 (ausência dupla simultânea):</strong> apesar de apenas 2 agentes disponíveis, o telefone manteve 100% de atendimento (12/12). A equipe absorveu bem a crise de um dia — provável redistribuição eficiente de carga.<br><br>
+    <strong>19–21/08 (Jaqueline ausente 3 dias consecutivos):</strong> impacto progressivo e mais grave no telefone — taxa caiu de 88% para 67% em 20/08. A ausência prolongada é mais difícil de absorver que a pontual. Alexsandro com carga extra nessa semana possivelmente explica seu TMA elevado (56min) no chat.<br><br>
+    <strong>Thalyta (5 ausências distribuídas):</strong> volume total de 206 conversas — estimativa de ~55 conv. que foram redistribuídas aos colegas. Sua presença fragmentada ao longo do mês dificulta manutenção de ritmo e entrega consistente.
+  </div>
+</section>
+
+<!-- ── 5. INSTABILIDADE ───────────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Causa-raiz</p><h2 class="sec-titulo">Instabilidade — 03/08 Servidor Zero</h2></div>
+    <p class="sec-desc">Uma instabilidade em agosto: Servidor Zero no dia 03/08. Impacto moderado no telefone; chat sem dados específicos mas dia figurou entre os maiores do mês.</p>
+  </div>
+
+  <div class="num-grid" style="margin-bottom:14px">
+    <div class="num-card"><p class="num-label">Data</p><p class="num-val azul">03/08</p><p class="num-sub">segunda-feira</p></div>
+    <div class="num-card"><p class="num-label">Sistema</p><p class="num-val" style="font-size:12pt">Servidor Zero</p><p class="num-sub">instabilidade interna</p></div>
+    <div class="num-card"><p class="num-label">Tel. válidas</p><p class="num-val">15</p><p class="num-sub">maior dia do mês no tel.</p></div>
+    <div class="num-card"><p class="num-label">Tel. atendidas</p><p class="num-val verde">12 (80%)</p><p class="num-sub">taxa normal do mês</p></div>
+    <div class="num-card"><p class="num-label">Tel. TMA</p><p class="num-val">10min 07s</p><p class="num-sub">abaixo da média mensal</p></div>
+  </div>
+
+  <div class="tabela-wrap" style="margin-bottom:12px">
+    <table>
+      <thead><tr><th>Dia</th><th>Sistema</th><th class="td-r">Tel. válidas</th><th class="td-r">Atendidas</th><th class="td-r">% atend.</th><th class="td-r">TMA tel.</th></tr></thead>
+      <tbody>
+        <tr><td><strong>03/08 ⚠</strong></td><td>Servidor Zero</td><td class="td-r"><strong>15</strong></td><td class="td-r">12</td><td class="td-r">80%</td><td class="td-r">10min 07s</td></tr>
+        <tr style="background:var(--cinza-cl)"><td>Média mês</td><td>—</td><td class="td-r">~8/dia</td><td class="td-r">~6/dia</td><td class="td-r">80,7%</td><td class="td-r">14min 26s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="analise">
+    <strong>Padrão: impacto moderado, equipe absorveu bem.</strong><br><br>
+    O Servidor Zero gerou o maior volume de ligações do mês (15 válidas em um único dia). A taxa de atendimento de 80% manteve-se na média mensal e o TMA de 10:07 ficou abaixo da média — sinal de que a equipe comunicou rapidamente a instabilidade e encerrou as ligações com resposta padronizada.<br><br>
+    Ao contrário das instabilidades de julho (Sefaz e Servidor em dias consecutivos), a de agosto foi isolada e em segunda-feira — o que pode ter contribuído para o volume elevado (clientes relatando o problema logo na abertura da semana). Sem concentração excessiva em horários específicos, a equipe conseguiu absorver sem comprometer a taxa de atendimento.<br><br>
+    Em agosto, o maior impacto operacional veio das <strong>ausências</strong>, não da instabilidade — diferente dos meses anteriores onde instabilidades sistêmicas eram o fator dominante.
+  </div>
+  <div class="nota-verd">✅ <strong>Ponto positivo:</strong> apenas 1 instabilidade em agosto, versus 4 em julho. A redução de eventos sistêmicos foi um fator positivo, parcialmente compensado pelo aumento de ausências humanas.</div>
+</section>
+
+<!-- ── 6. CSAT ─────────────────────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Qualidade</p><h2 class="sec-titulo">Satisfação (CSAT)</h2></div>
+    <p class="sec-desc">CSAT de 89,02% — queda de 3,4 pontos vs julho (92,4%). Jaqueline lidera com 93,26% mesmo com 3 ausências. Alexsandro com CSAT de 81,33% — único abaixo de 90% no mês.</p>
+  </div>
+
+  <div class="num-grid" style="margin-bottom:14px">
+    <div class="num-card"><p class="num-label">CSAT geral</p><p class="num-val wn">89,02%</p><p class="num-sub">equipe (jul: 92,4%)</p></div>
+    <div class="num-card"><p class="num-label">Melhor CSAT</p><p class="num-val verde">93,26%</p><p class="num-sub">Jaqueline</p></div>
+    <div class="num-card"><p class="num-label">Pior CSAT</p><p class="num-val verm">81,33%</p><p class="num-sub">Alexsandro — abaixo de 90%</p></div>
+  </div>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead><tr><th>Atendente</th><th class="td-r">Conversas</th><th class="td-r">CSAT</th><th class="td-r">Ausências</th></tr></thead>
+      <tbody>
+        <tr><td class="negrito">Jaqueline</td><td class="td-r">271</td><td class="td-r"><span class="chip chip-ok">93,26%</span></td><td class="td-r">3 dias</td></tr>
+        <tr><td class="negrito">Thalyta</td><td class="td-r">206</td><td class="td-r"><span class="chip chip-ok">92,06%</span></td><td class="td-r">5 dias</td></tr>
+        <tr><td class="negrito">Daniel Vitor</td><td class="td-r">312</td><td class="td-r"><span class="chip chip-wn">88,98%</span></td><td class="td-r">2h (médico)</td></tr>
+        <tr><td class="negrito">Alexsandro</td><td class="td-r">250</td><td class="td-r"><span class="chip chip-er">81,33%</span></td><td class="td-r">1 dia + 1h</td></tr>
+        <tr style="background:var(--cinza-cl)"><td class="negrito">EQUIPE</td><td class="td-r negrito">1.052</td><td class="td-r"><span class="chip chip-wn">89,02%</span></td><td class="td-r">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerta alerta-laranja" style="margin-top:8px">⚠ A correlação entre CSAT de Alexsandro (81,33%) e sua sobrecarga durante ausências simultâneas sugere que o problema foi estrutural, não individual. Com TMA de 56min (mais que o dobro de Daniel e Jaqueline), ele operou acima de sua capacidade ideal em semanas críticas.</div>
+</section>
+
+<!-- ── 7. PICOS ────────────────────────────────────────────────────────── -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Demanda</p><h2 class="sec-titulo">Picos de demanda — telefone</h2></div>
+    <p class="sec-desc">Dados de volume do canal telefone (Issabel). O dia 03/08 (Servidor Zero) foi o de maior volume. O impacto das ausências nos dias 19–21/08 é visível na queda da taxa de atendimento.</p>
+  </div>
+  <div class="motivos-grid">
+    <div class="motivo-item"><span class="motivo-num" style="color:var(--verm)">15</span><div class="motivo-txt"><b>03/08 ⚠ Servidor Zero</b><span>Maior dia no telefone — 12 atendidas (80%)</span></div></div>
+    <div class="motivo-item"><span class="motivo-num">13</span><div class="motivo-txt"><b>05/08 (qua)</b><span>2º maior dia no telefone</span></div></div>
+    <div class="motivo-item"><span class="motivo-num">13</span><div class="motivo-txt"><b>13/08 (qui)</b><span>Empate no 2º lugar</span></div></div>
+    <div class="motivo-item"><span class="motivo-num">16</span><div class="motivo-txt"><b>19/08 ⚠ Jaqueline aus.</b><span>Maior vol. diário total — 14 atend. (88%)</span></div></div>
+    <div class="motivo-item"><span class="motivo-num" style="color:var(--verm)">67%</span><div class="motivo-txt"><b>20/08 — Pior dia do mês</b><span>Jaqueline aus. 2º dia consecutivo — 4/6 atend.</span></div></div>
+    <div class="motivo-item"><span class="motivo-num">12</span><div class="motivo-txt"><b>17/08 ⚠ Ausência dupla</b><span>Alexsandro+Thalyta — 12/12 atend. (100%) ✓</span></div></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="rodape">
+  Londrisoft Customer Success · Fechamento Mensal Atendimento · Agosto 2026 · Uso interno
+</footer>
+</body>
+</html>
