@@ -962,9 +962,14 @@
   // Mesma allowlist do backend (_lib/clickup.js, ISM_OPCOES) — ids de usuario
   // real do ClickUp, nao texto livre. Duplicado de proposito, igual outras
   // opcoes espelhadas entre front e servidor neste projeto.
+  // linkAgenda = "Horário de agendamento" nativo do Google Calendar de cada
+  // ISM (lê a agenda real da pessoa e já cria o Meet sozinho — a sincronização
+  // ClickUp -> Google tem bug conhecido do lado do ClickUp, então agendar
+  // direto por aqui é o caminho confiável; a reserva abaixo vira só o
+  // registro de qual horário/link ficou combinado, pra referência do projeto).
   var ISM_OPCOES = [
-    { id: 118125102, nome: "Bruno Vaz" },
-    { id: 48933858, nome: "Erica Fernanda" }
+    { id: 118125102, nome: "Bruno Vaz", linkAgenda: "https://calendar.app.google/hJxRUZAzrF6EhPEr8" },
+    { id: 48933858, nome: "Erica Fernanda", linkAgenda: null }
   ];
 
   function renderIsmPicker(containerId, label, idsAtuais, onChange){
@@ -1276,9 +1281,20 @@
     '</div>';
   }
 
+  function agendaGoogleLinksHtml(){
+    var comLink = ISM_OPCOES.filter(function(o){ return o.linkAgenda; });
+    if (!comLink.length) return "";
+    return '<div class="callout" style="margin-top:0; margin-bottom:14px;"><div class="dot"></div><div>' +
+      '<b>Prefira agendar direto na agenda do ISM</b> — lê o horário real dele e já cria o Meet sozinho (a sincronização ClickUp → Google Calendar tem bug conhecido do lado do ClickUp, por isso não é confiável hoje). Depois, registre aqui embaixo o horário combinado e cole o link do Meet, só pra ficar salvo neste projeto.<br>' +
+      comLink.map(function(o){ return '<a href="' + esc(o.linkAgenda) + '" target="_blank" rel="noopener">Agenda de ' + esc(o.nome) + ' ↗</a>'; }).join(' · ') +
+      '</div></div>';
+  }
+
   function formNovaReservaHtml(){
     return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
-      '<div class="sp-k">Nova reserva</div>' +
+      agendaGoogleLinksHtml() +
+      '<div class="sp-k">Registrar reserva</div>' +
+      '<div class="hint" style="margin-bottom:6px;">Depois de agendar na agenda do Google, registre aqui o horário combinado (fica salvo neste projeto e, quando possível, também vira uma task no ClickUp).</div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
         '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
         '<select class="form-input" id="novaReservaIsm" style="width:auto;">' +
@@ -1290,7 +1306,7 @@
         '<input type="time" class="form-input" id="novaReservaHoraIni" style="width:auto;">' +
         '<span style="font-size:12px; color:var(--muted);">até</span>' +
         '<input type="time" class="form-input" id="novaReservaHoraFim" style="width:auto;">' +
-        '<button type="button" class="btn-flow-secondary" id="btnReservarHorario" style="width:auto;">Reservar horário</button>' +
+        '<button type="button" class="btn-flow-secondary" id="btnReservarHorario" style="width:auto;">Registrar reserva</button>' +
       '</div>' +
       '<div id="reservaErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
     '</div>';
@@ -1354,8 +1370,8 @@
       var reservas = (resp.reservas || []).filter(function(r){ return r.projetoId === projetoId; })
         .sort(function(a, b){ return (a.inicio || 0) - (b.inicio || 0); });
       container.innerHTML = '<div class="card"><h2>📅 Agenda</h2>' +
-        '<div class="sub">Reserva o horário do ISM — sincroniza sozinho pra Google Calendar dele. O link do Meet é colado depois, à mão.</div>' +
-        (reservas.length ? reservas.map(reservaHtml).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário reservado ainda.</div>') +
+        '<div class="sub">Registro dos horários combinados com o ISM para este projeto.</div>' +
+        (reservas.length ? reservas.map(reservaHtml).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário registrado ainda.</div>') +
         formNovaReservaHtml() +
       '</div>';
       wireAgenda(projetoId, container);
