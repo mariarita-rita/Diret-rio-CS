@@ -2641,7 +2641,7 @@
         salvarRascunho();
         mostrarModalSucesso(
           "Proposta salva",
-          'Encontrável em "Projetos em Andamento" como Aguardando Fechamento. O formulário desta simulação vai ser limpo pra começar a próxima.',
+          'Pode ser recarregada a qualquer momento em "Carregar proposta salva", aqui nesta mesma aba, pra ajustar o que foi fechado até confirmar — ela só aparece em "Projetos em Andamento" depois de confirmada. O formulário desta simulação vai ser limpo pra começar a próxima.',
           function(){ limparRascunho(); window.location.reload(); }
         );
       }).catch(function(e){
