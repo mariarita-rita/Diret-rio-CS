@@ -734,13 +734,21 @@ const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
 // tag manual editada pelo CSM, independente do checklist. FASE_ITEM_PADRAO
 // entra em todo item novo; "cancelado" nao conta como pendencia pro derivado
 // do projeto (ver derivarFaseProjeto).
-const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'aguardando_cliente', 'aguardando_interno', 'cancelado', 'entregue']);
+const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'em_andamento', 'aguardando_cliente', 'aguardando_interno', 'cancelado', 'entregue']);
 const FASE_ITEM_PADRAO = 'nao_iniciado';
 
 /**
  * Fase do PROJETO como um todo: automatica (derivada das fases dos itens +
  * do estagio do Waipe), mas com override manual (faseProjetoManual) sempre
  * que o CSM quiser forcar um valor diferente do calculado.
+ *
+ * "aguardando_interno" NUNCA e o resultado automatico daqui — so chega nesse
+ * valor se algum item foi manualmente marcado assim pelo ISM (ver
+ * FASES_ITEM_VALIDAS/seletor de fase no front). O motivo: "aguardando
+ * interno" significa um bloqueio tecnico real, dependente de outra equipe —
+ * nao "tem trabalho em andamento". O fallback de "tem item mexido mas nada
+ * concluido/bloqueado/esperando cliente" e "em_andamento", nao um alarme
+ * falso de bloqueio.
  */
 function derivarFaseProjeto(fases) {
   if (!fases.length) return FASE_ITEM_PADRAO;
@@ -749,7 +757,7 @@ function derivarFaseProjeto(fases) {
   if (fases.some((f) => f === 'aguardando_cliente')) return 'aguardando_cliente';
   if (fases.some((f) => f === 'aguardando_interno')) return 'aguardando_interno';
   if (!relevantes.length || relevantes.every((f) => f === FASE_ITEM_PADRAO)) return FASE_ITEM_PADRAO;
-  return 'aguardando_interno';
+  return 'em_andamento';
 }
 
 /** Fase do "item Waipe" (sintetico — nao e uma subtask propria) a partir da Camada 1 + progresso de entrega, pra entrar na derivacao acima. */
@@ -758,7 +766,7 @@ function faseWaipeDerivada(estadoProjeto, totalAgentes) {
   const camada1Pronta = !!(estadoProjeto.camada1Checks && estadoProjeto.camada1Checks['0'] && estadoProjeto.camada1Checks['1']);
   if (!camada1Pronta) return FASE_ITEM_PADRAO;
   const concluidos = Array.isArray(estadoProjeto.concluidos) ? estadoProjeto.concluidos.length : 0;
-  return concluidos >= totalAgentes ? 'entregue' : 'aguardando_interno';
+  return concluidos >= totalAgentes ? 'entregue' : 'em_andamento';
 }
 
 // Jornada (checklist) por produto — passos concretos, documentados pelo
@@ -1124,6 +1132,14 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
   if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
     payload.status = corpo.status;
+  } else if (projeto.status?.status === 'pendente') {
+    // O status nativo do ClickUp nunca era tocado por aqui — ficava preso em
+    // "pendente" pra sempre, mesmo com etapa/camada1/prioridade avançando.
+    // Qualquer chamada aqui já significa que alguém começou a mexer no
+    // projeto: sobe pra "in progress" sozinho, sem exigir um clique manual
+    // só pra isso (só na primeira vez — não sobrescreve outros status como
+    // "agendado"/"concluído" já setados manualmente).
+    payload.status = 'in progress';
   }
   if (Array.isArray(corpo.ism)) {
     payload.assignees = sanearAssignees(corpo.ism);
@@ -1196,6 +1212,12 @@ async function atualizarAgenteAcao(req, res, sessao) {
   }
 
   await atualizarTask(corpo.taskId, payload);
+  // Mesmo raciocinio de atualizar-implantacao: mexer no checklist/progresso de
+  // QUALQUER item/agente já tira o projeto do "pendente" — sobe o PROJETO
+  // (nao esta subtask) pra "in progress" sozinho, só na primeira vez.
+  if (projeto.status?.status === 'pendente') {
+    await atualizarTask(projeto.id, { status: 'in progress' }).catch(() => {});
+  }
   return res.status(200).json({ ok: true });
 }
 

@@ -899,15 +899,19 @@
 
   // Fase de acompanhamento (item da lista unificada, ou o projeto como um
   // todo) — mesmo vocabulário nos dois níveis.
+  // "Aguardando interno" é só bloqueio técnico real (depende de outra equipe/
+  // área) — nunca é calculado sozinho, só quando o ISM marca manualmente (ver
+  // derivarFaseProjeto em api/clickup.js). Trabalho normal em andamento usa
+  // "em_andamento", pra não soar como alarme de bloqueio.
   var FASE_LABEL = {
-    nao_iniciado: "Não iniciado", aguardando_cliente: "Aguardando cliente",
-    aguardando_interno: "Aguardando interno", cancelado: "Cancelado", entregue: "Entregue"
+    nao_iniciado: "Não iniciado", em_andamento: "Em andamento", aguardando_cliente: "Aguardando cliente",
+    aguardando_interno: "Aguardando interno (bloqueio)", cancelado: "Cancelado", entregue: "Entregue"
   };
   var FASE_TAG_CLASS = {
-    nao_iniciado: "neutro", aguardando_cliente: "cliente",
-    aguardando_interno: "londrisoft", cancelado: "perigo", entregue: "ambos"
+    nao_iniciado: "neutro", em_andamento: "londrisoft", aguardando_cliente: "cliente",
+    aguardando_interno: "perigo", cancelado: "perigo", entregue: "ambos"
   };
-  var FASES_ORDEM = ["nao_iniciado", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
+  var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
 
   // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
   function apiGet(action, params){
@@ -1125,10 +1129,12 @@
           : "";
         var statusCor = p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)");
         var statusDot = '<span title="Status: ' + esc(STATUS_LABEL[p.status] || p.status || "—") + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
+        var pct = p.agentesTotal ? Math.round((p.agentesConcluidos / p.agentesTotal) * 100) : 0;
         return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
           '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + '</div>' +
-          '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) + ' · ' + p.agentesConcluidos + '/' + p.agentesTotal + ' agentes entregues' +
+          '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
           (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
+          (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
         '</div>';
       }).join("");
     }
@@ -1317,8 +1323,7 @@
           '<div class="stepper" id="stepper"></div>' +
           '<div id="stepContent"></div>' +
         '</main>' +
-        '<aside class="project-detail-sidebar" aria-label="Resumo operacional do projeto">' +
-          '<div id="projetoResumoSidebar"></div>' +
+        '<aside class="project-detail-sidebar" aria-label="Agenda e comentários do projeto">' +
           '<div id="agendaProjetoWrap"></div>' +
           '<div id="comentariosProjetoWrap"></div>' +
         '</aside>' +
@@ -1329,30 +1334,9 @@
       itemAtual = null;
       renderProjetosPanel();
     });
-    renderResumoProjetoSidebar();
     renderComentarios(dadosProjeto.projeto.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
     renderAgenda(dadosProjeto.projeto.id, document.getElementById("agendaProjetoWrap"));
     renderConteudoProjeto();
-  }
-
-  function renderResumoProjetoSidebar(){
-    if (!dadosProjeto) return;
-    var p = dadosProjeto.projeto;
-    var el = document.getElementById("projetoResumoSidebar");
-    if (!el) return;
-    el.innerHTML = '<div class="card project-summary-card">' +
-      '<h2>Resumo do projeto</h2>' +
-      '<div class="sp-k">Fase do projeto</div>' +
-      '<div>' + seletorFaseProjeto(p) + '</div>' +
-      '<div class="sp-k">Contexto</div>' +
-      '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>' +
-      '<div id="ismProjetoWrap"></div>' +
-    '</div>';
-    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
-    var selFaseProjeto = el.querySelector("[data-projeto-fase]");
-    if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
-      persistirFaseProjeto(selFaseProjeto.value || null);
-    });
   }
 
   // Dispatcher de 2º nível, dentro de um projeto já aberto: lista unificada
@@ -1523,7 +1507,6 @@
       faseProjetoManual: faseProjetoManual
     }).then(function(){
       dadosProjeto.projeto.faseProjetoManual = faseProjetoManual;
-      renderResumoProjetoSidebar();
       renderListaItens();
     }).catch(function(){ showSimToast("Não deu para salvar a fase do projeto."); });
   }
@@ -1683,7 +1666,15 @@
     var p = dadosProjeto.projeto;
     var agentes = agentesReais();
     var solucoes = solucoesFechadas();
-    var html = '<div class="card">' +
+    var html = '<div class="card project-summary-card">' +
+      '<h2>Resumo do projeto</h2>' +
+      '<div class="sp-k">Fase do projeto</div>' +
+      '<div>' + seletorFaseProjeto(p) + '</div>' +
+      '<div class="sp-k">Contexto</div>' +
+      '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>' +
+      '<div id="ismProjetoWrap"></div>' +
+    '</div>' +
+    '<div class="card">' +
       '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
       '<div class="agent-pick-grid">' +
         solucoes.map(function(o){
@@ -1701,6 +1692,11 @@
       '</div>' +
     '</div>';
     document.getElementById("stepContent").innerHTML = html;
+    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
+    var selFaseProjeto = document.querySelector("[data-projeto-fase]");
+    if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
+      persistirFaseProjeto(selFaseProjeto.value || null);
+    });
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");

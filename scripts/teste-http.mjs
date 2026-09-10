@@ -1766,9 +1766,10 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   const estadoProjeto = { etapaAtual: 'alinhamento', prioridade: ['tAgente1'], agenteAtualId: 'tAgente1', concluidos: [], agentesTotal: 1 };
   const estadoAgente = { estrutura: { nome: 'Guardião X', frente: 'Cobranca' }, buildChecks: {}, testChecks: {}, entregaChecks: {} };
 
+  let statusProjetoAtual = 'pendente';
   const taskProjeto = () => ({
     id: 'tProjeto', name: 'Cliente X — Implantação Waipe', list: { id: LISTA },
-    status: { status: 'pendente' }, parent: null, subtasks: [{ id: 'tAgente1' }],
+    status: { status: statusProjetoAtual }, parent: null, subtasks: [{ id: 'tAgente1' }],
     description: descProjeto(estadoProjeto),
   });
   const taskAgente = () => ({
@@ -1873,6 +1874,7 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   checar('atualizar-implantacao: 200', [atualizarOk.code, atualizarOk.corpo.ok], [200, true]);
   const escritaProjeto = escritas.find((e) => e.alvo === 'projeto');
   checar('  grava etapaAtual no bloco de estado', escritaProjeto.body.markdown_description.includes('"etapaAtual":"construcao"'), true);
+  checar('  projeto "pendente" sobe pra "in progress" sozinho (1a interacao)', escritaProjeto.body.status, 'in progress');
   const atualizarEtapaInvalida = await chamarAcao(GIAN, 'POST', 'atualizar-implantacao', { body: { id: 'tProjeto', etapaAtual: 'xyz' } });
   checar('atualizar-implantacao: etapa invalida -> 400', [atualizarEtapaInvalida.code, atualizarEtapaInvalida.corpo.code], [400, 'etapa_invalida']);
   const atualizarOutroCsm = await chamarAcao(PATRICIA, 'POST', 'atualizar-implantacao', {
@@ -1889,9 +1891,20 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   const escritaAgente = escritas.find((e) => e.alvo === 'agente');
   checar('  grava buildChecks', escritaAgente.body.markdown_description.includes('"passo1":true'), true);
   checar('  preserva a estrutura ja salva', escritaAgente.body.markdown_description.includes('"frente":"Cobranca"'), true);
-  checar('  grava status', escritaAgente.body.status, 'in progress');
+  checar('  grava status (da subtask, explicito no corpo)', escritaAgente.body.status, 'in progress');
+  const escritaProjetoViaAgente = escritas.find((e) => e.alvo === 'projeto');
+  checar('  mexer no agente TAMBEM sobe o PROJETO pai pra "in progress"', escritaProjetoViaAgente?.body.status, 'in progress');
   const atualizarAgenteOutroCsm = await chamarAcao(PATRICIA, 'POST', 'atualizar-agente', { body: { taskId: 'tAgente1', buildChecks: {} } });
   checar('atualizar-agente: posse pelo pai, csm errado -> 403', [atualizarAgenteOutroCsm.code, atualizarAgenteOutroCsm.corpo.code], [403, 'fora_da_carteira']);
+
+  // projeto ja fora de "pendente" (ex: concluído manualmente, ou ja tinha
+  // subido antes): mexer em mais um agente NAO reabre/sobrescreve o status.
+  statusProjetoAtual = 'concluído';
+  escritas.length = 0;
+  const atualizarAgenteProjetoConcluido = await chamarAcao(GIAN, 'POST', 'atualizar-agente', { body: { taskId: 'tAgente1', buildChecks: { passo2: true } } });
+  checar('atualizar-agente com projeto concluído: 200', [atualizarAgenteProjetoConcluido.code, atualizarAgenteProjetoConcluido.corpo.ok], [200, true]);
+  checar('  NAO reabre o projeto pra "in progress"', escritas.some((e) => e.alvo === 'projeto'), false);
+  statusProjetoAtual = 'pendente';
 
   // comentar-implantacao: consulta nao pode, texto vazio 400, dono posta
   const comentarConsulta = await chamarAcao(CONSULTA, 'POST', 'comentar-implantacao', { body: { taskId: 'tAgente1', texto: 'oi' } });
