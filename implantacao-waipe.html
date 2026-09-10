@@ -1523,6 +1523,21 @@
     }).catch(function(){ showSimToast("Não deu para salvar os dados do cliente."); });
   }
 
+  function iniciarConversaUmbler(botao){
+    if (!dadosProjeto) return;
+    var textoOriginal = botao.textContent;
+    botao.disabled = true;
+    botao.textContent = "Abrindo conversa...";
+    apiPost("iniciar-conversa-umbler", { id: dadosProjeto.projeto.id }).then(function(){
+      showSimToast("Conversa criada no Utalk — abra o app pra continuar.");
+    }).catch(function(e){
+      showSimToast(mensagemErro(e) || "Não deu para iniciar a conversa no Utalk.");
+    }).then(function(){
+      botao.disabled = false;
+      botao.textContent = textoOriginal;
+    });
+  }
+
   function fmtDataHoraSim(ms){
     if (!ms) return "";
     try {
@@ -1695,6 +1710,7 @@
         '<div class="form-field"><label>Telefone</label><input type="text" class="form-input" id="cliTelefone" value="' + esc(p.telefone || "") + '"></div>' +
       '</div>' +
       '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosCliente" style="margin-top:6px;">Salvar dados do cliente</button>' +
+      '<button type="button" class="btn-flow-secondary" id="btnIniciarConversaUmbler" style="margin-top:6px;margin-left:8px;">💬 Iniciar conversa no Utalk</button>' +
     '</div>' +
     '<div class="card">' +
       '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
@@ -1727,6 +1743,10 @@
         email: document.getElementById("cliEmail").value.trim(),
         telefone: document.getElementById("cliTelefone").value.trim()
       });
+    });
+    var btnIniciarConversaUmbler = document.getElementById("btnIniciarConversaUmbler");
+    if (btnIniciarConversaUmbler) btnIniciarConversaUmbler.addEventListener("click", function(){
+      iniciarConversaUmbler(btnIniciarConversaUmbler);
     });
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){

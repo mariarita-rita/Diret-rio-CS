@@ -104,6 +104,17 @@ const stubGoogle = `
 `;
 const googleLibUrl = dataUrl(stubGoogle);
 
+// Stub padrao do modulo Umbler: nenhuma acao existente chama isto (so
+// iniciar-conversa-umbler usa) — existe so pra satisfazer o import.
+const stubUmbler = `
+  export class ErroUmbler extends Error { constructor(s){ super('u'); this.status = s; } }
+  export class ErroConfigUmbler extends Error {}
+  export function telefoneParaE164() { return null; }
+  export async function garantirContato() { return 'stub-contato'; }
+  export async function garantirConversa() { return 'stub-chat'; }
+`;
+const umblerLibUrl = dataUrl(stubUmbler);
+
 const carregar = (arquivo) =>
   import(
     dataUrl(
@@ -112,6 +123,7 @@ const carregar = (arquivo) =>
         .replace("'./_lib/auth.js'", `'${authUrl}'`)
         .replace("'./_lib/clickup.js'", `'${clickupLibUrl}'`)
         .replace("'./_lib/google.js'", `'${googleLibUrl}'`)
+        .replace("'./_lib/umbler.js'", `'${umblerLibUrl}'`)
     )
   ).then((m) => m.default);
 
@@ -128,7 +140,7 @@ const libClickupUnica = (tag) => dataUrl(ler('api/_lib/clickup.js') + `\n// vari
 
 /** Como carregar(), mas com o _lib/clickup.js REAL em vez do stub. `libGoogleUrl`
  * opcional troca tambem o _lib/google.js (default: mesmo stub de carregar()). */
-const carregarCom = (arquivo, libClickupUrl, libGoogleUrl = googleLibUrl) =>
+const carregarCom = (arquivo, libClickupUrl, libGoogleUrl = googleLibUrl, libUmblerUrl = umblerLibUrl) =>
   import(
     dataUrl(
       ler(arquivo)
@@ -136,11 +148,14 @@ const carregarCom = (arquivo, libClickupUrl, libGoogleUrl = googleLibUrl) =>
         .replace("'./_lib/auth.js'", `'${authUrl}'`)
         .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
         .replace("'./_lib/google.js'", `'${libGoogleUrl}'`)
+        .replace("'./_lib/umbler.js'", `'${libUmblerUrl}'`)
     )
   ).then((m) => m.default);
 
 /** data: URL do _lib/google.js real, UNICA por variante (mesmo motivo de libClickupUnica). */
 const libGoogleUnica = (tag) => dataUrl(ler('api/_lib/google.js') + `\n// variante:${tag}\n`);
+/** data: URL do _lib/umbler.js real, UNICA por variante (mesmo motivo de libClickupUnica). */
+const libUmblerUnica = (tag) => dataUrl(ler('api/_lib/umbler.js') + `\n// variante:${tag}\n`);
 
 // ── Harness ───────────────────────────────────────────────────────────────
 
@@ -2539,6 +2554,114 @@ console.log('\n[39] criar-reserva com ISM conectado ao Google: freebusy real + M
   // Erica NAO tem Google conectado: comportamento identico ao de sempre (sem Meet, sem checar freebusy)
   const semGoogle = await chamarAcao('criar-reserva', { titulo: 'Treinamento', ismId: ERICA, inicio: INICIO, fim: INICIO + UMA_HORA });
   checar('ISM sem Google conectado: 200 sem linkReuniao (fallback identico ao de hoje)', [semGoogle.code, semGoogle.corpo.linkReuniao], [200, null]);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[40] iniciar-conversa-umbler: cria contato + abre conversa no Umbler Talk (sem mandar mensagem)');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.UMBLER_API_TOKEN = 'token-teste';
+  process.env.UMBLER_ORGANIZATION_ID = 'org-teste';
+  process.env.UMBLER_CHANNEL_ID = 'canal-teste';
+
+  const estadoBase = {
+    etapaAtual: 'escopo', prioridade: [], concluidos: [], agentesTotal: 0, camada1Checks: {},
+    telefone: '(43) 90000-0000',
+  };
+  let estadoAtual = estadoBase;
+  let contatoExistente = null; // null = busca por telefone devolve 404
+  let statusCriarContato = 200;
+  let statusCriarChat = 200;
+  let chamadasUmbler = [];
+
+  function respostaJson(status, corpo) {
+    return { ok: status >= 200 && status < 300, status, headers: new Map(), json: async () => corpo, text: async () => '' };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjetoUmbler')) {
+      return respostaJson(200, {
+        id: 'tProjetoUmbler', name: 'Cliente Umbler', list: { id: '901328976497' }, parent: null,
+        description: 'CSM: Gian Luca\n\n' + JSON.stringify(estadoAtual),
+      });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/contacts/phone/')) {
+      chamadasUmbler.push({ tipo: 'busca-telefone' });
+      if (contatoExistente) return respostaJson(200, contatoExistente);
+      return respostaJson(404, { error: 'not found' });
+    }
+    if (metodo === 'POST' && u === 'https://app-utalk.umbler.com/api/v1/contacts/') {
+      chamadasUmbler.push({ tipo: 'criar-contato', body: JSON.parse(init.body) });
+      if (statusCriarContato !== 200) return respostaJson(statusCriarContato, { error: 'falhou' });
+      return respostaJson(200, { contact: { id: 'contato-novo' }, alreadyExisted: false });
+    }
+    if (metodo === 'POST' && u === 'https://app-utalk.umbler.com/api/v1/chats/') {
+      chamadasUmbler.push({ tipo: 'criar-chat', body: JSON.parse(init.body) });
+      if (statusCriarChat !== 200) return respostaJson(statusCriarChat, { error: 'falhou' });
+      return respostaJson(200, { id: 'chat-novo' });
+    }
+    return respostaJson(200, {});
+  };
+
+  const clickupLibUrl = libClickupUnica('umbler');
+  const umblerLibUrlReal = libUmblerUnica('umbler');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrl, umblerLibUrlReal);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const chamarAcao = async (perfil, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action: 'iniciar-conversa-umbler' }, body }, r);
+    return r;
+  };
+
+  const semPermissao = await chamarAcao(CONSULTA, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: consulta -> 403', [semPermissao.code, semPermissao.corpo.code], [403, 'somente_leitura']);
+
+  const outraCarteira = await chamarAcao(PATRICIA, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: csm de outra carteira -> 403', [outraCarteira.code, outraCarteira.corpo.code], [403, 'fora_da_carteira']);
+
+  const idInvalido = await chamarAcao(GESTAO, { id: 'zzz!!' });
+  checar('iniciar-conversa-umbler: id invalido -> 400', [idInvalido.code, idInvalido.corpo.code], [400, 'task_invalida']);
+
+  estadoAtual = { ...estadoBase, telefone: '' };
+  const semTelefone = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: sem telefone cadastrado -> 400', [semTelefone.code, semTelefone.corpo.code], [400, 'telefone_invalido']);
+
+  estadoAtual = estadoBase;
+  chamadasUmbler = [];
+  contatoExistente = null;
+  const criaContatoNovo = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: 200 cria contato novo + abre conversa', [
+    criaContatoNovo.code, criaContatoNovo.corpo.ok, criaContatoNovo.corpo.contactId, criaContatoNovo.corpo.chatId,
+  ], [200, true, 'contato-novo', 'chat-novo']);
+  checar('  telefone normalizado pro E.164', criaContatoNovo.corpo.telefone, '+5543900000000');
+  checar('  chamou criar-contato (nao existia ainda)', chamadasUmbler.some((c) => c.tipo === 'criar-contato'), true);
+
+  chamadasUmbler = [];
+  contatoExistente = { id: 'contato-existente' };
+  const reaproveitaContato = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: 200 reaproveita contato ja existente', [reaproveitaContato.code, reaproveitaContato.corpo.contactId], [200, 'contato-existente']);
+  checar('  NAO chama criar-contato de novo', chamadasUmbler.some((c) => c.tipo === 'criar-contato'), false);
+
+  chamadasUmbler = [];
+  contatoExistente = null;
+  statusCriarContato = 500;
+  const erroUmblerContato = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: erro do Umbler ao criar contato -> 502', [erroUmblerContato.code, erroUmblerContato.corpo.code], [502, 'erro_umbler']);
+  statusCriarContato = 200;
+
+  delete process.env.UMBLER_API_TOKEN;
+  const semConfig = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: configuracao ausente -> 500', [semConfig.code, semConfig.corpo.code], [500, 'umbler_nao_configurado']);
+  process.env.UMBLER_API_TOKEN = 'token-teste';
 
   globalThis.fetch = fetchOriginal;
 }

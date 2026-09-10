@@ -24,6 +24,9 @@ Nunca escreva nenhum destes valores em arquivo do repositório.
 | `GOOGLE_CLIENT_ID`     | OAuth Client ID (Google Cloud Console, tipo "Web application") — conexão da agenda de cada ISM | `xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Client secret da mesma credencial acima                                                       | `GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx` |
 | `GOOGLE_REDIRECT_URI`  | URL completa de `/api/google-oauth-callback` deste ambiente (precisa estar cadastrada como Redirect URI autorizada na credencial) | `https://<domínio-do-ambiente>/api/google-oauth-callback` |
+| `UMBLER_API_TOKEN`       | Token de organização do Umbler Talk, usado por `/api/clickup?action=iniciar-conversa-umbler` | `nome-da-org-AAAA-MM-DD-...--XXXXXXXX...` |
+| `UMBLER_ORGANIZATION_ID` | Id da organização no Umbler Talk (`GET /v1/members/me/` devolve a lista)                      | `AB_12-xyzEXAMPLE` |
+| `UMBLER_CHANNEL_ID`      | Id do canal (número de WhatsApp) usado para iniciar a conversa — hoje o canal "CSQ/ISM"       | `AB_12-xyzEXAMPLE` |
 
 Setup no Google Cloud Console: criar um projeto, ativar a **Google Calendar
 API**, configurar a tela de consentimento OAuth com **Audience = Internal**

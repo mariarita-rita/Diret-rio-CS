@@ -26,6 +26,9 @@
 //   GET  /api/clickup?action=conectar-agenda-google { ismId } -> 302 pro
 //        consentimento OAuth do Google (volta em api/google-oauth-callback.js)
 //   GET  /api/clickup?action=status-google-agenda  { [ismId]: conectado? }
+//   POST /api/clickup?action=iniciar-conversa-umbler { id } -> cria o
+//        contato + abre a conversa no Umbler Talk pro telefone do cliente
+//        desse projeto (não manda mensagem — ver api/_lib/umbler.js)
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -81,6 +84,7 @@ import {
   stringifyWaipeState,
 } from './_lib/clickup.js';
 import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { telefoneParaE164, garantirContato, garantirConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
 // A resposta varia por sessao (filtro por CSM), portanto nao pode ir para o
@@ -134,6 +138,9 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'cancelar-reserva') return await cancelarReservaAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'conectar-agenda-google') return await conectarAgendaGoogleAcao(req, res);
     if (req.method === 'GET' && acao === 'status-google-agenda') return await statusGoogleAgendaAcao(res);
+    if (req.method === 'POST' && acao === 'iniciar-conversa-umbler') {
+      return await iniciarConversaUmblerAcao(req, res, sessao);
+    }
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
@@ -142,7 +149,7 @@ export default async function handler(req, res) {
       'listar-comentarios', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
       'atualizar-reserva', 'cancelar-reserva', 'conectar-agenda-google',
-      'status-google-agenda',
+      'status-google-agenda', 'iniciar-conversa-umbler',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -1198,6 +1205,47 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   return res.status(200).json({ ok: true });
 }
 
+async function iniciarConversaUmblerAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const estado = parseWaipeState(projeto.description);
+  const telefoneE164 = telefoneParaE164(estado.telefone);
+  if (!telefoneE164) {
+    return erro(res, 400, 'telefone_invalido', 'Cadastre um telefone válido do cliente (Resumo do projeto) antes de iniciar a conversa.');
+  }
+
+  const contactId = await garantirContato(telefoneE164, projeto.name);
+  if (!contactId) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu o contato criado.');
+  const chatId = await garantirConversa(contactId);
+  if (!chatId) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu a conversa criada.');
+
+  return res.status(200).json({ ok: true, contactId, chatId, telefone: telefoneE164 });
+}
+
 async function atualizarAgenteAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   if (!podeEscrever(sessao)) {
@@ -1790,6 +1838,14 @@ function tratarErro(res, e, acao) {
     // ISM conectado cai no catch-all generico e mente dizendo "ClickUp".
     console.error(`[clickup] acao=${acao} falha_google=${e.status}:`, JSON.stringify(e.corpo)?.slice(0, 300));
     return erro(res, 502, 'erro_google', 'Falha ao falar com a agenda do Google desse ISM — pode ser token expirado/revogado. Tente reconectar a agenda dele.');
+  }
+  if (e instanceof ErroConfigUmbler) {
+    console.error('[clickup] configuracao Umbler:', e.message);
+    return erro(res, 500, 'umbler_nao_configurado', 'Integração com o Umbler Talk não está configurada no servidor.');
+  }
+  if (e instanceof ErroUmbler) {
+    console.error(`[clickup] acao=${acao} falha_umbler=${e.status}:`, JSON.stringify(e.corpo)?.slice(0, 300));
+    return erro(res, 502, 'erro_umbler', 'Falha ao falar com o Umbler Talk.');
   }
   if (e instanceof ErroUpstream) {
     // 429 tem tratamento proprio: a cota e de 100/min por TOKEN, compartilhada por
