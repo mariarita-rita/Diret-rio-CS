@@ -55,12 +55,12 @@ vez, manualmente, dentro do próprio painel do Umbler Talk:
    `https://<domínio-de-produção>/api/umbler-webhook?token=<UMBLER_WEBHOOK_TOKEN>`.
 2. Evento: **Message**. Canal: o mesmo configurado em `UMBLER_CHANNEL_ID`
    (hoje "CSQ/ISM").
-3. Depois de criado, o endpoint só **loga** o payload recebido por enquanto
-   (`vercel logs` ou a aba de logs do projeto na Vercel) — ainda falta
-   confirmar o formato real de um evento "Message" antes de processar de
-   verdade (casar telefone → projeto e acender o indicador de "mensagem
-   nova" na tela). Mande uma mensagem de teste e avise pra continuarmos essa
-   parte a partir do payload real.
+3. O endpoint já processa de verdade: quando o cliente manda mensagem (não a
+   equipe), no canal certo, casa o telefone com um projeto e grava
+   `ultimaMensagemClienteEm` — é isso que acende o ponto vermelho no card do
+   projeto na lista. Abrir o projeto "consome" o indicador só pra quem abriu
+   (`marcar-conversa-vista`, por identidade — `sessao.nome` — então CSM,
+   gestão e o(s) ISM(s) têm cada um o próprio estado de "já vi").
 
 ### Sessão
 
@@ -90,9 +90,9 @@ Uma variável por perfil. O valor é sempre o **hash**, no formato
 | `AUTH_CSM_LUCINEIA`   | Lucineia Felix    | `csm`      | Lucineia Felix    |
 | `AUTH_CSM_GUILHERME`  | Guilherme Camargo | `csm`      | Guilherme Camargo |
 | `AUTH_CSM_PATRICIA`   | Patricia Carvalho | `csm`      | Patricia Carvalho |
-| `AUTH_ISM_BRUNO`      | Bruno Vaz         | `ism`      | só implantação, só os projetos onde é ISM atribuído |
-| `AUTH_ISM_ERICA`      | Erica Fernanda    | `ism`      | só implantação, só os projetos onde é ISM atribuído |
-| `AUTH_ISM_AUXILIAR`   | Daiane / Aline (senha compartilhada) | `ism` | auxiliar — todos os projetos, agenda de qualquer ISM |
+| `AUTH_ISM_BRUNO`      | Bruno Vaz         | `ism`      | implantação (igual gestão), agenda só a própria |
+| `AUTH_ISM_ERICA`      | Erica Fernanda    | `ism`      | implantação (igual gestão), agenda só a própria |
+| `AUTH_ISM_AUXILIAR`   | Daiane / Aline (senha compartilhada) | `ism` | implantação (igual gestão), agenda de qualquer ISM |
 
 Nível `ism`: sem acesso nenhum a carteira/metas/cliente (dados financeiros) nem
 ao pipeline de proposta (criar/salvar-proposta/confirmar-fechamento — isso é
@@ -100,17 +100,17 @@ trabalho de CSM/gestão). Faz login direto em `implantacao-waipe.html` (tem
 tela de login própria — não depende mais de logar primeiro no
 `dashboard_carteiras.html`).
 
-Duas variantes dentro do nível:
+Dentro da implantação (listar/ver/editar projeto, agentes, comentários,
+conversa do Umbler, IA) **não tem diferença nenhuma entre `ism` e `gestao`** —
+todo `ism` vê e edita TODOS os projetos, atribuídos ou não a ele, igual
+gestão. A única distinção entre as duas variantes do nível é a **agenda**:
 - **ISM responsável** (Bruno, Erica): `ismId` aponta pro id dele em
-  `ISM_OPCOES` (`api/_lib/clickup.js`) — só enxerga/edita os projetos onde
-  esse id está entre os ISMs atribuídos (`pertenceAoIsm`), e só mexe na
-  própria agenda (conectar Google, criar/atualizar/cancelar reserva, vincular
-  agendamento).
+  `ISM_OPCOES` (`api/_lib/clickup.js`) — só mexe na PRÓPRIA agenda (conectar
+  Google, criar/atualizar/cancelar reserva, vincular agendamento).
 - **ISM auxiliar** (Daiane, Aline): `ismId: null` — não é responsável por
-  nenhum projeto (não aparece como opção pra atribuir), mas exatamente por
-  isso não tem escopo nenhum pra restringir: vê todos os projetos e pode
-  mexer na agenda de qualquer ISM (útil pra acompanhar e reagendar clientes
-  em nome de quem estiver de férias/ausente, por exemplo).
+  nenhum projeto (não aparece como opção pra atribuir), e por isso também não
+  tem restrição de agenda: pode mexer na agenda de qualquer ISM (útil pra
+  acompanhar e reagendar clientes em nome de quem estiver de férias/ausente).
 
 Placeholder do valor:
 

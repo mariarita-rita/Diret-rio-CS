@@ -207,17 +207,6 @@ export function pertenceAoCsm(gerente, csm) {
   return normalizarNome(gerente) === alvo;
 }
 
-/**
- * Escopo de leitura/escrita por ISM: o projeto (ou a subtask) precisa ter esse
- * ismId entre os assignees nativos do ClickUp. Mesmo espirito de pertenceAoCsm
- * (sem escopo -> tudo visivel; com escopo -> so bate por igualdade exata),
- * so que contra uma LISTA de ids em vez de comparar texto.
- */
-export function pertenceAoIsm(ismIds, ismId) {
-  if (!ismId) return true;
-  return Array.isArray(ismIds) && ismIds.map(Number).includes(Number(ismId));
-}
-
 // ── Senhas ────────────────────────────────────────────────────────────────
 // Formato armazenado (uma linha por variável de ambiente):
 //   scrypt$<N>$<r>$<p>$<saltBase64>$<hashBase64>

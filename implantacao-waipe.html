@@ -983,6 +983,15 @@
       body: JSON.stringify(body || {})
     }).then(tratarRespostaApi);
   }
+  // Endpoint separado (/api/ia) — mesma sessão, mesmo tratamento de 401.
+  function apiPostIa(action, body){
+    return fetch("/api/ia?action=" + action, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(tratarRespostaApi);
+  }
 
   // ---- Capability `sample` (extração de agentes por IA) ----
   var sampleFn = null;
@@ -997,6 +1006,7 @@
   var projetosCache = null;   // lista de listar-implantacoes (nao filtrada — a mesma pras 2 abas)
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
+  var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
@@ -1201,6 +1211,8 @@
     if (!entregues) renderCompromissosHoje(root.querySelector("#compromissosHojeWrap"));
     var todasCsm = Array.from(new Set((projetosCache || []).map(function(p){ return p.csm; }).filter(Boolean)))
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+    var todasIsm = Array.from(new Set((projetosCache || []).flatMap(function(p){ return p.ism || []; }).filter(Boolean)))
+      .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var lista = (projetosCache || []).filter(function(p){
       // Proposta ainda nao fechada nao e projeto de implantacao de verdade
       // ainda — so aparece/edita pelo simulador ("Carregar proposta salva"),
@@ -1208,19 +1220,27 @@
       if (p.etapaAtual === "proposta") return false;
       if (entregues ? p.status !== "concluído" : p.status === "concluído") return false;
       if (filtroCsmAtivo && p.csm !== filtroCsmAtivo) return false;
+      if (filtroIsmAtivo && !(p.ism || []).includes(filtroIsmAtivo)) return false;
       return true;
     });
     // Só mostra o filtro quando faz diferença — 1 CSM só ou nenhum não precisa.
-    var filtroHtml = todasCsm.length > 1
-      ? '<div style="margin-bottom:12px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por CSM</label>' +
+    var filtroHtml = (todasCsm.length > 1
+      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por CSM</label>' +
         '<select id="filtroCsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroCsmAtivo ? "" : " selected") + '>Todos</option>' +
         todasCsm.map(function(c){ return '<option value="' + esc(c) + '"' + (c === filtroCsmAtivo ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") +
         '</select></div>'
-      : "";
+      : "") +
+      (todasIsm.length > 1
+      ? '<div style="margin-bottom:12px;display:inline-block;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por ISM</label>' +
+        '<select id="filtroIsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value=""' + (filtroIsmAtivo ? "" : " selected") + '>Todos</option>' +
+        todasIsm.map(function(i){ return '<option value="' + esc(i) + '"' + (i === filtroIsmAtivo ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") +
+        '</select></div>'
+      : "");
     if (!lista.length){
       wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
-        (filtroCsmAtivo ? "Nenhum projeto desse CSM aqui." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
+        (filtroCsmAtivo || filtroIsmAtivo ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
         '</div></div>';
     } else {
       wrap.innerHTML = filtroHtml + lista.map(function(p){
@@ -1235,8 +1255,11 @@
         var statusCor = p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)");
         var statusDot = '<span title="Status: ' + esc(STATUS_LABEL[p.status] || p.status || "—") + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
         var pct = p.agentesTotal ? Math.round((p.agentesConcluidos / p.agentesTotal) * 100) : 0;
+        var novaMsgDot = p.temMensagemNova
+          ? '<span title="Mensagem nova do cliente" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
+          : '';
         return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
-          '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + '</div>' +
+          '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + novaMsgDot + '</div>' +
           '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
           (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
           (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
@@ -1249,6 +1272,11 @@
     var selCsm = document.getElementById("filtroCsmProjetos");
     if (selCsm) selCsm.addEventListener("change", function(){
       filtroCsmAtivo = selCsm.value;
+      renderListaProjetosWrap();
+    });
+    var selIsm = document.getElementById("filtroIsmProjetos");
+    if (selIsm) selIsm.addEventListener("change", function(){
+      filtroIsmAtivo = selIsm.value;
       renderListaProjetosWrap();
     });
   }
@@ -1268,6 +1296,12 @@
         camada1Checks: Object.assign({}, resp.projeto.camada1Checks || {})
       };
       renderProjetosPanel();
+      // Abrir o projeto ja "consome" o indicador de mensagem nova PRA QUEM
+      // abriu (por identidade — nao mexe no indicador de mais ninguem, ver
+      // marcar-conversa-vista/temMensagemNovaParaViewer no backend).
+      if (resp.projeto.temMensagemNova) {
+        apiPost("marcar-conversa-vista", { id: id }).catch(function(){});
+      }
     }).catch(function(e){
       var root = projetosRootAtivo();
       if (!root) return;
@@ -1432,6 +1466,7 @@
           '<div id="agendaProjetoWrap"></div>' +
           '<div id="comentariosProjetoWrap"></div>' +
           '<div id="conversaUmblerWrap"></div>' +
+          '<div id="analiseReuniaoWrap"></div>' +
         '</aside>' +
       '</div>';
     document.getElementById("btnVoltarLista").addEventListener("click", function(){
@@ -1442,6 +1477,7 @@
     });
     renderComentarios(dadosProjeto.projeto.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
     renderConversaUmbler(dadosProjeto.projeto.id, document.getElementById("conversaUmblerWrap"));
+    renderAnaliseReuniao(dadosProjeto.projeto.id, document.getElementById("analiseReuniaoWrap"));
     renderAgenda(dadosProjeto.projeto.id, document.getElementById("agendaProjetoWrap"));
     renderConteudoProjeto();
   }
@@ -1747,10 +1783,114 @@
         '<div class="sp-v">Status: <strong>' + statusTxt + '</strong>' + setorTxt + '</div>' +
         '<div class="sp-v">Última mensagem: ' + esc(ultimaTxt) + '</div>' +
         (msgsHtml || '<div class="sub" style="margin-top:8px;">Sem mensagens recentes.</div>') +
+        '<button type="button" class="btn-flow-secondary" id="btnResumirConversaIa" style="margin-top:10px;">🤖 Resumir com IA</button>' +
       '</div>';
+      var btnResumir = document.getElementById("btnResumirConversaIa");
+      if (btnResumir) btnResumir.addEventListener("click", function(){ resumirConversaComIa(btnResumir, projetoId); });
     }).catch(function(){
       container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Não deu para carregar.</div></div>';
     });
+  }
+
+  function resumirConversaComIa(botao, projetoId){
+    var textoOriginal = botao.textContent;
+    botao.disabled = true; botao.textContent = "Resumindo...";
+    apiPostIa("resumir-conversa-umbler", { id: projetoId }).then(function(){
+      showSimToast("Resumo registrado nos comentários do projeto.");
+      var comentariosWrap = document.getElementById("comentariosProjetoWrap");
+      if (comentariosWrap) renderComentarios(projetoId, comentariosWrap, "Comentários do projeto");
+    }).catch(function(e){
+      showSimToast(mensagemErro(e) || "Não deu para resumir a conversa.");
+    }).then(function(){
+      botao.disabled = false; botao.textContent = textoOriginal;
+    });
+  }
+
+  // Transcrição de reunião (kickoff, diagnóstico etc) — sob demanda, igual o
+  // resumo de conversa: registra como comentário marcado, pra o relatório de
+  // finalização ler depois (sem reprocessar a transcrição de novo).
+  function renderAnaliseReuniao(projetoId, container){
+    if (!container) return;
+    container.innerHTML =
+      '<div class="card">' +
+        '<h2>📝 Analisar reunião</h2>' +
+        '<div class="sub">Cole a transcrição de uma reunião (kickoff, diagnóstico etc) pra IA resumir e registrar nos comentários.</div>' +
+        '<button type="button" class="btn-flow-secondary" id="btnAbrirAnaliseReuniao" style="margin-top:8px;">Colar transcrição</button>' +
+        '<div id="analiseReuniaoPainel" style="display:none;margin-top:10px;">' +
+          '<textarea id="analiseReuniaoTexto" class="form-input" rows="5" style="width:100%;" placeholder="Cole aqui a transcrição da reunião..."></textarea>' +
+          '<div style="margin-top:6px;">' +
+            '<button type="button" class="btn-flow-secondary" id="btnAnalisarReuniao">Analisar</button> ' +
+            '<button type="button" class="btn-flow-secondary" id="btnCancelarAnaliseReuniao">Cancelar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    var btnAbrir = document.getElementById("btnAbrirAnaliseReuniao");
+    var painel = document.getElementById("analiseReuniaoPainel");
+    if (btnAbrir) btnAbrir.addEventListener("click", function(){
+      btnAbrir.style.display = "none";
+      painel.style.display = "block";
+    });
+    var btnCancelar = document.getElementById("btnCancelarAnaliseReuniao");
+    if (btnCancelar) btnCancelar.addEventListener("click", function(){
+      painel.style.display = "none";
+      btnAbrir.style.display = "inline-block";
+    });
+    var btnAnalisar = document.getElementById("btnAnalisarReuniao");
+    if (btnAnalisar) btnAnalisar.addEventListener("click", function(){
+      var transcricao = document.getElementById("analiseReuniaoTexto").value.trim();
+      if (transcricao.length < 20){ showSimToast("Cole a transcrição da reunião antes de analisar."); return; }
+      var textoOriginal = btnAnalisar.textContent;
+      btnAnalisar.disabled = true; btnAnalisar.textContent = "Analisando...";
+      apiPostIa("analisar-reuniao-implantacao", { id: projetoId, transcricao: transcricao }).then(function(){
+        showSimToast("Resumo da reunião registrado nos comentários do projeto.");
+        painel.style.display = "none";
+        btnAbrir.style.display = "inline-block";
+        document.getElementById("analiseReuniaoTexto").value = "";
+        var comentariosWrap = document.getElementById("comentariosProjetoWrap");
+        if (comentariosWrap) renderComentarios(projetoId, comentariosWrap, "Comentários do projeto");
+      }).catch(function(e){
+        showSimToast(mensagemErro(e) || "Não deu para analisar a reunião.");
+      }).then(function(){
+        btnAnalisar.disabled = false; btnAnalisar.textContent = textoOriginal;
+      });
+    });
+  }
+
+  function gerarFinalizacao(botao){
+    if (!dadosProjeto) return;
+    var textoOriginal = botao.textContent;
+    botao.disabled = true; botao.textContent = "Gerando...";
+    apiPostIa("gerar-relatorio-finalizacao", { id: dadosProjeto.projeto.id }).then(function(r){
+      document.getElementById("finalizacaoCampos").style.display = "block";
+      document.getElementById("finResumoGeral").value = r.resumoGeral || "";
+      document.getElementById("finRisco").value = r.riscoPercebido || "";
+      document.getElementById("finSatisfacao").value = r.satisfacaoPercebida || "";
+      document.getElementById("finCausaDemora").value = r.causaDaDemora || "";
+      showSimToast("Rascunho gerado a partir de " + r.resumosConsiderados + " resumo(s) registrado(s) — revise antes de salvar.");
+    }).catch(function(e){
+      showSimToast(mensagemErro(e) || "Não deu para gerar o relatório.");
+    }).then(function(){
+      botao.disabled = false; botao.textContent = textoOriginal;
+    });
+  }
+
+  function salvarFinalizacao(){
+    if (!dadosProjeto) return;
+    var finalizacao = {
+      resumoGeral: document.getElementById("finResumoGeral").value.trim(),
+      riscoPercebido: document.getElementById("finRisco").value,
+      satisfacaoPercebida: document.getElementById("finSatisfacao").value,
+      causaDaDemora: document.getElementById("finCausaDemora").value.trim(),
+      geradoEm: Date.now()
+    };
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
+      finalizacao: finalizacao
+    }).then(function(){
+      dadosProjeto.projeto.finalizacao = finalizacao;
+      showSimToast("Finalização salva.");
+    }).catch(function(){ showSimToast("Não deu para salvar a finalização."); });
   }
 
   function fmtDataHoraSim(ms){
@@ -1938,6 +2078,24 @@
       '</div>' +
     '</div>' +
     '<div class="card">' +
+      '<h2>Finalização do projeto</h2>' +
+      '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
+      '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;">🤖 Gerar relatório de finalização</button>' +
+      '<div id="finalizacaoCampos" style="margin-top:12px;' + (p.finalizacao && p.finalizacao.resumoGeral ? '' : 'display:none;') + '">' +
+        '<div class="form-field"><label>Resumo geral</label><textarea class="form-input" id="finResumoGeral" rows="3" style="width:100%;">' + esc((p.finalizacao && p.finalizacao.resumoGeral) || "") + '</textarea></div>' +
+        '<div class="form-grid-2">' +
+          '<div class="form-field"><label>Risco percebido</label><select class="form-input" id="finRisco">' +
+            ['', 'baixo', 'medio', 'alto'].map(function(v){ return '<option value="' + v + '"' + (((p.finalizacao && p.finalizacao.riscoPercebido) || '') === v ? ' selected' : '') + '>' + (v || "—") + '</option>'; }).join("") +
+          '</select></div>' +
+          '<div class="form-field"><label>Satisfação percebida</label><select class="form-input" id="finSatisfacao">' +
+            ['', 'positiva', 'neutra', 'negativa', 'indeterminada'].map(function(v){ return '<option value="' + v + '"' + (((p.finalizacao && p.finalizacao.satisfacaoPercebida) || '') === v ? ' selected' : '') + '>' + (v || "—") + '</option>'; }).join("") +
+          '</select></div>' +
+        '</div>' +
+        '<div class="form-field"><label>Causa da demora (se houver)</label><input type="text" class="form-input" id="finCausaDemora" style="width:100%;" value="' + esc((p.finalizacao && p.finalizacao.causaDaDemora) || "") + '"></div>' +
+        '<button type="button" class="btn-flow-secondary" id="btnSalvarFinalizacao" style="margin-top:8px;">Salvar</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card">' +
       '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
       '<div class="agent-pick-grid">' +
         solucoes.map(function(o){
@@ -1992,6 +2150,12 @@
     });
     var btnSalvarModeloUmbler = document.getElementById("btnSalvarModeloUmbler");
     if (btnSalvarModeloUmbler) btnSalvarModeloUmbler.addEventListener("click", salvarModeloAtual);
+    var btnGerarFinalizacao = document.getElementById("btnGerarFinalizacao");
+    if (btnGerarFinalizacao) btnGerarFinalizacao.addEventListener("click", function(){
+      gerarFinalizacao(btnGerarFinalizacao);
+    });
+    var btnSalvarFinalizacao = document.getElementById("btnSalvarFinalizacao");
+    if (btnSalvarFinalizacao) btnSalvarFinalizacao.addEventListener("click", salvarFinalizacao);
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");

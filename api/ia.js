@@ -1,17 +1,50 @@
-// Proxy da Claude API — usado hoje só pela aba de proposta do simulador Waipe
-// pra ler a transcrição de uma consultoria e sugerir os outros produtos do
-// ecossistema (Gestor, Simplaz, Unique, BIME APP). O motor de sugestão de
-// AGENTES do Waipe continua sendo o de sempre (palavra-chave, no front) — esta
-// ação só preenche cliente/segmento/dores e aponta oportunidades de outros
-// produtos, nunca escreve nada no ClickUp.
+// Proxy da Claude API.
 //
-//   POST /api/ia?action=analisar-transcricao   { transcricao }
+//   POST /api/ia?action=analisar-transcricao            { transcricao }
+//        Usado pela aba de proposta do simulador Waipe pra ler a transcrição
+//        de uma consultoria e sugerir os outros produtos do ecossistema
+//        (Gestor, Simplaz, Unique, BIME APP). O motor de sugestão de AGENTES
+//        do Waipe continua sendo o de sempre (palavra-chave, no front) — esta
+//        ação só preenche cliente/segmento/dores e aponta oportunidades de
+//        outros produtos, nunca escreve nada no ClickUp.
+//
+//   POST /api/ia?action=resumir-conversa-umbler         { id }
+//        SOB DEMANDA (nunca automático — custo por chamada): lê a conversa
+//        recente no Umbler Talk desse projeto, resume com a IA, e grava o
+//        resumo como COMENTÁRIO do projeto no ClickUp, marcado como resumo
+//        de IA (ver MARCADOR_RESUMO_CONVERSA). Esse comentário é o registro
+//        histórico que action=gerar-relatorio-finalizacao lê depois.
+//
+//   POST /api/ia?action=analisar-reuniao-implantacao    { id, transcricao }
+//        Mesma ideia, pra transcrição de reunião (kickoff, diagnóstico etc)
+//        — resume com a IA e grava como comentário marcado
+//        (MARCADOR_RESUMO_REUNIAO).
+//
+//   POST /api/ia?action=gerar-relatorio-finalizacao     { id }
+//        Gera o RASCUNHO do relatório de finalização do projeto — NÃO relê
+//        conversas/transcrições brutas, só os comentários já marcados como
+//        resumo de IA (dos dois pontos acima) + dados objetivos (dias em
+//        aberto, CSM, ISM). Não salva nada sozinho: a tela mostra o rascunho
+//        editável, e salvar passa pela ação normal `atualizar-implantacao`
+//        (campo `finalizacao`), igual qualquer outro campo do projeto.
 //
 // Mesmo portão de sessão do resto do painel: consulta fica de fora (é uso
-// pago, mesmo critério de podeEscrever já usado pro ClickUp).
+// pago, mesmo critério de podeEscrever já usado pro ClickUp). O limitador de
+// chamadas por IP é COMPARTILHADO entre todas as ações desta função — é o
+// controle de custo real (uso pontual, sob demanda, nunca em loop).
 
-import { aplicarCors, erro, ipCliente, lerCorpo, texto, ErroCorpo } from './_lib/http.js';
-import { exigirSessao, podeEscrever, ErroConfig } from './_lib/auth.js';
+import { aplicarCors, erro, ipCliente, lerCorpo, taskIdValido, texto, ErroCorpo } from './_lib/http.js';
+import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
+import {
+  criarComentario,
+  csmDaDescricaoImplantacao,
+  ISM_OPCOES,
+  listarComentarios,
+  LISTA_IMPLANTACOES_WAIPE,
+  obterTask,
+  parseWaipeState,
+} from './_lib/clickup.js';
+import { telefoneParaE164, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 const MODELO = 'claude-sonnet-5';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -19,6 +52,37 @@ const ANTHROPIC_VERSION = '2023-06-01';
 // painel — 600KB de corpo dá margem generosa pra uma reunião longa.
 const LIMITE_CORPO_BYTES = 600 * 1024;
 const MAX_TRANSCRICAO = 500000;
+
+// Prefixo ESTÁVEL (sem acento, texto fixo) — é por ele que
+// gerar-relatorio-finalizacao acha os resumos já registrados. Nunca muda o
+// texto deste marcador sem migrar os comentários já gravados.
+const MARCADOR_RESUMO_CONVERSA = '[Resumo IA - Conversa]';
+const MARCADOR_RESUMO_REUNIAO = '[Resumo IA - Reuniao]';
+
+/**
+ * Mesma resolução de posse usada em api/clickup.js (resolverImplantacao) —
+ * duplicada aqui (função pequena) pra não acoplar os dois arquivos por causa
+ * de uma função interna que não é exportada da lib.
+ */
+async function resolverImplantacao(taskId) {
+  const tarefa = await obterTask(taskId);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_IMPLANTACOES_WAIPE) return null;
+  if (!tarefa.parent) return { tarefa, projeto: tarefa };
+  const projeto = await obterTask(String(tarefa.parent));
+  if (!projeto) return null;
+  return { tarefa, projeto };
+}
+
+// "ism" ve/edita tudo igual "gestao" dentro de implantacao — so csm continua
+// restrito a propria carteira. A diferenca de nivel fica so nos dados
+// financeiros (carteira/metas/cliente), nunca aqui.
+function checarPosseProjeto(sessao, projeto) {
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return 'Este projeto não está na sua carteira.';
+  }
+  return null;
+}
 
 class ErroConfigIa extends Error {
   constructor() {
@@ -199,7 +263,12 @@ function sanearResultado(bruto) {
   };
 }
 
-async function chamarClaude(transcricao) {
+/**
+ * Chamada crua à Claude API — devolve só o texto da resposta. Cada ação faz
+ * seu próprio parse/saneamento (JSON estruturado ou texto livre, conforme o
+ * caso), porque o formato esperado muda de ação pra ação.
+ */
+async function chamarClaudeTexto({ system, mensagem, maxTokens }) {
   const chave = process.env.ANTHROPIC_API_KEY;
   if (!chave) throw new ErroConfigIa();
 
@@ -212,13 +281,13 @@ async function chamarClaude(transcricao) {
     },
     body: JSON.stringify({
       model: MODELO,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       // Sem isso o modelo gasta a maior parte do orçamento de max_tokens
-      // "pensando" (thinking_tokens) e corta a resposta em JSON antes de
-      // fechar — não precisamos do raciocínio exposto, só do JSON final.
+      // "pensando" (thinking_tokens) e corta a resposta antes de fechar —
+      // não precisamos do raciocínio exposto, só do resultado final.
       thinking: { type: 'disabled' },
-      system: [{ type: 'text', text: INSTRUCOES, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: `Transcrição da reunião:\n\n${transcricao}` }],
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: mensagem }],
     }),
   });
 
@@ -228,13 +297,235 @@ async function chamarClaude(transcricao) {
   }
   const corpo = await r.json();
   const respostaTexto = corpo?.content?.find((b) => b.type === 'text')?.text || '';
+  if (!respostaTexto.trim()) {
+    console.error(`[ia] resposta_vazia (stop_reason=${corpo?.stop_reason})`);
+    throw new Error('resposta_vazia');
+  }
+  return respostaTexto;
+}
+
+async function chamarClaude(transcricao) {
+  const respostaTexto = await chamarClaudeTexto({
+    system: INSTRUCOES,
+    mensagem: `Transcrição da reunião:\n\n${transcricao}`,
+    maxTokens: 4096,
+  });
   const parsed = jsonTolerante(respostaTexto);
   if (!parsed) {
-    console.error(`[ia] resposta_nao_json (stop_reason=${corpo?.stop_reason}): ${respostaTexto.slice(0, 500)}`);
+    console.error(`[ia] resposta_nao_json: ${respostaTexto.slice(0, 500)}`);
     throw new Error('resposta_nao_json');
   }
   return sanearResultado(parsed);
 }
+
+// ── Ação: analisar-transcricao (proposta comercial) ────────────────────────
+
+async function analisarTranscricaoAcao(req, res) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_BYTES });
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const transcricao = texto(corpo.transcricao, MAX_TRANSCRICAO);
+  if (transcricao.length < 20) {
+    return erro(res, 400, 'transcricao_invalida', 'Cole a transcrição da reunião antes de analisar.');
+  }
+
+  let resultado;
+  try {
+    resultado = await chamarClaude(transcricao);
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_nao_json' || e.message === 'resposta_vazia') {
+      return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido — tente novamente.');
+    }
+    throw e;
+  }
+  return res.status(200).json(resultado);
+}
+
+// ── Ação: resumir-conversa-umbler ──────────────────────────────────────────
+
+const INSTRUCOES_RESUMO_CONVERSA = `Você vai ler uma conversa de WhatsApp entre o time de Customer Success da Londrisoft e um cliente, durante um projeto de implantação do Waipe.
+
+Resuma em até 4 frases, em texto simples (sem markdown, sem título): o assunto tratado, o status atual (ex: aguardando resposta do cliente, confirmou horário, relatou um problema, pediu pra remarcar), e qualquer sinal de satisfação ou insatisfação do cliente que apareça na conversa. Seja objetivo — não invente informação que não está na conversa. Se a conversa for só sobre agendamento, sem nada relevante além disso, diga isso em uma frase só.`;
+
+async function resumirConversaUmblerAcao(req, res, sessao) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+  if (!taskIdValido(corpo.id)) return erro(res, 400, 'task_invalida', 'id inválido.');
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+  const negado = checarPosseProjeto(sessao, projeto);
+  if (negado) return erro(res, 403, 'fora_da_carteira', negado);
+
+  const estado = parseWaipeState(projeto.description);
+  const telefoneE164 = telefoneParaE164(estado.telefone);
+  if (!telefoneE164) {
+    return erro(res, 400, 'telefone_invalido', 'Cadastre o telefone do cliente (Resumo do projeto) antes de resumir a conversa.');
+  }
+
+  let historico;
+  try {
+    historico = await buscarHistoricoConversa(telefoneE164);
+  } catch (e) {
+    if (e instanceof ErroUmbler || e instanceof ErroConfigUmbler) throw e;
+    throw e;
+  }
+  if (!historico || !historico.mensagens?.length) {
+    return erro(res, 400, 'sem_conversa', 'Não há conversa registrada ainda com esse telefone no Umbler Talk.');
+  }
+
+  const textoConversa = historico.mensagens
+    .map((m) => `${m.deCliente ? 'Cliente' : 'Equipe'}: ${m.texto}`)
+    .join('\n');
+
+  let resumo;
+  try {
+    resumo = texto(await chamarClaudeTexto({ system: INSTRUCOES_RESUMO_CONVERSA, mensagem: textoConversa, maxTokens: 400 }), 2000);
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resumo válido.');
+    throw e;
+  }
+  if (!resumo) return erro(res, 502, 'falha_ia', 'A IA não devolveu um resumo válido.');
+
+  await criarComentario(projeto.id, `${MARCADOR_RESUMO_CONVERSA}\n${resumo}`);
+  return res.status(200).json({ ok: true, resumo });
+}
+
+// ── Ação: analisar-reuniao-implantacao ─────────────────────────────────────
+
+const INSTRUCOES_RESUMO_REUNIAO = `Você vai ler a transcrição de uma reunião entre o time de Implantação da Londrisoft e um cliente, durante um projeto de implantação do Waipe.
+
+Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as ferramentas/sistemas que o cliente usa hoje, regras ou processos importantes que ele mencionou, quais agentes ou funcionalidades foram discutidos como prioridade, e qualquer sinal de satisfação, insatisfação ou risco percebido. Seja objetivo — não invente informação que não está na transcrição.`;
+
+async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_BYTES });
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+  if (!taskIdValido(corpo.id)) return erro(res, 400, 'task_invalida', 'id inválido.');
+
+  const transcricao = texto(corpo.transcricao, MAX_TRANSCRICAO);
+  if (transcricao.length < 20) {
+    return erro(res, 400, 'transcricao_invalida', 'Cole a transcrição da reunião antes de analisar.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+  const negado = checarPosseProjeto(sessao, projeto);
+  if (negado) return erro(res, 403, 'fora_da_carteira', negado);
+
+  let resumo;
+  try {
+    resumo = texto(await chamarClaudeTexto({ system: INSTRUCOES_RESUMO_REUNIAO, mensagem: transcricao, maxTokens: 900 }), 3000);
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resumo válido.');
+    throw e;
+  }
+  if (!resumo) return erro(res, 502, 'falha_ia', 'A IA não devolveu um resumo válido.');
+
+  await criarComentario(projeto.id, `${MARCADOR_RESUMO_REUNIAO}\n${resumo}`);
+  return res.status(200).json({ ok: true, resumo });
+}
+
+// ── Ação: gerar-relatorio-finalizacao ──────────────────────────────────────
+
+const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório de finalização de um projeto de implantação do Waipe, com base SOMENTE nos resumos já registrados ao longo do projeto (não invente além do que eles dizem) e nos dados objetivos informados.
+
+Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código), neste formato exato:
+{"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia se os resumos não derem sinal de causa específica de atraso, senão uma frase curta","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada"}
+
+Regras: "satisfacaoPercebida" deve ser "indeterminada" quando os resumos não tiverem sinal suficiente pra inferir isso — é esperado e aceitável, não force uma resposta só porque o campo existe. "riscoPercebido" reflete o risco de o cliente terminar insatisfeito ou com algo mal resolvido, não risco comercial. "causaDaDemora" só quando houver sinal claro (ex: vários reagendamentos, demora do cliente em responder, problema técnico recorrente).`;
+
+async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+  if (!taskIdValido(corpo.id)) return erro(res, 400, 'task_invalida', 'id inválido.');
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+  const negado = checarPosseProjeto(sessao, projeto);
+  if (negado) return erro(res, 403, 'fora_da_carteira', negado);
+
+  const comentarios = await listarComentarios(projeto.id);
+  const resumosRegistrados = comentarios
+    .map((c) => String(c.comment_text || ''))
+    .filter((t) => t.startsWith(MARCADOR_RESUMO_CONVERSA) || t.startsWith(MARCADOR_RESUMO_REUNIAO));
+  if (!resumosRegistrados.length) {
+    return erro(res, 400, 'sem_registros', 'Nenhum resumo de conversa ou reunião foi registrado neste projeto ainda — use "Resumir conversa" ou "Analisar reunião" primeiro.');
+  }
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  const ismNomes = (projeto.assignees || [])
+    .map((a) => ISM_OPCOES.find((i) => i.id === Number(a.id))?.nome)
+    .filter(Boolean);
+  const diasEmAberto = Number.isFinite(Number(projeto.date_created))
+    ? Math.max(0, Math.round((Date.now() - Number(projeto.date_created)) / 86400000))
+    : null;
+  const dadosObjetivos = [
+    diasEmAberto !== null ? `Dias em aberto: ${diasEmAberto}.` : null,
+    `CSM: ${csm || '—'}.`,
+    `ISM responsável: ${ismNomes.length ? ismNomes.join(', ') : '—'}.`,
+  ].filter(Boolean).join(' ');
+
+  const mensagem = `${dadosObjetivos}\n\nResumos registrados ao longo do projeto:\n\n${resumosRegistrados.join('\n\n---\n\n')}`;
+
+  let respostaTexto;
+  try {
+    respostaTexto = await chamarClaudeTexto({ system: INSTRUCOES_RELATORIO_FINAL, mensagem, maxTokens: 1024 });
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido.');
+    throw e;
+  }
+  const parsed = jsonTolerante(respostaTexto);
+  if (!parsed) {
+    console.error(`[ia] relatorio_nao_json: ${respostaTexto.slice(0, 500)}`);
+    return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido — tente novamente.');
+  }
+
+  return res.status(200).json({
+    ok: true,
+    resumoGeral: texto(parsed.resumoGeral, 2000),
+    riscoPercebido: RISCO_PERCEBIDO_VALIDOS.has(parsed.riscoPercebido) ? parsed.riscoPercebido : '',
+    causaDaDemora: texto(parsed.causaDaDemora, 500),
+    satisfacaoPercebida: SATISFACAO_PERCEBIDA_VALIDOS.has(parsed.satisfacaoPercebida) ? parsed.satisfacaoPercebida : 'indeterminada',
+    resumosConsiderados: resumosRegistrados.length,
+  });
+}
+
+const RISCO_PERCEBIDO_VALIDOS = new Set(['baixo', 'medio', 'alto']);
+const SATISFACAO_PERCEBIDA_VALIDOS = new Set(['positiva', 'neutra', 'negativa', 'indeterminada']);
+
+const ACOES_IA = {
+  'analisar-transcricao': analisarTranscricaoAcao,
+  'resumir-conversa-umbler': resumirConversaUmblerAcao,
+  'analisar-reuniao-implantacao': analisarReuniaoImplantacaoAcao,
+  'gerar-relatorio-finalizacao': gerarRelatorioFinalizacaoAcao,
+};
 
 export default async function handler(req, res) {
   let acao = '';
@@ -249,7 +540,8 @@ export default async function handler(req, res) {
     const sessao = exigirSessao(req, res);
     if (!sessao) return undefined;
 
-    if (req.method !== 'POST' || acao !== 'analisar-transcricao') {
+    const acaoFn = ACOES_IA[acao];
+    if (req.method !== 'POST' || !acaoFn) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
     }
 
@@ -258,6 +550,8 @@ export default async function handler(req, res) {
       return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
     }
 
+    // Limitador de custo COMPARTILHADO entre as 4 ações — cada uma custa
+    // uma chamada paga, então o teto é único, não por ação.
     const agora = Date.now();
     const ip = ipCliente(req);
     limparExpirados(agora);
@@ -265,41 +559,21 @@ export default async function handler(req, res) {
       res.setHeader('Retry-After', String(Math.ceil(JANELA_MS / 1000)));
       return erro(res, 429, 'muitas_tentativas', 'Muitas análises em pouco tempo. Aguarde alguns minutos.');
     }
-
-    let corpo;
-    try {
-      corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_BYTES });
-    } catch (e) {
-      if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
-      throw e;
-    }
-
-    const transcricao = texto(corpo.transcricao, MAX_TRANSCRICAO);
-    if (transcricao.length < 20) {
-      return erro(res, 400, 'transcricao_invalida', 'Cole a transcrição da reunião antes de analisar.');
-    }
-
     registrarChamada(ip, agora);
 
-    let resultado;
-    try {
-      resultado = await chamarClaude(transcricao);
-    } catch (e) {
-      if (e instanceof ErroConfigIa) throw e;
-      if (e instanceof ErroUpstreamIa) {
-        return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
-      }
-      if (e.message === 'resposta_nao_json') {
-        return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido — tente novamente.');
-      }
-      throw e;
-    }
-
-    return res.status(200).json(resultado);
+    return await acaoFn(req, res, sessao);
   } catch (e) {
     if (e instanceof ErroConfig || e instanceof ErroConfigIa) {
       console.error('[ia] configuracao:', e.message);
       return erro(res, 500, 'nao_configurado', 'Análise por IA não configurada no servidor.');
+    }
+    if (e instanceof ErroConfigUmbler) {
+      console.error('[ia] configuracao Umbler:', e.message);
+      return erro(res, 500, 'umbler_nao_configurado', 'Integração com o Umbler Talk não está configurada no servidor.');
+    }
+    if (e instanceof ErroUmbler) {
+      console.error(`[ia] falha_umbler=${e.status}`);
+      return erro(res, 502, 'erro_umbler', 'Falha ao falar com o Umbler Talk.');
     }
     console.error(`[ia] falha inesperada em action=${acao}: ${e?.name}: ${e?.message}`);
     return erro(res, 500, 'erro_interno', 'Erro interno ao processar a análise.');

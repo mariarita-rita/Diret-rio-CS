@@ -40,6 +40,9 @@
 //   GET  /api/clickup?action=historico-conversa-umbler { id } -> conversa
 //        recente no Umbler Talk pro telefone desse projeto (so leitura, nao
 //        cria contato/conversa — ver iniciar-conversa-umbler pra isso)
+//   POST /api/clickup?action=marcar-conversa-vista { id } -> marca "eu ja vi"
+//        (por identidade — sessao.nome) pro indicador de mensagem nova, que
+//        e aceso por api/umbler-webhook.js quando o cliente responde
 //   GET  /api/clickup?action=listar-modelos-mensagem -> modelos salvos de
 //        mensagem de abertura, compartilhados entre todo o time
 //   POST /api/clickup?action=salvar-modelo-mensagem { nome, texto } -> salva
@@ -61,7 +64,7 @@ import {
   uuidValido,
   ErroCorpo,
 } from './_lib/http.js';
-import { exigirSessao, podeEscrever, pertenceAoCsm, pertenceAoIsm, ErroConfig } from './_lib/auth.js';
+import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
   atualizarTask,
   CAMPOS_ESCRITA,
@@ -185,6 +188,9 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'vincular-agendamento-google') {
       return await vincularAgendamentoGoogleAcao(req, res, sessao);
     }
+    if (req.method === 'POST' && acao === 'marcar-conversa-vista') {
+      return await marcarConversaVistaAcao(req, res, sessao);
+    }
     if (req.method === 'GET' && acao === 'historico-conversa-umbler') {
       return await historicoConversaUmblerAcao(req, res, sessao);
     }
@@ -205,6 +211,7 @@ export default async function handler(req, res) {
       'status-google-agenda', 'iniciar-conversa-umbler',
       'sincronizar-agendamentos-google', 'vincular-agendamento-google',
       'historico-conversa-umbler', 'listar-modelos-mensagem', 'salvar-modelo-mensagem',
+      'marcar-conversa-vista',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -921,6 +928,40 @@ function dadosClienteFaltando(dados) {
   return faltando;
 }
 
+/**
+ * "Mensagem nova" e por VIEWER, nao um estado global do projeto — cada
+ * identidade (sessao.nome: "Gestão", "Bruno Vaz", "Gian Luca"...) tem seu
+ * proprio ponteiro de "ate quando eu ja vi" (vistoPor), gravado por
+ * marcar-conversa-vista. `ultimaMensagemClienteEm` (gravado pelo webhook do
+ * Umbler Talk, ver api/umbler-webhook.js) e o UNICO estado compartilhado.
+ */
+function temMensagemNovaParaViewer(estado, sessao) {
+  const ultima = Number(estado.ultimaMensagemClienteEm);
+  if (!Number.isFinite(ultima) || ultima <= 0) return false;
+  const visto = Number(estado.vistoPor?.[sessao.nome]);
+  return !Number.isFinite(visto) || ultima > visto;
+}
+
+const RISCO_VALIDOS = new Set(['baixo', 'medio', 'alto']);
+const SATISFACAO_VALIDOS = new Set(['positiva', 'neutra', 'negativa', 'indeterminada']);
+
+/**
+ * Relatório de finalização — rascunho gerado pela IA (ver api/ia.js,
+ * action=gerar-relatorio-finalizacao) e revisado manualmente antes de salvar.
+ * Nunca confia no formato de quem manda: cada campo é saneado com um padrão
+ * seguro, igual ao resto do estado embutido.
+ */
+function sanearFinalizacao(d) {
+  const origem = d && typeof d === 'object' ? d : {};
+  return {
+    resumoGeral: texto(origem.resumoGeral, 2000),
+    riscoPercebido: RISCO_VALIDOS.has(origem.riscoPercebido) ? origem.riscoPercebido : '',
+    causaDaDemora: texto(origem.causaDaDemora, 500),
+    satisfacaoPercebida: SATISFACAO_VALIDOS.has(origem.satisfacaoPercebida) ? origem.satisfacaoPercebida : '',
+    geradoEm: Number.isFinite(Number(origem.geradoEm)) ? Number(origem.geradoEm) : null,
+  };
+}
+
 /** Descrição legível de uma "outra solução" (pra quem abre a subtask direto no ClickUp). */
 function descricaoSolucao(o) {
   const valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
@@ -975,10 +1016,12 @@ async function listarImplantacoesAcao(res, sessao) {
       // do projeto aberto (obter-implantacao), que já busca as subtasks.
       faseProjetoManual: FASES_ITEM_VALIDAS.has(estado.faseProjetoManual) ? estado.faseProjetoManual : null,
       dataCriacao: Number.isFinite(Number(t.date_created)) ? Number(t.date_created) : null,
+      temMensagemNova: temMensagemNovaParaViewer(estado, sessao),
     };
   });
-  let visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
-  if (sessao.nivel === 'ism') visiveis = visiveis.filter((l) => pertenceAoIsm(l.ismIds, sessao.ismId));
+  // "ism" ve tudo igual "gestao" dentro de implantacao — a unica diferenca
+  // de nivel fica nos dados financeiros (carteira/metas/cliente), nunca aqui.
+  const visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
   return res.status(200).json({ tasks: visiveis, total: visiveis.length });
 }
 
@@ -998,12 +1041,8 @@ async function obterImplantacaoAcao(req, res, sessao) {
   }
 
   const csm = csmDaDescricaoImplantacao(pai.description);
-  const ismIdsProjeto = (pai.assignees || []).map((a) => Number(a.id));
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm(ismIdsProjeto, sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   const estadoProjeto = parseWaipeState(pai.description);
@@ -1104,6 +1143,8 @@ async function obterImplantacaoAcao(req, res, sessao) {
       cnpj: texto(estadoProjeto.cnpj, 20),
       email: texto(estadoProjeto.email, 200),
       telefone: texto(estadoProjeto.telefone, 30),
+      finalizacao: sanearFinalizacao(estadoProjeto.finalizacao),
+      temMensagemNova: temMensagemNovaParaViewer(estadoProjeto, sessao),
     },
     agentes,
   });
@@ -1214,9 +1255,6 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
-  }
 
   const estadoAtual = parseWaipeState(tarefa.description);
   const novoEstado = {
@@ -1247,6 +1285,12 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     ...(('idNucleo' in corpo || 'cnpj' in corpo || 'email' in corpo || 'telefone' in corpo)
       ? sanearDadosCliente(corpo)
       : sanearDadosCliente(estadoAtual)),
+    // Relatório de finalização — mesmo padrão de faseProjetoManual/dadosCliente:
+    // só muda quando vem explicitamente no corpo (edição feita na tela de
+    // finalização), senão preserva o que já estava salvo.
+    finalizacao: 'finalizacao' in corpo
+      ? sanearFinalizacao(corpo.finalizacao)
+      : sanearFinalizacao(estadoAtual.finalizacao),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
@@ -1294,9 +1338,6 @@ async function iniciarConversaUmblerAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   const estado = parseWaipeState(projeto.description);
@@ -1359,9 +1400,6 @@ async function historicoConversaUmblerAcao(req, res, sessao) {
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
-  }
 
   const estado = parseWaipeState(projeto.description);
   const telefoneE164 = telefoneParaE164(estado.telefone);
@@ -1374,6 +1412,41 @@ async function historicoConversaUmblerAcao(req, res, sessao) {
     return res.status(200).json({ ok: true, semConversa: true });
   }
   return res.status(200).json({ ok: true, ...historico });
+}
+
+/**
+ * Marca "eu já vi a conversa" pra ESTA identidade (sessao.nome) — cada
+ * pessoa/perfil tem seu proprio ponteiro (vistoPor), então um CSM abrindo o
+ * projeto não desmarca o indicador do ISM, e vice-versa (ver
+ * temMensagemNovaParaViewer). Não precisa de podeEscrever tão restrito quanto
+ * outras escritas, mas segue o mesmo padrão do resto do arquivo.
+ */
+async function marcarConversaVistaAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+  if (!taskIdValido(corpo.id)) return erro(res, 400, 'task_invalida', 'id inválido.');
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+
+  const estadoAtual = parseWaipeState(projeto.description);
+  const novoEstado = {
+    ...estadoAtual,
+    vistoPor: { ...(estadoAtual.vistoPor || {}), [sessao.nome]: Date.now() },
+  };
+  await atualizarTask(projeto.id, { markdown_description: stringifyWaipeState(projeto.description, novoEstado) });
+  return res.status(200).json({ ok: true });
 }
 
 async function listarModelosMensagemAcao(res, sessao) {
@@ -1433,9 +1506,6 @@ async function atualizarAgenteAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   const estadoAtual = parseWaipeState(tarefa.description);
@@ -2121,9 +2191,6 @@ async function listarComentariosAcao(req, res, sessao) {
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm((resolvido.projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
-  }
 
   const comentarios = await listarComentarios(taskId);
   const mapeados = comentarios.map((c) => ({
@@ -2162,9 +2229,6 @@ async function comentarImplantacaoAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
-  if (sessao.nivel === 'ism' && !pertenceAoIsm((resolvido.projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   await criarComentario(corpo.taskId, comentario);

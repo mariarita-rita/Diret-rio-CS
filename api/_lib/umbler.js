@@ -133,7 +133,13 @@ export async function buscarHistoricoConversa(telefoneE164) {
     .filter((m) => m._t === 'MessageModel' || m._t === 'SentMessageModel')
     .map((m) => ({
       texto: m.content || '',
-      deCliente: !!m.fromContact,
+      // `sentByOrganizationMember` vem preenchido quando quem mandou foi a
+      // equipe, e null quando foi o contato — é esse campo que a API
+      // documenta sem ambiguidade ("null if sent by the contact"). O campo
+      // `fromContact` parecia o certo pelo nome, mas o texto da própria
+      // documentação da Umbler é sobre outra coisa — testado ao vivo e
+      // confirmado que só `sentByOrganizationMember` distingue certo.
+      deCliente: !m.sentByOrganizationMember,
       dataMs: Date.parse(m.eventAtUTC || '') || null,
     }))
     .filter((m) => m.texto);

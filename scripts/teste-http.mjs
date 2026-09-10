@@ -2967,35 +2967,35 @@ console.log('\n[42] Nível "ism": login, sem dados financeiros, só os próprios
     checar(`ism: POST ${acaoProibida} -> 403 nivel_nao_permitido`, [r.code, r.corpo.code], [403, 'nivel_nao_permitido']);
   }
 
-  // listar-implantacoes: so o projeto do Bruno
+  // listar-implantacoes: "ism" ve TUDO igual "gestao" — sem filtro por assignee.
   const lista = await chamarGet('listar-implantacoes');
-  checar('ism: listar-implantacoes so mostra o proprio projeto', lista.corpo.tasks.map((t) => t.id), ['tProjBruno']);
+  checar('ism: listar-implantacoes mostra todos os projetos (igual gestao)', lista.corpo.tasks.map((t) => t.id).sort(), ['tProjBruno', 'tProjErica']);
 
-  // obter-implantacao: proprio projeto ok, projeto de outro ISM -> 403
+  // obter-implantacao: qualquer projeto, mesmo o de outro ISM
   const obterProprio = await chamarGet('obter-implantacao', { id: 'tProjBruno' });
   checar('ism: obter-implantacao do proprio projeto -> 200', obterProprio.code, 200);
   const obterAlheio = await chamarGet('obter-implantacao', { id: 'tProjErica' });
-  checar('ism: obter-implantacao de projeto de outro ISM -> 403', [obterAlheio.code, obterAlheio.corpo.code], [403, 'fora_da_carteira']);
+  checar('ism: obter-implantacao de projeto de outro ISM -> 200 (sem restricao)', obterAlheio.code, 200);
 
-  // atualizar-implantacao: proprio ok, alheio 403
+  // atualizar-implantacao: qualquer projeto
   const atualizarProprio = await chamarPost('atualizar-implantacao', { id: 'tProjBruno', etapaAtual: 'testes', prioridade: [], concluidos: [] });
   checar('ism: atualizar-implantacao do proprio projeto -> 200', atualizarProprio.code, 200);
   const atualizarAlheio = await chamarPost('atualizar-implantacao', { id: 'tProjErica', etapaAtual: 'testes', prioridade: [], concluidos: [] });
-  checar('ism: atualizar-implantacao de projeto de outro ISM -> 403', [atualizarAlheio.code, atualizarAlheio.corpo.code], [403, 'fora_da_carteira']);
+  checar('ism: atualizar-implantacao de projeto de outro ISM -> 200 (sem restricao)', atualizarAlheio.code, 200);
 
   // atualizar-agente: idem, posse resolvida pelo projeto pai
   const agenteProprio = await chamarPost('atualizar-agente', { taskId: 'tAgenteBruno', buildChecks: {} });
   checar('ism: atualizar-agente do proprio projeto -> 200', agenteProprio.code, 200);
   const agenteAlheio = await chamarPost('atualizar-agente', { taskId: 'tAgenteErica', buildChecks: {} });
-  checar('ism: atualizar-agente de projeto de outro ISM -> 403', [agenteAlheio.code, agenteAlheio.corpo.code], [403, 'fora_da_carteira']);
+  checar('ism: atualizar-agente de projeto de outro ISM -> 200 (sem restricao)', agenteAlheio.code, 200);
 
   // comentar-implantacao / listar-comentarios: idem
   const comentarProprio = await chamarPost('comentar-implantacao', { taskId: 'tAgenteBruno', texto: 'oi' });
   checar('ism: comentar no proprio projeto -> 200', comentarProprio.code, 200);
   const comentarAlheio = await chamarPost('comentar-implantacao', { taskId: 'tAgenteErica', texto: 'oi' });
-  checar('ism: comentar em projeto de outro ISM -> 403', [comentarAlheio.code, comentarAlheio.corpo.code], [403, 'fora_da_carteira']);
+  checar('ism: comentar em projeto de outro ISM -> 200 (sem restricao)', comentarAlheio.code, 200);
   const listarComentariosAlheio = await chamarGet('listar-comentarios', { taskId: 'tAgenteErica' });
-  checar('ism: listar-comentarios de projeto de outro ISM -> 403', [listarComentariosAlheio.code, listarComentariosAlheio.corpo.code], [403, 'fora_da_carteira']);
+  checar('ism: listar-comentarios de projeto de outro ISM -> 200 (sem restricao)', listarComentariosAlheio.code, 200);
 
   // conectar-agenda-google: so a propria
   const conectarProprio = await chamarGet('conectar-agenda-google', { ismId: BRUNO });
@@ -3174,6 +3174,307 @@ console.log('\n[43] historico-conversa-umbler + modelos de mensagem');
   const BRUNO_SESSAO = { nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' };
   const salvarComoIsm = await chamarPost(BRUNO_SESSAO, 'salvar-modelo-mensagem', { nome: 'Modelo ISM', texto: 'Oi!' });
   checar('salvar-modelo-mensagem: ism tambem pode -> 200', [salvarComoIsm.code, salvarComoIsm.corpo.ok], [200, true]);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[44] api/ia.js — resumir-conversa-umbler, analisar-reuniao-implantacao, gerar-relatorio-finalizacao');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-teste';
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.UMBLER_API_TOKEN = 'token-teste';
+  process.env.UMBLER_ORGANIZATION_ID = 'org-teste';
+  process.env.UMBLER_CHANNEL_ID = 'canal-teste';
+
+  const BRUNO = 118125102;
+  const ERICA = 48933858;
+  let estadoProjetoIA = { etapaAtual: 'construcao', telefone: '(43) 90000-0000' };
+  let assigneesProjetoIA = [{ id: BRUNO }];
+  let comentariosExistentes = [];
+  let contatoAchado = { id: 'contato-ia' };
+  let respostaClaudeTexto = 'Resumo padrão de teste.';
+  const escritas = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+  function respostaJson(status, corpo) {
+    return { ok: status >= 200 && status < 300, status, headers: new Map(), json: async () => corpo, text: async () => '' };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u === 'https://api.anthropic.com/v1/messages') {
+      return ok({ content: [{ type: 'text', text: respostaClaudeTexto }] });
+    }
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjIA/comment')) {
+      if (metodo === 'POST') {
+        escritas.push({ alvo: 'comentario', body: JSON.parse(init.body) });
+        return ok({});
+      }
+      return ok({ comments: comentariosExistentes });
+    }
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjIA')) {
+      return ok({
+        id: 'tProjIA', name: 'Cliente IA', list: { id: '901328976497' }, parent: null,
+        assignees: assigneesProjetoIA, date_created: String(Date.now() - 5 * 86400000),
+        description: 'CSM: Gian Luca\n\n' + JSON.stringify(estadoProjetoIA),
+      });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/contacts/phone/')) {
+      return contatoAchado ? respostaJson(200, contatoAchado) : respostaJson(404, { error: 'not found' });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/chats/?')) {
+      return respostaJson(200, { items: [{ id: 'chat-ia' }] });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/chats/chat-ia/')) {
+      return respostaJson(200, {
+        open: true, sector: { name: 'Sucesso do Cliente' }, eventAtUTC: new Date().toISOString(),
+        latestMessages: [{ _t: 'MessageModel', content: 'Cliente: adorei o sistema, muito satisfeito!', eventAtUTC: new Date().toISOString(), fromContact: { id: 'x' } }],
+      });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('ia');
+  const umblerLibUrlReal = libUmblerUnica('ia');
+  const ia = await carregarCom('api/ia.js', clickupLibUrl, googleLibUrl, umblerLibUrlReal);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const chamarIa = async (perfil, action, body) => {
+    const r = res();
+    await ia({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body }, r);
+    return r;
+  };
+
+  // resumir-conversa-umbler
+  const resumirSemPermissao = await chamarIa(CONSULTA, 'resumir-conversa-umbler', { id: 'tProjIA' });
+  checar('resumir-conversa-umbler: consulta -> 403', [resumirSemPermissao.code, resumirSemPermissao.corpo.code], [403, 'somente_leitura']);
+
+  const resumirOutraCarteira = await chamarIa(PATRICIA, 'resumir-conversa-umbler', { id: 'tProjIA' });
+  checar('resumir-conversa-umbler: csm de outra carteira -> 403', [resumirOutraCarteira.code, resumirOutraCarteira.corpo.code], [403, 'fora_da_carteira']);
+
+  estadoProjetoIA = { etapaAtual: 'construcao', telefone: '' };
+  const resumirSemTelefone = await chamarIa(GESTAO, 'resumir-conversa-umbler', { id: 'tProjIA' });
+  checar('resumir-conversa-umbler: sem telefone -> 400', [resumirSemTelefone.code, resumirSemTelefone.corpo.code], [400, 'telefone_invalido']);
+
+  estadoProjetoIA = { etapaAtual: 'construcao', telefone: '(43) 90000-0000' };
+  contatoAchado = null;
+  const resumirSemConversa = await chamarIa(GESTAO, 'resumir-conversa-umbler', { id: 'tProjIA' });
+  checar('resumir-conversa-umbler: sem conversa registrada -> 400', [resumirSemConversa.code, resumirSemConversa.corpo.code], [400, 'sem_conversa']);
+  contatoAchado = { id: 'contato-ia' };
+
+  escritas.length = 0;
+  respostaClaudeTexto = 'Cliente relatou estar muito satisfeito com o sistema.';
+  const resumirOk = await chamarIa(GESTAO, 'resumir-conversa-umbler', { id: 'tProjIA' });
+  checar('resumir-conversa-umbler: 200', [resumirOk.code, resumirOk.corpo.ok, resumirOk.corpo.resumo], [200, true, 'Cliente relatou estar muito satisfeito com o sistema.']);
+  const comentarioConversa = escritas.find((e) => e.alvo === 'comentario')?.body;
+  checar('  grava comentario marcado como resumo de IA (conversa)', comentarioConversa?.comment_text.startsWith('[Resumo IA - Conversa]'), true);
+
+  // analisar-reuniao-implantacao
+  const analisarTranscricaoCurta = await chamarIa(GESTAO, 'analisar-reuniao-implantacao', { id: 'tProjIA', transcricao: 'oi' });
+  checar('analisar-reuniao-implantacao: transcricao curta -> 400', [analisarTranscricaoCurta.code, analisarTranscricaoCurta.corpo.code], [400, 'transcricao_invalida']);
+
+  const analisarOutraCarteira = await chamarIa(PATRICIA, 'analisar-reuniao-implantacao', { id: 'tProjIA', transcricao: 'x'.repeat(50) });
+  checar('analisar-reuniao-implantacao: csm de outra carteira -> 403', [analisarOutraCarteira.code, analisarOutraCarteira.corpo.code], [403, 'fora_da_carteira']);
+
+  escritas.length = 0;
+  respostaClaudeTexto = 'Cliente usa planilha hoje, quer priorizar o agente de cobrança.';
+  const analisarOk = await chamarIa(GESTAO, 'analisar-reuniao-implantacao', { id: 'tProjIA', transcricao: 'x'.repeat(200) });
+  checar('analisar-reuniao-implantacao: 200', [analisarOk.code, analisarOk.corpo.ok], [200, true]);
+  const comentarioReuniao = escritas.find((e) => e.alvo === 'comentario')?.body;
+  checar('  grava comentario marcado como resumo de IA (reuniao)', comentarioReuniao?.comment_text.startsWith('[Resumo IA - Reuniao]'), true);
+
+  // gerar-relatorio-finalizacao
+  comentariosExistentes = [{ id: 'c1', comment_text: 'Comentário manual qualquer, não é da IA.', user: { username: 'Gian' }, date: '1' }];
+  const relatorioSemRegistros = await chamarIa(GESTAO, 'gerar-relatorio-finalizacao', { id: 'tProjIA' });
+  checar('gerar-relatorio-finalizacao: sem resumos registrados -> 400', [relatorioSemRegistros.code, relatorioSemRegistros.corpo.code], [400, 'sem_registros']);
+
+  comentariosExistentes = [
+    { id: 'c1', comment_text: 'Comentário manual qualquer, não é da IA.', user: { username: 'Gian' }, date: '1' },
+    { id: 'c2', comment_text: '[Resumo IA - Conversa]\nCliente satisfeito, só faltava agendar.', user: { username: 'bot' }, date: '2' },
+    { id: 'c3', comment_text: '[Resumo IA - Reuniao]\nCliente quer priorizar cobrança, usa planilha hoje.', user: { username: 'bot' }, date: '3' },
+  ];
+  respostaClaudeTexto = JSON.stringify({
+    resumoGeral: 'Projeto correu bem, cliente satisfeito.',
+    riscoPercebido: 'baixo',
+    causaDaDemora: '',
+    satisfacaoPercebida: 'positiva',
+  });
+  const relatorioOk = await chamarIa(GESTAO, 'gerar-relatorio-finalizacao', { id: 'tProjIA' });
+  checar('gerar-relatorio-finalizacao: 200', [relatorioOk.code, relatorioOk.corpo.ok], [200, true]);
+  checar('  campos do relatorio corretos', [relatorioOk.corpo.riscoPercebido, relatorioOk.corpo.satisfacaoPercebida, relatorioOk.corpo.resumosConsiderados], ['baixo', 'positiva', 2]);
+
+  // Saneamento: valores fora da allowlist caem no padrao seguro.
+  respostaClaudeTexto = JSON.stringify({
+    resumoGeral: 'x', riscoPercebido: 'INVALIDO', causaDaDemora: '', satisfacaoPercebida: 'ENTUSIASMADA',
+  });
+  const relatorioSaneado = await chamarIa(GESTAO, 'gerar-relatorio-finalizacao', { id: 'tProjIA' });
+  checar('gerar-relatorio-finalizacao: valores invalidos caem no padrao seguro', [relatorioSaneado.corpo.riscoPercebido, relatorioSaneado.corpo.satisfacaoPercebida], ['', 'indeterminada']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[45] api/umbler-webhook.js + marcar-conversa-vista + temMensagemNova');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.UMBLER_WEBHOOK_TOKEN = 'segredo-webhook-teste';
+  process.env.UMBLER_CHANNEL_ID = 'ageW2GoTaSCcKI1m';
+
+  const LISTA = '901328976497';
+  let estadoProjetoWh = { etapaAtual: 'construcao', telefone: '(43) 98492-7116' };
+  const escritasWh = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.includes(`/list/${LISTA}/task?`)) {
+      return ok({ tasks: [{ id: 'tProjetoWebhook', name: 'Cliente Webhook', description: JSON.stringify(estadoProjetoWh) }], last_page: true });
+    }
+    if (metodo === 'PUT' && u.endsWith('/task/tProjetoWebhook')) {
+      escritasWh.push({ body: JSON.parse(init.body) });
+      return ok({});
+    }
+    return ok({});
+  };
+
+  const webhook = await carregarCom('api/umbler-webhook.js', libClickupUnica('webhook'), googleLibUrl, libUmblerUnica('webhook'));
+
+  const eventoBase = (overrides) => Object.assign({
+    Type: 'Message',
+    Payload: {
+      Content: {
+        Channel: { Id: 'ageW2GoTaSCcKI1m' },
+        Contact: { PhoneNumber: '+5543984927116', ContactType: 'DirectMessage' },
+        LastMessage: { Source: 'Contact', Content: 'Oi', EventAtUTC: '2026-09-10T17:21:07.737Z' },
+      },
+    },
+  }, overrides);
+
+  const chamarWebhook = async (token, corpo) => {
+    const r = res();
+    await webhook({ method: 'POST', headers: cabecalhos(), query: { token }, body: corpo }, r);
+    return r;
+  };
+
+  const semToken = await chamarWebhook('token-errado', eventoBase());
+  checar('umbler-webhook: token invalido -> 403', [semToken.code, semToken.corpo.code], [403, 'token_invalido']);
+
+  delete process.env.UMBLER_WEBHOOK_TOKEN;
+  const semConfig = await chamarWebhook('qualquer', eventoBase());
+  checar('umbler-webhook: sem UMBLER_WEBHOOK_TOKEN configurado -> 500', [semConfig.code, semConfig.corpo.error], [500, 'nao_configurado']);
+  process.env.UMBLER_WEBHOOK_TOKEN = 'segredo-webhook-teste';
+
+  escritasWh.length = 0;
+  const mensagemDaEquipe = eventoBase({});
+  mensagemDaEquipe.Payload.Content.LastMessage = { Source: 'Member', Content: 'Resposta nossa', EventAtUTC: '2026-09-10T17:21:07.737Z' };
+  const respMensagemEquipe = await chamarWebhook('segredo-webhook-teste', mensagemDaEquipe);
+  checar('umbler-webhook: mensagem da equipe (Source=Member) -> 200 mas nao escreve', [respMensagemEquipe.code, escritasWh.length], [200, 0]);
+
+  escritasWh.length = 0;
+  const canalErrado = eventoBase({});
+  canalErrado.Payload.Content.Channel = { Id: 'outro-canal-qualquer' };
+  const respCanalErrado = await chamarWebhook('segredo-webhook-teste', canalErrado);
+  checar('umbler-webhook: canal diferente do configurado -> 200 mas nao escreve', [respCanalErrado.code, escritasWh.length], [200, 0]);
+
+  escritasWh.length = 0;
+  const grupo = eventoBase({});
+  grupo.Payload.Content.Contact.ContactType = 'Group';
+  const respGrupo = await chamarWebhook('segredo-webhook-teste', grupo);
+  checar('umbler-webhook: contato do tipo Group -> 200 mas nao escreve', [respGrupo.code, escritasWh.length], [200, 0]);
+
+  escritasWh.length = 0;
+  estadoProjetoWh = { etapaAtual: 'construcao', telefone: '(43) 98492-7116' };
+  const respOk = await chamarWebhook('segredo-webhook-teste', eventoBase());
+  checar('umbler-webhook: mensagem real do cliente -> 200 e grava ultimaMensagemClienteEm', [respOk.code, escritasWh.length], [200, 1]);
+  const estadoGravado = JSON.parse(escritasWh[0].body.markdown_description);
+  checar('  ultimaMensagemClienteEm gravado com o timestamp certo', estadoGravado.ultimaMensagemClienteEm, Date.parse('2026-09-10T17:21:07.737Z'));
+  checar('  preserva o resto do estado (etapaAtual)', estadoGravado.etapaAtual, 'construcao');
+
+  // Evento fora de ordem (mais antigo que o ja registrado) -> nao regride.
+  escritasWh.length = 0;
+  estadoProjetoWh = { etapaAtual: 'construcao', telefone: '(43) 98492-7116', ultimaMensagemClienteEm: Date.parse('2026-09-10T18:00:00.000Z') };
+  const respAntigo = await chamarWebhook('segredo-webhook-teste', eventoBase());
+  checar('umbler-webhook: evento mais antigo que o ja registrado -> nao regride', escritasWh.length, 0);
+
+  // Telefone sem projeto correspondente -> nao escreve, nao quebra.
+  escritasWh.length = 0;
+  estadoProjetoWh = { etapaAtual: 'construcao', telefone: '(11) 90000-0000' };
+  const respSemMatch = await chamarWebhook('segredo-webhook-teste', eventoBase());
+  checar('umbler-webhook: telefone sem projeto correspondente -> 200, nao escreve', [respSemMatch.code, escritasWh.length], [200, 0]);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+// marcar-conversa-vista + temMensagemNova: verificado direto no dispatcher normal (api/clickup.js).
+console.log('\n[46] marcar-conversa-vista + temMensagemNova (por identidade)');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  const LISTA = '901328976497';
+  let estadoProjetoVisto = { etapaAtual: 'construcao', ultimaMensagemClienteEm: Date.parse('2026-09-10T17:00:00.000Z') };
+  const escritasVisto = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.includes(`/list/${LISTA}/task?`)) {
+      return ok({ tasks: [{ id: 'tProjVisto', name: 'Cliente Visto', description: 'CSM: Gian Luca\n\n' + JSON.stringify(estadoProjetoVisto) }], last_page: true });
+    }
+    if (metodo === 'PUT' && u.endsWith('/task/tProjVisto')) {
+      escritasVisto.push({ body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjVisto')) {
+      return ok({ id: 'tProjVisto', name: 'Cliente Visto', list: { id: LISTA }, parent: null, description: 'CSM: Gian Luca\n\n' + JSON.stringify(estadoProjetoVisto) });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('visto');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl);
+  const clickupLibReal = await import(clickupLibUrl);
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const chamarGet = async (perfil, action, query = {}) => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action, ...query } }, r);
+    return r;
+  };
+  const chamarPost = async (perfil, action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body }, r);
+    return r;
+  };
+
+  const listaAntes = await chamarGet(GESTAO, 'listar-implantacoes');
+  checar('listar-implantacoes: temMensagemNova=true (nunca visto por Gestao)', listaAntes.corpo.tasks[0].temMensagemNova, true);
+
+  escritasVisto.length = 0;
+  const marcarOk = await chamarPost(GESTAO, 'marcar-conversa-vista', { id: 'tProjVisto' });
+  checar('marcar-conversa-vista: 200', [marcarOk.code, marcarOk.corpo.ok], [200, true]);
+  estadoProjetoVisto = clickupLibReal.parseWaipeState(escritasVisto[0].body.markdown_description);
+  checar('  grava vistoPor["Gestao"] com timestamp recente', estadoProjetoVisto.vistoPor.Gestao > Date.now() - 5000, true);
+
+  const listaDepoisGestao = await chamarGet(GESTAO, 'listar-implantacoes');
+  checar('listar-implantacoes: temMensagemNova=false pra Gestao depois de marcar', listaDepoisGestao.corpo.tasks[0].temMensagemNova, false);
+
+  const listaGian = await chamarGet(GIAN, 'listar-implantacoes');
+  checar('listar-implantacoes: temMensagemNova continua true pra Gian (nao viu ainda — visto e por identidade)', listaGian.corpo.tasks[0].temMensagemNova, true);
 
   globalThis.fetch = fetchOriginal;
 }
