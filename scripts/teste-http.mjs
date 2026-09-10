@@ -2212,6 +2212,11 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
     agentesPropostos: [{ nome: 'Agente Novo', frente: 'Comercial', entrega: ['Resumo diário'] }],
     outrasSolucoesPropostas: estadoProposta.outrasSolucoesPropostas,
     diagnosticoWaipe: estadoProposta.diagnosticoWaipe,
+    secoesPropostaSelecionadas: { abertura_narrativa: true, custo_do_problema: false, nao_existe: true },
+    secoesPropostaGeradas: [
+      { id: 'abertura_narrativa', titulo: 'Abertura sob medida', html: '<p>Olá Cliente Y</p>' },
+      { id: 'nao_existe', titulo: 'Fora do catálogo', html: '<p>nunca deveria ser salvo</p>' },
+    ],
   });
   checar('salvar-proposta: 200 cria task nova', [salvarNovo.code, salvarNovo.corpo.ok], [200, true]);
   const criarBody = escritas.find((e) => e.alvo === 'criar')?.body;
@@ -2219,6 +2224,27 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('  agentesPropostos gravado', criarBody.markdown_description.includes('"nome":"Agente Novo"'), true);
   checar('  outrasSolucoesPropostas gravado (produto invalido seria descartado, aqui os 2 sao validos)', criarBody.markdown_description.includes('"produto":"BIME APP"'), true);
   checar('  CSM do formulario prevalece sobre quem esta logado', criarBody.markdown_description.includes('**CSM:** Ana Paula Souza'), true);
+  checar('  secoesPropostaSelecionadas gravado (so id valido)', criarBody.markdown_description.includes('"abertura_narrativa":true'), true);
+  checar('  id fora do catalogo descartado do mapa de selecao', criarBody.markdown_description.includes('nao_existe'), false);
+  checar('  secoesPropostaGeradas gravado (so id valido)', criarBody.markdown_description.includes('Olá Cliente Y'), true);
+  checar('  secao gerada com id invalido descartada', criarBody.markdown_description.includes('nunca deveria ser salvo'), false);
+
+  // obter-implantacao: le de volta o que foi salvo, saneado (id fora do
+  // catalogo nunca sobrevive, nem no mapa de selecao nem na lista gerada).
+  estadoProposta.secoesPropostaSelecionadas = { abertura_narrativa: true, nao_existe: true };
+  estadoProposta.secoesPropostaGeradas = [
+    { id: 'abertura_narrativa', titulo: 'Abertura', html: '<p>ola</p>' },
+    { id: 'nao_existe', titulo: 'fora', html: '<p>fora</p>' },
+  ];
+  const obterComSecoes = await (async () => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(GIAN) }), query: { action: 'obter-implantacao', id: 'tProposta' } }, r);
+    return r;
+  })();
+  checar('obter-implantacao: secoesPropostaSelecionadas saneado (so id valido)', obterComSecoes.corpo.projeto.secoesPropostaSelecionadas, { abertura_narrativa: true });
+  checar('obter-implantacao: secoesPropostaGeradas saneado (descarta id invalido)', obterComSecoes.corpo.projeto.secoesPropostaGeradas, [{ id: 'abertura_narrativa', titulo: 'Abertura', html: '<p>ola</p>' }]);
+  delete estadoProposta.secoesPropostaSelecionadas;
+  delete estadoProposta.secoesPropostaGeradas;
 
   // salvar-proposta-implantacao: taskIdExistente ATUALIZA a mesma task (nao cria outra)
   escritas.length = 0;
@@ -3317,6 +3343,35 @@ console.log('\n[44] api/ia.js — resumir-conversa-umbler, analisar-reuniao-impl
   });
   const relatorioSaneado = await chamarIa(GESTAO, 'gerar-relatorio-finalizacao', { id: 'tProjIA' });
   checar('gerar-relatorio-finalizacao: valores invalidos caem no padrao seguro', [relatorioSaneado.corpo.riscoPercebido, relatorioSaneado.corpo.satisfacaoPercebida], ['', 'indeterminada']);
+
+  // gerar-secoes-proposta — nao usa taskId/resolverImplantacao (proposta ainda
+  // nao e projeto do ClickUp), so precisa do fetch do Claude configurado acima.
+  const semSecoes = await chamarIa(GESTAO, 'gerar-secoes-proposta', { cliente: 'Cliente X', secoes: [] });
+  checar('gerar-secoes-proposta: sem secoes -> 400', [semSecoes.code, semSecoes.corpo.code], [400, 'secoes_invalidas']);
+
+  const secaoInvalida = await chamarIa(GESTAO, 'gerar-secoes-proposta', { cliente: 'Cliente X', secoes: ['nao_existe'] });
+  checar('gerar-secoes-proposta: so ids invalidos -> 400 (filtrados antes de contar)', [secaoInvalida.code, secaoInvalida.corpo.code], [400, 'secoes_invalidas']);
+
+  respostaClaudeTexto = 'isso nao e json';
+  const respostaRuim = await chamarIa(GESTAO, 'gerar-secoes-proposta', { cliente: 'Cliente X', secoes: ['abertura_narrativa'] });
+  checar('gerar-secoes-proposta: resposta da IA nao-JSON -> 502 falha_ia', [respostaRuim.code, respostaRuim.corpo.code], [502, 'falha_ia']);
+
+  respostaClaudeTexto = JSON.stringify({
+    secoes: [
+      { id: 'abertura_narrativa', titulo: 'Abertura', html: '<p>Ola Cliente X</p><script>alert(1)</script>' },
+      { id: 'custo_do_problema', titulo: 'Custo', html: '<div class="callout" onerror="alert(2)">custo alto</div>' },
+      { id: 'nao_existe', titulo: 'Fora do catalogo', html: '<p>nunca deveria voltar</p>' },
+    ],
+  });
+  const secoesOk = await chamarIa(GESTAO, 'gerar-secoes-proposta', {
+    cliente: 'Cliente X', contexto: 'dor de exemplo', secoes: ['abertura_narrativa', 'custo_do_problema'],
+    agentes: [{ nome: 'Agente 1', substitui: '10h/mes' }], outrasSolucoes: [{ produto: 'Gestor', planoSugerido: 'Avançado' }],
+  });
+  checar('gerar-secoes-proposta: 200', [secoesOk.code, secoesOk.corpo.ok, secoesOk.corpo.secoes.length], [200, true, 2]);
+  checar('  descarta id fora do catalogo', secoesOk.corpo.secoes.some((s) => s.id === 'nao_existe'), false);
+  checar('  remove <script> do html', secoesOk.corpo.secoes.find((s) => s.id === 'abertura_narrativa').html.includes('<script'), false);
+  checar('  remove atributo onerror do html', secoesOk.corpo.secoes.find((s) => s.id === 'custo_do_problema').html.includes('onerror'), false);
+  checar('  preserva o conteudo legitimo', secoesOk.corpo.secoes.find((s) => s.id === 'abertura_narrativa').html.includes('Ola Cliente X'), true);
 
   globalThis.fetch = fetchOriginal;
 }

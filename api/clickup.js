@@ -952,6 +952,36 @@ function sanearDiagnosticoWaipeProposto(d) {
   };
 }
 
+// Ids duplicados de proposito do catalogo client-side (waipe-diagnostico.html,
+// CATALOGO_SECOES_PROPOSTA) e do servidor de IA (api/ia.js,
+// IDS_SECOES_PROPOSTA_VALIDAS) — mesmo espirito de resolverImplantacao
+// duplicado entre api/clickup.js e api/ia.js: função/constante pequena, não
+// vale acoplar os arquivos só por isso.
+const IDS_SECOES_PROPOSTA_VALIDAS = new Set([
+  'abertura_narrativa',
+  'custo_do_problema',
+  'tempo_devolvido_agentes',
+  'cenarios_comparativos',
+]);
+
+/** Mapa id->bool das seções de análise detalhada marcadas pelo CSM — só ids conhecidos sobrevivem. */
+function sanearSecoesPropostaSelecionadas(d) {
+  const origem = d && typeof d === 'object' && !Array.isArray(d) ? d : {};
+  const out = {};
+  for (const id of Object.keys(origem)) {
+    if (IDS_SECOES_PROPOSTA_VALIDAS.has(id)) out[id] = !!origem[id];
+  }
+  return out;
+}
+
+/** Uma seção de análise detalhada já gerada pela IA (e possivelmente editada pelo CSM). */
+function sanearSecaoPropostaGerada(s) {
+  if (!s || typeof s !== 'object') return null;
+  const id = typeof s.id === 'string' ? s.id : '';
+  if (!IDS_SECOES_PROPOSTA_VALIDAS.has(id)) return null;
+  return { id, titulo: texto(s.titulo, 150), html: texto(s.html, 6000) };
+}
+
 /** ID Núcleo/CNPJ/e-mail/telefone do cliente, saneados — sempre string (nunca null),
  * pra poder ir direto no bloco de estado sem checagem extra em cada call site. */
 function sanearDadosCliente(d) {
@@ -1189,6 +1219,10 @@ async function obterImplantacaoAcao(req, res, sessao) {
         ? estadoProjeto.outrasSolucoesPropostas.map(sanearOutraSolucao).filter(Boolean)
         : [],
       diagnosticoWaipe: sanearDiagnosticoWaipeProposto(estadoProjeto.diagnosticoWaipe) || null,
+      secoesPropostaSelecionadas: sanearSecoesPropostaSelecionadas(estadoProjeto.secoesPropostaSelecionadas),
+      secoesPropostaGeradas: Array.isArray(estadoProjeto.secoesPropostaGeradas)
+        ? estadoProjeto.secoesPropostaGeradas.map(sanearSecaoPropostaGerada).filter(Boolean)
+        : [],
       // Identificação do cliente (ID Núcleo é o campo que amarra as
       // conexões entre ferramentas) — opcional até a proposta ser
       // confirmada, obrigatório a partir dali (ver confirmarFechamentoImplantacaoAcao).
@@ -1651,11 +1685,18 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     ? corpo.outrasSolucoesPropostas.slice(0, MAX_OUTRAS_SOLUCOES).map(sanearOutraSolucao).filter(Boolean)
     : [];
   const diagnosticoWaipe = sanearDiagnosticoWaipeProposto(corpo.diagnosticoWaipe);
+  const secoesPropostaSelecionadas = sanearSecoesPropostaSelecionadas(corpo.secoesPropostaSelecionadas);
+  const secoesPropostaGeradas = Array.isArray(corpo.secoesPropostaGeradas)
+    ? corpo.secoesPropostaGeradas.slice(0, IDS_SECOES_PROPOSTA_VALIDAS.size).map(sanearSecaoPropostaGerada).filter(Boolean)
+    : [];
   // Opcionais aqui — só viram obrigatórios em confirmar-fechamento-implantacao,
   // quando a proposta vira projeto de implantação de verdade.
   const dadosCliente = sanearDadosCliente(corpo);
 
-  const novoEstado = { etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe, ...dadosCliente };
+  const novoEstado = {
+    etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe,
+    secoesPropostaSelecionadas, secoesPropostaGeradas, ...dadosCliente,
+  };
   const nomeTask = `${cliente} — Proposta — ${dataRotuloHoje()}`;
 
   if (corpo.taskIdExistente) {

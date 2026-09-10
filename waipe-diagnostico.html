@@ -1334,6 +1334,7 @@
       </div>
 
       <div id="analiseIaResultado"></div>
+      <div id="secoesPropostaWrap"></div>
     </div>
   </section>
 
@@ -2196,7 +2197,7 @@
   var doresDebounce = null;
   document.getElementById("p-dores").addEventListener("input", function(){
     clearTimeout(doresDebounce);
-    doresDebounce = setTimeout(runAutoSuggest, 500);
+    doresDebounce = setTimeout(function(){ runAutoSuggest(); renderSecoesProposta(); }, 500);
   });
 
   // ---- Analisar transcrição com IA (cliente/segmento/dores + outros produtos) ----
@@ -2270,6 +2271,27 @@
   }
 
   var recomendacoesState = [];
+
+  // ---- Análise detalhada da proposta (seções narrativas geradas por IA) ----
+  // Mesmos ids duplicados de propósito em api/ia.js (IDS_SECOES_PROPOSTA_VALIDAS)
+  // — mudar aqui sem mudar lá só faz a seção não voltar na resposta, nunca quebra.
+  var CATALOGO_SECOES_PROPOSTA = [
+    { id: "abertura_narrativa", titulo: "Abertura personalizada", posicao: "antes_solucao",
+      gatilho: function(ctx){ return !!ctx.dores; } },
+    { id: "custo_do_problema", titulo: "O que o problema custa hoje", posicao: "antes_solucao",
+      gatilho: function(ctx){ return !!ctx.dores; } },
+    { id: "tempo_devolvido_agentes", titulo: "Tempo devolvido pela automação", posicao: "depois_solucao",
+      gatilho: function(ctx){ return waipeIncluido && ctx.agents.length > 0; } },
+    { id: "cenarios_comparativos", titulo: "Cenários comparativos", posicao: "depois_solucao",
+      gatilho: function(ctx){ return waipeIncluido && (ctx.agents.length > 0 || computeOutrosProdutos().length > 0); } }
+  ];
+  // Map id -> true/false. Recalculado pelo gatilho toda vez que o contexto
+  // muda — EXCETO pros ids que o CSM já tocou manualmente (secoesTocadasManualmente),
+  // esses nunca são sobrescritos pelo automático.
+  var secoesSelecionadas = {};
+  var secoesTocadasManualmente = {};
+  // Map id -> { titulo, html } — o que a IA já gerou (editável antes de virar documento).
+  var secoesGeradasState = {};
 
   var PLANOS_POR_PRODUTO = {
     "Gestor": ["Básico", "Intermediário", "Avançado"],
@@ -2557,6 +2579,7 @@
       }
       aplicarWaipeDiagnostico(resultado.waipeDiagnostico);
       renderAnaliseIa(resultado);
+      renderSecoesProposta();
       showToast("Análise concluída — revise os campos preenchidos e o diagnóstico Waipe calculado.");
     }).catch(function(e){
       erroEl.textContent = (e && e.error) || "Não foi possível analisar agora. Preencha os campos manualmente.";
@@ -2566,6 +2589,115 @@
       btn.textContent = textoOriginal;
     });
   });
+
+  /** Recalcula secoesSelecionadas[id] pelo gatilho — mas nunca pros ids que o
+   * CSM já tocou manualmente (checkbox clicado, ou carregados de uma proposta
+   * salva). Mesmo princípio de renderAnaliseIa preservar os itens "manual" de
+   * recomendacoesState: automático não pode apagar uma escolha deliberada. */
+  function autoSeedSecoesProposta(){
+    var ctx = getProposalContext();
+    CATALOGO_SECOES_PROPOSTA.forEach(function(s){
+      if (!secoesTocadasManualmente[s.id]) secoesSelecionadas[s.id] = !!s.gatilho(ctx);
+    });
+  }
+
+  function renderSecoesProposta(){
+    var wrap = document.getElementById("secoesPropostaWrap");
+    if (!wrap) return;
+    autoSeedSecoesProposta();
+
+    var checklistHtml = CATALOGO_SECOES_PROPOSTA.map(function(s){
+      var marcado = !!secoesSelecionadas[s.id];
+      return '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13.5px;">' +
+        '<input type="checkbox" data-secao-check="' + s.id + '"' + (marcado ? " checked" : "") + '> ' + escapeHtml(s.titulo) +
+      '</label>';
+    }).join("");
+
+    var geradasHtml = CATALOGO_SECOES_PROPOSTA
+      .filter(function(s){ return secoesGeradasState[s.id]; })
+      .map(function(s){
+        var g = secoesGeradasState[s.id];
+        return '<div class="field" style="margin-top:10px;">' +
+          '<label>' + escapeHtml(g.titulo || s.titulo) + '</label>' +
+          '<textarea class="ta" data-secao-html="' + s.id + '" style="min-height:110px;">' + escapeHtml(g.html) + '</textarea>' +
+        '</div>';
+      }).join("");
+
+    wrap.innerHTML =
+      '<div class="field" style="margin-top:14px;border-top:1px solid var(--linha,#E5E7EB);padding-top:14px;">' +
+        '<label>🤖 Análise detalhada (seções opcionais geradas por IA)</label>' +
+        '<div class="hint">Marque as seções que fazem sentido pra este cliente — o automático já vem sugerido, mas edite à vontade antes de gerar.</div>' +
+        checklistHtml +
+        '<button type="button" class="btn-secondary" id="btnGerarSecoesProposta" style="margin-top:8px;">Gerar análise detalhada</button>' +
+        '<div id="secoesPropostaErro" style="display:none; font-size:12.5px; color:#B91C1C; margin-top:8px;"></div>' +
+        geradasHtml +
+      '</div>';
+
+    wrap.querySelectorAll("[data-secao-check]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var id = cb.getAttribute("data-secao-check");
+        secoesTocadasManualmente[id] = true;
+        secoesSelecionadas[id] = cb.checked;
+      });
+    });
+    wrap.querySelectorAll("[data-secao-html]").forEach(function(ta){
+      ta.addEventListener("input", function(){
+        var id = ta.getAttribute("data-secao-html");
+        if (secoesGeradasState[id]) secoesGeradasState[id].html = ta.value;
+      });
+    });
+
+    var btnGerar = document.getElementById("btnGerarSecoesProposta");
+    if (btnGerar) btnGerar.addEventListener("click", function(){
+      var erroEl = document.getElementById("secoesPropostaErro");
+      erroEl.style.display = "none";
+      var idsMarcados = CATALOGO_SECOES_PROPOSTA.filter(function(s){ return secoesSelecionadas[s.id]; }).map(function(s){ return s.id; });
+      if (!idsMarcados.length){
+        erroEl.textContent = "Marque ao menos uma seção antes de gerar.";
+        erroEl.style.display = "block";
+        return;
+      }
+      var ctx = getProposalContext();
+      var payload = {
+        cliente: ctx.cliente,
+        contexto: [ctx.segmento, ctx.dores].filter(Boolean).join("\n\n"),
+        secoes: idsMarcados,
+        diagnosticoWaipe: (waipeIncluido && lastDiagnostic) ? {
+          usuarios: lastDiagnostic.input.usuarios, empresas: lastDiagnostic.input.empresas,
+          plano: lastDiagnostic.rec.plan, valorMensal: computePricing().total
+        } : null,
+        agentes: waipeIncluido ? ctx.agents.map(function(a){
+          return { nome: a.nome, oque: a.oque || "", faz: a.faz || "", substitui: a.substitui || "" };
+        }) : [],
+        outrasSolucoes: computeOutrosProdutos().map(function(o){
+          return { produto: o.produto, planoSugerido: o.planoSugerido || "", motivo: o.motivo || "" };
+        })
+      };
+
+      btnGerar.disabled = true;
+      var textoOriginal = btnGerar.textContent;
+      btnGerar.textContent = "Gerando…";
+      fetch("/api/ia?action=gerar-secoes-proposta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }).then(function(r){
+        return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+      }).then(function(resultado){
+        (resultado.secoes || []).forEach(function(s){
+          secoesGeradasState[s.id] = { titulo: s.titulo, html: s.html };
+        });
+        renderSecoesProposta();
+        showToast("Análise detalhada gerada — revise o texto antes de baixar a proposta.");
+      }).catch(function(e){
+        erroEl.textContent = (e && e.error) || "Não foi possível gerar a análise agora.";
+        erroEl.style.display = "block";
+      }).finally(function(){
+        btnGerar.disabled = false;
+        btnGerar.textContent = textoOriginal;
+      });
+    });
+  }
 
   function refreshPropSummary(){
     if (typeof salvarRascunho === "function") salvarRascunho();
@@ -2609,6 +2741,7 @@
         : '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>Rode o diagnóstico no card do Waipe (ou cole a transcrição acima) antes de gerar a proposta, para trazer o plano e o preço certos.</span></div>';
     }
     agentsStat.textContent = Object.keys(selectedAgentIds).length;
+    if (typeof renderSecoesProposta === "function") renderSecoesProposta();
   }
 
   document.getElementById("btnAddAddl").addEventListener("click", function(){
@@ -2704,6 +2837,7 @@
   renderHorasSim();
   renderImplantacaoSim();
   renderRecomendacoes();
+  renderSecoesProposta();
   refreshPropSummary();
 
   // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
@@ -2863,6 +2997,15 @@
       telefone: ctx.telefone,
       agentesPropostos: waipeIncluido ? montarAgentesPropostos() : [],
       outrasSolucoesPropostas: recomendacoesState,
+      // Mapa completo (não só os marcados) — pra reabrir a proposta sem
+      // reverter pro automático uma seção que o CSM desmarcou manualmente.
+      secoesPropostaSelecionadas: CATALOGO_SECOES_PROPOSTA.reduce(function(m, s){
+        if (s.id in secoesSelecionadas) m[s.id] = !!secoesSelecionadas[s.id];
+        return m;
+      }, {}),
+      secoesPropostaGeradas: CATALOGO_SECOES_PROPOSTA.filter(function(s){ return secoesGeradasState[s.id]; }).map(function(s){
+        return { id: s.id, titulo: secoesGeradasState[s.id].titulo, html: secoesGeradasState[s.id].html };
+      }),
       diagnosticoWaipe: (waipeIncluido && lastDiagnostic) ? {
         usuarios: lastDiagnostic.input.usuarios,
         empresas: lastDiagnostic.input.empresas,
@@ -2976,6 +3119,22 @@
           if (achou) selectedAgentIds[achou.id] = true;
         });
         renderAgentCatalog();
+        secoesSelecionadas = {};
+        secoesTocadasManualmente = {};
+        var secoesSalvas = projeto.secoesPropostaSelecionadas;
+        if (secoesSalvas && typeof secoesSalvas === "object" && !Array.isArray(secoesSalvas)){
+          // Uma escolha já salva é tratada como deliberada — não deixa o
+          // automático recalcular por cima assim que a tela carregar.
+          Object.keys(secoesSalvas).forEach(function(id){
+            secoesSelecionadas[id] = !!secoesSalvas[id];
+            secoesTocadasManualmente[id] = true;
+          });
+        }
+        secoesGeradasState = {};
+        (projeto.secoesPropostaGeradas || []).forEach(function(s){
+          secoesGeradasState[s.id] = { titulo: s.titulo, html: s.html };
+        });
+        renderSecoesProposta();
         atualizarStatusProposta();
         salvarRascunho();
         document.getElementById("carregarPropostaWrap").style.display = "none";
@@ -3400,6 +3559,16 @@
           body: doresHtml }
       ];
 
+      // Seções da "análise detalhada" geradas por IA (opcionais, decididas
+      // pelo CSM no checklist antes de gerar) — só as marcadas E já geradas
+      // entram aqui; o layout continua 100% definido em código, a IA só
+      // escreveu o texto/dados de dentro do que já foi gerado.
+      CATALOGO_SECOES_PROPOSTA.forEach(function(s){
+        if (s.posicao === "antes_solucao" && secoesSelecionadas[s.id] && secoesGeradasState[s.id]){
+          sections.push({ title: secoesGeradasState[s.id].titulo || s.titulo, body: secoesGeradasState[s.id].html });
+        }
+      });
+
       // Todo o bloco Waipe (time de agentes, horas devolvidas, plano e
       // investimento, implantação Enterprise) só entra no documento quando
       // "Incluir" está marcado no card do Waipe — senão a proposta é feita
@@ -3410,6 +3579,12 @@
         sections.push({ title: "Tempo Devolvido à Gestão",
           body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml });
       }
+
+      CATALOGO_SECOES_PROPOSTA.forEach(function(s){
+        if (s.posicao === "depois_solucao" && secoesSelecionadas[s.id] && secoesGeradasState[s.id]){
+          sections.push({ title: secoesGeradasState[s.id].titulo || s.titulo, body: secoesGeradasState[s.id].html });
+        }
+      });
 
       if (outros.length){
         sections.push({ title: waipeIncluido ? "Outras Soluções Recomendadas" : "Soluções Recomendadas",

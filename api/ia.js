@@ -28,6 +28,21 @@
 //        editável, e salvar passa pela ação normal `atualizar-implantacao`
 //        (campo `finalizacao`), igual qualquer outro campo do projeto.
 //
+//   POST /api/ia?action=gerar-secoes-proposta           { cliente, contexto,
+//        secoes[], diagnosticoWaipe?, agentes?, outrasSolucoes? }
+//        Gera o CONTEÚDO (texto + números já fornecidos, nunca inventados)
+//        de seções narrativas opcionais da proposta comercial do simulador
+//        Waipe — a "análise detalhada" que hoje só o gerente de contas
+//        produz manualmente. `secoes` é a lista de ids já decididos pelo CSM
+//        (cada um com um gatilho automático + override manual no simulador)
+//        ANTES desta chamada — nunca gera mais do que foi pedido. O HTML
+//        devolvido usa só classes já existentes no template gerado por
+//        `buildProposalHTML()` (.callout/table/ul.clean) — o layout continua
+//        inteiramente definido em código, a IA só escreve o conteúdo de
+//        dentro dele. Não salva nada sozinho; a tela guarda o resultado
+//        editável e ele entra no payload de `salvar-proposta-implantacao`
+//        quando o CSM salvar.
+//
 // Mesmo portão de sessão do resto do painel: consulta fica de fora (é uso
 // pago, mesmo critério de podeEscrever já usado pro ClickUp). O limitador de
 // chamadas por IP é COMPARTILHADO entre todas as ações desta função — é o
@@ -520,11 +535,126 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
 const RISCO_PERCEBIDO_VALIDOS = new Set(['baixo', 'medio', 'alto']);
 const SATISFACAO_PERCEBIDA_VALIDOS = new Set(['positiva', 'neutra', 'negativa', 'indeterminada']);
 
+// ── Ação: gerar-secoes-proposta ────────────────────────────────────────────
+//
+// Ids duplicados de propósito do catálogo client-side (waipe-diagnostico.html,
+// CATALOGO_SECOES_PROPOSTA) — mesmo espírito de resolverImplantacao duplicado
+// no topo deste arquivo: função/constante pequena, não vale acoplar os dois
+// lados só por isso. Mudar aqui sem mudar lá (ou vice-versa) faz uma seção
+// pedida pelo CSM simplesmente não voltar na resposta (fica de fora do
+// whitelist), nunca quebra nada — mas os dois devem ficar em sincronia.
+const IDS_SECOES_PROPOSTA_VALIDAS = new Set([
+  'abertura_narrativa',
+  'custo_do_problema',
+  'tempo_devolvido_agentes',
+  'cenarios_comparativos',
+]);
+
+// Prompt ESTÁTICO (não interpola a lista de seções pedidas nem dados do
+// cliente) pra manter o cache de prompt (`cache_control` em chamarClaudeTexto)
+// válido em toda chamada, não só quando o mesmo conjunto de seções se repete
+// — é o que mantém o custo desta ação na mesma ordem de grandeza das outras
+// três (resumo de conversa/reunião), bem longe do custo de gerar o HTML
+// inteiro da proposta do zero.
+const INSTRUCOES_SECOES_PROPOSTA = `Você escreve seções narrativas de uma proposta comercial da Londrisoft (ecossistema Waipe + Gestor/Simplaz/Unique/BIME APP), no mesmo padrão de tom que os gerentes de conta mais experientes já usam: direto, endereça o cliente pelo nome/segmento, nunca genérico ou robótico.
+
+Você recebe: o nome do cliente, um resumo de contexto/dores (texto livre do CSM ou extraído de transcrição), e os DADOS DISPONÍVEIS desta proposta (diagnóstico Waipe, agentes selecionados com o que cada um substitui, outras soluções incluídas). Você recebe também a lista exata de seções que devem ser escritas nesta chamada — escreva SOMENTE essas, uma por id.
+
+REGRA MAIS IMPORTANTE: nunca invente número (hora, valor, quantidade, percentual) que não esteja explicitamente nos dados recebidos. Quando não houver dado numérico suficiente pra uma seção, escreva de forma qualitativa (sem inventar a estimativa) em vez de forçar um número.
+
+Catálogo de seções (escreva só as pedidas):
+
+- "abertura_narrativa": abertura curta (2 a 3 parágrafos) que nomeia a dor central do cliente em linguagem direta, no estilo "Hoje a empresa X funciona, mas funciona presa em [gargalo específico]" — usa o contexto/dores recebido, nunca genérico. Fecha com uma frase que conecta a dor à motivação de resolver agora.
+- "custo_do_problema": quantifica o que o problema custa hoje, em tempo e/ou dinheiro, usando SOMENTE números presentes no contexto recebido (se não houver número, descreva o custo qualitativamente — trabalho manual, retrabalho, risco — sem estimar).
+- "tempo_devolvido_agentes": só faz sentido quando a lista de agentes foi enviada. Para cada agente (ou agrupado, se forem muitos), resuma o que ele substitui e o tempo que devolve à gestão, citando o texto de "substitui" de cada agente quando disponível — não crie uma tabela de horas que não veio nos dados.
+- "cenarios_comparativos": compara o cenário atual (sem a solução) com o cenário proposto, e — se houver outras soluções incluídas além do Waipe — um terceiro cenário combinando as duas. Baseie a comparação nos dados de investimento/diagnóstico recebidos, nunca em receita ou resultado financeiro hipotético do cliente.
+
+Formato de saída — responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código markdown):
+{"secoes":[{"id":"um dos ids pedidos","titulo":"título curto e específico para este cliente (não repita o nome genérico do catálogo)","html":"conteúdo HTML desta seção"}]}
+
+Regras do campo "html": só o corpo da seção (nunca <html>, <head> ou <style>); pode usar <p>, <h3>, <h4>, <strong>, <ul class="clean"><li>...</li></ul>, <table><tr><th>...</th></tr><tr><td>...</td></tr></table>, e <div class="callout"><span class="lbl">RÓTULO</span>texto</div> (variantes: class="callout green" pra destaque positivo, class="callout warn" pra atenção/risco) — não use nenhuma outra classe CSS, elas não existem no template. Um item por id pedido, na mesma ordem recebida.`;
+
+/** Remove <script>...</script> e atributos on*="..." do HTML gerado — defesa
+ * barata contra o modelo emitir algo executável; o CSM ainda revisa o texto
+ * antes de baixar/enviar, mas a pré-visualização usa `srcdoc`, que executa
+ * JS, então mais vale nunca deixar passar um <script> daqui pra frente. */
+function limparHtmlGerado(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+\s*=\s*"(?:[^"\\]|\\.)*"/gi, '')
+    .replace(/\son\w+\s*=\s*'(?:[^'\\]|\\.)*'/gi, '');
+}
+
+/** Nunca confia na resposta da IA crua — só ids do catálogo, tamanhos travados, HTML limpo. */
+function sanearSecoesGeradas(bruto) {
+  const secoesBrutas = Array.isArray(bruto?.secoes) ? bruto.secoes : [];
+  return secoesBrutas
+    .slice(0, IDS_SECOES_PROPOSTA_VALIDAS.size)
+    .map((s) => {
+      const id = typeof s?.id === 'string' ? s.id.trim() : '';
+      if (!IDS_SECOES_PROPOSTA_VALIDAS.has(id)) return null;
+      const html = limparHtmlGerado(texto(s?.html, 6000));
+      if (!html) return null;
+      return { id, titulo: texto(s?.titulo, 150), html };
+    })
+    .filter(Boolean);
+}
+
+async function gerarSecoesPropostaAcao(req, res) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_BYTES });
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const idsPedidos = Array.isArray(corpo.secoes)
+    ? [...new Set(corpo.secoes.filter((id) => typeof id === 'string' && IDS_SECOES_PROPOSTA_VALIDAS.has(id)))]
+    : [];
+  if (!idsPedidos.length) {
+    return erro(res, 400, 'secoes_invalidas', 'Marque ao menos uma seção antes de gerar a análise detalhada.');
+  }
+
+  const cliente = texto(corpo.cliente, 120) || 'o cliente';
+  const contexto = texto(corpo.contexto, 4000);
+  const agentes = Array.isArray(corpo.agentes) ? corpo.agentes.slice(0, 20) : [];
+  const outrasSolucoes = Array.isArray(corpo.outrasSolucoes) ? corpo.outrasSolucoes.slice(0, 10) : [];
+  const diagnosticoWaipe = corpo.diagnosticoWaipe && typeof corpo.diagnosticoWaipe === 'object' ? corpo.diagnosticoWaipe : null;
+
+  const mensagem = [
+    `Cliente: ${cliente}`,
+    contexto ? `Contexto/dores: ${contexto}` : null,
+    `Seções a escrever (nesta ordem, só estas): ${idsPedidos.join(', ')}`,
+    diagnosticoWaipe ? `Diagnóstico Waipe: ${JSON.stringify(diagnosticoWaipe)}` : null,
+    agentes.length ? `Agentes Waipe selecionados: ${JSON.stringify(agentes)}` : 'Nenhum agente Waipe selecionado nesta proposta.',
+    outrasSolucoes.length ? `Outras soluções incluídas: ${JSON.stringify(outrasSolucoes)}` : 'Nenhuma outra solução incluída além do Waipe.',
+  ].filter(Boolean).join('\n\n');
+
+  let respostaTexto;
+  try {
+    respostaTexto = await chamarClaudeTexto({ system: INSTRUCOES_SECOES_PROPOSTA, mensagem, maxTokens: 6000 });
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido.');
+    throw e;
+  }
+  const parsed = jsonTolerante(respostaTexto);
+  if (!parsed) {
+    console.error(`[ia] secoes_proposta_nao_json: ${respostaTexto.slice(0, 500)}`);
+    return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido — tente novamente.');
+  }
+
+  const secoes = sanearSecoesGeradas(parsed);
+  return res.status(200).json({ ok: true, secoes });
+}
+
 const ACOES_IA = {
   'analisar-transcricao': analisarTranscricaoAcao,
   'resumir-conversa-umbler': resumirConversaUmblerAcao,
   'analisar-reuniao-implantacao': analisarReuniaoImplantacaoAcao,
   'gerar-relatorio-finalizacao': gerarRelatorioFinalizacaoAcao,
+  'gerar-secoes-proposta': gerarSecoesPropostaAcao,
 };
 
 export default async function handler(req, res) {
