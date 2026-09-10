@@ -21,6 +21,17 @@ Nunca escreva nenhum destes valores em arquivo do repositório.
 | ------------------ | ----------------------------------------------------- | ----------- |
 | `CLICKUP_API_KEY`  | Token pessoal do ClickUp usado por `/api/clickup`     | `pk_XXXXXXXX_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX` |
 | `MOSKIT_API_KEY`   | Chave da API do Moskit usada por `/api/moskit`        | `00000000-0000-0000-0000-000000000000` |
+| `GOOGLE_CLIENT_ID`     | OAuth Client ID (Google Cloud Console, tipo "Web application") — conexão da agenda de cada ISM | `xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Client secret da mesma credencial acima                                                       | `GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx` |
+| `GOOGLE_REDIRECT_URI`  | URL completa de `/api/google-oauth-callback` deste ambiente (precisa estar cadastrada como Redirect URI autorizada na credencial) | `https://<domínio-do-ambiente>/api/google-oauth-callback` |
+
+Setup no Google Cloud Console: criar um projeto, ativar a **Google Calendar
+API**, configurar a tela de consentimento OAuth com **Audience = Internal**
+(exige o projeto vinculado à organização do Google Workspace da Londrisoft —
+evita todo o processo de verificação do Google, já que ninguém fora do
+domínio nunca vai autorizar este app) e criar a credencial Web application
+com uma Redirect URI por ambiente (produção e local, se for testar com
+`vercel dev`).
 
 ### Sessão
 

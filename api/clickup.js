@@ -23,6 +23,9 @@
 //   POST /api/clickup?action=atualizar-reserva     { id, linkReuniao } — cola o
 //        link do Meet depois que a reuniao foi criada (a API do ClickUp nao gera isso)
 //   POST /api/clickup?action=cancelar-reserva      { id } -> libera o horario
+//   GET  /api/clickup?action=conectar-agenda-google { ismId } -> 302 pro
+//        consentimento OAuth do Google (volta em api/google-oauth-callback.js)
+//   GET  /api/clickup?action=status-google-agenda  { [ismId]: conectado? }
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -70,12 +73,14 @@ import {
   localizarTask,
   obterTask,
   obterTaskComSubtasks,
+  obterTokenGoogle,
   parseWaipeState,
   projetoDaDescricaoReserva,
   refletirEscrita,
   STATUS_MES_ATUAL,
   stringifyWaipeState,
 } from './_lib/clickup.js';
+import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
 // A resposta varia por sessao (filtro por CSM), portanto nao pode ir para o
@@ -127,6 +132,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'criar-reserva') return await criarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'atualizar-reserva') return await atualizarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'cancelar-reserva') return await cancelarReservaAcao(req, res, sessao);
+    if (req.method === 'GET' && acao === 'conectar-agenda-google') return await conectarAgendaGoogleAcao(req, res);
+    if (req.method === 'GET' && acao === 'status-google-agenda') return await statusGoogleAgendaAcao(res);
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
@@ -134,7 +141,8 @@ export default async function handler(req, res) {
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
       'listar-comentarios', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
-      'atualizar-reserva', 'cancelar-reserva',
+      'atualizar-reserva', 'cancelar-reserva', 'conectar-agenda-google',
+      'status-google-agenda',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -1485,6 +1493,39 @@ async function criarReservaAcao(req, res, sessao) {
     });
   }
 
+  // Se o ISM ja conectou a propria agenda do Google: checa disponibilidade
+  // REAL (nao so contra as reservas ja registradas aqui) e cria a reuniao
+  // com Meet automatico. Sem conexao, comportamento identico ao de sempre —
+  // ninguem fica bloqueado por nao ter conectado ainda.
+  let linkReuniao = null;
+  const tokenGoogle = await obterTokenGoogle(ismId);
+  if (tokenGoogle) {
+    let accessToken;
+    try {
+      accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
+    } catch (e) {
+      if (!(e instanceof ErroGoogle)) throw e;
+      accessToken = null;
+    }
+    if (accessToken) {
+      const ocupado = await consultarFreeBusy(accessToken, inicio, fim);
+      if (ocupado) {
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(409).json({
+          error: 'Este ISM tem outro compromisso na agenda do Google nesse horário.',
+          code: 'conflito_horario_google',
+          conflito: ocupado,
+        });
+      }
+      linkReuniao = await criarEventoComMeet(accessToken, { titulo, inicio, fim });
+    }
+  }
+
+  const linhasDescricao = [
+    projetoId ? `**Projeto:** ${projetoId}` : null,
+    linkReuniao ? `**Link:** ${linkReuniao}` : null,
+  ].filter(Boolean);
+
   const nova = await criarReserva({
     name: titulo,
     start_date: inicio,
@@ -1492,9 +1533,9 @@ async function criarReservaAcao(req, res, sessao) {
     due_date: fim,
     due_date_time: true,
     assignees: [ismId],
-    markdown_description: projetoId ? `**Projeto:** ${projetoId}` : '',
+    markdown_description: linhasDescricao.join('\n\n'),
   });
-  return res.status(200).json({ ok: true, id: nova.id });
+  return res.status(200).json({ ok: true, id: nova.id, linkReuniao });
 }
 
 async function atualizarReservaAcao(req, res, sessao) {
@@ -1556,6 +1597,37 @@ async function cancelarReservaAcao(req, res, sessao) {
 
   await excluirTask(corpo.id);
   return res.status(200).json({ ok: true });
+}
+
+/** 302 pro consentimento OAuth do Google — devolve o redirect, a troca de code por
+ * token acontece do outro lado, em api/google-oauth-callback.js (fora deste dispatcher). */
+async function conectarAgendaGoogleAcao(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
+  const ismId = Number(req.query?.ismId);
+  if (!ISM_IDS_VALIDOS.has(ismId)) {
+    return erro(res, 400, 'ism_invalido', 'ismId inválido.');
+  }
+  let url;
+  try {
+    url = urlAutorizacaoGoogle(ismId);
+  } catch (e) {
+    if (e instanceof ErroConfigGoogle) {
+      return erro(res, 500, 'google_nao_configurado', 'Integração com o Google ainda não foi configurada.');
+    }
+    throw e;
+  }
+  res.setHeader('Location', url);
+  return res.status(302).end();
+}
+
+/** { [ismId]: true|false } — se cada ISM ja conectou a propria agenda do Google. */
+async function statusGoogleAgendaAcao(res) {
+  res.setHeader('Cache-Control', 'no-store');
+  const status = {};
+  await Promise.all(ISM_OPCOES.map(async (o) => {
+    status[o.id] = !!(await obterTokenGoogle(o.id));
+  }));
+  return res.status(200).json({ status });
 }
 
 async function listarComentariosAcao(req, res, sessao) {

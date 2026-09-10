@@ -86,8 +86,23 @@ const stubClickup = `
   export async function excluirTask() { return {}; }
   export function projetoDaDescricaoReserva() { return ''; }
   export function linkDaDescricaoReserva() { return ''; }
+  export async function obterTokenGoogle() { return null; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
+
+// Stub padrao do modulo Google: nenhuma acao chega a bater na rede real. Como
+// obterTokenGoogle acima sempre devolve null, o ramo de integracao do Google em
+// criarReservaAcao nunca chama nada disto — existe so pra satisfazer o import.
+const stubGoogle = `
+  export class ErroGoogle extends Error { constructor(s){ super('g'); this.status = s; } }
+  export class ErroConfigGoogle extends Error {}
+  export function urlAutorizacaoGoogle() { return 'https://accounts.google.com/o/oauth2/v2/auth?stub=1'; }
+  export async function trocarCodigoPorToken() { return { access_token: 'stub', refresh_token: 'stub' }; }
+  export async function renovarAccessToken() { return 'stub-access-token'; }
+  export async function consultarFreeBusy() { return null; }
+  export async function criarEventoComMeet() { return null; }
+`;
+const googleLibUrl = dataUrl(stubGoogle);
 
 const carregar = (arquivo) =>
   import(
@@ -96,6 +111,7 @@ const carregar = (arquivo) =>
         .replace("'./_lib/http.js'", `'${httpUrl}'`)
         .replace("'./_lib/auth.js'", `'${authUrl}'`)
         .replace("'./_lib/clickup.js'", `'${clickupLibUrl}'`)
+        .replace("'./_lib/google.js'", `'${googleLibUrl}'`)
     )
   ).then((m) => m.default);
 
@@ -110,16 +126,21 @@ const moskit = await carregar('api/moskit.js');
  */
 const libClickupUnica = (tag) => dataUrl(ler('api/_lib/clickup.js') + `\n// variante:${tag}\n`);
 
-/** Como carregar(), mas com o _lib/clickup.js REAL em vez do stub. */
-const carregarCom = (arquivo, libClickupUrl) =>
+/** Como carregar(), mas com o _lib/clickup.js REAL em vez do stub. `libGoogleUrl`
+ * opcional troca tambem o _lib/google.js (default: mesmo stub de carregar()). */
+const carregarCom = (arquivo, libClickupUrl, libGoogleUrl = googleLibUrl) =>
   import(
     dataUrl(
       ler(arquivo)
         .replace("'./_lib/http.js'", `'${httpUrl}'`)
         .replace("'./_lib/auth.js'", `'${authUrl}'`)
         .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
+        .replace("'./_lib/google.js'", `'${libGoogleUrl}'`)
     )
   ).then((m) => m.default);
+
+/** data: URL do _lib/google.js real, UNICA por variante (mesmo motivo de libClickupUnica). */
+const libGoogleUnica = (tag) => dataUrl(ler('api/_lib/google.js') + `\n// variante:${tag}\n`);
 
 // ── Harness ───────────────────────────────────────────────────────────────
 
@@ -2366,6 +2387,128 @@ console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link
 
   const cancelarForaDaLista = await chamarAcao(GESTAO, 'POST', 'cancelar-reserva', { id: 'tOutraLista' });
   checar('cancelar-reserva: task de outra lista -> 404', [cancelarForaDaLista.code, cancelarForaDaLista.corpo.code], [404, 'nao_encontrado']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[38] Google Calendar: state assinado do OAuth (mesmo esquema HMAC da sessao)');
+{
+  const google = await import(libGoogleUnica('state'));
+  process.env.SESSION_SECRET = 'T'.repeat(48);
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+
+  const estado = google.assinarEstadoGoogle(118125102);
+  checar('assina e verifica: ismId volta certo', google.verificarEstadoGoogle(estado)?.ismId, 118125102);
+  checar('adulterado: recusado', google.verificarEstadoGoogle(estado.slice(0, -3) + 'aaa'), null);
+  checar('lixo: recusado', google.verificarEstadoGoogle('nao-e-um-state'), null);
+
+  // TTL de 10min, mesmo truque de HMAC(iat) manual do teste [19] (sem esperar de verdade)
+  const b64u = (b) => Buffer.from(b).toString('base64url');
+  const stateComIat = (iat) => {
+    const corpo = b64u(JSON.stringify({ ismId: 118125102, iat }));
+    return `${corpo}.${b64u(crypto.createHmac('sha256', process.env.SESSION_SECRET).update(corpo).digest())}`;
+  };
+  const agora = Date.now();
+  checar('9min59: valido', google.verificarEstadoGoogle(stateComIat(agora - 9.98 * 60000))?.ismId, 118125102);
+  checar('10min01: expirado', google.verificarEstadoGoogle(stateComIat(agora - 10.02 * 60000)), null);
+
+  const url = google.urlAutorizacaoGoogle(118125102);
+  checar('urlAutorizacaoGoogle: aponta pro Google, com os 2 escopos e state', [
+    url.startsWith('https://accounts.google.com/o/oauth2/v2/auth?'),
+    url.includes('calendar.events'), url.includes('calendar.freebusy'),
+    url.includes('access_type=offline'), url.includes('prompt=consent'),
+  ], [true, true, true, true, true]);
+}
+
+console.log('\n[39] criar-reserva com ISM conectado ao Google: freebusy real + Meet automatico');
+{
+  const fetchOriginal = globalThis.fetch;
+  const LISTA_RESERVAS = '901329017742';
+  const LISTA_TOKENS_GOOGLE = '901329032234';
+  const BRUNO = 118125102;
+  const ERICA = 48933858;
+  const INICIO = Date.UTC(2026, 8, 20, 13, 0);
+  const UMA_HORA = 60 * 60 * 1000;
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+
+  const escritas = [];
+  let freeBusyOcupado = false; // alternado entre os dois cenarios abaixo
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    // ClickUp: lista de reservas — sempre vazia aqui (o foco deste teste e o Google, nao o conflito interno)
+    if (u.includes(`/list/${LISTA_RESERVAS}/task?`)) return ok({ tasks: [], last_page: true });
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_RESERVAS}/task`)) {
+      escritas.push({ alvo: 'criar-reserva', body: JSON.parse(init.body) });
+      return ok({ id: 'tNovaReservaGoogle' });
+    }
+    // ClickUp: lista de tokens do Google — so o Bruno tem token salvo
+    if (u.includes(`/list/${LISTA_TOKENS_GOOGLE}/task?`)) {
+      return ok({
+        tasks: [{
+          id: 'tTokenBruno', assignees: [],
+          description: JSON.stringify({ ismId: BRUNO, refreshToken: 'rt-bruno', conectadoEm: Date.now() }),
+        }],
+        last_page: true,
+      });
+    }
+    // Google: renovar access_token
+    if (u === 'https://oauth2.googleapis.com/token') {
+      return ok({ access_token: 'at-bruno', expires_in: 3600 });
+    }
+    // Google: freebusy — controlado por freeBusyOcupado
+    if (u.endsWith('/calendar/v3/freeBusy')) {
+      return ok({ calendars: { primary: { busy: freeBusyOcupado ? [{ start: 'x', end: 'y' }] : [] } } });
+    }
+    // Google: criar evento com Meet
+    if (u.includes('/calendar/v3/calendars/primary/events')) {
+      return ok({ hangoutLink: 'https://meet.google.com/bruno-teste' });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('google-reserva');
+  const googleLibUrl = libGoogleUnica('google-reserva');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const chamarAcao = async (action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(GESTAO) }), query: { action }, body: JSON.stringify(body) }, r);
+    return r;
+  };
+
+  // Bruno tem Google conectado e a agenda real dele esta OCUPADA nesse horario
+  freeBusyOcupado = true;
+  const comConflitoGoogle = await chamarAcao('criar-reserva', { titulo: 'Camada 1', ismId: BRUNO, inicio: INICIO, fim: INICIO + UMA_HORA });
+  checar('ISM conectado + agenda real ocupada: 409 conflito_horario_google', [comConflitoGoogle.code, comConflitoGoogle.corpo.code], [409, 'conflito_horario_google']);
+
+  // Agora livre: cria o evento de verdade, com Meet automatico
+  freeBusyOcupado = false;
+  escritas.length = 0;
+  const semConflitoGoogle = await chamarAcao('criar-reserva', { titulo: 'Camada 1', ismId: BRUNO, inicio: INICIO, fim: INICIO + UMA_HORA });
+  checar('ISM conectado + agenda real livre: 200 com linkReuniao', [semConflitoGoogle.code, semConflitoGoogle.corpo.linkReuniao], [200, 'https://meet.google.com/bruno-teste']);
+  const criada = escritas.find((e) => e.alvo === 'criar-reserva')?.body;
+  checar('  link do Meet ja vai gravado na descricao (sem passo manual)', criada.markdown_description.includes('**Link:** https://meet.google.com/bruno-teste'), true);
+
+  // Erica NAO tem Google conectado: comportamento identico ao de sempre (sem Meet, sem checar freebusy)
+  const semGoogle = await chamarAcao('criar-reserva', { titulo: 'Treinamento', ismId: ERICA, inicio: INICIO, fim: INICIO + UMA_HORA });
+  checar('ISM sem Google conectado: 200 sem linkReuniao (fallback identico ao de hoje)', [semGoogle.code, semGoogle.corpo.linkReuniao], [200, null]);
 
   globalThis.fetch = fetchOriginal;
 }

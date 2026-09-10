@@ -237,6 +237,127 @@
   .agent-editor-card h2{font-size:14.5px;}
 
   @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+
+  /* ---- Revisão UX/UI — paleta oficial Londrisoft + fluxo Waipe ---- */
+  :root{
+    --azul:#3A86FF;
+    --noite:#000035;
+    --profundo:#0A41B4;
+    --claro:#A8C5FF;
+    --quasebranco:#F0F4FF;
+    --branco:#FFFFFF;
+    --bg:#FFFFFF;
+    --surface:#FFFFFF;
+    --surface-2:#F0F4FF;
+    --border:#E5E7EB;
+    --border-strong:#6B7280;
+    --ink:#000035;
+    --ink-2:#374151;
+    --muted:#6B7280;
+    --muted-2:#6B7280;
+    --success:#16A34A;
+    --success-bg:#F0F4FF;
+    --warning:#CA8A04;
+    --warning-bg:#F0F4FF;
+    --danger:#DC2626;
+    --danger-bg:#F0F4FF;
+    --tag-londrisoft:#0A41B4;
+    --tag-londrisoft-bg:#A8C5FF;
+    --tag-cliente:#000035;
+    --tag-cliente-bg:#A8C5FF;
+    --tag-ambos:#000035;
+    --tag-ambos-bg:#A8C5FF;
+    --shadow:0 1px 2px rgba(0,0,53,.06),0 8px 24px rgba(0,0,53,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#000035; --surface:#000035; --surface-2:#374151;
+      --border:#6B7280; --border-strong:#A8C5FF;
+      --ink:#FFFFFF; --ink-2:#FFFFFF; --muted:#A8C5FF; --muted-2:#A8C5FF;
+      --success:#16A34A; --success-bg:#374151;
+      --warning:#CA8A04; --warning-bg:#374151;
+      --danger:#DC2626; --danger-bg:#374151;
+      --tag-londrisoft:#000035; --tag-londrisoft-bg:#A8C5FF;
+      --tag-cliente:#000035; --tag-cliente-bg:#A8C5FF;
+      --tag-ambos:#000035; --tag-ambos-bg:#A8C5FF;
+      --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#000035; --surface:#000035; --surface-2:#374151;
+    --border:#6B7280; --border-strong:#A8C5FF;
+    --ink:#FFFFFF; --ink-2:#FFFFFF; --muted:#A8C5FF; --muted-2:#A8C5FF;
+    --success:#16A34A; --success-bg:#374151;
+    --warning:#CA8A04; --warning-bg:#374151;
+    --danger:#DC2626; --danger-bg:#374151;
+    --tag-londrisoft:#000035; --tag-londrisoft-bg:#A8C5FF;
+    --tag-cliente:#000035; --tag-cliente-bg:#A8C5FF;
+    --tag-ambos:#000035; --tag-ambos-bg:#A8C5FF;
+    --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.25);
+  }
+  body{background:var(--bg); color:var(--ink);}
+  .page{max-width:1180px; padding:24px 28px 72px;}
+  .topbar{align-items:flex-start; padding:18px 0 20px; margin-bottom:18px;}
+  .brand{padding-top:3px;}
+  .header-title{flex:1; min-width:260px;}
+  .header-title h1{font-size:24px; letter-spacing:-.025em;}
+  .header-title p{max-width:720px; line-height:1.45;}
+  .header-meta{min-width:210px; padding-top:4px;}
+  .tabs{position:sticky; top:0; z-index:20; width:100%; gap:3px; margin:0 0 28px; padding:5px; background:color-mix(in srgb,var(--surface) 94%,transparent); backdrop-filter:blur(12px); box-shadow:0 4px 16px rgba(0,0,53,.06);}
+  .tab-btn{flex:1 1 auto; min-height:40px; padding:9px 12px; color:var(--ink-2);}
+  .tab-btn.active{background:var(--azul); color:var(--branco); box-shadow:none;}
+  .tab-btn:hover{background:var(--claro); color:var(--noite);}
+  .tab-btn.active:hover{background:var(--profundo); color:var(--branco);}
+  .section-title{font-size:21px; color:var(--noite); margin-bottom:8px;}
+  .section-sub{max-width:780px; line-height:1.55;}
+  .card{box-shadow:var(--shadow); padding:24px;}
+  .callout{background:var(--quasebranco); border-color:var(--claro);}
+  .callout.warn{background:var(--quasebranco); border-color:var(--warning);}
+  .callout.danger{background:var(--quasebranco); border-color:var(--danger);}
+  .layer-card.l1{background:var(--quasebranco);}
+  .layer-card.l2{background:var(--surface);}
+  .layer-card.l3{background:var(--quasebranco);}
+  .table-wrap{box-shadow:0 1px 2px rgba(0,0,53,.04);}
+  table.cmp tbody tr:nth-child(even){background:var(--quasebranco);}
+  table.cmp tbody tr:hover{background:var(--claro);}
+  .phase{box-shadow:0 1px 2px rgba(0,0,53,.04);}
+  .phase-head{background:var(--surface-2); transition:background .15s;}
+  .phase-head:hover{background:var(--claro);}
+  .phase-progress .bar{background:var(--border);}
+  .stepper{padding:16px 14px 12px; border:1px solid var(--border); border-radius:16px; background:var(--surface); box-shadow:var(--shadow);}
+  .stepper-item .sc{background:var(--surface);}
+  .stepper-item.current .sc{background:var(--azul); border-color:var(--azul);}
+  .stepper-item.current .sl{color:var(--noite);}
+  .stepper-item.done .sc{background:var(--success); border-color:var(--success);}
+  .stepper-item .sline{background:var(--border);}
+  .backlog-strip{background:var(--surface-2); border-color:var(--border);}
+  .backlog-chip.active{color:var(--noite); border-color:var(--azul); background:var(--claro);}
+  .agent-pick.on,.agent-pick:hover{border-color:var(--azul); background:var(--quasebranco);}
+  .struct-panel{border-color:var(--azul); box-shadow:var(--shadow);}
+  .struct-panel .sp-head{background:var(--quasebranco);}
+  .btn-flow{background:var(--azul); min-height:42px; box-shadow:0 2px 5px rgba(0,0,53,.12);}
+  .btn-flow:hover{background:var(--profundo);}
+  .btn-flow-secondary{min-height:42px; background:var(--surface);}
+  .form-input,.form-textarea{min-height:42px; border-color:var(--border-strong);}
+  .form-input:focus,.form-textarea:focus,.tab-btn:focus-visible,.btn-flow:focus-visible,.btn-flow-secondary:focus-visible,.btn-reset:focus-visible{outline:3px solid var(--claro); outline-offset:2px; border-color:var(--azul);}
+  .form-field label{color:var(--ink-2);}
+  .proj-card{box-shadow:0 1px 2px rgba(0,0,53,.04);}
+  .proj-card:hover{border-color:var(--azul); box-shadow:var(--shadow);}
+  .timeline:before{background:var(--claro);}
+  .tl-item:before{background:var(--azul); border-color:var(--quasebranco);}
+  .tl-item .tlw{color:var(--profundo);}
+  .faq-item summary::before{color:var(--azul);}
+  @media (max-width:760px){
+    .page{padding:16px 16px 56px;}
+    .topbar{gap:12px;}
+    .brand-logo-svg{height:22px;}
+    .header-title h1{font-size:21px;}
+    .header-meta{text-align:left; min-width:0; width:100%;}
+    .tabs{overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin;}
+    .tab-btn{flex:0 0 auto;}
+    .card{padding:18px;}
+  }
+
 </style>
 
 <div class="page">
@@ -253,13 +374,13 @@
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Seções">
-    <button class="tab-btn active" data-tab="projetos">📁 Projetos em Andamento</button>
-    <button class="tab-btn" data-tab="entregues">✅ Projetos Entregues</button>
-    <button class="tab-btn" data-tab="cliente">👤 Jornada do Cliente</button>
+    <button class="tab-btn active" data-tab="projetos">Projetos em Andamento</button>
+    <button class="tab-btn" data-tab="entregues">Projetos Entregues</button>
+    <button class="tab-btn" data-tab="cliente">Jornada do Cliente</button>
     <button class="tab-btn" data-tab="escopo">Escopo Técnico</button>
-    <button class="tab-btn" data-tab="apoio">🛠️ Materiais de Apoio</button>
+    <button class="tab-btn" data-tab="apoio">Materiais de Apoio</button>
     <button class="tab-btn" data-tab="faq">FAQ</button>
-    <button class="tab-btn" data-tab="indicadores">📊 Indicadores</button>
+    <button class="tab-btn" data-tab="indicadores">Indicadores</button>
   </nav>
 
   <!-- ===================== PROJETOS EM ANDAMENTO ===================== -->
@@ -1301,20 +1422,30 @@
     '</div>';
   }
 
-  function agendaGoogleLinksHtml(){
-    var comLink = ISM_OPCOES.filter(function(o){ return o.linkAgenda; });
-    if (!comLink.length) return "";
+  // statusGoogle = { [ismId]: true|false }, vindo de status-google-agenda. ISM
+  // conectado nao precisa de callout nenhum aqui — criar-reserva ja checa a
+  // agenda real dele e cria o Meet sozinho. So quem ainda nao conectou ve o
+  // link manual de hoje (se tiver) + o convite pra conectar de vez.
+  function agendaGoogleLinksHtml(statusGoogle){
+    var status = statusGoogle || {};
+    var naoConectados = ISM_OPCOES.filter(function(o){ return !status[o.id]; });
+    if (!naoConectados.length) return "";
     return '<div class="callout" style="margin-top:0; margin-bottom:14px;"><div class="dot"></div><div>' +
-      '<b>Prefira agendar direto na agenda do ISM</b> — lê o horário real dele e já cria o Meet sozinho (a sincronização ClickUp → Google Calendar tem bug conhecido do lado do ClickUp, por isso não é confiável hoje). Depois, registre aqui embaixo o horário combinado e cole o link do Meet, só pra ficar salvo neste projeto.<br>' +
-      comLink.map(function(o){ return '<a href="' + esc(o.linkAgenda) + '" target="_blank" rel="noopener">Agenda de ' + esc(o.nome) + ' ↗</a>'; }).join(' · ') +
+      '<b>Conecte a agenda do Google do ISM</b> — depois disso, registrar a reserva aqui embaixo já checa o horário real dele e cria o Meet sozinho, sem precisar sair da tela.<br>' +
+      naoConectados.map(function(o){
+        var manual = o.linkAgenda
+          ? ' (<a href="' + esc(o.linkAgenda) + '" target="_blank" rel="noopener">agendar manualmente por enquanto ↗</a>)'
+          : '';
+        return '<a href="/api/clickup?action=conectar-agenda-google&ismId=' + o.id + '">Conectar agenda do ' + esc(o.nome) + '</a>' + manual;
+      }).join(' · ') +
       '</div></div>';
   }
 
-  function formNovaReservaHtml(){
+  function formNovaReservaHtml(statusGoogle){
     return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
       '<div class="sp-k">Agendar novo horário</div>' +
-      agendaGoogleLinksHtml() +
-      '<div class="hint" style="margin-bottom:6px;">Depois de agendar na agenda do Google, registre aqui o horário combinado (fica salvo neste projeto e, quando possível, também vira uma task no ClickUp).</div>' +
+      agendaGoogleLinksHtml(statusGoogle) +
+      '<div class="hint" style="margin-bottom:6px;">Se o ISM já tem a agenda do Google conectada, é só preencher e registrar — o horário é checado de verdade e o Meet é criado sozinho. Senão, agenda manualmente primeiro e registra aqui o que foi combinado.</div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
         '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
         '<select class="form-input" id="novaReservaIsm" style="width:auto;">' +
@@ -1370,10 +1501,15 @@
       var fim = new Date(data + "T" + horaFim + ":00").getTime();
       btnReservar.disabled = true;
       apiPost("criar-reserva", { projetoId: projetoId, titulo: titulo, ismId: ismId, inicio: inicio, fim: fim })
-        .then(function(){ renderAgenda(projetoId, container); })
+        .then(function(resp){
+          if (resp && resp.linkReuniao) showSimToast("Reservado! Meet criado automático: " + resp.linkReuniao);
+          renderAgenda(projetoId, container);
+        })
         .catch(function(e){
           if (e && e.code === "conflito_horario" && e.conflito){
             erroEl.textContent = "Conflito: \"" + e.conflito.titulo + "\" já reservado nesse horário (" + fmtDataHoraSim(e.conflito.inicio) + " até " + fmtDataHoraSim(e.conflito.fim) + ").";
+          } else if (e && e.code === "conflito_horario_google"){
+            erroEl.textContent = "Conflito na agenda REAL do Google desse ISM (fora do que já era rastreado aqui) — escolha outro horário.";
           } else {
             erroEl.textContent = mensagemErro(e);
           }
@@ -1386,14 +1522,18 @@
   function renderAgenda(projetoId, container){
     if (!container) return;
     container.innerHTML = '<div class="card"><h2>📅 Agenda</h2><div class="sub">Carregando…</div></div>';
-    apiGet("listar-reservas").then(function(resp){
+    Promise.all([
+      apiGet("listar-reservas"),
+      apiGet("status-google-agenda").catch(function(){ return { status: {} }; })
+    ]).then(function(resultados){
+      var resp = resultados[0], statusGoogle = resultados[1].status || {};
       var reservas = (resp.reservas || []).filter(function(r){ return r.projetoId === projetoId; })
         .sort(function(a, b){ return (a.inicio || 0) - (b.inicio || 0); });
       container.innerHTML = '<div class="card"><h2>📅 Agenda</h2>' +
         '<div class="sub">Registro dos horários combinados com o ISM para este projeto.</div>' +
         '<div class="sp-k" style="margin-top:12px">Próximos compromissos</div>' +
         (reservas.length ? reservas.map(reservaHtml).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário registrado ainda.</div>') +
-        formNovaReservaHtml() +
+        formNovaReservaHtml(statusGoogle) +
       '</div>';
       wireAgenda(projetoId, container);
     }).catch(function(){
@@ -2135,6 +2275,23 @@
       showSimToast("Não deu para copiar automaticamente — selecione e copie manualmente.");
     });
   }
+
+  // Feedback do redirect de volta do OAuth do Google (api/google-oauth-callback.js) —
+  // le uma vez no boot e limpa a URL, pra nao reaparecer num F5.
+  (function tratarRetornoGoogle(){
+    var params = new URLSearchParams(window.location.search);
+    if (params.has("googleConectado")){
+      showSimToast("Agenda do Google conectada!");
+    } else if (params.has("googleErro")){
+      showSimToast("Não deu para conectar a agenda do Google — tenta de novo.");
+    } else {
+      return;
+    }
+    params.delete("googleConectado");
+    params.delete("googleErro");
+    var resto = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (resto ? "?" + resto : ""));
+  })();
 
   renderProjetosPanel();
 })();

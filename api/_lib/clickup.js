@@ -34,6 +34,16 @@ export const LISTA_IMPLANTACOES_WAIPE = '901328976497';
  */
 export const LISTA_RESERVAS_AGENDA = '901329017742';
 
+/**
+ * Tokens OAuth do Google Calendar, um por ISM — 1 task por ISM (assignee =
+ * o ISM), descricao = so o refresh token + quando conectou, no MESMO formato
+ * de bloco JSON usado no fluxo Waipe (ver parseWaipeState/stringifyWaipeState
+ * mais abaixo — aqui a descricao inteira e o bloco, sem texto de contexto
+ * antes). Preenchida pelo callback do OAuth (api/google-oauth-callback.js),
+ * lida por criarReservaAcao pra checar disponibilidade real e criar o Meet.
+ */
+export const LISTA_GOOGLE_TOKENS = '901329032234';
+
 // Campos da lista Carteira
 const CF = {
   ID_NUCLEO: '6126a50b-7afb-40fd-8654-26a687f34258',
@@ -819,6 +829,50 @@ export async function criarReserva(payload) {
 /** Todas as reservas de agenda — lista pequena (so os horarios marcados), 1 chamada basta. */
 export async function listarReservas() {
   return buscarPaginado(LISTA_RESERVAS_AGENDA, '', 1);
+}
+
+/** Todas as tasks de LISTA_GOOGLE_TOKENS — no maximo 1 por ISM, lista minuscula. */
+export async function listarTokensGoogle() {
+  return buscarPaginado(LISTA_GOOGLE_TOKENS, '', 1);
+}
+
+// Identifica de quem e cada task pelo PROPRIO conteudo salvo (campo ismId no
+// JSON), nunca pelo assignee do ClickUp — o assignee e so um bonus visual pra
+// quem abrir a lista manualmente; depender dele pra achar o token e fragil
+// (um ISM sem acesso de guest configurado NESSA lista especifica faz o
+// ClickUp aceitar a criacao da task mas descartar o assignee em silencio,
+// sem erro nenhum — foi exatamente isso que aconteceu na primeira conexao
+// real testada).
+function tokenDoIsm(tasks, ismId) {
+  return tasks.find((t) => Number(parseWaipeState(t.description).ismId) === Number(ismId));
+}
+
+/** Refresh token salvo do ISM, ou null se ele nunca conectou o Google. */
+export async function obterTokenGoogle(ismId) {
+  const tasks = await listarTokensGoogle();
+  const task = tokenDoIsm(tasks, ismId);
+  if (!task) return null;
+  const estado = parseWaipeState(task.description);
+  return estado.refreshToken ? { ...estado, taskId: task.id } : null;
+}
+
+/** Cria ou atualiza a task de token do ISM (1 por pessoa, achada pelo ismId salvo). */
+export async function salvarTokenGoogle(ismId, refreshToken) {
+  const nome = ISM_OPCOES.find((o) => o.id === Number(ismId))?.nome || String(ismId);
+  const estado = { ismId: Number(ismId), refreshToken, conectadoEm: Date.now() };
+  const tasks = await listarTokensGoogle();
+  const existente = tokenDoIsm(tasks, ismId);
+  if (existente) {
+    return atualizarTask(existente.id, { markdown_description: JSON.stringify(estado) });
+  }
+  return cu(`/list/${LISTA_GOOGLE_TOKENS}/task`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: `Google Calendar — ${nome}`,
+      assignees: [Number(ismId)],
+      markdown_description: JSON.stringify(estado),
+    }),
+  });
 }
 
 /** DELETE /task/{id} — usado pra cancelar uma reserva. Responde 200 com corpo vazio. */
