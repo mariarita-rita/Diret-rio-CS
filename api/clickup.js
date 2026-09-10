@@ -26,9 +26,10 @@
 //   GET  /api/clickup?action=conectar-agenda-google { ismId } -> 302 pro
 //        consentimento OAuth do Google (volta em api/google-oauth-callback.js)
 //   GET  /api/clickup?action=status-google-agenda  { [ismId]: conectado? }
-//   POST /api/clickup?action=iniciar-conversa-umbler { id } -> cria o
-//        contato + abre a conversa no Umbler Talk pro telefone do cliente
-//        desse projeto (não manda mensagem — ver api/_lib/umbler.js)
+//   POST /api/clickup?action=iniciar-conversa-umbler { id, mensagem? } -> cria
+//        o contato + abre a conversa no Umbler Talk pro telefone do cliente
+//        desse projeto; com `mensagem`, manda ela tambem (texto livre — os
+//        canais desta org sao "Broker", nao a Cloud API oficial da Meta)
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -84,7 +85,7 @@ import {
   stringifyWaipeState,
 } from './_lib/clickup.js';
 import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
-import { telefoneParaE164, garantirContato, garantirConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
+import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
 // A resposta varia por sessao (filtro por CSM), portanto nao pode ir para o
@@ -1240,10 +1241,36 @@ async function iniciarConversaUmblerAcao(req, res, sessao) {
 
   const contactId = await garantirContato(telefoneE164, projeto.name);
   if (!contactId) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu o contato criado.');
-  const chatId = await garantirConversa(contactId);
-  if (!chatId) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu a conversa criada.');
+  const conversa = await garantirConversa(contactId);
+  if (!conversa) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu a conversa criada.');
 
-  return res.status(200).json({ ok: true, contactId, chatId, telefone: telefoneE164 });
+  // Mensagem de abertura e opcional (o CSM pode limpar o campo antes de
+  // enviar) — se a Umbler Talk falhar em mandar, isso NAO derruba a resposta:
+  // contato e conversa ja foram criados de verdade, entao devolve ok:true
+  // mesmo assim, so avisando que a mensagem em si nao saiu.
+  const mensagem = texto(corpo.mensagem, 4096);
+  let mensagemEnviada = false;
+  let mensagemErro = null;
+  if (mensagem) {
+    try {
+      await enviarMensagem(conversa.id, mensagem);
+      mensagemEnviada = true;
+    } catch (e) {
+      if (!(e instanceof ErroUmbler)) throw e;
+      mensagemErro = 'Não deu para mandar a mensagem — a conversa foi criada, mas escreva por lá manualmente.';
+    }
+  }
+
+  return res.status(200).json({
+    ok: true,
+    contactId,
+    chatId: conversa.id,
+    telefone: telefoneE164,
+    chatNovo: conversa.criadaAgora,
+    setor: conversa.setor,
+    mensagemEnviada,
+    mensagemErro,
+  });
 }
 
 async function atualizarAgenteAcao(req, res, sessao) {

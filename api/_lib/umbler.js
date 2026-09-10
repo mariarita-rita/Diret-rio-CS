@@ -1,12 +1,10 @@
-// Integração com a Umbler Talk (Utalk) API — cria o contato e abre a
-// conversa no canal configurado, pro ISM continuar manualmente por lá.
+// Integração com a Umbler Talk (Utalk) API — cria o contato, abre a conversa
+// no canal configurado e (opcionalmente) manda a mensagem de abertura.
 //
-// NÃO manda mensagem nenhuma automaticamente: a conta ainda não tem nenhum
-// template aprovado pela Meta, e o WhatsApp só permite texto livre pra quem
-// já mandou mensagem antes (janela de sessão de 24h) — tentar mandar teria
-// grande chance de ser rejeitado pra clientes que nunca falaram com esse
-// número. O Utalk já sinaliza isso pro ISM quando ele for escrever por lá,
-// do mesmo jeito que já acontece hoje ao iniciar uma conversa manualmente.
+// Os canais desta organização são do tipo "Broker" (não a Cloud API oficial
+// da Meta) — por isso a própria usuária confirmou que dá pra mandar texto
+// livre sem precisar de template pré-aprovado, diferente do que a regra geral
+// do WhatsApp Business exigiria num canal oficial.
 
 export class ErroConfigUmbler extends Error {
   constructor(mensagem) {
@@ -72,12 +70,33 @@ export async function garantirContato(telefoneE164, nome) {
   return criado?.contact?.id || null;
 }
 
-/** Cria a conversa desse contato no canal configurado (ou devolve a já aberta, se houver). */
+/**
+ * Cria a conversa desse contato no canal configurado (ou devolve a já aberta,
+ * se houver — a API não avisa qual dos dois casos foi, então quem chama usa
+ * `criadaAgora` pra diferenciar: `eventAtUTC` de uma conversa recém-criada é o
+ * próprio instante da criação, então bem recente = nova; mais antigo = já existia).
+ */
 export async function garantirConversa(contactId) {
   const { organizationId, channelId } = credenciais();
   const chat = await request('/v1/chats/', {
     method: 'POST',
     body: JSON.stringify({ organizationId, channelId, contactId }),
   });
-  return chat?.id || null;
+  if (!chat?.id) return null;
+  const eventoMs = Date.parse(chat.eventAtUTC || '');
+  return {
+    id: chat.id,
+    criadaAgora: Number.isFinite(eventoMs) && Date.now() - eventoMs < 15000,
+    setor: chat.sector?.name || null,
+  };
+}
+
+/** Manda uma mensagem de texto livre na conversa. Devolve o id da mensagem enviada. */
+export async function enviarMensagem(chatId, mensagem) {
+  const { organizationId } = credenciais();
+  const enviada = await request('/v1/messages/', {
+    method: 'POST',
+    body: JSON.stringify({ organizationId, chatId, message: mensagem }),
+  });
+  return enviada?.id || null;
 }

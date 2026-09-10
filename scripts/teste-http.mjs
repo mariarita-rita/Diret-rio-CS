@@ -111,7 +111,8 @@ const stubUmbler = `
   export class ErroConfigUmbler extends Error {}
   export function telefoneParaE164() { return null; }
   export async function garantirContato() { return 'stub-contato'; }
-  export async function garantirConversa() { return 'stub-chat'; }
+  export async function garantirConversa() { return { id: 'stub-chat', criadaAgora: true, setor: null }; }
+  export async function enviarMensagem() { return 'stub-mensagem'; }
 `;
 const umblerLibUrl = dataUrl(stubUmbler);
 
@@ -2574,7 +2575,10 @@ console.log('\n[40] iniciar-conversa-umbler: cria contato + abre conversa no Umb
   let contatoExistente = null; // null = busca por telefone devolve 404
   let statusCriarContato = 200;
   let statusCriarChat = 200;
+  let statusEnviarMensagem = 200;
   let chamadasUmbler = [];
+  let chatEventAtUTC = new Date().toISOString(); // recente = chat recem-criado
+  let chatSetor = null;
 
   function respostaJson(status, corpo) {
     return { ok: status >= 200 && status < 300, status, headers: new Map(), json: async () => corpo, text: async () => '' };
@@ -2602,7 +2606,12 @@ console.log('\n[40] iniciar-conversa-umbler: cria contato + abre conversa no Umb
     if (metodo === 'POST' && u === 'https://app-utalk.umbler.com/api/v1/chats/') {
       chamadasUmbler.push({ tipo: 'criar-chat', body: JSON.parse(init.body) });
       if (statusCriarChat !== 200) return respostaJson(statusCriarChat, { error: 'falhou' });
-      return respostaJson(200, { id: 'chat-novo' });
+      return respostaJson(200, { id: 'chat-novo', eventAtUTC: chatEventAtUTC, sector: chatSetor ? { name: chatSetor } : null });
+    }
+    if (metodo === 'POST' && u === 'https://app-utalk.umbler.com/api/v1/messages/') {
+      chamadasUmbler.push({ tipo: 'enviar-mensagem', body: JSON.parse(init.body) });
+      if (statusEnviarMensagem !== 200) return respostaJson(statusEnviarMensagem, { error: 'falhou' });
+      return respostaJson(200, { id: 'mensagem-nova' });
     }
     return respostaJson(200, {});
   };
@@ -2638,18 +2647,56 @@ console.log('\n[40] iniciar-conversa-umbler: cria contato + abre conversa no Umb
   estadoAtual = estadoBase;
   chamadasUmbler = [];
   contatoExistente = null;
+  chatEventAtUTC = new Date().toISOString();
+  chatSetor = 'Sucesso do Cliente';
   const criaContatoNovo = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
   checar('iniciar-conversa-umbler: 200 cria contato novo + abre conversa', [
     criaContatoNovo.code, criaContatoNovo.corpo.ok, criaContatoNovo.corpo.contactId, criaContatoNovo.corpo.chatId,
   ], [200, true, 'contato-novo', 'chat-novo']);
   checar('  telefone normalizado pro E.164', criaContatoNovo.corpo.telefone, '+5543900000000');
   checar('  chamou criar-contato (nao existia ainda)', chamadasUmbler.some((c) => c.tipo === 'criar-contato'), true);
+  checar('  chatNovo: true (eventAtUTC recem-criado)', criaContatoNovo.corpo.chatNovo, true);
+  checar('  setor devolvido', criaContatoNovo.corpo.setor, 'Sucesso do Cliente');
 
   chamadasUmbler = [];
   contatoExistente = { id: 'contato-existente' };
   const reaproveitaContato = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
   checar('iniciar-conversa-umbler: 200 reaproveita contato ja existente', [reaproveitaContato.code, reaproveitaContato.corpo.contactId], [200, 'contato-existente']);
   checar('  NAO chama criar-contato de novo', chamadasUmbler.some((c) => c.tipo === 'criar-contato'), false);
+
+  // Conversa ja existia de antes (eventAtUTC antigo) — nao manda mensagem
+  // nenhuma, so avisa onde procurar, sem fingir que criou uma nova.
+  chamadasUmbler = [];
+  chatEventAtUTC = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const conversaJaExistia = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: chatNovo=false quando a conversa ja existia', conversaJaExistia.corpo.chatNovo, false);
+  checar('  setor da conversa ja existente tambem volta', conversaJaExistia.corpo.setor, 'Sucesso do Cliente');
+  chatEventAtUTC = new Date().toISOString();
+  chatSetor = null;
+
+  // Mensagem de abertura opcional: manda quando vier preenchida, nao manda
+  // quando o campo veio vazio (sem tentar nada no Umbler).
+  chamadasUmbler = [];
+  contatoExistente = null;
+  const comMensagem = await chamarAcao(GIAN, { id: 'tProjetoUmbler', mensagem: 'Olá tudo bem?' });
+  checar('iniciar-conversa-umbler: 200 manda a mensagem quando preenchida', [comMensagem.code, comMensagem.corpo.mensagemEnviada], [200, true]);
+  const corpoMensagem = chamadasUmbler.find((c) => c.tipo === 'enviar-mensagem')?.body;
+  checar('  manda o texto certo pro chat certo', [corpoMensagem.chatId, corpoMensagem.message], ['chat-novo', 'Olá tudo bem?']);
+
+  chamadasUmbler = [];
+  contatoExistente = null;
+  const semMensagem = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
+  checar('iniciar-conversa-umbler: sem mensagem no corpo -> nao chama enviar-mensagem', [semMensagem.corpo.mensagemEnviada, chamadasUmbler.some((c) => c.tipo === 'enviar-mensagem')], [false, false]);
+
+  // Erro do Umbler ao ENVIAR a mensagem nao derruba a resposta — contato e
+  // conversa ja foram criados de verdade, entao ok:true com o aviso certo.
+  chamadasUmbler = [];
+  contatoExistente = null;
+  statusEnviarMensagem = 500;
+  const falhaMensagem = await chamarAcao(GIAN, { id: 'tProjetoUmbler', mensagem: 'Olá tudo bem?' });
+  checar('iniciar-conversa-umbler: falha ao enviar mensagem -> 200 mesmo assim, so avisa', [falhaMensagem.code, falhaMensagem.corpo.ok, falhaMensagem.corpo.mensagemEnviada], [200, true, false]);
+  checar('  mensagemErro preenchido', typeof falhaMensagem.corpo.mensagemErro === 'string' && falhaMensagem.corpo.mensagemErro.length > 0, true);
+  statusEnviarMensagem = 200;
 
   chamadasUmbler = [];
   contatoExistente = null;
