@@ -1857,14 +1857,19 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   // criar-implantacao: consulta nao pode, sem agente 400, gestao cria pai + subtask
   const criarConsulta = await chamarAcao(CONSULTA, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [{ nome: 'A' }] } });
   checar('criar-implantacao: consulta -> 403', [criarConsulta.code, criarConsulta.corpo.code], [403, 'somente_leitura']);
-  const criarSemAgente = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [] } });
+  const DADOS_CLIENTE_TESTE = { idNucleo: '123', cnpj: '00.000.000/0001-00', email: 'contato@cliente.com.br', telefone: '(43) 90000-0000' };
+  const criarSemAgente = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [], ...DADOS_CLIENTE_TESTE } });
   checar('criar-implantacao: sem agentes -> 400', [criarSemAgente.code, criarSemAgente.corpo.code], [400, 'agentes_invalidos']);
+  const criarSemDadosCliente = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [{ nome: 'A' }] } });
+  checar('criar-implantacao: sem ID Nucleo/CNPJ/e-mail/telefone -> 400', [criarSemDadosCliente.code, criarSemDadosCliente.corpo.code], [400, 'dados_cliente_incompletos']);
   escritas.length = 0;
   const criarOk = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', {
-    body: { cliente: 'Cliente Novo', contexto: 'Escopo fechado', agentes: [{ nome: 'Agente 1', frente: 'Cobranca' }] },
+    body: { cliente: 'Cliente Novo', contexto: 'Escopo fechado', agentes: [{ nome: 'Agente 1', frente: 'Cobranca' }], ...DADOS_CLIENTE_TESTE },
   });
   checar('criar-implantacao: 200', [criarOk.code, criarOk.corpo.ok], [200, true]);
   checar('  cria 1 projeto + 1 subtask', escritas.filter((e) => e.alvo === 'criar').length, 2);
+  const criarBody = escritas.find((e) => e.alvo === 'criar')?.body;
+  checar('  grava idNucleo/cnpj/email/telefone no bloco de estado', criarBody.markdown_description.includes('"idNucleo":"123"') && criarBody.markdown_description.includes('"cnpj":"00.000.000/0001-00"'), true);
 
   // atualizar-implantacao: dono grava o estado, etapa invalida 400, outro csm 403
   escritas.length = 0;
@@ -1923,6 +1928,7 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
       cliente: 'Cliente ISM', contexto: '',
       ismProjeto: [48933858, 999999],
       agentes: [{ nome: 'Agente ISM', ism: [118125102, 'invalido'] }],
+      ...DADOS_CLIENTE_TESTE,
     },
   });
   checar('criar-implantacao com ISM: 200', [criarComIsm.code, criarComIsm.corpo.ok], [200, true]);
@@ -2081,6 +2087,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
       { produto: 'Treinamento', planoSugerido: '', variante: null, motivo: 'Nunca usou o módulo financeiro.', quantidade: 1, valorTabela: null, valorManual: 0, pol: null, descontoPercent: 0, incluir: true },
     ],
     diagnosticoWaipe: { usuarios: 3, empresas: 1, governanca: 'nao', auditoria: 'nao', automacao: 'pronta', enterprisePorVolume: 'nao', plano: 'Time', valorMensal: 249 },
+    idNucleo: '123', cnpj: '00.000.000/0001-00', email: 'contato@cliente.com.br', telefone: '(43) 90000-0000',
   };
   const descProposta = (estado) => `CSM: Gian Luca\n\nContexto de teste.\n\n${JSON.stringify(estado)}`;
 
@@ -2201,6 +2208,15 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   const salvarJaPromovida = await chamarAcao(GIAN, 'salvar-proposta-implantacao', { cliente: 'Cliente Z', taskIdExistente: 'tPromovida' });
   checar('salvar-proposta: ja promovida -> 409', [salvarJaPromovida.code, salvarJaPromovida.corpo.code], [409, 'ja_promovida']);
 
+  // confirmar-fechamento-implantacao: ID Nucleo/CNPJ/e-mail/telefone viram
+  // obrigatorios so aqui (na proposta em si, salvar-proposta-implantacao ja
+  // testado acima aceita sem eles).
+  const cnpjOriginal = estadoProposta.cnpj;
+  delete estadoProposta.cnpj;
+  const confirmarSemDadosCliente = await chamarAcao(GIAN, 'confirmar-fechamento-implantacao', { id: 'tProposta' });
+  checar('confirmar-fechamento: sem CNPJ -> 400', [confirmarSemDadosCliente.code, confirmarSemDadosCliente.corpo.code], [400, 'dados_cliente_incompletos']);
+  estadoProposta.cnpj = cnpjOriginal;
+
   // confirmar-fechamento-implantacao: promove so os itens incluidos, avanca etapa,
   // resolve a jornada (checklist) por produto — null so quando Gestor/Unique envolve troca de ambiente.
   escritas.length = 0;
@@ -2219,6 +2235,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('  Treinamento: jornada própria', treinoBody.markdown_description.includes('"checklist":["Agendar o treinamento","Confirmar participantes","Realizar o treinamento na data agendada"]'), true);
   const escritaProjeto = escritas.find((e) => e.alvo === 'proposta');
   checar('  projeto avanca pra etapa escopo', escritaProjeto.body.markdown_description.includes('"etapaAtual":"escopo"'), true);
+  checar('  idNucleo/cnpj/email/telefone carregados pro projeto promovido', escritaProjeto.body.markdown_description.includes('"idNucleo":"123"') && escritaProjeto.body.markdown_description.includes('"telefone":"(43) 90000-0000"'), true);
 
   const confirmarOutroCsm = await chamarAcao(PATRICIA, 'confirmar-fechamento-implantacao', { id: 'tProposta' });
   checar('confirmar-fechamento: csm de outra carteira -> 403', [confirmarOutroCsm.code, confirmarOutroCsm.corpo.code], [403, 'fora_da_carteira']);

@@ -1007,6 +1007,29 @@
 
         <div class="field-row">
           <div class="field">
+            <label for="p-id-nucleo">ID Núcleo</label>
+            <input type="text" id="p-id-nucleo" class="num-input" placeholder="ex: 12345">
+            <div class="hint">Campo principal que amarra a identificação do cliente entre as ferramentas — obrigatório só na hora de confirmar o fechamento.</div>
+          </div>
+          <div class="field">
+            <label for="p-cnpj">CNPJ</label>
+            <input type="text" id="p-cnpj" class="num-input" placeholder="ex: 00.000.000/0001-00">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="p-email">E-mail</label>
+            <input type="email" id="p-email" class="num-input" placeholder="ex: contato@cliente.com.br">
+          </div>
+          <div class="field">
+            <label for="p-telefone">Telefone</label>
+            <input type="text" id="p-telefone" class="num-input" placeholder="ex: (43) 90000-0000">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
             <label for="p-contato">Contato (A/C)</label>
             <input type="text" id="p-contato" class="num-input" placeholder="ex: Mateus">
           </div>
@@ -2685,7 +2708,7 @@
 
   // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
   var CHAVE_RASCUNHO = "waipeArquiteturaSolucao.rascunho.v1";
-  var CAMPOS_RASCUNHO = ["p-transcricao", "p-cliente", "p-segmento", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
+  var CAMPOS_RASCUNHO = ["p-transcricao", "p-cliente", "p-segmento", "p-id-nucleo", "p-cnpj", "p-email", "p-telefone", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
     "waipeIncluidoCheck", "f-usuarios", "f-empresas", "f-motivo", "f-conversas", "f-execucoes",
     "p-desc-tipo", "p-desc-valor", "p-ent-base",
     "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento"];
@@ -2834,6 +2857,10 @@
       cliente: ctx.cliente,
       csm: ctx.csm,
       contexto: [ctx.segmento, ctx.dores].filter(Boolean).join("\n\n"),
+      idNucleo: ctx.idNucleo,
+      cnpj: ctx.cnpj,
+      email: ctx.email,
+      telefone: ctx.telefone,
       agentesPropostos: waipeIncluido ? montarAgentesPropostos() : [],
       outrasSolucoesPropostas: recomendacoesState,
       diagnosticoWaipe: (waipeIncluido && lastDiagnostic) ? {
@@ -2916,6 +2943,10 @@
         var projeto = resultado.projeto;
         propostaSalvaId = projeto.id;
         document.getElementById("p-cliente").value = projeto.cliente || "";
+        document.getElementById("p-id-nucleo").value = projeto.idNucleo || "";
+        document.getElementById("p-cnpj").value = projeto.cnpj || "";
+        document.getElementById("p-email").value = projeto.email || "";
+        document.getElementById("p-telefone").value = projeto.telefone || "";
         // Se a proposta foi salva sem diagnóstico Waipe, o CSM não incluiu o
         // Waipe naquela rodada — o toggle já carrega refletindo isso.
         waipeIncluido = !!projeto.diagnosticoWaipe;
@@ -2959,6 +2990,14 @@
   document.getElementById("btnConfirmarFechamento").addEventListener("click", function(){
     limparErroImplantacao();
     if (!propostaSalvaId) return;
+    // Os 4 campos de identificação do cliente só são obrigatórios aqui — na
+    // hora de virar projeto de implantação de verdade — nunca só pra salvar
+    // o rascunho da proposta (ver camposClienteFaltando/getProposalContext).
+    var faltando = camposClienteFaltando(getProposalContext());
+    if (faltando.length){
+      mostrarErroImplantacao("Preencha antes de confirmar o fechamento: " + faltando.join(", ") + ".");
+      return;
+    }
     if (!window.confirm("Confirmar o fechamento e criar o projeto de implantação com os itens marcados como incluídos?")) return;
     var btn = this;
     btn.disabled = true;
@@ -2998,13 +3037,32 @@
   function getProposalContext(){
     var cliente = document.getElementById("p-cliente").value.trim() || "Cliente";
     var segmento = document.getElementById("p-segmento").value.trim();
+    var idNucleo = document.getElementById("p-id-nucleo").value.trim();
+    var cnpj = document.getElementById("p-cnpj").value.trim();
+    var email = document.getElementById("p-email").value.trim();
+    var telefone = document.getElementById("p-telefone").value.trim();
     var contato = document.getElementById("p-contato").value.trim();
     var csm = document.getElementById("p-csm").value.trim();
     var erp = document.getElementById("p-erp").value;
     var dores = document.getElementById("p-dores").value.trim();
     var obs = document.getElementById("p-obs") ? document.getElementById("p-obs").value.trim() : "";
     var agents = allAgentsList().filter(function(a){ return selectedAgentIds[a.id]; });
-    return { cliente: cliente, segmento: segmento, contato: contato, csm: csm, erp: erp, dores: dores, obs: obs, agents: agents };
+    return {
+      cliente: cliente, segmento: segmento, idNucleo: idNucleo, cnpj: cnpj, email: email, telefone: telefone,
+      contato: contato, csm: csm, erp: erp, dores: dores, obs: obs, agents: agents
+    };
+  }
+
+  /** Os 4 campos de identificação do cliente — obrigatórios só na hora de
+   * confirmar o fechamento (virar projeto de implantação de verdade), nunca
+   * pra só salvar um rascunho da proposta. */
+  function camposClienteFaltando(ctx){
+    var faltando = [];
+    if (!ctx.idNucleo) faltando.push("ID Núcleo");
+    if (!ctx.cnpj) faltando.push("CNPJ");
+    if (!ctx.email) faltando.push("E-mail");
+    if (!ctx.telefone) faltando.push("Telefone");
+    return faltando;
   }
 
   var NETWORK_SVG = '<svg class="net" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid slice" fill="none"><g stroke="#fff" stroke-width="1" opacity="0.5"><line x1="120" y1="90" x2="300" y2="180"/><line x1="300" y1="180" x2="240" y2="360"/><line x1="300" y1="180" x2="500" y2="120"/><line x1="500" y1="120" x2="700" y2="220"/><line x1="240" y1="360" x2="460" y2="430"/><line x1="460" y1="430" x2="700" y2="220"/><line x1="700" y1="220" x2="820" y2="400"/><line x1="460" y1="430" x2="660" y2="500"/><line x1="120" y1="90" x2="240" y2="360"/><line x1="500" y1="120" x2="460" y2="430"/></g><g fill="#fff"><circle cx="120" cy="90" r="5"/><circle cx="300" cy="180" r="7"/><circle cx="500" cy="120" r="6"/><circle cx="700" cy="220" r="8"/><circle cx="240" cy="360" r="6"/><circle cx="460" cy="430" r="7"/><circle cx="820" cy="400" r="5"/><circle cx="660" cy="500" r="6"/></g></svg>';

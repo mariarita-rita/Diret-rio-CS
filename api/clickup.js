@@ -832,6 +832,33 @@ function sanearDiagnosticoWaipeProposto(d) {
   };
 }
 
+/** ID Núcleo/CNPJ/e-mail/telefone do cliente, saneados — sempre string (nunca null),
+ * pra poder ir direto no bloco de estado sem checagem extra em cada call site. */
+function sanearDadosCliente(d) {
+  const origem = d && typeof d === 'object' ? d : {};
+  return {
+    idNucleo: texto(origem.idNucleo, 60),
+    cnpj: texto(origem.cnpj, 20),
+    email: texto(origem.email, 200),
+    telefone: texto(origem.telefone, 30),
+  };
+}
+
+/**
+ * Opcionais enquanto é só rascunho de proposta — viram obrigatórios na hora
+ * de confirmar o fechamento (ou de criar o projeto direto, sem passar pela
+ * proposta), porque o ID Núcleo é o campo que amarra a identificação do
+ * cliente entre as ferramentas depois.
+ */
+function dadosClienteFaltando(dados) {
+  const faltando = [];
+  if (!dados.idNucleo) faltando.push('ID Núcleo');
+  if (!dados.cnpj) faltando.push('CNPJ');
+  if (!dados.email) faltando.push('E-mail');
+  if (!dados.telefone) faltando.push('Telefone');
+  return faltando;
+}
+
 /** Descrição legível de uma "outra solução" (pra quem abre a subtask direto no ClickUp). */
 function descricaoSolucao(o) {
   const valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
@@ -1002,6 +1029,13 @@ async function obterImplantacaoAcao(req, res, sessao) {
         ? estadoProjeto.outrasSolucoesPropostas.map(sanearOutraSolucao).filter(Boolean)
         : [],
       diagnosticoWaipe: sanearDiagnosticoWaipeProposto(estadoProjeto.diagnosticoWaipe) || null,
+      // Identificação do cliente (ID Núcleo é o campo que amarra as
+      // conexões entre ferramentas) — opcional até a proposta ser
+      // confirmada, obrigatório a partir dali (ver confirmarFechamentoImplantacaoAcao).
+      idNucleo: texto(estadoProjeto.idNucleo, 60),
+      cnpj: texto(estadoProjeto.cnpj, 20),
+      email: texto(estadoProjeto.email, 200),
+      telefone: texto(estadoProjeto.telefone, 30),
     },
     agentes,
   });
@@ -1032,6 +1066,15 @@ async function criarImplantacaoAcao(req, res, sessao) {
   }
   const contexto = texto(corpo.contexto, 6000);
 
+  // Criação direta (sem passar pela proposta) já é "virar projeto de
+  // implantação de verdade" — os 4 campos são obrigatórios aqui, mesmo
+  // padrão de confirmar-fechamento-implantacao.
+  const dadosCliente = sanearDadosCliente(corpo);
+  const faltando = dadosClienteFaltando(dadosCliente);
+  if (faltando.length) {
+    return erro(res, 400, 'dados_cliente_incompletos', `Preencha antes de criar o projeto: ${faltando.join(', ')}.`);
+  }
+
   const agentesRaw = Array.isArray(corpo.agentes) ? corpo.agentes.slice(0, MAX_AGENTES) : [];
   const agentes = agentesRaw
     .map((a) => ({ estrutura: sanearAgente(a), ism: sanearAssignees(a?.ism) }))
@@ -1044,7 +1087,7 @@ async function criarImplantacaoAcao(req, res, sessao) {
   const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
   const descricaoProjeto = stringifyWaipeState(
     [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
-    { etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: agentes.length }
+    { etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: agentes.length, ...dadosCliente }
   );
 
   const projeto = await criarTaskImplantacao({
@@ -1127,6 +1170,12 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     faseProjetoManual: 'faseProjetoManual' in corpo
       ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
       : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null),
+    // Dados de identificação do cliente — só muda quando vem no corpo (edição
+    // vinda do "Resumo do projeto"), senão preserva o que já estava gravado,
+    // mesmo padrão de faseProjetoManual logo acima.
+    ...(('idNucleo' in corpo || 'cnpj' in corpo || 'email' in corpo || 'telefone' in corpo)
+      ? sanearDadosCliente(corpo)
+      : sanearDadosCliente(estadoAtual)),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
@@ -1265,8 +1314,11 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     ? corpo.outrasSolucoesPropostas.slice(0, MAX_OUTRAS_SOLUCOES).map(sanearOutraSolucao).filter(Boolean)
     : [];
   const diagnosticoWaipe = sanearDiagnosticoWaipeProposto(corpo.diagnosticoWaipe);
+  // Opcionais aqui — só viram obrigatórios em confirmar-fechamento-implantacao,
+  // quando a proposta vira projeto de implantação de verdade.
+  const dadosCliente = sanearDadosCliente(corpo);
 
-  const novoEstado = { etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe };
+  const novoEstado = { etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe, ...dadosCliente };
   const nomeTask = `${cliente} — Proposta — ${dataRotuloHoje()}`;
 
   if (corpo.taskIdExistente) {
@@ -1360,6 +1412,16 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     return erro(res, 400, 'nada_para_promover', 'Marque ao menos um agente ou solução antes de confirmar.');
   }
 
+  // Aqui — virando projeto de implantação de verdade — os 4 campos deixam de
+  // ser opcionais. O simulador já valida isso no cliente antes de chamar esta
+  // ação, mas confirma de novo aqui pra não depender só do front (ex: alguém
+  // chamando a API direto).
+  const dadosCliente = sanearDadosCliente(estadoAtual);
+  const faltando = dadosClienteFaltando(dadosCliente);
+  if (faltando.length) {
+    return erro(res, 400, 'dados_cliente_incompletos', `Preencha antes de confirmar o fechamento: ${faltando.join(', ')}.`);
+  }
+
   for (const a of agentesPropostos) {
     const estrutura = {
       nome: a.nome, frente: a.frente, frequencia: '', canal: '', publico: '',
@@ -1412,6 +1474,7 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     agentesPropostos: estadoAtual.agentesPropostos || [],
     outrasSolucoesPropostas: estadoAtual.outrasSolucoesPropostas || [],
     diagnosticoWaipe: estadoAtual.diagnosticoWaipe || null,
+    ...dadosCliente,
   };
   await atualizarTask(projeto.id, {
     markdown_description: stringifyWaipeState(tarefa.description, novoEstadoProjeto),
@@ -1716,6 +1779,17 @@ function tratarErro(res, e, acao) {
   if (e instanceof ErroConfigClickUp || e instanceof ErroConfig) {
     console.error('[clickup] configuracao:', e.message);
     return erro(res, 500, 'nao_configurado', 'Integração não configurada no servidor.');
+  }
+  if (e instanceof ErroConfigGoogle) {
+    console.error('[clickup] configuracao Google:', e.message);
+    return erro(res, 500, 'google_nao_configurado', 'Integração com o Google não está configurada no servidor.');
+  }
+  if (e instanceof ErroGoogle) {
+    // Falha do lado do GOOGLE (token expirado/revogado, freebusy, criacao do
+    // evento) — nao e o ClickUp que falhou. Sem isso, criar-reserva com um
+    // ISM conectado cai no catch-all generico e mente dizendo "ClickUp".
+    console.error(`[clickup] acao=${acao} falha_google=${e.status}:`, JSON.stringify(e.corpo)?.slice(0, 300));
+    return erro(res, 502, 'erro_google', 'Falha ao falar com a agenda do Google desse ISM — pode ser token expirado/revogado. Tente reconectar a agenda dele.');
   }
   if (e instanceof ErroUpstream) {
     // 429 tem tratamento proprio: a cota e de 100/min por TOKEN, compartilhada por
