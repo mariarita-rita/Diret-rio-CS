@@ -27,6 +27,7 @@ Nunca escreva nenhum destes valores em arquivo do repositório.
 | `UMBLER_API_TOKEN`       | Token de organização do Umbler Talk, usado por `/api/clickup?action=iniciar-conversa-umbler` | `nome-da-org-AAAA-MM-DD-...--XXXXXXXX...` |
 | `UMBLER_ORGANIZATION_ID` | Id da organização no Umbler Talk (`GET /v1/members/me/` devolve a lista)                      | `AB_12-xyzEXAMPLE` |
 | `UMBLER_CHANNEL_ID`      | Id do canal (número de WhatsApp) usado para iniciar a conversa — hoje o canal "CSQ/ISM"       | `AB_12-xyzEXAMPLE` |
+| `UMBLER_WEBHOOK_TOKEN`   | Token compartilhado que protege `/api/umbler-webhook` (o Umbler não assina o payload, então isso evita chamada forjada) | `<24 bytes aleatórios em base64url>` |
 
 Setup no Google Cloud Console: criar um projeto, ativar a **Google Calendar
 API**, configurar a tela de consentimento OAuth com **Audience = Internal**
@@ -43,6 +44,23 @@ Horários de agendamento**, com uma pergunta personalizada chamada
 exatamente **"CNPJ"** no formulário de reserva (é assim que o backend acha
 a resposta — ver `cnpjDoAgendamentoGoogle` em `api/_lib/clickup.js`). Sem
 essa pergunta, o agendamento é ignorado silenciosamente pelo sincronismo.
+
+**Webhook do Umbler Talk (mensagem nova do cliente) — cadastro manual:** a
+API do Umbler Talk só permite LISTAR/APAGAR webhooks, não CRIAR um novo (sem
+`POST /v1/webhooks/` documentado), então esse cadastro precisa ser feito uma
+vez, manualmente, dentro do próprio painel do Umbler Talk:
+
+1. No Umbler Talk, abra **Configurações → Webhooks** (ou equivalente) e crie
+   um novo apontando para
+   `https://<domínio-de-produção>/api/umbler-webhook?token=<UMBLER_WEBHOOK_TOKEN>`.
+2. Evento: **Message**. Canal: o mesmo configurado em `UMBLER_CHANNEL_ID`
+   (hoje "CSQ/ISM").
+3. Depois de criado, o endpoint só **loga** o payload recebido por enquanto
+   (`vercel logs` ou a aba de logs do projeto na Vercel) — ainda falta
+   confirmar o formato real de um evento "Message" antes de processar de
+   verdade (casar telefone → projeto e acender o indicador de "mensagem
+   nova" na tela). Mande uma mensagem de teste e avise pra continuarmos essa
+   parte a partir do payload real.
 
 ### Sessão
 

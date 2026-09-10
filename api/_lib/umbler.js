@@ -100,3 +100,48 @@ export async function enviarMensagem(chatId, mensagem) {
   });
   return enviada?.id || null;
 }
+
+/**
+ * Busca o histórico recente de conversa desse telefone no canal configurado —
+ * SEM criar nada (diferente de garantirContato/garantirConversa). Devolve
+ * `null` quando não existe conversa nenhuma ainda.
+ */
+export async function buscarHistoricoConversa(telefoneE164) {
+  const { organizationId, channelId } = credenciais();
+
+  let contato;
+  try {
+    contato = await request(`/v1/contacts/phone/?${new URLSearchParams({ organizationId, phoneNumber: telefoneE164 })}`);
+  } catch (e) {
+    if (e instanceof ErroUmbler && e.status === 404) return null;
+    throw e;
+  }
+  if (!contato?.id) return null;
+
+  const paramsChats = new URLSearchParams({
+    organizationId, PhoneNumbers: telefoneE164, ChatState: 'All',
+    ChatOrderBy: 'LastMessage', Order: 'Desc', Take: '5',
+  });
+  paramsChats.append('Channels.Values', channelId);
+  const listaChats = await request(`/v1/chats/?${paramsChats.toString()}`);
+  const chatResumo = (listaChats?.items || [])[0];
+  if (!chatResumo?.id) return null;
+
+  const detalhe = await request(`/v1/chats/${chatResumo.id}/?${new URLSearchParams({ organizationId, includeMessages: '10' })}`);
+
+  const mensagens = (detalhe?.latestMessages || [])
+    .filter((m) => m._t === 'MessageModel' || m._t === 'SentMessageModel')
+    .map((m) => ({
+      texto: m.content || '',
+      deCliente: !!m.fromContact,
+      dataMs: Date.parse(m.eventAtUTC || '') || null,
+    }))
+    .filter((m) => m.texto);
+
+  return {
+    aberta: !!detalhe?.open,
+    setor: detalhe?.sector?.name || null,
+    ultimaMensagemEm: Date.parse(detalhe?.eventAtUTC || '') || null,
+    mensagens,
+  };
+}

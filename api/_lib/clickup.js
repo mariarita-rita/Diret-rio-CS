@@ -35,6 +35,13 @@ export const LISTA_IMPLANTACOES_WAIPE = '901328976497';
 export const LISTA_RESERVAS_AGENDA = '901329017742';
 
 /**
+ * Modelos de mensagem de abertura pro Umbler Talk (botão "Iniciar conversa" em
+ * implantacao-waipe.html) — cada task e um modelo: name = nome do modelo,
+ * description = texto. Compartilhado entre todo o time, sem dono.
+ */
+export const LISTA_MODELOS_MENSAGEM = '901329038100';
+
+/**
  * Tokens OAuth do Google Calendar, um por ISM — 1 task por ISM (assignee =
  * o ISM), descricao = so o refresh token + quando conectou, no MESMO formato
  * de bloco JSON usado no fluxo Waipe (ver parseWaipeState/stringifyWaipeState
@@ -834,6 +841,18 @@ export async function listarReservas() {
 /** Todas as tasks de LISTA_GOOGLE_TOKENS — no maximo 1 por ISM, lista minuscula. */
 export async function listarTokensGoogle() {
   return buscarPaginado(LISTA_GOOGLE_TOKENS, '', 1);
+}
+
+/** Todos os modelos de mensagem salvos — lista pequena, 1 chamada basta. */
+export async function listarModelosMensagem() {
+  return buscarPaginado(LISTA_MODELOS_MENSAGEM, '', 1);
+}
+
+export async function criarModeloMensagem(payload) {
+  return cu(`/list/${LISTA_MODELOS_MENSAGEM}/task`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 // Identifica de quem e cada task pelo PROPRIO conteudo salvo (campo ismId no

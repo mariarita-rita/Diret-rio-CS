@@ -1431,6 +1431,7 @@
         '<aside class="project-detail-sidebar" aria-label="Agenda e comentários do projeto">' +
           '<div id="agendaProjetoWrap"></div>' +
           '<div id="comentariosProjetoWrap"></div>' +
+          '<div id="conversaUmblerWrap"></div>' +
         '</aside>' +
       '</div>';
     document.getElementById("btnVoltarLista").addEventListener("click", function(){
@@ -1440,6 +1441,7 @@
       renderProjetosPanel();
     });
     renderComentarios(dadosProjeto.projeto.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
+    renderConversaUmbler(dadosProjeto.projeto.id, document.getElementById("conversaUmblerWrap"));
     renderAgenda(dadosProjeto.projeto.id, document.getElementById("agendaProjetoWrap"));
     renderConteudoProjeto();
   }
@@ -1655,10 +1657,99 @@
       botao.textContent = textoOriginal;
       var btnAbrir = document.getElementById("btnIniciarConversaUmbler");
       if (btnAbrir) btnAbrir.style.display = "inline-block";
+      var conversaWrap = document.getElementById("conversaUmblerWrap");
+      if (conversaWrap) renderConversaUmbler(dadosProjeto.projeto.id, conversaWrap);
     }).catch(function(e){
       showSimToast(mensagemErro(e) || "Não deu para iniciar a conversa no Utalk.");
       botao.disabled = false;
       botao.textContent = textoOriginal;
+    });
+  }
+
+  function abrirModalModelos(aoEscolher){
+    var overlay = document.getElementById("modalModelosOverlay");
+    if (!overlay){
+      overlay = document.createElement("div");
+      overlay.id = "modalModelosOverlay";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(16,16,51,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;";
+      overlay.innerHTML =
+        '<div class="card" style="max-width:480px;width:100%;max-height:70vh;overflow:auto;">' +
+          '<h2 style="margin-bottom:10px;">Modelos de mensagem</h2>' +
+          '<div id="modalModelosLista"></div>' +
+          '<button type="button" class="btn-flow-secondary" id="btnFecharModalModelos" style="margin-top:12px;">Fechar</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", function(e){ if (e.target === overlay) overlay.style.display = "none"; });
+    }
+    overlay.style.display = "flex";
+    document.getElementById("btnFecharModalModelos").onclick = function(){ overlay.style.display = "none"; };
+    var lista = document.getElementById("modalModelosLista");
+    lista.innerHTML = '<div class="sub">Carregando…</div>';
+    apiGet("listar-modelos-mensagem").then(function(resp){
+      var modelos = resp.modelos || [];
+      if (!modelos.length){
+        lista.innerHTML = '<div class="sub">Nenhum modelo salvo ainda — escreva uma mensagem e use "Salvar como modelo".</div>';
+        return;
+      }
+      lista.innerHTML = modelos.map(function(m, i){
+        return '<div class="agent-pick" data-modelo="' + i + '" style="cursor:pointer;margin-top:8px;">' +
+          '<div class="apname">' + esc(m.nome) + '</div>' +
+          '<div class="apmeta" style="white-space:pre-wrap;">' + esc(m.texto) + '</div>' +
+        '</div>';
+      }).join("");
+      lista.querySelectorAll("[data-modelo]").forEach(function(el){
+        el.addEventListener("click", function(){
+          var i = Number(el.getAttribute("data-modelo"));
+          aoEscolher(modelos[i].texto);
+          overlay.style.display = "none";
+        });
+      });
+    }).catch(function(){
+      lista.innerHTML = '<div class="sub">Não deu para carregar os modelos.</div>';
+    });
+  }
+
+  function salvarModeloAtual(){
+    var campoTexto = document.getElementById("umblerMsgTexto");
+    var conteudo = campoTexto ? campoTexto.value.trim() : "";
+    if (!conteudo){ showSimToast("Escreva a mensagem antes de salvar como modelo."); return; }
+    var nome = window.prompt("Nome do modelo:");
+    if (!nome || !nome.trim()) return;
+    apiPost("salvar-modelo-mensagem", { nome: nome.trim(), texto: conteudo }).then(function(){
+      showSimToast("Modelo salvo.");
+    }).catch(function(e){
+      showSimToast(mensagemErro(e) || "Não deu para salvar o modelo.");
+    });
+  }
+
+  function renderConversaUmbler(projetoId, container){
+    if (!container) return;
+    container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sidebar-loading">Carregando…</div></div>';
+    apiGet("historico-conversa-umbler", { id: projetoId }).then(function(resp){
+      if (resp.semTelefone){
+        container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Cadastre o telefone do cliente (Resumo do projeto) pra ver o histórico aqui.</div></div>';
+        return;
+      }
+      if (resp.semConversa){
+        container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Nenhuma conversa iniciada ainda com esse telefone.</div></div>';
+        return;
+      }
+      var statusTxt = resp.aberta ? "Aberta" : "Fechada";
+      var setorTxt = resp.setor ? (" · " + esc(resp.setor)) : "";
+      var ultimaTxt = resp.ultimaMensagemEm ? fmtDataHoraSim(resp.ultimaMensagemEm) : "—";
+      var msgsHtml = (resp.mensagens || []).slice(-5).map(function(m){
+        return '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:' + (m.deCliente ? "var(--surface-2)" : "var(--tag-londrisoft-bg)") + ';">' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:2px;">' + (m.deCliente ? "Cliente" : "Equipe") + ' · ' + fmtDataHoraSim(m.dataMs) + '</div>' +
+          '<div style="white-space:pre-wrap;font-size:13px;">' + esc(m.texto) + '</div>' +
+        '</div>';
+      }).join("");
+      container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2>' +
+        '<div class="sp-v">Status: <strong>' + statusTxt + '</strong>' + setorTxt + '</div>' +
+        '<div class="sp-v">Última mensagem: ' + esc(ultimaTxt) + '</div>' +
+        (msgsHtml || '<div class="sub" style="margin-top:8px;">Sem mensagens recentes.</div>') +
+      '</div>';
+    }).catch(function(){
+      container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Não deu para carregar.</div></div>';
     });
   }
 
@@ -1840,6 +1931,8 @@
         '<textarea id="umblerMsgTexto" class="form-input" rows="3" style="width:100%;margin-top:4px;">' + esc(textoAberturaPadrao(p)) + '</textarea>' +
         '<div style="margin-top:6px;">' +
           '<button type="button" class="btn-flow-secondary" id="btnEnviarUmbler">Enviar</button> ' +
+          '<button type="button" class="btn-flow-secondary" id="btnUsarModeloUmbler">Usar modelo</button> ' +
+          '<button type="button" class="btn-flow-secondary" id="btnSalvarModeloUmbler">💾 Salvar como modelo</button> ' +
           '<button type="button" class="btn-flow-secondary" id="btnCancelarUmbler">Cancelar</button>' +
         '</div>' +
       '</div>' +
@@ -1891,6 +1984,14 @@
     if (btnEnviarUmbler) btnEnviarUmbler.addEventListener("click", function(){
       iniciarConversaUmbler(btnEnviarUmbler, document.getElementById("umblerMsgTexto").value.trim());
     });
+    var btnUsarModeloUmbler = document.getElementById("btnUsarModeloUmbler");
+    if (btnUsarModeloUmbler) btnUsarModeloUmbler.addEventListener("click", function(){
+      abrirModalModelos(function(texto){
+        document.getElementById("umblerMsgTexto").value = texto;
+      });
+    });
+    var btnSalvarModeloUmbler = document.getElementById("btnSalvarModeloUmbler");
+    if (btnSalvarModeloUmbler) btnSalvarModeloUmbler.addEventListener("click", salvarModeloAtual);
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");

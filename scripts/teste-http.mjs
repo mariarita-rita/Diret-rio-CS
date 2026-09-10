@@ -93,6 +93,8 @@ const stubClickup = `
   export function cnpjDoAgendamentoGoogle() { return null; }
   export async function obterTokenGoogle() { return null; }
   export async function listarTokensGoogle() { return []; }
+  export async function listarModelosMensagem() { return []; }
+  export async function criarModeloMensagem() { return { id: 'stub-modelo' }; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -120,6 +122,7 @@ const stubUmbler = `
   export async function garantirContato() { return 'stub-contato'; }
   export async function garantirConversa() { return { id: 'stub-chat', criadaAgora: true, setor: null }; }
   export async function enviarMensagem() { return 'stub-mensagem'; }
+  export async function buscarHistoricoConversa() { return null; }
 `;
 const umblerLibUrl = dataUrl(stubUmbler);
 
@@ -3051,6 +3054,126 @@ console.log('\n[42] Nível "ism": login, sem dados financeiros, só os próprios
 
   const carteiraAuxiliar = await chamarGetAuxiliar('carteira');
   checar('ism auxiliar: continua sem acesso a carteira -> 403', [carteiraAuxiliar.code, carteiraAuxiliar.corpo.code], [403, 'nivel_nao_permitido']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[43] historico-conversa-umbler + modelos de mensagem');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.UMBLER_API_TOKEN = 'token-teste';
+  process.env.UMBLER_ORGANIZATION_ID = 'org-teste';
+  process.env.UMBLER_CHANNEL_ID = 'canal-teste';
+
+  const LISTA_MODELOS = '901329038100';
+  let estadoProjetoHist = { etapaAtual: 'construcao', telefone: '(43) 90000-0000' };
+  let historicoUmbler = { open: true, sector: { name: 'Sucesso do Cliente' }, eventAtUTC: new Date().toISOString(), latestMessages: [
+    { _t: 'SentMessageModel', content: 'Olá!', eventAtUTC: new Date().toISOString() },
+  ] };
+  let contatoAchado = { id: 'contato-1' };
+  const escritas = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+  function respostaJson(status, corpo) {
+    return { ok: status >= 200 && status < 300, status, headers: new Map(), json: async () => corpo, text: async () => '' };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjetoHist')) {
+      return ok({
+        id: 'tProjetoHist', name: 'Cliente Hist', list: { id: '901328976497' }, parent: null,
+        description: 'CSM: Gian Luca\n\n' + JSON.stringify(estadoProjetoHist),
+      });
+    }
+    if (u.includes(`/list/${LISTA_MODELOS}/task?`)) {
+      return ok({ tasks: [{ id: 'tModelo1', name: 'Abertura padrão', description: 'Olá tudo bem?' }], last_page: true });
+    }
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_MODELOS}/task`)) {
+      escritas.push({ alvo: 'criar-modelo', body: JSON.parse(init.body) });
+      return ok({ id: 'tModeloNovo' });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/contacts/phone/')) {
+      return contatoAchado ? respostaJson(200, contatoAchado) : respostaJson(404, { error: 'not found' });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/chats/?')) {
+      return respostaJson(200, { items: historicoUmbler ? [{ id: 'chat-1' }] : [] });
+    }
+    if (u.startsWith('https://app-utalk.umbler.com/api/v1/chats/chat-1/')) {
+      return respostaJson(200, historicoUmbler || {});
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('hist-modelos');
+  const umblerLibUrlReal = libUmblerUnica('hist-modelos');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrl, umblerLibUrlReal);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const chamarGet = async (perfil, action, query = {}) => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action, ...query } }, r);
+    return r;
+  };
+  const chamarPost = async (perfil, action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body }, r);
+    return r;
+  };
+
+  // historico-conversa-umbler
+  const histOutraCarteira = await chamarGet(PATRICIA, 'historico-conversa-umbler', { id: 'tProjetoHist' });
+  checar('historico-conversa-umbler: csm de outra carteira -> 403', [histOutraCarteira.code, histOutraCarteira.corpo.code], [403, 'fora_da_carteira']);
+
+  const histOk = await chamarGet(GIAN, 'historico-conversa-umbler', { id: 'tProjetoHist' });
+  checar('historico-conversa-umbler: 200 com conversa', [histOk.code, histOk.corpo.aberta, histOk.corpo.setor], [200, true, 'Sucesso do Cliente']);
+  checar('  mensagens vem no corpo', histOk.corpo.mensagens.length, 1);
+
+  estadoProjetoHist = { etapaAtual: 'construcao', telefone: '' };
+  const histSemTelefone = await chamarGet(GIAN, 'historico-conversa-umbler', { id: 'tProjetoHist' });
+  checar('historico-conversa-umbler: sem telefone -> semTelefone', [histSemTelefone.code, histSemTelefone.corpo.semTelefone], [200, true]);
+
+  estadoProjetoHist = { etapaAtual: 'construcao', telefone: '(43) 90000-0000' };
+  contatoAchado = null;
+  const histSemConversa = await chamarGet(GIAN, 'historico-conversa-umbler', { id: 'tProjetoHist' });
+  checar('historico-conversa-umbler: contato nao existe -> semConversa', [histSemConversa.code, histSemConversa.corpo.semConversa], [200, true]);
+  contatoAchado = { id: 'contato-1' };
+
+  const idInvalidoHist = await chamarGet(GESTAO, 'historico-conversa-umbler', { id: 'zzz!!' });
+  checar('historico-conversa-umbler: id invalido -> 400', [idInvalidoHist.code, idInvalidoHist.corpo.code], [400, 'task_invalida']);
+
+  // listar-modelos-mensagem
+  const listaModelos = await chamarGet(CONSULTA, 'listar-modelos-mensagem');
+  checar('listar-modelos-mensagem: 200 (leitura franqueada, so nao pode gestao/carteira)', [listaModelos.code, listaModelos.corpo.modelos.length], [200, 1]);
+  checar('  nome e texto vem certos', [listaModelos.corpo.modelos[0].nome, listaModelos.corpo.modelos[0].texto], ['Abertura padrão', 'Olá tudo bem?']);
+
+  // salvar-modelo-mensagem
+  const salvarSemPermissao = await chamarPost(CONSULTA, 'salvar-modelo-mensagem', { nome: 'X', texto: 'Y' });
+  checar('salvar-modelo-mensagem: consulta -> 403', [salvarSemPermissao.code, salvarSemPermissao.corpo.code], [403, 'somente_leitura']);
+
+  const salvarSemNome = await chamarPost(GESTAO, 'salvar-modelo-mensagem', { nome: '', texto: 'Olá' });
+  checar('salvar-modelo-mensagem: sem nome -> 400', [salvarSemNome.code, salvarSemNome.corpo.code], [400, 'nome_invalido']);
+
+  const salvarSemTexto = await chamarPost(GESTAO, 'salvar-modelo-mensagem', { nome: 'Modelo X', texto: '' });
+  checar('salvar-modelo-mensagem: sem texto -> 400', [salvarSemTexto.code, salvarSemTexto.corpo.code], [400, 'texto_invalido']);
+
+  escritas.length = 0;
+  const salvarOk = await chamarPost(GESTAO, 'salvar-modelo-mensagem', { nome: 'Modelo X', texto: 'Olá, tudo bem?' });
+  checar('salvar-modelo-mensagem: 200', [salvarOk.code, salvarOk.corpo.ok], [200, true]);
+  checar('  cria a task com nome e texto certos', [escritas[0]?.body.name, escritas[0]?.body.markdown_description], ['Modelo X', 'Olá, tudo bem?']);
+
+  // ISM (Bruno) tambem pode salvar/listar modelos — nao esta em ACOES_PROIBIDAS_ISM
+  const BRUNO_SESSAO = { nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' };
+  const salvarComoIsm = await chamarPost(BRUNO_SESSAO, 'salvar-modelo-mensagem', { nome: 'Modelo ISM', texto: 'Oi!' });
+  checar('salvar-modelo-mensagem: ism tambem pode -> 200', [salvarComoIsm.code, salvarComoIsm.corpo.ok], [200, true]);
 
   globalThis.fetch = fetchOriginal;
 }

@@ -37,6 +37,13 @@
 //   POST /api/clickup?action=vincular-agendamento-google { projetoId, ismId,
 //        googleEventId, titulo, inicio, fim, linkReuniao? } -> vincula
 //        manualmente um item de `naoVinculados` a um projeto
+//   GET  /api/clickup?action=historico-conversa-umbler { id } -> conversa
+//        recente no Umbler Talk pro telefone desse projeto (so leitura, nao
+//        cria contato/conversa — ver iniciar-conversa-umbler pra isso)
+//   GET  /api/clickup?action=listar-modelos-mensagem -> modelos salvos de
+//        mensagem de abertura, compartilhados entre todo o time
+//   POST /api/clickup?action=salvar-modelo-mensagem { nome, texto } -> salva
+//        um modelo novo
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -61,6 +68,7 @@ import {
   cnpjDoAgendamentoGoogle,
   contextoSemEstado,
   criarComentario,
+  criarModeloMensagem,
   criarReserva,
   criarSubtaskAgente,
   criarTaskImplantacao,
@@ -82,6 +90,7 @@ import {
   LISTA_RESERVAS_AGENDA,
   listarComentarios,
   listarImplantacoes,
+  listarModelosMensagem,
   listarReservas,
   listarTokensGoogle,
   localizarTask,
@@ -96,7 +105,7 @@ import {
   stringifyWaipeState,
 } from './_lib/clickup.js';
 import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
-import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
+import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
 // A resposta varia por sessao (filtro por CSM), portanto nao pode ir para o
@@ -176,6 +185,15 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'vincular-agendamento-google') {
       return await vincularAgendamentoGoogleAcao(req, res, sessao);
     }
+    if (req.method === 'GET' && acao === 'historico-conversa-umbler') {
+      return await historicoConversaUmblerAcao(req, res, sessao);
+    }
+    if (req.method === 'GET' && acao === 'listar-modelos-mensagem') {
+      return await listarModelosMensagemAcao(res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'salvar-modelo-mensagem') {
+      return await salvarModeloMensagemAcao(req, res, sessao);
+    }
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
@@ -186,6 +204,7 @@ export default async function handler(req, res) {
       'atualizar-reserva', 'cancelar-reserva', 'conectar-agenda-google',
       'status-google-agenda', 'iniciar-conversa-umbler',
       'sincronizar-agendamentos-google', 'vincular-agendamento-google',
+      'historico-conversa-umbler', 'listar-modelos-mensagem', 'salvar-modelo-mensagem',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -1318,6 +1337,75 @@ async function iniciarConversaUmblerAcao(req, res, sessao) {
     mensagemEnviada,
     mensagemErro,
   });
+}
+
+/**
+ * So LEITURA — nao cria contato nem conversa (diferente de iniciar-conversa-umbler).
+ * Devolve o historico recente pro bloco "Conversa no Utalk" no projeto, pra
+ * quem for mandar mensagem ver primeiro se ja teve contato recente.
+ */
+async function historicoConversaUmblerAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const id = String(req.query?.id || '');
+  if (!taskIdValido(id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
+  }
+
+  const estado = parseWaipeState(projeto.description);
+  const telefoneE164 = telefoneParaE164(estado.telefone);
+  if (!telefoneE164) {
+    return res.status(200).json({ ok: true, semTelefone: true });
+  }
+
+  const historico = await buscarHistoricoConversa(telefoneE164);
+  if (!historico) {
+    return res.status(200).json({ ok: true, semConversa: true });
+  }
+  return res.status(200).json({ ok: true, ...historico });
+}
+
+async function listarModelosMensagemAcao(res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const tasks = await listarModelosMensagem();
+  const modelos = tasks
+    .map((t) => ({ id: t.id, nome: t.name, texto: contextoSemEstado(t.description) }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  return res.status(200).json({ modelos });
+}
+
+async function salvarModeloMensagemAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  const nome = texto(corpo.nome, 100);
+  const conteudo = texto(corpo.texto, 4096);
+  if (!nome) return erro(res, 400, 'nome_invalido', 'Dê um nome pro modelo.');
+  if (!conteudo) return erro(res, 400, 'texto_invalido', 'O modelo não pode ficar vazio.');
+
+  const nova = await criarModeloMensagem({ name: nome, markdown_description: conteudo });
+  return res.status(200).json({ ok: true, id: nova.id });
 }
 
 async function atualizarAgenteAcao(req, res, sessao) {
