@@ -28,6 +28,14 @@ export const PERFIS = [
   { env: 'AUTH_CSM_PATRICIA', nivel: 'csm', csm: 'Patricia Carvalho', ismId: null, nome: 'Patricia Carvalho' },
   { env: 'AUTH_ISM_BRUNO', nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' },
   { env: 'AUTH_ISM_ERICA', nivel: 'ism', csm: null, ismId: 48933858, nome: 'Erica Fernanda' },
+  // Daiane e Aline ajudam com agendamentos (acompanhar e reagendar clientes)
+  // mas não são ISM responsável por nenhum projeto — por isso `ismId: null`,
+  // igual ao "sem escopo" de csm: pertenceAoIsm/os checks de agenda por ismId
+  // tratam null como "sem restrição", então elas veem tudo e mexem na agenda
+  // de qualquer ISM, sem aparecer como opção de responsável (isso é definido
+  // por ISM_OPCOES em api/_lib/clickup.js, que continua só com Bruno/Erica).
+  // Uma senha só pras duas — mesma permissão, sem necessidade de diferenciar.
+  { env: 'AUTH_ISM_AUXILIAR', nivel: 'ism', csm: null, ismId: null, nome: 'Suporte ISM' },
 ];
 
 export class ErroConfig extends Error {

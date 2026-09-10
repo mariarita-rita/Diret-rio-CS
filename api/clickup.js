@@ -1671,7 +1671,7 @@ async function criarReservaAcao(req, res, sessao) {
   if (!ISM_IDS_VALIDOS.has(ismId)) {
     return erro(res, 400, 'ism_invalido', 'Selecione um ISM válido.');
   }
-  if (sessao.nivel === 'ism' && Number(sessao.ismId) !== ismId) {
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(sessao.ismId) !== ismId) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode registrar reserva na própria agenda.');
   }
 
@@ -1774,7 +1774,7 @@ async function atualizarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
   }
 
@@ -1811,7 +1811,7 @@ async function cancelarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode cancelar reservas da própria agenda.');
   }
 
@@ -1951,7 +1951,7 @@ async function vincularAgendamentoGoogleAcao(req, res, sessao) {
   if (!ISM_OPCOES.some((i) => i.id === ismId)) {
     return erro(res, 400, 'ism_invalido', 'ISM inválido.');
   }
-  if (sessao.nivel === 'ism' && Number(sessao.ismId) !== ismId) {
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(sessao.ismId) !== ismId) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode vincular agendamentos da própria agenda.');
   }
   const googleEventId = texto(corpo.googleEventId, 200);
@@ -1994,7 +1994,7 @@ async function conectarAgendaGoogleAcao(req, res, sessao) {
   }
   // Um ISM so conecta a PROPRIA agenda — nunca a de outro (o ismId da sessao
   // vem assinado, nao da pra forjar so trocando o parametro na URL).
-  if (sessao.nivel === 'ism' && Number(sessao.ismId) !== ismId) {
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(sessao.ismId) !== ismId) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode conectar a própria agenda.');
   }
   let url;

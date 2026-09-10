@@ -3019,6 +3019,39 @@ console.log('\n[42] Nível "ism": login, sem dados financeiros, só os próprios
   const vincularAlheio = await chamarPost('vincular-agendamento-google', { projetoId: 'tProjBruno', ismId: ERICA, googleEventId: 'evt-x', inicio: 1, fim: 2 });
   checar('ism: vincular-agendamento-google pra outro ISM -> 403', [vincularAlheio.code, vincularAlheio.corpo.code], [403, 'fora_do_escopo']);
 
+  // "ism" auxiliar (Daiane/Aline): ismId null -> sem projeto/calendario proprio,
+  // entao SEM restricao nenhuma (ve tudo, mexe na agenda de qualquer ISM) —
+  // mas continua fora de carteira/metas/cliente/proposta, igual Bruno/Erica.
+  const ISM_AUXILIAR = { nivel: 'ism', csm: null, ismId: null, nome: 'Daiane' };
+  const chamarGetAuxiliar = async (action, query = {}) => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(ISM_AUXILIAR) }), query: { action, ...query } }, r);
+    return r;
+  };
+  const chamarPostAuxiliar = async (action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(ISM_AUXILIAR) }), query: { action }, body }, r);
+    return r;
+  };
+
+  const listaAuxiliar = await chamarGetAuxiliar('listar-implantacoes');
+  checar('ism auxiliar (ismId null): ve TODOS os projetos, nao so um ISM', listaAuxiliar.corpo.tasks.map((t) => t.id).sort(), ['tProjBruno', 'tProjErica']);
+
+  const obterAlheioAuxiliar = await chamarGetAuxiliar('obter-implantacao', { id: 'tProjErica' });
+  checar('ism auxiliar: obter-implantacao de qualquer projeto -> 200', obterAlheioAuxiliar.code, 200);
+
+  const conectarAlheioAuxiliar = await chamarGetAuxiliar('conectar-agenda-google', { ismId: ERICA });
+  checar('ism auxiliar: conectar-agenda-google de qualquer ISM -> 302 (nao bloqueia)', conectarAlheioAuxiliar.code, 302);
+
+  const criarReservaAuxiliar = await chamarPostAuxiliar('criar-reserva', { titulo: 'Reagendamento', ismId: ERICA, inicio: inicioReserva + 10 * 3600000, fim: inicioReserva + 11 * 3600000 });
+  checar('ism auxiliar: criar-reserva pra outro ISM -> 200 (nao bloqueia)', criarReservaAuxiliar.code, 200);
+
+  const atualizarReservaAuxiliar = await chamarPostAuxiliar('atualizar-reserva', { id: 'tReservaErica', linkReuniao: 'y' });
+  checar('ism auxiliar: atualizar-reserva de qualquer ISM -> 200 (nao bloqueia)', atualizarReservaAuxiliar.code, 200);
+
+  const carteiraAuxiliar = await chamarGetAuxiliar('carteira');
+  checar('ism auxiliar: continua sem acesso a carteira -> 403', [carteiraAuxiliar.code, carteiraAuxiliar.corpo.code], [403, 'nivel_nao_permitido']);
+
   globalThis.fetch = fetchOriginal;
 }
 

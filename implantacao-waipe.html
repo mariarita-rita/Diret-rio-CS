@@ -914,21 +914,74 @@
   var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
 
   // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
+  // Esta página não tinha tela de login própria — dependia de já existir um
+  // cookie de sessão criado ao logar no dashboard_carteiras.html antes. ISM não
+  // usa aquele painel, então precisava logar lá só pra conseguir usar este.
+  // Agora: qualquer chamada que voltar 401/sessao_invalida mostra o login bem
+  // aqui, dentro do painel de projetos — sem depender de mais nada.
+  var loginPendente = false;
+
+  function mostrarLoginNoPainel(){
+    if (loginPendente) return;
+    loginPendente = true;
+    var alvo = (typeof projetosRootAtivo === "function" ? projetosRootAtivo() : null) || document.getElementById("projetosRoot");
+    if (!alvo) return;
+    alvo.innerHTML =
+      '<div class="card" style="max-width:380px;margin:60px auto;">' +
+        '<h2 style="margin-bottom:6px;">Entrar</h2>' +
+        '<p class="sub" style="margin-bottom:16px;">Faça login para acessar os projetos de implantação.</p>' +
+        '<input type="password" id="loginSenhaInput" class="form-input" placeholder="Senha de acesso" style="width:100%;margin-bottom:10px;">' +
+        '<button type="button" class="btn-flow" id="btnLoginEntrar" style="width:100%;">Entrar</button>' +
+        '<div id="loginErro" style="color:var(--danger);font-size:13px;margin-top:8px;min-height:18px;"></div>' +
+      '</div>';
+    var input = document.getElementById("loginSenhaInput");
+    var btn = document.getElementById("btnLoginEntrar");
+    var erro = document.getElementById("loginErro");
+    function tentar(){
+      var senha = input.value;
+      if (!senha){ erro.textContent = "Digite a senha."; return; }
+      btn.disabled = true; btn.textContent = "Entrando...";
+      fetch("/api/login", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senha: senha })
+      }).then(function(r){
+        return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+      }).then(function(){
+        loginPendente = false;
+        renderProjetosPanel();
+      }).catch(function(e){
+        erro.textContent = (e && e.error) || "Senha incorreta.";
+        btn.disabled = false; btn.textContent = "Entrar";
+      });
+    }
+    btn.addEventListener("click", tentar);
+    input.addEventListener("keydown", function(e){ if (e.key === "Enter") tentar(); });
+    input.focus();
+  }
+
+  function tratarRespostaApi(r){
+    return r.json().then(function(j){
+      if (r.status === 401 && j && j.code === "sessao_invalida"){
+        mostrarLoginNoPainel();
+        return new Promise(function(){}); // fica pendente pra sempre — a tela de login assume a partir daqui
+      }
+      if (!r.ok) throw j;
+      return j;
+    });
+  }
   function apiGet(action, params){
     var qs = "";
     if (params) qs = "&" + Object.keys(params).map(function(k){ return k + "=" + encodeURIComponent(params[k]); }).join("&");
-    return fetch("/api/clickup?action=" + action + qs).then(function(r){
-      return r.json().then(function(j){ if (!r.ok) throw j; return j; });
-    });
+    return fetch("/api/clickup?action=" + action + qs, { credentials: "same-origin" }).then(tratarRespostaApi);
   }
   function apiPost(action, body){
     return fetch("/api/clickup?action=" + action, {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
-    }).then(function(r){
-      return r.json().then(function(j){ if (!r.ok) throw j; return j; });
-    });
+    }).then(tratarRespostaApi);
   }
 
   // ---- Capability `sample` (extração de agentes por IA) ----

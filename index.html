@@ -16,8 +16,8 @@ body{
   background:#000035;
   min-height:100vh;
   display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  padding:2rem;position:relative;overflow:hidden;
+  align-items:center;justify-content:flex-start;
+  padding:2rem;position:relative;overflow-x:hidden;overflow-y:auto;
 }
 body::before{
   content:'';position:fixed;inset:0;
@@ -72,12 +72,46 @@ body::after{
   padding:10px 14px;background:rgba(255,255,255,0.04);
   border-radius:8px;border-left:2px solid rgba(58,134,255,0.4);
 }
+.login-bar{margin-bottom:1.25rem;}
+.login-bar-row{display:flex;gap:8px;align-items:center;}
+.login-bar-input{
+  flex:1;padding:9px 12px;border-radius:8px;
+  border:1px solid rgba(168,197,255,0.2);background:rgba(255,255,255,0.06);
+  color:#fff;font-size:13px;outline:none;
+}
+.login-bar-input::placeholder{color:rgba(255,255,255,0.3);}
+.login-bar-input:focus{border-color:rgba(58,134,255,0.6);background:rgba(255,255,255,0.1);}
+.login-bar-btn{
+  padding:9px 18px;border-radius:8px;border:none;white-space:nowrap;
+  background:linear-gradient(135deg,var(--brand),var(--brand-dark));
+  color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:opacity 0.15s;
+}
+.login-bar-btn:hover{opacity:0.9;}
+.login-bar-status-text{font-size:13px;color:rgba(255,255,255,0.6);flex:1;}
+.login-bar-status-text b{color:#fff;}
+.login-bar-logout{
+  padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;
+  background:rgba(255,255,255,0.08);border:1px solid rgba(168,197,255,0.2);color:rgba(255,255,255,0.6);
+}
+.login-bar-logout:hover{background:rgba(255,255,255,0.14);}
+.login-bar-error{font-size:12px;color:#FDA4AF;margin-top:6px;min-height:16px;}
 .divider{width:100%;height:1px;background:rgba(255,255,255,0.07);margin-bottom:1.5rem;}
+.section{margin-top:0.5rem;}
 .section-label{
   font-size:10px;font-weight:600;letter-spacing:1px;
   text-transform:uppercase;color:rgba(255,255,255,0.3);
   margin-bottom:10px;margin-top:0.5rem;
 }
+summary.section-label{
+  cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;
+  user-select:none;
+}
+summary.section-label::-webkit-details-marker{display:none;}
+summary.section-label::before{
+  content:'▸';display:inline-block;font-size:9px;
+  color:rgba(255,255,255,0.3);transition:transform 0.15s;
+}
+details[open]>summary.section-label::before{transform:rotate(90deg);}
 .tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;}
 .tool-btn{
   display:flex;flex-direction:column;align-items:flex-start;
@@ -102,6 +136,8 @@ body::after{
 .i-proc{background:rgba(42,111,230,0.15);}
 .i-anal{background:rgba(22,163,74,0.15);}
 .i-prec{background:rgba(202,138,4,0.15);}
+.i-ism{background:rgba(147,51,234,0.15);}
+.i-gestao{background:rgba(220,38,38,0.15);}
 .tool-name{font-size:14px;font-weight:600;color:#fff;margin-bottom:4px;line-height:1.2;}
 .tool-desc{font-size:12px;color:rgba(255,255,255,0.38);line-height:1.5;}
 .tool-arrow{
@@ -148,65 +184,140 @@ body::after{
       <span>⭐</span>
       <span>Recomendado: favorite esta página no navegador para acesso rápido no dia a dia.</span>
     </div>
+
+    <div class="login-bar" id="loginBar">
+      <div class="login-bar-row" id="loginBarForm">
+        <input type="password" class="login-bar-input" id="loginBarInput" placeholder="Senha de acesso" onkeydown="if(event.key==='Enter')hubDoLogin()">
+        <button type="button" class="login-bar-btn" id="loginBarBtn" onclick="hubDoLogin()">Entrar</button>
+      </div>
+      <div class="login-bar-row" id="loginBarStatus" style="display:none;">
+        <span class="login-bar-status-text" id="loginBarStatusText"></span>
+        <button type="button" class="login-bar-logout" onclick="hubDoLogout()">Sair</button>
+      </div>
+      <div class="login-bar-error" id="loginBarError"></div>
+    </div>
+
     <div class="divider"></div>
 
-    <div class="section-label">Acesso geral</div>
-    <div class="tools-grid">
+    <details class="section" open>
+      <summary class="section-label">Gerais</summary>
+      <div class="tools-grid">
 
-      <a class="tool-btn" href="https://painel-de-analises.vercel.app/" target="_blank">
-        <div class="tool-icon i-anal">🔍</div>
-        <div class="tool-name">Monitoramento de Análises</div>
-        <div class="tool-desc">Acompanhe status, responsável e Jira das solicitações em tempo real.</div>
-        <span class="tool-arrow">↗</span>
-      </a>
+        <a class="tool-btn" href="https://painel-de-analises.vercel.app/" target="_blank">
+          <div class="tool-icon i-anal">🔍</div>
+          <div class="tool-name">Monitoramento de Análises</div>
+          <div class="tool-desc">Acompanhe status, responsável e Jira das solicitações em tempo real.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
 
-      <a class="tool-btn" href="csm_processos.html" target="_blank">
-        <div class="tool-icon i-proc">📋</div>
-        <div class="tool-name">Processos CSM</div>
-        <div class="tool-desc">Upsell, renovação, troca de titularidade e boas práticas de negociação.</div>
-        <span class="tool-arrow">↗</span>
-      </a>
+        <a class="tool-btn" href="dashboard_carteiras.html" target="_blank">
+          <div class="tool-icon i-dash">🔎</div>
+          <div class="tool-name">Pesquisa de Clientes</div>
+          <div class="tool-desc">Consulte o gerente de contas e informações de qualquer cliente da base.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
 
-      <a class="tool-btn" href="tabela-precos-cs.html" target="_blank">
-        <div class="tool-icon i-prec">💰</div>
-        <div class="tool-name">Tabela de Preços</div>
-        <div class="tool-desc">Preços vigentes, políticas de desconto e simulador por produto e plano.</div>
-        <span class="tool-arrow">↗</span>
-      </a>
+      </div>
+    </details>
 
-      <a class="tool-btn" href="dashboard_carteiras.html" target="_blank">
-        <div class="tool-icon i-dash">🔎</div>
-        <div class="tool-name">Pesquisa de Clientes</div>
-        <div class="tool-desc">Consulte o gerente de contas e informações de qualquer cliente da base.</div>
-        <span class="tool-arrow">↗</span>
-      </a>
+    <details class="section" open>
+      <summary class="section-label">CSM</summary>
+      <div class="tools-grid">
+        <a class="tool-btn tool-full" href="dashboard_carteiras.html" target="_blank">
+          <div class="tool-icon i-dash">📊</div>
+          <div class="tool-name">Dashboard de Carteiras <span class="badge-restrito">Senha necessária</span></div>
+          <div class="tool-desc">Sua carteira de clientes: MRR, metas, comissões, renovações e alertas.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
+        <a class="tool-btn" href="csm_processos.html" target="_blank">
+          <div class="tool-icon i-proc">📋</div>
+          <div class="tool-name">Processos CSM</div>
+          <div class="tool-desc">Upsell, renovação, troca de titularidade e boas práticas de negociação.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
+        <a class="tool-btn" href="tabela-precos-cs.html" target="_blank">
+          <div class="tool-icon i-prec">💰</div>
+          <div class="tool-name">Tabela de Preços</div>
+          <div class="tool-desc">Preços vigentes, políticas de desconto e simulador por produto e plano.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
+      </div>
+    </details>
 
-    </div>
+    <details class="section" open>
+      <summary class="section-label">ISM — Implantação</summary>
+      <div class="tools-grid">
+        <a class="tool-btn tool-full" href="implantacao-waipe.html" target="_blank">
+          <div class="tool-icon i-ism">🚀</div>
+          <div class="tool-name">Projetos em Andamento <span class="badge-restrito">Senha necessária</span></div>
+          <div class="tool-desc">Fluxo de implantação por cliente — agentes Waipe e outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) fechadas junto, do escopo à entrega, salvo no ClickUp.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
+      </div>
+    </details>
 
-    <div class="section-label" style="margin-top:1rem">Acesso restrito — gerentes e gestão</div>
-    <div class="tools-grid">
-      <a class="tool-btn tool-full" href="dashboard_carteiras.html" target="_blank">
-        <div class="tool-icon i-dash">📊</div>
-        <div class="tool-name">Dashboard de Carteiras <span class="badge-restrito">Senha necessária</span></div>
-        <div class="tool-desc">Gerencie carteiras de clientes, MRR, metas, comissões, renovações e alertas por gerente de contas.</div>
-        <span class="tool-arrow">↗</span>
-      </a>
-    </div>
-
-    <div class="section-label" style="margin-top:1rem">CS Implantação</div>
-    <div class="tools-grid">
-      <a class="tool-btn tool-full" href="implantacao-waipe.html" target="_blank">
-        <div class="tool-icon i-dash">🚀</div>
-        <div class="tool-name">Projetos em Andamento <span class="badge-restrito">Senha necessária</span></div>
-        <div class="tool-desc">Fluxo de implantação por cliente — agentes Waipe e outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) fechadas junto, do escopo à entrega, salvo no ClickUp.</div>
-        <span class="tool-arrow">↗</span>
-      </a>
-    </div>
+    <details class="section" open>
+      <summary class="section-label">Gestão</summary>
+      <div class="tools-grid">
+        <a class="tool-btn tool-full" href="dashboard_carteiras.html" target="_blank">
+          <div class="tool-icon i-gestao">📈</div>
+          <div class="tool-name">Dashboard de Carteiras <span class="badge-restrito">Senha necessária</span></div>
+          <div class="tool-desc">Visão geral de todas as carteiras, fechamentos e campanha — gerencie por gerente de contas.</div>
+          <span class="tool-arrow">↗</span>
+        </a>
+      </div>
+    </details>
 
   </div>
 
   <div class="footer">Londrisoft Customer Success · Uso interno</div>
 </div>
+
+<script>
+// Login aqui no hub, uma vez só — o cookie de sessão vale pra todas as
+// páginas do site (mesma origem), então depois de entrar aqui os links já
+// abrem autenticados, sem pedir senha de novo em cada ferramenta.
+function hubMostrarLogado(nome){
+  document.getElementById('loginBarForm').style.display='none';
+  document.getElementById('loginBarStatus').style.display='flex';
+  document.getElementById('loginBarStatusText').innerHTML='Conectado como <b>'+nome+'</b>';
+}
+function hubMostrarDeslogado(){
+  document.getElementById('loginBarForm').style.display='flex';
+  document.getElementById('loginBarStatus').style.display='none';
+}
+async function hubDoLogin(){
+  var input=document.getElementById('loginBarInput');
+  var err=document.getElementById('loginBarError');
+  var btn=document.getElementById('loginBarBtn');
+  err.textContent='';
+  if(!input.value){err.textContent='Digite a senha.';return;}
+  btn.disabled=true;btn.textContent='Entrando...';
+  try{
+    var r=await fetch('/api/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha:input.value})});
+    var d=await r.json().catch(function(){return {};});
+    if(!r.ok)throw d;
+    input.value='';
+    hubMostrarLogado(d.nome||'');
+  }catch(e){
+    err.textContent=(e&&e.error)||'Senha incorreta.';
+  }finally{
+    btn.disabled=false;btn.textContent='Entrar';
+  }
+}
+async function hubDoLogout(){
+  try{await fetch('/api/login?action=logout',{method:'POST',credentials:'same-origin'});}catch(_){}
+  hubMostrarDeslogado();
+}
+(async function hubRestaurarSessao(){
+  try{
+    var r=await fetch('/api/login',{credentials:'same-origin'});
+    if(!r.ok)return;
+    var s=await r.json();
+    if(s&&s.autenticado)hubMostrarLogado(s.nome||'');
+  }catch(_){}
+})();
+</script>
 
 </body>
 </html>

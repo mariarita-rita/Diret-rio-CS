@@ -74,13 +74,25 @@ Uma variável por perfil. O valor é sempre o **hash**, no formato
 | `AUTH_CSM_PATRICIA`   | Patricia Carvalho | `csm`      | Patricia Carvalho |
 | `AUTH_ISM_BRUNO`      | Bruno Vaz         | `ism`      | só implantação, só os projetos onde é ISM atribuído |
 | `AUTH_ISM_ERICA`      | Erica Fernanda    | `ism`      | só implantação, só os projetos onde é ISM atribuído |
+| `AUTH_ISM_AUXILIAR`   | Daiane / Aline (senha compartilhada) | `ism` | auxiliar — todos os projetos, agenda de qualquer ISM |
 
 Nível `ism`: sem acesso nenhum a carteira/metas/cliente (dados financeiros) nem
 ao pipeline de proposta (criar/salvar-proposta/confirmar-fechamento — isso é
-trabalho de CSM/gestão). Dentro da implantação, só enxerga e edita os projetos
-onde o próprio id está entre os ISMs atribuídos (`pertenceAoIsm` em
-`api/_lib/auth.js`), e só mexe na própria agenda (conectar Google, criar/
-atualizar/cancelar reserva, vincular agendamento).
+trabalho de CSM/gestão). Faz login direto em `implantacao-waipe.html` (tem
+tela de login própria — não depende mais de logar primeiro no
+`dashboard_carteiras.html`).
+
+Duas variantes dentro do nível:
+- **ISM responsável** (Bruno, Erica): `ismId` aponta pro id dele em
+  `ISM_OPCOES` (`api/_lib/clickup.js`) — só enxerga/edita os projetos onde
+  esse id está entre os ISMs atribuídos (`pertenceAoIsm`), e só mexe na
+  própria agenda (conectar Google, criar/atualizar/cancelar reserva, vincular
+  agendamento).
+- **ISM auxiliar** (Daiane, Aline): `ismId: null` — não é responsável por
+  nenhum projeto (não aparece como opção pra atribuir), mas exatamente por
+  isso não tem escopo nenhum pra restringir: vê todos os projetos e pode
+  mexer na agenda de qualquer ISM (útil pra acompanhar e reagendar clientes
+  em nome de quem estiver de férias/ausente, por exemplo).
 
 Placeholder do valor:
 
