@@ -1008,6 +1008,34 @@ export function linkDaDescricaoReserva(description) {
   return m ? m[1].trim() : '';
 }
 
+/** Idem, pro id do evento do Google Calendar (marca que essa reserva veio de lá — evita duplicar no proximo sincronismo). */
+export function googleEventIdDaDescricaoReserva(description) {
+  const m = /\*{0,2}GoogleEventId:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+export function soDigitos(v) {
+  return String(v || '').replace(/\D/g, '');
+}
+
+/**
+ * A pagina de "Horarios de agendamento" do Google grava a resposta de cada
+ * pergunta personalizada na descricao do evento como blocos separados por
+ * linha em branco: primeira linha = rotulo da pergunta, linha(s) seguintes =
+ * resposta. Acha o bloco cujo rotulo menciona "CNPJ" (cada ISM precisa nomear
+ * a propria pergunta assim ao criar a pagina) e devolve so os digitos.
+ */
+export function cnpjDoAgendamentoGoogle(description) {
+  const blocos = String(description || '').split(/\n\s*\n/);
+  for (const bloco of blocos) {
+    const linhas = bloco.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!linhas.length || !/cnpj/i.test(linhas[0])) continue;
+    const digitos = soDigitos(linhas.slice(1).join(''));
+    if (digitos) return digitos;
+  }
+  return null;
+}
+
 /**
  * Invalida o cache da carteira. Ultimo recurso: a proxima leitura paga ~28 chamadas.
  *

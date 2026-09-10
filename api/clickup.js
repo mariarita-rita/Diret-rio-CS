@@ -30,6 +30,13 @@
 //        o contato + abre a conversa no Umbler Talk pro telefone do cliente
 //        desse projeto; com `mensagem`, manda ela tambem (texto livre — os
 //        canais desta org sao "Broker", nao a Cloud API oficial da Meta)
+//   POST /api/clickup?action=sincronizar-agendamentos-google -> varre a agenda
+//        de cada ISM conectado atras de reservas feitas pelo cliente numa
+//        pagina de agendamento do Google; casa por CNPJ (cria a reserva
+//        sozinho) ou devolve em `naoVinculados` pra confirmar na tela
+//   POST /api/clickup?action=vincular-agendamento-google { projetoId, ismId,
+//        googleEventId, titulo, inicio, fim, linkReuniao? } -> vincula
+//        manualmente um item de `naoVinculados` a um projeto
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -47,10 +54,11 @@ import {
   uuidValido,
   ErroCorpo,
 } from './_lib/http.js';
-import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
+import { exigirSessao, podeEscrever, pertenceAoCsm, pertenceAoIsm, ErroConfig } from './_lib/auth.js';
 import {
   atualizarTask,
   CAMPOS_ESCRITA,
+  cnpjDoAgendamentoGoogle,
   contextoSemEstado,
   criarComentario,
   criarReserva,
@@ -64,6 +72,7 @@ import {
   excluirTask,
   getCarteira,
   getMetas,
+  googleEventIdDaDescricaoReserva,
   gravarCampo,
   ISM_OPCOES,
   lerClienteFresco,
@@ -74,6 +83,7 @@ import {
   listarComentarios,
   listarImplantacoes,
   listarReservas,
+  listarTokensGoogle,
   localizarTask,
   obterTask,
   obterTaskComSubtasks,
@@ -81,10 +91,11 @@ import {
   parseWaipeState,
   projetoDaDescricaoReserva,
   refletirEscrita,
+  soDigitos,
   STATUS_MES_ATUAL,
   stringifyWaipeState,
 } from './_lib/clickup.js';
-import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -93,6 +104,15 @@ import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, Er
 const CACHE_LEITURA = 'private, max-age=300, stale-while-revalidate=600';
 
 const MAX_LABELS = 10;
+
+// Nivel "ism" nao acessa dados financeiros (carteira/metas/cliente/set-field/
+// log-proposta, que e o log de propostas ligado a carteira) nem o pipeline de
+// proposta de implantacao (criar/salvar-proposta/confirmar-fechamento — isso
+// e trabalho de CSM/gestao; o ISM so entra depois, quando o projeto ja existe).
+const ACOES_PROIBIDAS_ISM = new Set([
+  'carteira', 'metas', 'cliente', 'set-field', 'log-proposta',
+  'criar-implantacao', 'salvar-proposta-implantacao', 'confirmar-fechamento-implantacao',
+]);
 
 export default async function handler(req, res) {
   // req.query, como req.body, e getter lazy no runtime da Vercel: fica dentro
@@ -111,6 +131,14 @@ export default async function handler(req, res) {
 
     const sessao = exigirSessao(req, res);
     if (!sessao) return undefined;
+
+    // Nivel "ism" e so implantacao: nada de carteira/metas/cliente (dados
+    // financeiros) nem do pipeline de proposta (isso e trabalho de CSM/gestao).
+    // Bloqueado aqui, ANTES de rotear pra funcao — nao depende de cada acao
+    // lembrar de checar sozinha.
+    if (sessao.nivel === 'ism' && ACOES_PROIBIDAS_ISM.has(acao)) {
+      return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
+    }
 
     if (req.method === 'GET' && acao === 'carteira') return await lerCarteira(res, sessao);
     if (req.method === 'GET' && acao === 'busca') return await lerBusca(res, sessao);
@@ -137,10 +165,16 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'criar-reserva') return await criarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'atualizar-reserva') return await atualizarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'cancelar-reserva') return await cancelarReservaAcao(req, res, sessao);
-    if (req.method === 'GET' && acao === 'conectar-agenda-google') return await conectarAgendaGoogleAcao(req, res);
+    if (req.method === 'GET' && acao === 'conectar-agenda-google') return await conectarAgendaGoogleAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'status-google-agenda') return await statusGoogleAgendaAcao(res);
     if (req.method === 'POST' && acao === 'iniciar-conversa-umbler') {
       return await iniciarConversaUmblerAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'sincronizar-agendamentos-google') {
+      return await sincronizarAgendamentosGoogleAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'vincular-agendamento-google') {
+      return await vincularAgendamentoGoogleAcao(req, res, sessao);
     }
 
     const ACOES_VALIDAS = [
@@ -151,6 +185,7 @@ export default async function handler(req, res) {
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
       'atualizar-reserva', 'cancelar-reserva', 'conectar-agenda-google',
       'status-google-agenda', 'iniciar-conversa-umbler',
+      'sincronizar-agendamentos-google', 'vincular-agendamento-google',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -908,6 +943,7 @@ async function listarImplantacoesAcao(res, sessao) {
       etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
       csm: csmDaDescricaoImplantacao(t.description),
       ism: nomesIsm(t.assignees),
+      ismIds: sanearAssignees((t.assignees || []).map((a) => a.id)),
       // Antes de promovida (etapa "proposta"), ainda não existem subtasks —
       // conta o que foi proposto pra lista não mostrar "0 itens".
       agentesTotal: Number.isFinite(estado.agentesTotal)
@@ -922,7 +958,8 @@ async function listarImplantacoesAcao(res, sessao) {
       dataCriacao: Number.isFinite(Number(t.date_created)) ? Number(t.date_created) : null,
     };
   });
-  const visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
+  let visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
+  if (sessao.nivel === 'ism') visiveis = visiveis.filter((l) => pertenceAoIsm(l.ismIds, sessao.ismId));
   return res.status(200).json({ tasks: visiveis, total: visiveis.length });
 }
 
@@ -942,8 +979,12 @@ async function obterImplantacaoAcao(req, res, sessao) {
   }
 
   const csm = csmDaDescricaoImplantacao(pai.description);
+  const ismIdsProjeto = (pai.assignees || []).map((a) => Number(a.id));
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm(ismIdsProjeto, sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   const estadoProjeto = parseWaipeState(pai.description);
@@ -1154,6 +1195,9 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
+  }
 
   const estadoAtual = parseWaipeState(tarefa.description);
   const novoEstado = {
@@ -1232,6 +1276,9 @@ async function iniciarConversaUmblerAcao(req, res, sessao) {
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
+  }
 
   const estado = parseWaipeState(projeto.description);
   const telefoneE164 = telefoneParaE164(estado.telefone);
@@ -1298,6 +1345,9 @@ async function atualizarAgenteAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm((projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   const estadoAtual = parseWaipeState(tarefa.description);
@@ -1621,6 +1671,9 @@ async function criarReservaAcao(req, res, sessao) {
   if (!ISM_IDS_VALIDOS.has(ismId)) {
     return erro(res, 400, 'ism_invalido', 'Selecione um ISM válido.');
   }
+  if (sessao.nivel === 'ism' && Number(sessao.ismId) !== ismId) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode registrar reserva na própria agenda.');
+  }
 
   const inicio = epocaOuNula(corpo.inicio);
   const fim = epocaOuNula(corpo.fim);
@@ -1721,6 +1774,9 @@ async function atualizarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
+  if (sessao.nivel === 'ism' && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
+  }
 
   const projetoId = projetoDaDescricaoReserva(tarefa.description);
   const linkReuniao = texto(corpo.linkReuniao, 300);
@@ -1755,18 +1811,191 @@ async function cancelarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
+  if (sessao.nivel === 'ism' && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode cancelar reservas da própria agenda.');
+  }
 
   await excluirTask(corpo.id);
   return res.status(200).json({ ok: true });
 }
 
+// Janela de busca de eventos na agenda de cada ISM: um pouco pro passado
+// (agendamento feito hoje mais cedo) e bastante pro futuro (o cliente pode
+// marcar com semanas de antecedencia).
+const SYNC_GOOGLE_DIAS_ANTES = 1;
+const SYNC_GOOGLE_DIAS_DEPOIS = 60;
+
+/**
+ * Varre a agenda de cada ISM conectado ao Google atras de reservas feitas
+ * pelo PROPRIO CLIENTE numa pagina de "Horarios de agendamento" (fora do
+ * nosso fluxo de criar-reserva). Casa pelo CNPJ (pergunta personalizada que
+ * cada ISM configura na propria pagina) contra os projetos abertos: bate ->
+ * cria a reserva sozinho; nao bate (ou o evento nem tem a pergunta) -> nao
+ * cria nada, so devolve pra tela mostrar e o ISM vincular manualmente.
+ * Idempotente: cada reserva importada carrega o GoogleEventId na descricao,
+ * entao rodar de novo nao duplica.
+ */
+async function sincronizarAgendamentosGoogleAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  const tokensTasks = await listarTokensGoogle();
+  const tokens = tokensTasks
+    .map((t) => parseWaipeState(t.description))
+    .filter((e) => Number.isFinite(Number(e.ismId)) && typeof e.refreshToken === 'string' && e.refreshToken);
+
+  const vinculados = [];
+  const naoVinculados = [];
+  if (!tokens.length) {
+    return res.status(200).json({ ok: true, vinculados, naoVinculados });
+  }
+
+  const agora = Date.now();
+  const inicioJanela = agora - SYNC_GOOGLE_DIAS_ANTES * 24 * 60 * 60 * 1000;
+  const fimJanela = agora + SYNC_GOOGLE_DIAS_DEPOIS * 24 * 60 * 60 * 1000;
+
+  const [projetos, reservasExistentes] = await Promise.all([listarImplantacoes(), listarReservas()]);
+
+  const cnpjParaProjeto = new Map();
+  for (const p of projetos) {
+    const estado = parseWaipeState(p.description);
+    const cnpj = soDigitos(estado.cnpj);
+    if (cnpj && !cnpjParaProjeto.has(cnpj)) cnpjParaProjeto.set(cnpj, { id: p.id, nome: p.name });
+  }
+
+  const eventosJaImportados = new Set(
+    reservasExistentes.map((r) => googleEventIdDaDescricaoReserva(r.description)).filter(Boolean)
+  );
+
+  for (const tk of tokens) {
+    const ismId = Number(tk.ismId);
+    const ismNome = ISM_OPCOES.find((i) => i.id === ismId)?.nome || String(ismId);
+
+    let accessToken;
+    try {
+      accessToken = await renovarAccessToken(tk.refreshToken);
+    } catch (e) {
+      if (!(e instanceof ErroGoogle)) throw e;
+      continue; // token expirado/revogado nesse ISM — nao derruba o sincronismo dos outros
+    }
+
+    let eventos;
+    try {
+      eventos = await listarEventos(accessToken, inicioJanela, fimJanela);
+    } catch (e) {
+      if (!(e instanceof ErroGoogle)) throw e;
+      continue;
+    }
+
+    for (const ev of eventos) {
+      if (!ev?.id || eventosJaImportados.has(ev.id)) continue;
+      const cnpj = cnpjDoAgendamentoGoogle(ev.description);
+      if (!cnpj) continue; // evento comum, sem a pergunta de CNPJ — nao veio da pagina de agendamento
+
+      const inicioEvento = Date.parse(ev.start?.dateTime || ev.start?.date || '');
+      const fimEvento = Date.parse(ev.end?.dateTime || ev.end?.date || '');
+      if (!Number.isFinite(inicioEvento) || !Number.isFinite(fimEvento)) continue;
+
+      const linkReuniao = ev.hangoutLink || null;
+      const titulo = texto(ev.summary, 200) || 'Agendamento do cliente';
+      const projeto = cnpjParaProjeto.get(cnpj);
+
+      if (projeto) {
+        const linhasDescricao = [
+          `**Projeto:** ${projeto.id}`,
+          linkReuniao ? `**Link:** ${linkReuniao}` : null,
+          `**GoogleEventId:** ${ev.id}`,
+        ].filter(Boolean);
+        const nova = await criarReserva({
+          name: titulo,
+          start_date: inicioEvento,
+          start_date_time: true,
+          due_date: fimEvento,
+          due_date_time: true,
+          assignees: [ismId],
+          markdown_description: linhasDescricao.join('\n\n'),
+        });
+        vinculados.push({ id: nova.id, projetoId: projeto.id, projetoNome: projeto.nome, titulo, ismNome });
+      } else {
+        naoVinculados.push({ googleEventId: ev.id, ismId, ismNome, titulo, inicio: inicioEvento, fim: fimEvento, linkReuniao, cnpj });
+      }
+    }
+  }
+
+  return res.status(200).json({ ok: true, vinculados, naoVinculados });
+}
+
+/** Vincula manualmente um agendamento do Google (achado por sincronizar-agendamentos-google
+ * sem CNPJ correspondente) a um projeto — o ISM escolhe na tela. Mesmo formato de reserva
+ * do caminho automatico, inclusive o GoogleEventId (evita duplicar num sincronismo futuro). */
+async function vincularAgendamentoGoogleAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.projetoId)) {
+    return erro(res, 400, 'task_invalida', 'projetoId inválido.');
+  }
+  const ismId = Number(corpo.ismId);
+  if (!ISM_OPCOES.some((i) => i.id === ismId)) {
+    return erro(res, 400, 'ism_invalido', 'ISM inválido.');
+  }
+  if (sessao.nivel === 'ism' && Number(sessao.ismId) !== ismId) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode vincular agendamentos da própria agenda.');
+  }
+  const googleEventId = texto(corpo.googleEventId, 200);
+  if (!googleEventId) {
+    return erro(res, 400, 'evento_invalido', 'googleEventId é obrigatório.');
+  }
+  const inicio = epocaOuNula(corpo.inicio);
+  const fim = epocaOuNula(corpo.fim);
+  if (inicio === null || fim === null || fim <= inicio) {
+    return erro(res, 400, 'horario_invalido', 'Início e fim precisam ser válidos, com fim depois do início.');
+  }
+
+  const titulo = texto(corpo.titulo, 200) || 'Agendamento do cliente';
+  const linkReuniao = typeof corpo.linkReuniao === 'string' ? texto(corpo.linkReuniao, 300) : null;
+  const linhasDescricao = [
+    `**Projeto:** ${corpo.projetoId}`,
+    linkReuniao ? `**Link:** ${linkReuniao}` : null,
+    `**GoogleEventId:** ${googleEventId}`,
+  ].filter(Boolean);
+
+  const nova = await criarReserva({
+    name: titulo,
+    start_date: inicio,
+    start_date_time: true,
+    due_date: fim,
+    due_date_time: true,
+    assignees: [ismId],
+    markdown_description: linhasDescricao.join('\n\n'),
+  });
+  return res.status(200).json({ ok: true, id: nova.id });
+}
+
 /** 302 pro consentimento OAuth do Google — devolve o redirect, a troca de code por
  * token acontece do outro lado, em api/google-oauth-callback.js (fora deste dispatcher). */
-async function conectarAgendaGoogleAcao(req, res) {
+async function conectarAgendaGoogleAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   const ismId = Number(req.query?.ismId);
   if (!ISM_IDS_VALIDOS.has(ismId)) {
     return erro(res, 400, 'ism_invalido', 'ismId inválido.');
+  }
+  // Um ISM so conecta a PROPRIA agenda — nunca a de outro (o ismId da sessao
+  // vem assinado, nao da pra forjar so trocando o parametro na URL).
+  if (sessao.nivel === 'ism' && Number(sessao.ismId) !== ismId) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode conectar a própria agenda.');
   }
   let url;
   try {
@@ -1803,6 +2032,9 @@ async function listarComentariosAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm((resolvido.projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   const comentarios = await listarComentarios(taskId);
@@ -1842,6 +2074,9 @@ async function comentarImplantacaoAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (sessao.nivel === 'ism' && !pertenceAoIsm((resolvido.projeto.assignees || []).map((a) => Number(a.id)), sessao.ismId)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está atribuído a você.');
   }
 
   await criarComentario(corpo.taskId, comentario);

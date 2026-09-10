@@ -36,6 +36,14 @@ domínio nunca vai autorizar este app) e criar a credencial Web application
 com uma Redirect URI por ambiente (produção e local, se for testar com
 `vercel dev`).
 
+**Página de agendamento por ISM (opcional):** cada ISM que quiser que
+`sincronizar-agendamentos-google` vincule sozinho os horários que o cliente
+reservar precisa criar a própria página em **Google Calendar → Criar →
+Horários de agendamento**, com uma pergunta personalizada chamada
+exatamente **"CNPJ"** no formulário de reserva (é assim que o backend acha
+a resposta — ver `cnpjDoAgendamentoGoogle` em `api/_lib/clickup.js`). Sem
+essa pergunta, o agendamento é ignorado silenciosamente pelo sincronismo.
+
 ### Sessão
 
 | Variável         | Para que serve                                              | Placeholder |
@@ -64,6 +72,15 @@ Uma variável por perfil. O valor é sempre o **hash**, no formato
 | `AUTH_CSM_LUCINEIA`   | Lucineia Felix    | `csm`      | Lucineia Felix    |
 | `AUTH_CSM_GUILHERME`  | Guilherme Camargo | `csm`      | Guilherme Camargo |
 | `AUTH_CSM_PATRICIA`   | Patricia Carvalho | `csm`      | Patricia Carvalho |
+| `AUTH_ISM_BRUNO`      | Bruno Vaz         | `ism`      | só implantação, só os projetos onde é ISM atribuído |
+| `AUTH_ISM_ERICA`      | Erica Fernanda    | `ism`      | só implantação, só os projetos onde é ISM atribuído |
+
+Nível `ism`: sem acesso nenhum a carteira/metas/cliente (dados financeiros) nem
+ao pipeline de proposta (criar/salvar-proposta/confirmar-fechamento — isso é
+trabalho de CSM/gestão). Dentro da implantação, só enxerga e edita os projetos
+onde o próprio id está entre os ISMs atribuídos (`pertenceAoIsm` em
+`api/_lib/auth.js`), e só mexe na própria agenda (conectar Google, criar/
+atualizar/cancelar reserva, vincular agendamento).
 
 Placeholder do valor:
 

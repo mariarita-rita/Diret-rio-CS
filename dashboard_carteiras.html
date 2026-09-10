@@ -724,6 +724,13 @@ async function loadAllData(forcar){
     if(forcar===true)carregarBusca(true);
     return;
   }
+  // ism (ISM de implantação) não tem carteira/metas nenhuma — mesmo motivo do
+  // consulta acima (evita ~29 chamadas de cota pra não exibir nada), só que
+  // aqui nem a busca de clientes é relevante pro trabalho dele.
+  if(session?.nivel==='ism'){
+    document.getElementById('update-info').textContent='ISM — implantação';
+    return;
+  }
   const lbar=document.getElementById('lbar');
   const lwrap=lbar.parentElement;
   lwrap.style.display='block';

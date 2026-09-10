@@ -112,6 +112,7 @@ function sessaoAtual(req, res) {
     autenticado: true,
     nivel: sessao.nivel,
     csm: sessao.csm,
+    ismId: sessao.ismId,
     nome: sessao.nome,
   });
 }
@@ -213,6 +214,7 @@ async function autenticar(req, res) {
     autenticado: true,
     nivel: perfil.nivel,
     csm: perfil.csm,
+    ismId: perfil.ismId,
     nome: perfil.nome,
   });
 }

@@ -1022,6 +1022,56 @@
       return new Date(Number(ms)).toLocaleTimeString("pt-BR", { timeZone:"America/Sao_Paulo", hour:"2-digit", minute:"2-digit" });
     } catch(e){ return "—"; }
   }
+  // Agendamentos feitos pelo cliente numa página de "Horários de agendamento"
+  // do Google cujo CNPJ não bateu com nenhum projeto aberto (os que bateram
+  // já viraram reserva sozinhos — ver sincronizar-agendamentos-google).
+  function renderAgendamentosSemProjeto(container){
+    if (!container) return;
+    apiPost("sincronizar-agendamentos-google", {}).then(function(resp){
+      if (resp.vinculados && resp.vinculados.length){
+        showSimToast(resp.vinculados.length + " agendamento(s) do Google vinculado(s) automaticamente por CNPJ.");
+      }
+      var naoVinculados = resp.naoVinculados || [];
+      if (!naoVinculados.length){ container.innerHTML = ""; return; }
+      var opcoesProjeto = (projetosCache || []).map(function(p){
+        return '<option value="' + esc(p.id) + '">' + esc(p.cliente || p.id) + '</option>';
+      }).join("");
+      container.innerHTML = '<div class="callout" style="margin-bottom:14px;"><div class="dot"></div><div>' +
+        '<strong>Agendamentos sem projeto</strong> — reservados pelo cliente numa página de agendamento do Google, mas o CNPJ não bateu com nenhum projeto aberto. Vincule manualmente:' +
+        '<div style="margin-top:10px;display:flex;flex-direction:column;gap:10px;">' +
+        naoVinculados.map(function(a, i){
+          return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;" data-agendamento="' + i + '">' +
+            '<span>' + esc(a.titulo) + ' — ' + esc(a.ismNome) + ' — ' + fmtDataHoraSim(a.inicio) + ' — CNPJ ' + esc(a.cnpj) + '</span>' +
+            '<select class="form-input" data-sel-projeto style="width:auto;"><option value="">Selecione o projeto…</option>' + opcoesProjeto + '</select>' +
+            '<button type="button" class="btn-flow-secondary" data-btn-vincular>Vincular</button>' +
+          '</div>';
+        }).join("") +
+        '</div></div></div>';
+      container.querySelectorAll("[data-agendamento]").forEach(function(linha){
+        var i = Number(linha.getAttribute("data-agendamento"));
+        var a = naoVinculados[i];
+        var sel = linha.querySelector("[data-sel-projeto]");
+        var btn = linha.querySelector("[data-btn-vincular]");
+        btn.addEventListener("click", function(){
+          var projetoId = sel.value;
+          if (!projetoId){ showSimToast("Selecione o projeto antes de vincular."); return; }
+          btn.disabled = true;
+          apiPost("vincular-agendamento-google", {
+            projetoId: projetoId, ismId: a.ismId, googleEventId: a.googleEventId,
+            titulo: a.titulo, inicio: a.inicio, fim: a.fim, linkReuniao: a.linkReuniao
+          }).then(function(){
+            showSimToast("Agendamento vinculado.");
+            linha.remove();
+            if (!container.querySelector("[data-agendamento]")) container.innerHTML = "";
+          }).catch(function(e){
+            btn.disabled = false;
+            showSimToast(mensagemErro(e) || "Não deu para vincular.");
+          });
+        });
+      });
+    }).catch(function(){ container.innerHTML = ""; });
+  }
+
   function renderCompromissosHoje(container){
     if (!container) return;
     var agora = new Date();
@@ -1066,6 +1116,7 @@
     root.innerHTML =
       '<div class="callout"><div class="dot"></div><div>' + introTexto + ' Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
       (entregues ? "" : '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>') +
+      (!entregues ? '<div id="agendamentosSemProjetoWrap"></div>' : '') +
       (!entregues ? '<div id="compromissosHojeWrap"></div>' : '') +
       '<div data-lista-wrap><div class="sub">Carregando…</div></div>';
     var btnNovo = document.getElementById("btnNovoProjeto");
@@ -1093,6 +1144,7 @@
     var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
     if (!wrap) return;
     var entregues = filtroProjetosAtivo === "entregues";
+    if (!entregues) renderAgendamentosSemProjeto(root.querySelector("#agendamentosSemProjetoWrap"));
     if (!entregues) renderCompromissosHoje(root.querySelector("#compromissosHojeWrap"));
     var todasCsm = Array.from(new Set((projetosCache || []).map(function(p){ return p.csm; }).filter(Boolean)))
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });

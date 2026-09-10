@@ -8,19 +8,26 @@ export const COOKIE_NOME = 'cs_sessao';
 export const SESSAO_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const TOLERANCIA_FUTURO_MS = 60 * 1000;
 
-export const NIVEIS = ['consulta', 'gestao', 'csm'];
+export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism'];
 
 /**
  * Perfis de acesso. A senha de cada perfil vive apenas na variável de ambiente
  * correspondente, sempre como hash scrypt (ver scripts/gerar-hash.js).
+ *
+ * Nível "ism": só implantação — sem carteira/metas/cliente (dados financeiros),
+ * e dentro da implantação só os projetos onde a pessoa está entre os ISMs
+ * atribuídos (ver pertenceAoIsm). `ismId` precisa bater com um dos ids em
+ * ISM_OPCOES (api/_lib/clickup.js) — são o mesmo id em ambos os lugares.
  */
 export const PERFIS = [
-  { env: 'AUTH_CONSULTA', nivel: 'consulta', csm: null, nome: 'Consulta Geral' },
-  { env: 'AUTH_GESTAO', nivel: 'gestao', csm: null, nome: 'Gestão' },
-  { env: 'AUTH_CSM_GIAN', nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' },
-  { env: 'AUTH_CSM_LUCINEIA', nivel: 'csm', csm: 'Lucineia Felix', nome: 'Lucineia Felix' },
-  { env: 'AUTH_CSM_GUILHERME', nivel: 'csm', csm: 'Guilherme Camargo', nome: 'Guilherme Camargo' },
-  { env: 'AUTH_CSM_PATRICIA', nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' },
+  { env: 'AUTH_CONSULTA', nivel: 'consulta', csm: null, ismId: null, nome: 'Consulta Geral' },
+  { env: 'AUTH_GESTAO', nivel: 'gestao', csm: null, ismId: null, nome: 'Gestão' },
+  { env: 'AUTH_CSM_GIAN', nivel: 'csm', csm: 'Gian Luca', ismId: null, nome: 'Gian Luca' },
+  { env: 'AUTH_CSM_LUCINEIA', nivel: 'csm', csm: 'Lucineia Felix', ismId: null, nome: 'Lucineia Felix' },
+  { env: 'AUTH_CSM_GUILHERME', nivel: 'csm', csm: 'Guilherme Camargo', ismId: null, nome: 'Guilherme Camargo' },
+  { env: 'AUTH_CSM_PATRICIA', nivel: 'csm', csm: 'Patricia Carvalho', ismId: null, nome: 'Patricia Carvalho' },
+  { env: 'AUTH_ISM_BRUNO', nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' },
+  { env: 'AUTH_ISM_ERICA', nivel: 'ism', csm: null, ismId: 48933858, nome: 'Erica Fernanda' },
 ];
 
 export class ErroConfig extends Error {
@@ -47,8 +54,8 @@ function hmac(dados) {
 const b64 = (buf) => Buffer.from(buf).toString('base64url');
 
 /** Gera o token de sessão: base64url(payload).base64url(hmac). */
-export function assinarSessao({ nivel, csm, nome }) {
-  const corpo = b64(JSON.stringify({ nivel, csm: csm || null, nome, iat: Date.now() }));
+export function assinarSessao({ nivel, csm, ismId, nome }) {
+  const corpo = b64(JSON.stringify({ nivel, csm: csm || null, ismId: ismId || null, nome, iat: Date.now() }));
   return `${corpo}.${b64(hmac(corpo))}`;
 }
 
@@ -78,8 +85,10 @@ export function verificarSessao(token) {
   if (!NIVEIS.includes(p.nivel)) return null;
   if (p.nivel === 'csm' && !PERFIS.some((x) => x.nivel === 'csm' && x.csm === p.csm)) return null;
   if (p.nivel !== 'csm' && p.csm) return null;
+  if (p.nivel === 'ism' && !PERFIS.some((x) => x.nivel === 'ism' && x.ismId === p.ismId)) return null;
+  if (p.nivel !== 'ism' && p.ismId) return null;
 
-  return { nivel: p.nivel, csm: p.csm || null, nome: String(p.nome || ''), iat: p.iat };
+  return { nivel: p.nivel, csm: p.csm || null, ismId: p.ismId || null, nome: String(p.nome || ''), iat: p.iat };
 }
 
 // ── Cookie ────────────────────────────────────────────────────────────────
@@ -156,7 +165,7 @@ export function exigirSessao(req, res, { detalharExpiracao = false } = {}) {
 
 /** consulta é somente leitura: nada de escrita no ClickUp nem no Moskit. */
 export function podeEscrever(sessao) {
-  return sessao.nivel === 'gestao' || sessao.nivel === 'csm';
+  return sessao.nivel === 'gestao' || sessao.nivel === 'csm' || sessao.nivel === 'ism';
 }
 
 /**
@@ -188,6 +197,17 @@ export function pertenceAoCsm(gerente, csm) {
   const alvo = normalizarNome(csm);
   if (!alvo) return false;
   return normalizarNome(gerente) === alvo;
+}
+
+/**
+ * Escopo de leitura/escrita por ISM: o projeto (ou a subtask) precisa ter esse
+ * ismId entre os assignees nativos do ClickUp. Mesmo espirito de pertenceAoCsm
+ * (sem escopo -> tudo visivel; com escopo -> so bate por igualdade exata),
+ * so que contra uma LISTA de ids em vez de comparar texto.
+ */
+export function pertenceAoIsm(ismIds, ismId) {
+  if (!ismId) return true;
+  return Array.isArray(ismIds) && ismIds.map(Number).includes(Number(ismId));
 }
 
 // ── Senhas ────────────────────────────────────────────────────────────────

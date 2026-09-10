@@ -32,6 +32,7 @@ const dataUrl = (code) =>
 // Segredos fabricados aqui. Nenhum valor de .env.local é lido.
 const SENHA_GESTAO = 'senha-de-teste-gestao';
 const SENHA_CONSULTA = 'senha-de-teste-consulta';
+const SENHA_ISM_BRUNO = 'senha-de-teste-ism-bruno';
 
 function hashScrypt(senha) {
   const N = 16384, r = 8, p = 1, KEYLEN = 64;
@@ -43,6 +44,7 @@ function hashScrypt(senha) {
 process.env.SESSION_SECRET = 'T'.repeat(48);
 process.env.AUTH_GESTAO = hashScrypt(SENHA_GESTAO);
 process.env.AUTH_CONSULTA = hashScrypt(SENHA_CONSULTA);
+process.env.AUTH_ISM_BRUNO = hashScrypt(SENHA_ISM_BRUNO);
 delete process.env.ALLOWED_ORIGINS;
 delete process.env.VERCEL_ENV;
 
@@ -86,7 +88,11 @@ const stubClickup = `
   export async function excluirTask() { return {}; }
   export function projetoDaDescricaoReserva() { return ''; }
   export function linkDaDescricaoReserva() { return ''; }
+  export function googleEventIdDaDescricaoReserva() { return ''; }
+  export function soDigitos(v) { return String(v || '').replace(/\\D/g, ''); }
+  export function cnpjDoAgendamentoGoogle() { return null; }
   export async function obterTokenGoogle() { return null; }
+  export async function listarTokensGoogle() { return []; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -101,6 +107,7 @@ const stubGoogle = `
   export async function renovarAccessToken() { return 'stub-access-token'; }
   export async function consultarFreeBusy() { return null; }
   export async function criarEventoComMeet() { return null; }
+  export async function listarEventos() { return []; }
 `;
 const googleLibUrl = dataUrl(stubGoogle);
 
@@ -2709,6 +2716,308 @@ console.log('\n[40] iniciar-conversa-umbler: cria contato + abre conversa no Umb
   const semConfig = await chamarAcao(GIAN, { id: 'tProjetoUmbler' });
   checar('iniciar-conversa-umbler: configuracao ausente -> 500', [semConfig.code, semConfig.corpo.code], [500, 'umbler_nao_configurado']);
   process.env.UMBLER_API_TOKEN = 'token-teste';
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[41] sincronizar-agendamentos-google + vincular-agendamento-google: casamento por CNPJ');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+
+  const LISTA_TOKENS_GOOGLE = '901329032234';
+  const LISTA_IMPLANTACOES = '901328976497';
+  const LISTA_RESERVAS = '901329017742';
+  const BRUNO = 118125102;
+
+  const descEvento = (cnpj) =>
+    'Reservado por\nCliente Teste\ncliente@exemplo.test\n\nCNPJ (sem pontuação)\n' + cnpj + '\n\nAssunto da Reunião\nImplantação do Waipe';
+
+  const eventos = [
+    {
+      id: 'evt-vinculado', summary: 'Implantação do Waipe', hangoutLink: 'https://meet.google.com/vinculado',
+      start: { dateTime: '2026-09-21T14:00:00-03:00' }, end: { dateTime: '2026-09-21T15:00:00-03:00' },
+      description: descEvento('11222333000181'), // bate com o CNPJ do Projeto A
+    },
+    {
+      id: 'evt-sem-projeto', summary: 'Reunião sem projeto', hangoutLink: null,
+      start: { dateTime: '2026-09-22T10:00:00-03:00' }, end: { dateTime: '2026-09-22T11:00:00-03:00' },
+      description: descEvento('99988877000166'), // nenhum projeto tem esse CNPJ
+    },
+    {
+      id: 'evt-sem-cnpj', summary: 'Reunião interna qualquer', hangoutLink: null,
+      start: { dateTime: '2026-09-23T09:00:00-03:00' }, end: { dateTime: '2026-09-23T10:00:00-03:00' },
+      description: 'Sem nenhuma pergunta personalizada aqui.',
+    },
+    {
+      id: 'evt-ja-importado', summary: 'Ja processado antes', hangoutLink: null,
+      start: { dateTime: '2026-09-24T09:00:00-03:00' }, end: { dateTime: '2026-09-24T10:00:00-03:00' },
+      description: descEvento('11222333000181'),
+    },
+  ];
+
+  const escritas = [];
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.includes(`/list/${LISTA_TOKENS_GOOGLE}/task?`)) {
+      return ok({
+        tasks: [{ id: 'tTokenBruno', assignees: [], description: JSON.stringify({ ismId: BRUNO, refreshToken: 'rt-bruno', conectadoEm: Date.now() }) }],
+        last_page: true,
+      });
+    }
+    if (u.includes(`/list/${LISTA_IMPLANTACOES}/task?`)) {
+      return ok({
+        tasks: [{ id: 'tProjA', name: 'Cliente A', description: JSON.stringify({ etapaAtual: 'construcao', cnpj: '11222333000181' }) }],
+        last_page: true,
+      });
+    }
+    if (u.includes(`/list/${LISTA_RESERVAS}/task?`)) {
+      return ok({
+        tasks: [{ id: 'tReservaAntiga', assignees: [{ id: BRUNO }], description: '**Projeto:** tProjA\n\n**GoogleEventId:** evt-ja-importado' }],
+        last_page: true,
+      });
+    }
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_RESERVAS}/task`)) {
+      escritas.push({ alvo: 'criar-reserva', body: JSON.parse(init.body) });
+      return ok({ id: 'tNovaReservaGoogle' });
+    }
+    if (u === 'https://oauth2.googleapis.com/token') {
+      return ok({ access_token: 'at-bruno', expires_in: 3600 });
+    }
+    if (u.includes('/calendar/v3/calendars/primary/events')) {
+      return ok({ items: eventos });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('sync-google');
+  const googleLibUrlReal = libGoogleUnica('sync-google');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrlReal);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const chamarAcao = async (perfil, action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body }, r);
+    return r;
+  };
+
+  const semPermissao = await chamarAcao(CONSULTA, 'sincronizar-agendamentos-google', {});
+  checar('sincronizar-agendamentos-google: consulta -> 403', [semPermissao.code, semPermissao.corpo.code], [403, 'somente_leitura']);
+
+  escritas.length = 0;
+  const sync = await chamarAcao(GESTAO, 'sincronizar-agendamentos-google', {});
+  checar('sincronizar-agendamentos-google: 200', [sync.code, sync.corpo.ok], [200, true]);
+  checar('  evento com CNPJ batendo -> vinculado automatico', sync.corpo.vinculados.map((v) => v.projetoId), ['tProjA']);
+  checar('  cria a reserva de verdade, com GoogleEventId gravado', escritas[0]?.body.markdown_description.includes('**GoogleEventId:** evt-vinculado'), true);
+  checar('  evento com CNPJ sem projeto -> naoVinculados', sync.corpo.naoVinculados.map((n) => n.googleEventId), ['evt-sem-projeto']);
+  checar('  evento sem pergunta de CNPJ -> ignorado (nao aparece em nenhuma lista)', escritas.length, 1);
+  checar('  evento ja importado (GoogleEventId ja existe numa reserva) -> nao duplica', escritas.some((e) => e.body.markdown_description.includes('evt-ja-importado')), false);
+
+  // vincular-agendamento-google: valida os campos e cria a reserva manualmente
+  const semPermissaoVincular = await chamarAcao(CONSULTA, 'vincular-agendamento-google', { projetoId: 'tProjA', ismId: BRUNO, googleEventId: 'x', inicio: 1, fim: 2 });
+  checar('vincular-agendamento-google: consulta -> 403', [semPermissaoVincular.code, semPermissaoVincular.corpo.code], [403, 'somente_leitura']);
+
+  const projetoInvalido = await chamarAcao(GESTAO, 'vincular-agendamento-google', { projetoId: 'zzz!!', ismId: BRUNO, googleEventId: 'x', inicio: 1, fim: 2 });
+  checar('vincular-agendamento-google: projetoId invalido -> 400', [projetoInvalido.code, projetoInvalido.corpo.code], [400, 'task_invalida']);
+
+  const ismInvalido = await chamarAcao(GESTAO, 'vincular-agendamento-google', { projetoId: 'tProjA', ismId: 999999, googleEventId: 'x', inicio: 1, fim: 2 });
+  checar('vincular-agendamento-google: ismId invalido -> 400', [ismInvalido.code, ismInvalido.corpo.code], [400, 'ism_invalido']);
+
+  const semEvento = await chamarAcao(GESTAO, 'vincular-agendamento-google', { projetoId: 'tProjA', ismId: BRUNO, inicio: 1, fim: 2 });
+  checar('vincular-agendamento-google: sem googleEventId -> 400', [semEvento.code, semEvento.corpo.code], [400, 'evento_invalido']);
+
+  const horarioInvalido = await chamarAcao(GESTAO, 'vincular-agendamento-google', { projetoId: 'tProjA', ismId: BRUNO, googleEventId: 'evt-x', inicio: 2, fim: 1 });
+  checar('vincular-agendamento-google: fim antes do inicio -> 400', [horarioInvalido.code, horarioInvalido.corpo.code], [400, 'horario_invalido']);
+
+  escritas.length = 0;
+  const vincularOk = await chamarAcao(GESTAO, 'vincular-agendamento-google', {
+    projetoId: 'tProjB', ismId: BRUNO, googleEventId: 'evt-sem-projeto', titulo: 'Reunião sem projeto',
+    inicio: Date.parse('2026-09-22T10:00:00-03:00'), fim: Date.parse('2026-09-22T11:00:00-03:00'), linkReuniao: null,
+  });
+  checar('vincular-agendamento-google: 200', [vincularOk.code, vincularOk.corpo.ok], [200, true]);
+  const reservaManual = escritas.find((e) => e.alvo === 'criar-reserva')?.body;
+  checar('  grava Projeto + GoogleEventId certos', [
+    reservaManual.markdown_description.includes('**Projeto:** tProjB'),
+    reservaManual.markdown_description.includes('**GoogleEventId:** evt-sem-projeto'),
+  ], [true, true]);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[42] Nível "ism": login, sem dados financeiros, só os próprios projetos/agenda');
+{
+  // Login de verdade com a senha configurada em AUTH_ISM_BRUNO. IP proprio (nao
+  // compartilhado com os outros testes de login) pra nao esbarrar no limitador
+  // de tentativas — e' por IP, em memoria, e o modulo `login` e carregado uma
+  // unica vez pro arquivo inteiro.
+  const loginOk = await (async () => {
+    const r = res();
+    await login({ method: 'POST', headers: cabecalhos({ 'x-forwarded-for': '203.0.113.42' }), query: {}, body: { senha: SENHA_ISM_BRUNO } }, r);
+    return r;
+  })();
+  checar('login: senha do Bruno -> nivel ism com ismId certo', [
+    loginOk.code, loginOk.corpo.nivel, loginOk.corpo.ismId, loginOk.corpo.nome,
+  ], [200, 'ism', 118125102, 'Bruno Vaz']);
+
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+
+  const LISTA = '901328976497';
+  const LISTA_RESERVAS = '901329017742';
+  const BRUNO = 118125102;
+  const ERICA = 48933858;
+
+  const tarefas = {
+    tProjBruno: { id: 'tProjBruno', name: 'Cliente Bruno', list: { id: LISTA }, parent: null, assignees: [{ id: BRUNO }], subtasks: [{ id: 'tAgenteBruno' }], description: JSON.stringify({ etapaAtual: 'construcao' }) },
+    tAgenteBruno: { id: 'tAgenteBruno', name: 'Agente Bruno', list: { id: LISTA }, parent: 'tProjBruno', assignees: [{ id: BRUNO }], description: JSON.stringify({ tipo: 'agente' }) },
+    tProjErica: { id: 'tProjErica', name: 'Cliente Erica', list: { id: LISTA }, parent: null, assignees: [{ id: ERICA }], subtasks: [{ id: 'tAgenteErica' }], description: JSON.stringify({ etapaAtual: 'construcao' }) },
+    tAgenteErica: { id: 'tAgenteErica', name: 'Agente Erica', list: { id: LISTA }, parent: 'tProjErica', assignees: [{ id: ERICA }], description: JSON.stringify({ tipo: 'agente' }) },
+  };
+  const reservas = {
+    tReservaBruno: { id: 'tReservaBruno', list: { id: LISTA_RESERVAS }, assignees: [{ id: BRUNO }], description: '' },
+    tReservaErica: { id: 'tReservaErica', list: { id: LISTA_RESERVAS }, assignees: [{ id: ERICA }], description: '' },
+  };
+
+  const escritas = [];
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    const idNaUrl = (prefixo) => {
+      const m = u.match(new RegExp(`/task/([^/?]+)${prefixo}`));
+      return m ? m[1] : null;
+    };
+    if (u.includes(`/list/${LISTA}/task?`)) return ok({ tasks: Object.values(tarefas).filter((t) => !t.parent), last_page: true });
+    if (u.includes(`/list/${LISTA_RESERVAS}/task?`)) return ok({ tasks: Object.values(reservas), last_page: true });
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_RESERVAS}/task`)) {
+      escritas.push({ alvo: 'criar-reserva', body: JSON.parse(init.body) });
+      return ok({ id: 'tNovaReserva' });
+    }
+    const idSub = idNaUrl('\\?include_subtasks=true');
+    if (idSub) return ok(tarefas[idSub] || null);
+    if (metodo === 'PUT') {
+      const id = idNaUrl('$');
+      escritas.push({ alvo: id, body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'DELETE') {
+      const id = idNaUrl('$');
+      escritas.push({ alvo: 'excluir-' + id });
+      return ok({});
+    }
+    if (metodo === 'POST' && u.includes('/comment')) {
+      const id = idNaUrl('/comment');
+      escritas.push({ alvo: 'comentario-' + id, body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'GET' && u.includes('/comment')) return ok({ comments: [] });
+    const id = idNaUrl('$');
+    if (id && tarefas[id]) return ok(tarefas[id]);
+    if (id && reservas[id]) return ok(reservas[id]);
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('ism');
+  const googleLibUrlReal = libGoogleUnica('ism');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrlReal);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const ISM_BRUNO = { nivel: 'ism', csm: null, ismId: BRUNO, nome: 'Bruno Vaz' };
+  const chamarGet = async (action, query = {}) => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(ISM_BRUNO) }), query: { action, ...query } }, r);
+    return r;
+  };
+  const chamarPost = async (action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(ISM_BRUNO) }), query: { action }, body }, r);
+    return r;
+  };
+
+  // Sem nada de financeiro/carteira nem pipeline de proposta — bloqueado ANTES da funcao rodar.
+  for (const acaoProibida of ['carteira', 'metas', 'cliente']) {
+    const r = await chamarGet(acaoProibida, acaoProibida === 'cliente' ? { taskId: 'tProjBruno' } : {});
+    checar(`ism: GET ${acaoProibida} -> 403 nivel_nao_permitido`, [r.code, r.corpo.code], [403, 'nivel_nao_permitido']);
+  }
+  for (const acaoProibida of ['set-field', 'log-proposta', 'criar-implantacao', 'salvar-proposta-implantacao', 'confirmar-fechamento-implantacao']) {
+    const r = await chamarPost(acaoProibida, {});
+    checar(`ism: POST ${acaoProibida} -> 403 nivel_nao_permitido`, [r.code, r.corpo.code], [403, 'nivel_nao_permitido']);
+  }
+
+  // listar-implantacoes: so o projeto do Bruno
+  const lista = await chamarGet('listar-implantacoes');
+  checar('ism: listar-implantacoes so mostra o proprio projeto', lista.corpo.tasks.map((t) => t.id), ['tProjBruno']);
+
+  // obter-implantacao: proprio projeto ok, projeto de outro ISM -> 403
+  const obterProprio = await chamarGet('obter-implantacao', { id: 'tProjBruno' });
+  checar('ism: obter-implantacao do proprio projeto -> 200', obterProprio.code, 200);
+  const obterAlheio = await chamarGet('obter-implantacao', { id: 'tProjErica' });
+  checar('ism: obter-implantacao de projeto de outro ISM -> 403', [obterAlheio.code, obterAlheio.corpo.code], [403, 'fora_da_carteira']);
+
+  // atualizar-implantacao: proprio ok, alheio 403
+  const atualizarProprio = await chamarPost('atualizar-implantacao', { id: 'tProjBruno', etapaAtual: 'testes', prioridade: [], concluidos: [] });
+  checar('ism: atualizar-implantacao do proprio projeto -> 200', atualizarProprio.code, 200);
+  const atualizarAlheio = await chamarPost('atualizar-implantacao', { id: 'tProjErica', etapaAtual: 'testes', prioridade: [], concluidos: [] });
+  checar('ism: atualizar-implantacao de projeto de outro ISM -> 403', [atualizarAlheio.code, atualizarAlheio.corpo.code], [403, 'fora_da_carteira']);
+
+  // atualizar-agente: idem, posse resolvida pelo projeto pai
+  const agenteProprio = await chamarPost('atualizar-agente', { taskId: 'tAgenteBruno', buildChecks: {} });
+  checar('ism: atualizar-agente do proprio projeto -> 200', agenteProprio.code, 200);
+  const agenteAlheio = await chamarPost('atualizar-agente', { taskId: 'tAgenteErica', buildChecks: {} });
+  checar('ism: atualizar-agente de projeto de outro ISM -> 403', [agenteAlheio.code, agenteAlheio.corpo.code], [403, 'fora_da_carteira']);
+
+  // comentar-implantacao / listar-comentarios: idem
+  const comentarProprio = await chamarPost('comentar-implantacao', { taskId: 'tAgenteBruno', texto: 'oi' });
+  checar('ism: comentar no proprio projeto -> 200', comentarProprio.code, 200);
+  const comentarAlheio = await chamarPost('comentar-implantacao', { taskId: 'tAgenteErica', texto: 'oi' });
+  checar('ism: comentar em projeto de outro ISM -> 403', [comentarAlheio.code, comentarAlheio.corpo.code], [403, 'fora_da_carteira']);
+  const listarComentariosAlheio = await chamarGet('listar-comentarios', { taskId: 'tAgenteErica' });
+  checar('ism: listar-comentarios de projeto de outro ISM -> 403', [listarComentariosAlheio.code, listarComentariosAlheio.corpo.code], [403, 'fora_da_carteira']);
+
+  // conectar-agenda-google: so a propria
+  const conectarProprio = await chamarGet('conectar-agenda-google', { ismId: BRUNO });
+  checar('ism: conectar-agenda-google da propria -> 302', conectarProprio.code, 302);
+  const conectarAlheio = await chamarGet('conectar-agenda-google', { ismId: ERICA });
+  checar('ism: conectar-agenda-google de outro ISM -> 403', [conectarAlheio.code, conectarAlheio.corpo.code], [403, 'fora_do_escopo']);
+
+  // criar-reserva: so a propria
+  const inicioReserva = Date.UTC(2026, 9, 1, 13, 0);
+  const criarReservaAlheia = await chamarPost('criar-reserva', { titulo: 'Reuniao', ismId: ERICA, inicio: inicioReserva, fim: inicioReserva + 3600000 });
+  checar('ism: criar-reserva pra outro ISM -> 403', [criarReservaAlheia.code, criarReservaAlheia.corpo.code], [403, 'fora_do_escopo']);
+  const criarReservaPropria = await chamarPost('criar-reserva', { titulo: 'Reuniao', ismId: BRUNO, inicio: inicioReserva, fim: inicioReserva + 3600000 });
+  checar('ism: criar-reserva pra si mesmo -> 200', criarReservaPropria.code, 200);
+
+  // atualizar-reserva/cancelar-reserva: so a reserva da propria agenda
+  const atualizarReservaAlheia = await chamarPost('atualizar-reserva', { id: 'tReservaErica', linkReuniao: 'x' });
+  checar('ism: atualizar-reserva de outro ISM -> 403', [atualizarReservaAlheia.code, atualizarReservaAlheia.corpo.code], [403, 'fora_do_escopo']);
+  const atualizarReservaPropria = await chamarPost('atualizar-reserva', { id: 'tReservaBruno', linkReuniao: 'x' });
+  checar('ism: atualizar-reserva da propria -> 200', atualizarReservaPropria.code, 200);
+  const cancelarReservaAlheia = await chamarPost('cancelar-reserva', { id: 'tReservaErica' });
+  checar('ism: cancelar-reserva de outro ISM -> 403', [cancelarReservaAlheia.code, cancelarReservaAlheia.corpo.code], [403, 'fora_do_escopo']);
+
+  // vincular-agendamento-google: so pra propria agenda
+  const vincularAlheio = await chamarPost('vincular-agendamento-google', { projetoId: 'tProjBruno', ismId: ERICA, googleEventId: 'evt-x', inicio: 1, fim: 2 });
+  checar('ism: vincular-agendamento-google pra outro ISM -> 403', [vincularAlheio.code, vincularAlheio.corpo.code], [403, 'fora_do_escopo']);
 
   globalThis.fetch = fetchOriginal;
 }

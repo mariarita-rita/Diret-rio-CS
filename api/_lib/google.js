@@ -149,6 +149,23 @@ export async function consultarFreeBusy(accessToken, inicio, fim) {
   return ocupado.length ? ocupado[0] : null;
 }
 
+/**
+ * Lista os eventos da agenda primária do ISM entre inicio/fim (epoch ms) —
+ * usado pra achar reservas feitas pelo próprio cliente numa página de
+ * agendamento do Google (fora do nosso fluxo de criar-reserva).
+ */
+export async function listarEventos(accessToken, inicio, fim) {
+  const params = new URLSearchParams({
+    timeMin: new Date(inicio).toISOString(),
+    timeMax: new Date(fim).toISOString(),
+    singleEvents: 'true',
+    orderBy: 'startTime',
+    maxResults: '250',
+  });
+  const r = await calendarRequest(`/calendars/primary/events?${params.toString()}`, accessToken);
+  return r?.items || [];
+}
+
 /** Cria o evento na agenda primária do ISM com Meet automático. Devolve o hangoutLink (ou null). */
 export async function criarEventoComMeet(accessToken, { titulo, inicio, fim }) {
   const r = await calendarRequest('/calendars/primary/events?conferenceDataVersion=1', accessToken, {
