@@ -709,8 +709,9 @@
   <section class="panel" id="panel-indicadores">
     <div class="callout">
       <div class="dot"></div>
-      <div><b>Em construção.</b> Em breve: indicadores de projetos por etapa, tempo médio de implantação e outras métricas do funil de implantação.</div>
+      <div><b>Engajamento de treinamento.</b> Vídeos assistidos pelos clientes na Central de Treinamento, por produto ativado. Trilhas por etapa/tempo de implantação continuam em aberto.</div>
     </div>
+    <div id="indicadoresRoot"><div class="sub">Carregando...</div></div>
   </section>
 
   <footer class="page-footer">
@@ -750,6 +751,7 @@
         wizard = null;
         if (typeof renderProjetosPanel === "function") renderProjetosPanel();
       }
+      if (tab === "indicadores" && typeof carregarIndicadores === "function") carregarIndicadores();
     });
   });
 
@@ -991,6 +993,113 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
     }).then(tratarRespostaApi);
+  }
+
+  // ---- Anexos (projeto e itens) ----
+  var MAX_ANEXO_BYTES_FRONT = 4 * 1024 * 1024;
+
+  /** File/Blob -> base64 puro (sem o prefixo "data:...;base64,"). */
+  function arquivoParaBase64(blob){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){
+        var resultado = String(reader.result || "");
+        var virgula = resultado.indexOf(",");
+        resolve(virgula >= 0 ? resultado.slice(virgula + 1) : resultado);
+      };
+      reader.onerror = function(){ reject(reader.error); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function anexoLinhaHtml(a){
+    var icone = /^(png|jpe?g|gif|webp)$/i.test(a.extensao || "") ? "🖼️" : (/^pdf$/i.test(a.extensao || "") ? "📄" : "📎");
+    return '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;text-decoration:none;color:inherit;">' +
+      '<span>' + icone + '</span><span style="text-decoration:underline;">' + esc(a.nome) + '</span></a>';
+  }
+
+  /** Card de anexos de uma task (projeto, agente ou solução) — lista o que já existe e deixa anexar mais um. */
+  function renderAnexos(taskId, container, titulo, anexosIniciais){
+    if (!container) return;
+    var anexos = (anexosIniciais || []).slice();
+    var idInput = "inputAnexo_" + taskId;
+    var idBtn = "btnAnexar_" + taskId;
+    var idStatus = "anexoStatus_" + taskId;
+
+    function desenhar(){
+      container.innerHTML = '<div class="card"><h2>📎 ' + esc(titulo || "Anexos") + '</h2>' +
+        (anexos.length ? anexos.map(anexoLinhaHtml).join("") : '<div class="sub">Nenhum anexo ainda.</div>') +
+        '<div style="margin-top:10px;">' +
+          '<input type="file" id="' + idInput + '" style="display:none;">' +
+          '<button type="button" class="btn-flow-secondary" id="' + idBtn + '">+ Anexar arquivo</button>' +
+          '<span class="sub" id="' + idStatus + '" style="margin-left:8px;"></span>' +
+        '</div></div>';
+      var input = document.getElementById(idInput);
+      var btn = document.getElementById(idBtn);
+      var statusEl = document.getElementById(idStatus);
+      btn.addEventListener("click", function(){ input.click(); });
+      input.addEventListener("change", function(){
+        var arquivo = input.files && input.files[0];
+        if (!arquivo) return;
+        if (arquivo.size > MAX_ANEXO_BYTES_FRONT){
+          showSimToast("Arquivo maior que 4 MB — não deu para anexar.");
+          input.value = "";
+          return;
+        }
+        statusEl.textContent = "Enviando…";
+        btn.disabled = true;
+        arquivoParaBase64(arquivo).then(function(base64){
+          return apiPost("anexar-arquivo-implantacao", {
+            id: taskId, nomeArquivo: arquivo.name, mimeType: arquivo.type || "application/octet-stream", base64: base64
+          });
+        }).then(function(resp){
+          anexos = anexos.concat([resp.anexo]);
+          showSimToast("Arquivo anexado.");
+          desenhar();
+        }).catch(function(e){
+          showSimToast(mensagemErro(e) || "Não deu para anexar o arquivo.");
+          statusEl.textContent = "";
+          btn.disabled = false;
+          input.value = "";
+        });
+      });
+    }
+    desenhar();
+  }
+
+  // ---- Indicadores (engajamento de treinamento — Central de Treinamento) ----
+  function carregarIndicadores(){
+    var root = document.getElementById("indicadoresRoot");
+    if (!root) return;
+    root.innerHTML = '<div class="sub">Carregando...</div>';
+    fetch("/api/trilhas-indicadores", { credentials: "same-origin" }).then(tratarRespostaApi)
+      .then(function(j){ renderIndicadores(root, j.indicadores || []); })
+      .catch(function(e){
+        // Sessão inválida nunca cai aqui: tratarRespostaApi devolve uma promise
+        // que fica pendente pra sempre nesse caso, e mostrarLoginNoPainel já
+        // assumiu a tela (ver definição de tratarRespostaApi acima).
+        root.innerHTML = '<div class="callout danger"><div class="dot"></div><div>' +
+          ((e && e.error) || "Erro ao carregar indicadores.") + '</div></div>';
+      });
+  }
+  function renderIndicadores(root, linhas){
+    var comAtividade = linhas.filter(function(l){ return l.videosDisponiveis > 0; })
+      .sort(function(a, b){ return (b.percentual || 0) - (a.percentual || 0); });
+    if (!comAtividade.length){
+      root.innerHTML = '<div class="sub">Nenhum cliente com trilha disponível ainda.</div>';
+      return;
+    }
+    var linhasHtml = comAtividade.map(function(l){
+      var ultima = l.ultimaAtividade ? new Date(l.ultimaAtividade).toLocaleDateString("pt-BR") : "—";
+      return '<tr>' +
+        '<td>' + (l.nome || l.idNucleo || "") + '</td>' +
+        '<td class="tabular">' + l.videosAssistidos + '/' + l.videosDisponiveis + ' (' + (l.percentual == null ? "—" : l.percentual + '%') + ')</td>' +
+        '<td>' + ultima + '</td>' +
+      '</tr>';
+    }).join("");
+    root.innerHTML =
+      '<div class="table-wrap"><table class="cmp"><thead><tr><th>Cliente</th><th>Vídeos assistidos</th><th>Última atividade</th></tr></thead>' +
+      '<tbody>' + linhasHtml + '</tbody></table></div>';
   }
 
   // ---- Capability `sample` (extração de agentes por IA) ----
@@ -1379,24 +1488,38 @@
 
   // ---- Comentários (lidos e escritos direto do painel — o time nao acessa o ClickUp) ----
 
+  // Print colado num comentario vira, no texto salvo, uma URL de anexo do
+  // ClickUp na própria linha (ver comentar-implantacao, api/clickup.js) — aqui
+  // é só reconhecer essa URL de volta e trocar por um preview inline.
+  var RE_URL_IMAGEM = /(https?:\/\/\S+\.(?:png|jpe?g|gif|webp))(?:\?\S*)?/i;
   function comentarioHtml(c){
     if (/^\[\[FLOW\]\]/.test(c.texto)){
       var jsonTexto = c.texto.replace(/^\[\[FLOW\]\]/, "");
       return '<div class="build-check" style="align-items:flex-start"><span>📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
         ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button></span></div>';
     }
-    return '<div class="build-check" style="align-items:flex-start"><span><b>' + esc(c.autor) + '</b> — ' + esc(c.texto) +
+    var m = RE_URL_IMAGEM.exec(c.texto || "");
+    var textoSemImagem = m ? (c.texto.slice(0, m.index) + c.texto.slice(m.index + m[0].length)).trim() : (c.texto || "");
+    var imagemHtml = m
+      ? '<div style="margin-top:6px;"><a href="' + esc(m[0]) + '" target="_blank" rel="noopener">' +
+          '<img src="' + esc(m[0]) + '" alt="print anexado" style="max-width:240px;max-height:240px;border-radius:8px;display:block;"></a></div>'
+      : "";
+    return '<div class="build-check" style="align-items:flex-start"><span><b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
+      imagemHtml +
       '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span></span></div>';
   }
 
   function renderComentarios(taskId, container, titulo){
     if (!container) return;
+    var imagemPendente = null; // { nomeArquivo, mimeType, base64, previewUrl } — print colado, aguardando o clique em "Comentar"
     container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2><div class="sub">Carregando…</div></div>';
     apiGet("listar-comentarios", { taskId: taskId }).then(function(resp){
       var lista = resp.comentarios || [];
       container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2>' +
         (lista.length ? lista.map(comentarioHtml).join("") : '<div class="sub">Nenhum comentário ainda.</div>') +
-        '<div style="margin-top:12px; display:flex; gap:8px;">' +
+        '<div id="comentarioPreview" style="display:none;margin-top:10px;"></div>' +
+        '<div class="sub" style="margin-top:10px;">Dá para colar um print (Ctrl+V) direto no campo abaixo.</div>' +
+        '<div style="margin-top:6px; display:flex; gap:8px;">' +
           '<input type="text" class="form-input" id="novoComentario">' +
           '<button type="button" class="btn-flow-secondary" id="btnComentar">Comentar</button>' +
         '</div></div>';
@@ -1406,14 +1529,55 @@
           copyToClipboard(jsonTexto).then(function(){ showSimToast("JSON do Fluxo copiado."); }).catch(function(){ showSimToast("Não deu para copiar."); });
         });
       });
+      var previewEl = container.querySelector("#comentarioPreview");
       var btnComentar = container.querySelector("#btnComentar");
       var input = container.querySelector("#novoComentario");
+
+      function mostrarPreview(){
+        if (!imagemPendente){ previewEl.style.display = "none"; previewEl.innerHTML = ""; return; }
+        previewEl.style.display = "block";
+        previewEl.innerHTML =
+          '<div style="display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);padding:6px 10px;border-radius:8px;">' +
+            '<img src="' + imagemPendente.previewUrl + '" style="max-width:60px;max-height:60px;border-radius:6px;">' +
+            '<span class="sub">print pronto pra enviar</span>' +
+            '<button type="button" class="btn-reset" id="btnRemoverPrint">✕</button>' +
+          '</div>';
+        var btnRemover = previewEl.querySelector("#btnRemoverPrint");
+        if (btnRemover) btnRemover.addEventListener("click", function(){ imagemPendente = null; mostrarPreview(); });
+      }
+
+      input.addEventListener("paste", function(e){
+        var itens = (e.clipboardData && e.clipboardData.items) || [];
+        var itemImagem = null;
+        for (var i = 0; i < itens.length; i++){
+          if (itens[i].type && itens[i].type.indexOf("image/") === 0){ itemImagem = itens[i]; break; }
+        }
+        if (!itemImagem) return; // sem imagem colada — deixa o paste de texto normal acontecer
+        e.preventDefault();
+        var arquivo = itemImagem.getAsFile();
+        if (!arquivo) return;
+        if (arquivo.size > 4 * 1024 * 1024){ showSimToast("Print maior que 4 MB — não deu para colar."); return; }
+        arquivoParaBase64(arquivo).then(function(base64){
+          var mime = arquivo.type || "image/png";
+          imagemPendente = { nomeArquivo: "print.png", mimeType: mime, base64: base64, previewUrl: "data:" + mime + ";base64," + base64 };
+          mostrarPreview();
+        }).catch(function(){ showSimToast("Não deu para colar o print."); });
+      });
+
       btnComentar.addEventListener("click", function(){
         var texto = input.value.trim();
-        if (!texto) return;
-        apiPost("comentar-implantacao", { taskId: taskId, texto: texto }).then(function(){
+        if (!texto && !imagemPendente) return;
+        var payload = { taskId: taskId, texto: texto };
+        if (imagemPendente){
+          payload.imagem = { nomeArquivo: imagemPendente.nomeArquivo, mimeType: imagemPendente.mimeType, base64: imagemPendente.base64 };
+        }
+        btnComentar.disabled = true;
+        apiPost("comentar-implantacao", payload).then(function(){
           renderComentarios(taskId, container, titulo);
-        }).catch(function(){ showSimToast("Não deu para comentar."); });
+        }).catch(function(){
+          showSimToast("Não deu para comentar.");
+          btnComentar.disabled = false;
+        });
       });
     }).catch(function(){
       container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2><div class="sub">Não deu para carregar os comentários.</div></div>';
@@ -1464,6 +1628,7 @@
         '</main>' +
         '<aside class="project-detail-sidebar" aria-label="Agenda e comentários do projeto">' +
           '<div id="agendaProjetoWrap"></div>' +
+          '<div id="anexosProjetoWrap"></div>' +
           '<div id="comentariosProjetoWrap"></div>' +
           '<div id="conversaUmblerWrap"></div>' +
           '<div id="analiseReuniaoWrap"></div>' +
@@ -1475,6 +1640,7 @@
       itemAtual = null;
       renderProjetosPanel();
     });
+    renderAnexos(dadosProjeto.projeto.id, document.getElementById("anexosProjetoWrap"), "Anexos do projeto", dadosProjeto.projeto.anexos);
     renderComentarios(dadosProjeto.projeto.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
     renderConversaUmbler(dadosProjeto.projeto.id, document.getElementById("conversaUmblerWrap"));
     renderAnaliseReuniao(dadosProjeto.projeto.id, document.getElementById("analiseReuniaoWrap"));
@@ -2170,9 +2336,11 @@
     var o = agentePorId(id);
     if (!o){ itemAtual = null; renderConteudoProjeto(); return; }
     var html = '<div class="flow-actions" style="margin-bottom:14px;"><button type="button" class="btn-flow-secondary" id="btnVoltarItens">← Voltar aos itens do projeto</button></div>' +
-      cardSolucaoFechada(o);
+      cardSolucaoFechada(o) +
+      '<div id="anexosItemWrap"></div>';
     document.getElementById("stepContent").innerHTML = html;
     document.getElementById("btnVoltarItens").addEventListener("click", function(){ itemAtual = null; renderConteudoProjeto(); });
+    renderAnexos(o.id, document.getElementById("anexosItemWrap"), "Anexos deste item", o.anexos);
     document.querySelectorAll("[data-solucao-check]").forEach(function(cb){
       cb.addEventListener("change", function(){
         var cid = cb.getAttribute("data-solucao-check");

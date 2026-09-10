@@ -10,8 +10,15 @@
 //   POST /api/clickup?action=criar-implantacao     { cliente, contexto, agentes[] }
 //   POST /api/clickup?action=atualizar-implantacao { id, etapaAtual, prioridade[], ... }
 //   POST /api/clickup?action=atualizar-agente      { taskId, buildChecks?, testChecks?, ... }
-//   POST /api/clickup?action=comentar-implantacao  { taskId, texto }
+//   POST /api/clickup?action=comentar-implantacao  { taskId, texto, imagem? }
+//        -> `imagem` ({nomeArquivo, mimeType, base64}) e opcional: um print
+//        colado no comentario sobe primeiro como anexo, e a URL entra no
+//        texto do comentario (o ClickUp nao aceita imagem embutida direto
+//        no corpo do comentario pela API)
 //   GET  /api/clickup?action=listar-comentarios    { taskId }
+//   POST /api/clickup?action=anexar-arquivo-implantacao { id, nomeArquivo,
+//        mimeType, base64 } -> anexa um arquivo a um projeto ou subtask
+//        (agente/solucao); { imagem/pdf/office/csv/texto, ate 4MB }
 //   POST /api/clickup?action=salvar-proposta-implantacao      cria/atualiza task
 //        na etapa "proposta" (o simulador Waipe salva o que foi proposto e o
 //        CSM reabre dias depois pra editar o que o cliente fechou)
@@ -66,6 +73,7 @@ import {
 } from './_lib/http.js';
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
+  anexarArquivoTask,
   atualizarTask,
   CAMPOS_ESCRITA,
   cnpjDoAgendamentoGoogle,
@@ -117,6 +125,46 @@ const CACHE_LEITURA = 'private, max-age=300, stale-while-revalidate=600';
 
 const MAX_LABELS = 10;
 
+// Anexos (projeto/agente/solução e print colado em comentário) — allowlist de
+// tipo por MIME, nunca por extensão do nome (o nome é só rótulo). Teto de
+// tamanho é sobre o arquivo CRU; o corpo da requisição em si (base64 + JSON)
+// precisa de um teto maior, por isso o `limiteBytes` custom passado a
+// `lerCorpo` nas duas ações que aceitam arquivo.
+const MIME_ANEXOS_VALIDOS = new Set([
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv', 'text/plain',
+]);
+const MAX_ANEXO_BYTES = 4 * 1024 * 1024;
+const LIMITE_CORPO_ANEXO = 6 * 1024 * 1024;
+const RE_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** Anexo (arquivo ou print) saneado a partir do corpo — nunca confia no que vem sem checar tipo/tamanho antes de gastar uma chamada de upload no ClickUp. */
+function lerArquivoAnexo(corpo) {
+  const nomeArquivo = texto(corpo?.nomeArquivo, 150);
+  const mimeType = typeof corpo?.mimeType === 'string' ? corpo.mimeType.trim().toLowerCase() : '';
+  const base64 = typeof corpo?.base64 === 'string' ? corpo.base64.trim() : '';
+  if (!nomeArquivo || !mimeType || !base64) return { erro: 'Arquivo, nome e tipo são obrigatórios.' };
+  if (!MIME_ANEXOS_VALIDOS.has(mimeType)) return { erro: 'Tipo de arquivo não permitido.' };
+  if (!RE_BASE64.test(base64)) return { erro: 'Arquivo corrompido.' };
+  const bytesAprox = Math.floor((base64.length * 3) / 4);
+  if (bytesAprox > MAX_ANEXO_BYTES) return { erro: 'Arquivo muito grande (máximo 4 MB).' };
+  return { nomeArquivo, mimeType, base64 };
+}
+
+/** Anexos nativos do ClickUp (o próprio GET de task já devolve), reduzidos ao que a tela precisa mostrar. */
+function mapearAnexos(attachments) {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .slice(0, 30)
+    .map((a) => ({ id: a.id, nome: texto(a.title, 150) || 'arquivo', url: a.url || a.url_w_query || '', extensao: texto(a.extension, 10) }))
+    .filter((a) => a.url);
+}
+
 // Nivel "ism" nao acessa dados financeiros (carteira/metas/cliente/set-field/
 // log-proposta, que e o log de propostas ligado a carteira) nem o pipeline de
 // proposta de implantacao (criar/salvar-proposta/confirmar-fechamento — isso
@@ -167,6 +215,9 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-comentarios') return await listarComentariosAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'anexar-arquivo-implantacao') {
+      return await anexarArquivoImplantacaoAcao(req, res, sessao);
+    }
     if (req.method === 'POST' && acao === 'salvar-proposta-implantacao') {
       return await salvarPropostaImplantacaoAcao(req, res, sessao);
     }
@@ -205,7 +256,7 @@ export default async function handler(req, res) {
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
-      'listar-comentarios', 'salvar-proposta-implantacao',
+      'listar-comentarios', 'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
       'atualizar-reserva', 'cancelar-reserva', 'conectar-agenda-google',
       'status-google-agenda', 'iniciar-conversa-umbler',
@@ -1077,6 +1128,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
           checklist,
           checklistChecks: sanearChecks(e.checklistChecks) || {},
           fase: FASES_ITEM_VALIDAS.has(e.fase) ? e.fase : FASE_ITEM_PADRAO,
+          anexos: mapearAnexos(t.attachments),
         };
       }
       return {
@@ -1094,6 +1146,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
         prereqChecks: e.prereqChecks || {},
         diagnostico: e.diagnostico || {},
         validacao: e.validacao || { status: 'pendente', motivo: '' },
+        anexos: mapearAnexos(t.attachments),
       };
     })
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -1145,6 +1198,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
       telefone: texto(estadoProjeto.telefone, 30),
       finalizacao: sanearFinalizacao(estadoProjeto.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estadoProjeto, sessao),
+      anexos: mapearAnexos(pai.attachments),
     },
     agentes,
   });
@@ -2210,7 +2264,7 @@ async function comentarImplantacaoAcao(req, res, sessao) {
 
   let corpo;
   try {
-    corpo = await lerCorpo(req);
+    corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_ANEXO });
   } catch (e) {
     if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
     throw e;
@@ -2220,7 +2274,20 @@ async function comentarImplantacaoAcao(req, res, sessao) {
     return erro(res, 400, 'task_invalida', 'taskId inválido.');
   }
   const comentario = texto(corpo.texto, 2000);
-  if (!comentario) {
+
+  // `imagem` e opcional: um print colado no comentario. O ClickUp nao aceita
+  // imagem embutida no corpo do comentario pela API — sobe como anexo comum
+  // e a URL entra no texto (o cliente ClickUp mostra preview inline sozinho
+  // pra link de anexo próprio, sem precisar de markdown).
+  let arquivo = null;
+  if (corpo.imagem) {
+    arquivo = lerArquivoAnexo(corpo.imagem);
+    if (arquivo.erro) return erro(res, 400, 'arquivo_invalido', arquivo.erro);
+    if (!arquivo.mimeType.startsWith('image/')) {
+      return erro(res, 400, 'arquivo_invalido', 'Só é possível colar imagens no comentário.');
+    }
+  }
+  if (!comentario && !arquivo) {
     return erro(res, 400, 'texto_invalido', 'Comentário vazio.');
   }
 
@@ -2231,8 +2298,48 @@ async function comentarImplantacaoAcao(req, res, sessao) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
 
-  await criarComentario(corpo.taskId, comentario);
+  let textoFinal = comentario;
+  if (arquivo) {
+    const anexado = await anexarArquivoTask(corpo.taskId, arquivo);
+    textoFinal = [comentario, anexado.url].filter(Boolean).join('\n');
+  }
+
+  await criarComentario(corpo.taskId, textoFinal);
   return res.status(200).json({ ok: true });
+}
+
+async function anexarArquivoImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_ANEXO });
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+  const arquivo = lerArquivoAnexo(corpo);
+  if (arquivo.erro) return erro(res, 400, 'arquivo_invalido', arquivo.erro);
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
+  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const anexado = await anexarArquivoTask(corpo.id, arquivo);
+  return res.status(200).json({
+    ok: true,
+    anexo: { id: anexado.id, nome: anexado.title || arquivo.nomeArquivo, url: anexado.url, extensao: anexado.extension || '' },
+  });
 }
 
 // ── Erros ─────────────────────────────────────────────────────────────────

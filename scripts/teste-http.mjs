@@ -77,6 +77,7 @@ const stubClickup = `
   export async function obterTaskComSubtasks() { return { pai: null, subtasks: [] }; }
   export async function criarComentario() { return {}; }
   export async function listarComentarios() { return []; }
+  export async function anexarArquivoTask() { return { id: 'stub-anexo', title: 'arquivo', url: 'https://stub/anexo', extension: '' }; }
   export const ISM_OPCOES = [{ id: 118125102, nome: 'Bruno Vaz' }, { id: 48933858, nome: 'Erica Fernanda' }];
   export function parseWaipeState() { return {}; }
   export function stringifyWaipeState(description) { return description || ''; }
@@ -3475,6 +3476,94 @@ console.log('\n[46] marcar-conversa-vista + temMensagemNova (por identidade)');
 
   const listaGian = await chamarGet(GIAN, 'listar-implantacoes');
   checar('listar-implantacoes: temMensagemNova continua true pra Gian (nao viu ainda — visto e por identidade)', listaGian.corpo.tasks[0].temMensagemNova, true);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[47] anexar-arquivo-implantacao + print colado em comentario');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  const LISTA = '901328976497';
+  const anexosCriados = [];
+  const comentariosCriados = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'POST' && u.endsWith('/task/tAnexoProj/attachment')) {
+      anexosCriados.push({ ehFormData: init.body instanceof FormData });
+      return ok({ id: 'novo-anexo', title: 'print.png', url: 'https://clickup-attachments.example/print.png', extension: 'png' });
+    }
+    if (metodo === 'POST' && u.endsWith('/task/tAnexoProj/comment')) {
+      comentariosCriados.push(JSON.parse(init.body));
+      return ok({});
+    }
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tAnexoProj')) {
+      return ok({
+        id: 'tAnexoProj', name: 'Cliente Anexo', list: { id: LISTA }, parent: null,
+        description: 'CSM: Gian Luca\n\n' + JSON.stringify({ etapaAtual: 'construcao' }),
+      });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('anexos');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl);
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const BRUNO_SESSAO = { nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' };
+  const chamarPost = async (perfil, action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body }, r);
+    return r;
+  };
+
+  const base64Fake = Buffer.from('conteudo-fake-de-teste').toString('base64');
+  const arquivoOk = { nomeArquivo: 'print.png', mimeType: 'image/png', base64: base64Fake };
+
+  const semPermissao = await chamarPost(CONSULTA, 'anexar-arquivo-implantacao', { id: 'tAnexoProj', ...arquivoOk });
+  checar('anexar-arquivo: consulta -> 403', [semPermissao.code, semPermissao.corpo.code], [403, 'somente_leitura']);
+
+  const outraCarteira = await chamarPost(PATRICIA, 'anexar-arquivo-implantacao', { id: 'tAnexoProj', ...arquivoOk });
+  checar('anexar-arquivo: csm de outra carteira -> 403', [outraCarteira.code, outraCarteira.corpo.code], [403, 'fora_da_carteira']);
+
+  const tipoInvalido = await chamarPost(GIAN, 'anexar-arquivo-implantacao', { id: 'tAnexoProj', nomeArquivo: 'virus.exe', mimeType: 'application/x-msdownload', base64: base64Fake });
+  checar('anexar-arquivo: tipo nao permitido -> 400', [tipoInvalido.code, tipoInvalido.corpo.code], [400, 'arquivo_invalido']);
+
+  const grandeDemais = await chamarPost(GIAN, 'anexar-arquivo-implantacao', { id: 'tAnexoProj', nomeArquivo: 'grande.png', mimeType: 'image/png', base64: 'A'.repeat(6_000_000) });
+  checar('anexar-arquivo: maior que 4MB -> 400', [grandeDemais.code, grandeDemais.corpo.code], [400, 'arquivo_invalido']);
+
+  anexosCriados.length = 0;
+  const anexoOk = await chamarPost(GIAN, 'anexar-arquivo-implantacao', { id: 'tAnexoProj', ...arquivoOk });
+  checar('anexar-arquivo: 200', [anexoOk.code, anexoOk.corpo.ok, anexoOk.corpo.anexo.url], [200, true, 'https://clickup-attachments.example/print.png']);
+  checar('  sobe como multipart/FormData de verdade', anexosCriados[0]?.ehFormData, true);
+
+  const anexoComoIsm = await chamarPost(BRUNO_SESSAO, 'anexar-arquivo-implantacao', { id: 'tAnexoProj', ...arquivoOk });
+  checar('anexar-arquivo: ism tambem pode -> 200 (nao esta em ACOES_PROIBIDAS_ISM)', [anexoComoIsm.code, anexoComoIsm.corpo.ok], [200, true]);
+
+  // comentar-implantacao com print colado (imagem)
+  const comentarioVazio = await chamarPost(GIAN, 'comentar-implantacao', { taskId: 'tAnexoProj', texto: '' });
+  checar('comentar-implantacao: sem texto e sem imagem -> 400', [comentarioVazio.code, comentarioVazio.corpo.code], [400, 'texto_invalido']);
+
+  const imagemNaoImagem = await chamarPost(GIAN, 'comentar-implantacao', { taskId: 'tAnexoProj', texto: '', imagem: { nomeArquivo: 'planilha.csv', mimeType: 'text/csv', base64: base64Fake } });
+  checar('comentar-implantacao: "imagem" que nao e imagem -> 400', [imagemNaoImagem.code, imagemNaoImagem.corpo.code], [400, 'arquivo_invalido']);
+
+  comentariosCriados.length = 0;
+  const soPrint = await chamarPost(GIAN, 'comentar-implantacao', { taskId: 'tAnexoProj', texto: '', imagem: { nomeArquivo: 'print.png', mimeType: 'image/png', base64: base64Fake } });
+  checar('comentar-implantacao: so print (sem texto) -> 200', [soPrint.code, soPrint.corpo.ok], [200, true]);
+  checar('  comentario carrega a URL do anexo', comentariosCriados[0]?.comment_text, 'https://clickup-attachments.example/print.png');
+
+  comentariosCriados.length = 0;
+  const textoComPrint = await chamarPost(GIAN, 'comentar-implantacao', { taskId: 'tAnexoProj', texto: 'Segue o print do erro', imagem: { nomeArquivo: 'print.png', mimeType: 'image/png', base64: base64Fake } });
+  checar('comentar-implantacao: texto + print -> 200', [textoComPrint.code, textoComPrint.corpo.ok], [200, true]);
+  checar('  comentario carrega texto e a URL do anexo', comentariosCriados[0]?.comment_text, 'Segue o print do erro\nhttps://clickup-attachments.example/print.png');
 
   globalThis.fetch = fetchOriginal;
 }

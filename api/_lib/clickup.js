@@ -945,6 +945,42 @@ export async function listarComentarios(taskId) {
 }
 
 /**
+ * Upload de anexo (multipart/form-data) — a unica chamada ao ClickUp que nao
+ * pode passar por `cu()`: o `fetch` precisa gerar o boundary sozinho a partir
+ * do `FormData`, e `cu()` sempre forca `Content-Type: application/json`.
+ * Mesmo tratamento de cota/erro de `cu()`, só que sem JSON.stringify no corpo.
+ */
+async function cuMultipart(path, form) {
+  const r = await fetch(BASE + path, {
+    method: 'POST',
+    headers: { Authorization: chave() },
+    body: form,
+  });
+  registrarCota(r);
+  if (!r.ok) {
+    await r.text().catch(() => '');
+    throw new ErroUpstream(r.status, r.status === 429 ? esperaDe(r) : null);
+  }
+  return r.json();
+}
+
+/**
+ * Anexa um arquivo a uma task (projeto ou subtask de implantacao) — usado
+ * tanto pelo botao de anexo no "Resumo do projeto" quanto por um print colado
+ * num comentario (que primeiro sobe como anexo, depois entra no texto do
+ * comentario como link). `base64` ja vem decodificado do corpo da requisicao
+ * pelo endpoint (anexar-arquivo-implantacao, em clickup.js) — aqui so monta o
+ * multipart e envia.
+ */
+export async function anexarArquivoTask(taskId, { nomeArquivo, mimeType, base64 }) {
+  const buffer = Buffer.from(base64, 'base64');
+  const blob = new Blob([buffer], { type: mimeType || 'application/octet-stream' });
+  const form = new FormData();
+  form.append('attachment', blob, nomeArquivo);
+  return cuMultipart(`/task/${taskId}/attachment`, form);
+}
+
+/**
  * ISMs (Implementation Success Managers) responsaveis por implantacao — papel
  * diferente do CSM (que e dono de carteira, atribuido por texto). Aqui e
  * assignee DE VERDADE do ClickUp, por isso a allowlist e por id de usuario do
