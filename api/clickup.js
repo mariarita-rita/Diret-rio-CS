@@ -819,6 +819,7 @@ function sanearDiagnosticoWaipeProposto(d) {
     automacao: typeof d.automacao === 'string' && AUTOMACAO_WAIPE_VALIDOS.has(d.automacao) ? d.automacao : 'pronta',
     enterprisePorVolume: typeof d.enterprisePorVolume === 'string' && GOV_WAIPE_VALIDOS.has(d.enterprisePorVolume) ? d.enterprisePorVolume : 'nao',
     plano: texto(d.plano, 40),
+    motivo: texto(d.motivo, 400),
     valorMensal: numeroOuNulo(d.valorMensal, 0, 999999),
   };
 }

@@ -414,6 +414,199 @@
   .modal-box iframe{flex:1; width:100%; border:none; background:#fff;}
 
   @media (prefers-reduced-motion:reduce){ *{transition:none !important;} }
+
+  /* ---- Revisão UX/UI — paleta oficial Londrisoft + fluxo de diagnóstico ---- */
+  :root{
+    --brand-night:#000035; --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F0F4FF;
+    --border:#E5E7EB; --border-strong:#6B7280; --ink:#000035; --ink-2:#374151;
+    --muted:#6B7280; --muted-2:#6B7280; --brand:#3A86FF; --brand-dark:#0A41B4;
+    --brand-ink:#FFFFFF; --focus-ring:#3A86FF;
+    --success:#16A34A; --success-bg:#F0F4FF; --danger:#DC2626; --danger-bg:#F0F4FF;
+    --warning:#CA8A04; --warning-bg:#F0F4FF;
+    --plan-individual:#3A86FF; --plan-individual-bg:#F0F4FF;
+    --plan-time:#0A41B4; --plan-time-bg:#A8C5FF;
+    --plan-enterprise:#000035; --plan-enterprise-bg:#A8C5FF;
+    --shadow:0 1px 2px rgba(0,0,53,.06),0 8px 24px rgba(0,0,53,.08);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#000035; --surface:#000035; --surface-2:#374151; --border:#6B7280;
+      --border-strong:#A8C5FF; --ink:#FFFFFF; --ink-2:#FFFFFF; --muted:#A8C5FF; --muted-2:#A8C5FF;
+      --brand:#3A86FF; --brand-dark:#A8C5FF; --brand-ink:#000035;
+      --success:#16A34A; --success-bg:#374151; --danger:#DC2626; --danger-bg:#374151;
+      --warning:#CA8A04; --warning-bg:#374151;
+      --plan-individual:#3A86FF; --plan-individual-bg:#374151; --plan-time:#A8C5FF; --plan-time-bg:#374151;
+      --plan-enterprise:#FFFFFF; --plan-enterprise-bg:#374151;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#000035; --surface:#000035; --surface-2:#374151; --border:#6B7280;
+    --border-strong:#A8C5FF; --ink:#FFFFFF; --ink-2:#FFFFFF; --muted:#A8C5FF; --muted-2:#A8C5FF;
+    --brand:#3A86FF; --brand-dark:#A8C5FF; --brand-ink:#000035;
+    --success:#16A34A; --success-bg:#374151; --danger:#DC2626; --danger-bg:#374151;
+    --warning:#CA8A04; --warning-bg:#374151;
+    --plan-individual:#3A86FF; --plan-individual-bg:#374151; --plan-time:#A8C5FF; --plan-time-bg:#374151;
+    --plan-enterprise:#FFFFFF; --plan-enterprise-bg:#374151;
+  }
+  .page{max-width:1200px; padding:24px 28px 72px;}
+  .topbar{padding:22px 26px; margin-bottom:18px; border-radius:18px; background:var(--brand-night); box-shadow:var(--shadow);}
+  .brand svg{height:24px;}
+  .header-title h1{font-size:24px; letter-spacing:-.025em;}
+  .header-title p{max-width:760px; line-height:1.5;}
+  .tabs{position:sticky; top:0; z-index:20; width:100%; margin:0 0 30px; padding:5px; gap:3px; background:color-mix(in srgb,var(--surface) 94%,transparent); backdrop-filter:blur(12px); box-shadow:0 4px 16px rgba(0,0,53,.06);}
+  .tab-btn{flex:1 1 0; min-height:42px; padding:9px 14px; color:var(--ink-2);}
+  .tab-btn:hover{background:var(--claro,#A8C5FF); color:var(--noite,#000035);}
+  .tab-btn.active{background:var(--brand); color:#FFFFFF; box-shadow:none;}
+  .tab-btn.active:hover{background:var(--brand-dark); color:#FFFFFF;}
+  .callout,.prop-warn{background:var(--surface-2); border-color:var(--claro,#A8C5FF);}
+  .callout.warn,.prop-warn{border-left:3px solid var(--warning);}
+  .diag-grid{grid-template-columns:minmax(0,380px) minmax(0,1fr); gap:24px;}
+  .card,.result-card,.prop-summary{box-shadow:var(--shadow);}
+  .card{padding:24px;}
+  .card h2,.prop-summary h2{font-size:16px; color:var(--noite,#000035);}
+  .field{margin-bottom:20px;}
+  .num-input, textarea.ta, select.sel{min-height:42px; background:var(--surface); border-color:var(--border-strong);}
+  .num-input:focus-visible,textarea.ta:focus-visible,select.sel:focus-visible{outline:3px solid var(--claro,#A8C5FF); outline-offset:2px; border-color:var(--brand);}
+  .seg button.on{background:var(--brand); color:#FFFFFF;}
+  .seg button:hover{background:var(--surface-2);}
+  .radio-opt:hover,.agent-item:hover{border-color:var(--brand);}
+  .radio-opt.on,.agent-item.on{border-color:var(--brand); background:var(--surface-2);}
+  .radio-opt input,.agent-item input{accent-color:var(--brand);}
+  .btn-primary{background:var(--brand); min-height:44px; box-shadow:0 2px 5px rgba(0,0,53,.12);}
+  .btn-primary:hover{background:var(--brand-dark); opacity:1;}
+  .btn-primary:focus-visible,.btn-secondary:focus-visible,.btn-remove:focus-visible,.btn-add-small:focus-visible{outline:3px solid var(--claro,#A8C5FF); outline-offset:2px;}
+  .result-head{padding:24px; border-bottom:1px solid var(--border);}
+  .result-body{padding:22px 24px 24px;}
+  .result-empty{padding:72px 30px;}
+  .plan-chip{border:1px solid currentColor;}
+  .price-breakdown,.pitch-box,.prop-stat{background:var(--surface-2);}
+  .pitch-box{border-left-color:var(--brand);}
+  .table-wrap{box-shadow:0 1px 2px rgba(0,0,53,.04);}
+  table.cmp tbody tr:nth-child(even){background:var(--surface-2);}
+  table.cmp tbody tr:hover{background:var(--claro,#A8C5FF);}
+  .accordion,.limit-card,.pitch-card{box-shadow:0 1px 2px rgba(0,0,53,.04);}
+  .accordion summary{min-height:52px;}
+  .accordion summary:hover{background:var(--surface-2);}
+  .section-title{font-size:21px; color:var(--noite,#000035); margin-top:36px;}
+  .section-sub{line-height:1.55; max-width:820px;}
+  .prop-grid{gap:18px;}
+  .prop-warn{padding:16px 18px; margin-bottom:20px; line-height:1.6;}
+  .field-row{gap:16px;}
+  .agent-item{padding:12px 14px;}
+  .btn-secondary{min-height:42px; background:var(--surface);}
+  .btn-secondary:hover{border-color:var(--brand); color:var(--brand-dark);}
+  .btn-add-small{min-height:40px; border-color:var(--brand); color:var(--brand-dark);}
+  .modal-overlay{background:rgba(0,0,53,.72);}
+  .modal-box{box-shadow:0 20px 60px rgba(0,0,53,.35);}
+  @media (max-width:860px){.diag-grid{grid-template-columns:1fr;}}
+  @media (max-width:700px){
+    .page{padding:16px 16px 56px;}
+    .topbar{padding:18px; gap:12px;}
+    .header-title h1{font-size:21px;}
+    .tabs{overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin;}
+    .tab-btn{flex:0 0 auto;}
+    .card,.result-head,.result-body,.prop-summary{padding:18px;}
+  }
+
+
+  /* ---- Resumo da proposta persistente ---- */
+  .prop-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(320px,360px);
+    align-items:start;
+    gap:24px;
+  }
+  .prop-summary{
+    position:sticky;
+    top:80px;
+    max-height:calc(100vh - 96px);
+    overflow-y:auto;
+    scrollbar-width:thin;
+    z-index:5;
+  }
+  .prop-summary h2{
+    position:sticky;
+    top:-1px;
+    z-index:1;
+    margin:-24px -24px 16px;
+    padding:20px 24px 14px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+  }
+  .prop-summary .prop-stat-row{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  .prop-summary .prop-stat{
+    min-width:0;
+    padding:10px 12px;
+  }
+  .prop-summary .prop-actions{
+    gap:8px;
+  }
+  .prop-summary .prop-actions button{
+    min-height:42px;
+  }
+  .prop-summary #btnPreview{
+    order:-5;
+    border-color:var(--brand);
+    color:var(--brand-dark);
+  }
+  .prop-summary #btnPreview:hover{
+    background:var(--surface-2);
+    border-color:var(--brand-dark);
+  }
+  .prop-summary #btnBaixar{
+    order:-4;
+  }
+  .prop-summary #btnCopyHtml{order:-3;}
+  .prop-summary #btnPrompt{order:-2;}
+  .prop-summary #btnLimparFormulario{
+    order:-1;
+    margin-top:8px !important;
+  }
+  .prop-summary #implantacaoWrap{
+    padding-top:2px;
+  }
+  .prop-summary #implantacaoWrap > .sub{
+    line-height:1.5;
+  }
+  @media (max-width:960px){
+    .prop-grid{
+      grid-template-columns:minmax(0,1fr) minmax(280px,320px);
+      gap:18px;
+    }
+  }
+  @media (max-width:760px){
+    .prop-grid{
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+    .prop-summary{
+      position:relative;
+      top:auto;
+      max-height:none;
+      overflow:visible;
+      width:100%;
+      order:-1;
+    }
+    .prop-summary h2{
+      position:static;
+      margin:-18px -18px 16px;
+      padding:16px 18px 12px;
+    }
+    .prop-summary .prop-stat-row{
+      grid-template-columns:repeat(3,minmax(0,1fr));
+    }
+  }
+  @media (max-width:520px){
+    .prop-summary .prop-stat-row{
+      grid-template-columns:1fr;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -942,60 +1135,34 @@
 
         <div class="diag-grid" style="margin-top:14px;">
           <!-- FORM -->
-          <form class="card" id="diagForm">
-            <h2>Especificações do cliente</h2>
-            <div class="sub">A IA já preenche isso a partir da transcrição — revise ou responda manualmente com base na conversa de diagnóstico.</div>
+          <div class="card" id="diagForm">
+            <h2>Plano do Waipe</h2>
+            <div class="sub">A IA já sugere isso a partir da transcrição — revise ou escolha direto com base na conversa.</div>
 
-            <div class="field">
-              <label for="f-usuarios">Quantas pessoas vão usar a plataforma?</label>
-              <input type="number" id="f-usuarios" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
-              <div class="hint">Inclua todos os usuários que precisam de acesso individual ao Waipe.</div>
-            </div>
-
-            <div class="field">
-              <label for="f-empresas">Quantas empresas do grupo econômico precisam consultar dados?</label>
-              <input type="number" id="f-empresas" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
-            </div>
-
-            <div class="field">
-              <label>Precisam controlar quem acessa o quê (permissões por usuário)?</label>
-              <div class="seg" data-group="governanca">
-                <button type="button" data-val="nao" class="on">Não</button>
-                <button type="button" data-val="sim">Sim</button>
+            <div class="field-row" style="display:flex; gap:14px; flex-wrap:wrap;">
+              <div class="field" style="flex:1; min-width:140px;">
+                <label for="f-usuarios">Usuários</label>
+                <input type="number" id="f-usuarios" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
+              </div>
+              <div class="field" style="flex:1; min-width:140px;">
+                <label for="f-empresas">Empresas do grupo</label>
+                <input type="number" id="f-empresas" class="num-input tabular" min="1" step="1" value="1" inputmode="numeric">
               </div>
             </div>
 
             <div class="field">
-              <label>Precisam auditar o uso da ferramenta ou ter relatório por pessoa?</label>
-              <div class="seg" data-group="auditoria">
-                <button type="button" data-val="nao" class="on">Não</button>
-                <button type="button" data-val="sim">Sim</button>
+              <label>Plano</label>
+              <div class="seg" data-group="plano" style="display:flex; gap:8px;">
+                <button type="button" data-plano-btn="Individual">Individual</button>
+                <button type="button" data-plano-btn="Time">Time</button>
+                <button type="button" data-plano-btn="Enterprise">Enterprise</button>
               </div>
+              <div class="hint">O Individual não expande em usuário/empresa; o Enterprise não é plano de volume — só quando há integração externa ou automação personalizada de verdade.</div>
             </div>
 
             <div class="field">
-              <fieldset>
-                <legend>O que o cliente precisa fazer com o Waipe Flow (automações)?</legend>
-                <div class="radio-list" data-group="automacao">
-                  <label class="radio-opt on">
-                    <input type="radio" name="automacao" value="pronta" checked>
-                    <span class="txt"><strong>Apenas ativar modelos prontos e ajustar parâmetros</strong><span>Horário, relatório usado, texto da instrução — sem tocar sistemas externos.</span></span>
-                  </label>
-                  <label class="radio-opt">
-                    <input type="radio" name="automacao" value="personalizada">
-                    <span class="txt"><strong>Mudar a estrutura da automação ou integrar sistemas externos</strong><span>Construção personalizada pelo Waipe Flow, tocando sistemas do cliente.</span></span>
-                  </label>
-                </div>
-              </fieldset>
-            </div>
-
-            <div class="field">
-              <label>O cliente está pedindo Enterprise só por volume, usuários ou empresas?</label>
-              <div class="seg" data-group="enterprisePorVolume">
-                <button type="button" data-val="nao" class="on">Não</button>
-                <button type="button" data-val="sim">Sim</button>
-              </div>
-              <div class="hint">Se sim, isso não justifica Enterprise sozinho — tudo isso escala dentro do Time.</div>
+              <label for="f-motivo">Motivo (fica só com o time, não vai pro cliente)</label>
+              <textarea id="f-motivo" class="ta" rows="3" placeholder="Por que esse plano — a IA preenche ao analisar a transcrição, mas edite à vontade."></textarea>
             </div>
 
             <details class="opt-block">
@@ -1011,16 +1178,14 @@
                 </div>
               </div>
             </details>
-
-            <button type="button" class="btn-primary" id="btnCalcular">Indicar plano ideal</button>
-          </form>
+          </div>
 
           <!-- RESULT -->
           <div id="resultWrap">
             <div class="result-card">
               <div class="result-empty" id="resultEmpty">
                 <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-                Preencha as especificações ao lado e clique em <b>“Indicar plano ideal”</b> para ver a recomendação, o preço estimado e o argumento de venda.
+                Escolha um plano ao lado (ou espere a IA sugerir) para ver o preço estimado e o argumento de venda.
               </div>
             </div>
           </div>
@@ -1268,23 +1433,21 @@
   });
 
   // ---------- Segmented (yes/no) controls ----------
+  // governanca/auditoria/enterprisePorVolume nao sao mais campo de tela (so
+  // sinal interno que a IA extrai da transcricao, usado dentro de
+  // aplicarWaipeDiagnostico) — segState/coletarRascunho continuam existindo
+  // por compatibilidade com rascunhos antigos salvos, mas ficam vazios daqui
+  // pra frente.
   var segState = { governanca:"nao", auditoria:"nao", enterprisePorVolume:"nao" };
   document.querySelectorAll(".seg").forEach(function(seg){
     var group = seg.getAttribute("data-group");
+    if (group === "plano") return; // wiring proprio — ver wireBotoesPlano()
     seg.querySelectorAll("button").forEach(function(b){
       b.addEventListener("click", function(){
         seg.querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
         b.classList.add("on");
         segState[group] = b.getAttribute("data-val");
       });
-    });
-  });
-
-  // ---------- Radio cards (automação) ----------
-  document.querySelectorAll('.radio-opt').forEach(function(opt){
-    opt.addEventListener("click", function(){
-      document.querySelectorAll('.radio-opt').forEach(function(o){ o.classList.remove("on"); });
-      opt.classList.add("on");
     });
   });
 
@@ -1391,34 +1554,54 @@
 
   var planClass = { Individual: "individual", Time: "time", Enterprise: "enterprise" };
 
-  document.getElementById("btnCalcular").addEventListener("click", function(){
+  // Plano é sempre escolha direta (clique num dos 3 botões, ou aplicado pela
+  // sugestão da IA em aplicarWaipeDiagnostico) — nunca mais calculado a
+  // partir de um questionário. usuarios/empresas continuam alimentando o
+  // preço do Time (os únicos campos que mudam o valor de verdade, ver
+  // priceFor()); motivo é texto livre, editável, pré-preenchido pela IA
+  // quando disponível. Esta função é o único lugar que escreve lastDiagnostic.
+  function aplicarPlano(plano, opts){
+    opts = opts || {};
+
+    // Se o novo plano tem teto menor que a quantidade ja marcada, desmarca os
+    // excedentes automaticamente (mantem os primeiros marcados, na ordem em
+    // que foram selecionados) — nunca deixa a proposta num estado inconsistente
+    // (ex: Individual com 2 agentes), sem exigir o CSM desmarcar na mao.
+    var capNovoPlano = AGENT_CAP[plano] != null ? AGENT_CAP[plano] : Infinity;
+    var idsMarcados = Object.keys(selectedAgentIds);
+    if (idsMarcados.length > capNovoPlano){
+      var removidos = idsMarcados.slice(capNovoPlano);
+      removidos.forEach(function(id){
+        delete selectedAgentIds[id]; delete suggestedIds[id]; delete horasProposta[id];
+      });
+      if (typeof showToast === "function"){
+        showToast((removidos.length > 1 ? removidos.length + " agentes removidos" : "1 agente removido") + " da seleção — o plano " + plano + " permite no máximo " + capNovoPlano + ".");
+      }
+    }
+
     var input = {
       usuarios: parseInt(document.getElementById("f-usuarios").value, 10) || 1,
       empresas: parseInt(document.getElementById("f-empresas").value, 10) || 1,
-      governanca: segState.governanca,
-      auditoria: segState.auditoria,
-      automacao: document.querySelector('input[name="automacao"]:checked').value,
-      enterprisePorVolume: segState.enterprisePorVolume,
       conversas: document.getElementById("f-conversas").value === "" ? null : parseFloat(document.getElementById("f-conversas").value),
       execucoes: document.getElementById("f-execucoes").value === "" ? null : parseFloat(document.getElementById("f-execucoes").value),
       agentesSelecionados: Object.keys(selectedAgentIds).length
     };
+    var motivoEl = document.getElementById("f-motivo");
+    if (opts.motivo != null && motivoEl) motivoEl.value = opts.motivo;
+    var motivo = motivoEl ? motivoEl.value : "";
 
-    var rec = recommend(input);
-    var price = priceFor(rec.plan, input);
-    var vNotes = volumeNotes(rec.plan, input);
-    var cls = planClass[rec.plan];
+    var price = priceFor(plano, input);
+    var vNotes = volumeNotes(plano, input);
+    var cls = planClass[plano];
 
     var html = '<div class="result-head">' +
-      '<div><span class="plan-chip ' + cls + '">' + rec.plan + '</span></div>' +
+      '<div><span class="plan-chip ' + cls + '">' + plano + '</span></div>' +
       '<div style="text-align:right">' +
         (price.total != null
           ? '<div class="result-price tabular">' + fmtBRL(price.total) + ' <small>/ mês</small></div>'
           : '<div class="result-price" style="font-size:16px">Sob negociação <small style="display:block">piso interno de R$990/mês</small></div>') +
       '</div></div>' +
       '<div class="result-body">';
-
-    html += '<ul class="reasons">' + rec.reasons.map(function(r){ return '<li>' + svgCheck("var(--success)") + '<span>' + r + '</span></li>'; }).join("") + '</ul>';
 
     if (price.breakdown.length){
       html += '<div class="price-breakdown">' +
@@ -1432,23 +1615,39 @@
     }
 
     html += '<div class="sub" style="margin:14px 0 4px; text-transform:uppercase; letter-spacing:.04em; font-size:11px; font-weight:700; color:var(--muted)">Pitch de fechamento</div>';
-    html += '<div class="pitch-box">' + pitches[rec.plan] + '</div>';
-
-    if (input.enterprisePorVolume === "sim" && rec.plan !== "Enterprise"){
-      html += '<div class="alert-box">' + svgFlag("var(--warning)") + '<span><b>Atenção:</b> o cliente sinalizou interesse em Enterprise apenas por volume, usuários ou empresas. Isso não justifica Enterprise — reforce que tudo isso escala dentro do Time.</span></div>';
-    }
-    if (input.enterprisePorVolume === "sim" && rec.plan === "Enterprise"){
-      html += '<div class="alert-box">' + svgFlag("var(--warning)") + '<span>Confirme que a necessidade real é integração com sistema externo ou automação personalizada — e não apenas volume, usuários ou empresas, que não justificam Enterprise sozinhos.</span></div>';
-    }
+    html += '<div class="pitch-box">' + pitches[plano] + '</div>';
 
     html += '</div>';
 
     document.getElementById("resultWrap").innerHTML = '<div class="result-card">' + html + '</div>';
 
-    lastDiagnostic = { input: input, rec: rec, price: price };
+    lastDiagnostic = { input: input, rec: { plan: plano, motivo: motivo }, price: price };
+
+    document.querySelectorAll('.seg[data-group="plano"] button').forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-plano-btn") === plano);
+    });
+
+    if (typeof renderAgentCatalog === "function") renderAgentCatalog();
+    if (typeof renderHorasSim === "function") renderHorasSim();
     if (typeof renderPriceSim === "function") renderPriceSim();
     if (typeof refreshPropSummary === "function") refreshPropSummary();
+  }
+
+  document.querySelectorAll('.seg[data-group="plano"] button').forEach(function(b){
+    b.addEventListener("click", function(){ aplicarPlano(b.getAttribute("data-plano-btn")); });
   });
+  ["f-usuarios", "f-empresas"].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener("change", function(){
+      if (lastDiagnostic && lastDiagnostic.rec) aplicarPlano(lastDiagnostic.rec.plan, { motivo: lastDiagnostic.rec.motivo });
+    });
+  });
+  (function(){
+    var motivoEl = document.getElementById("f-motivo");
+    if (motivoEl) motivoEl.addEventListener("input", function(){
+      if (lastDiagnostic && lastDiagnostic.rec) lastDiagnostic.rec.motivo = motivoEl.value;
+    });
+  })();
 
   // =====================================================================
   // ---------- GERAR PROPOSTA ----------
@@ -1882,19 +2081,34 @@
     return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   }
 
+  // Teto de agentes por plano — Individual só permite 1 modelo pronto ativo,
+  // Time até 3, Enterprise sem limite (ver "Comparativo de Planos"). Sem
+  // plano escolhido ainda, sem limite (não trava exploração antes de decidir
+  // o plano). Substitui o antigo aviso reativo "planoDesatualizado" que só
+  // avisava DEPOIS que a contagem já tinha estourado.
+  var AGENT_CAP = { Individual: 1, Time: 3, Enterprise: Infinity };
+  function limiteAgentesAtual(){
+    var plano = lastDiagnostic && lastDiagnostic.rec && lastDiagnostic.rec.plan;
+    return (plano && AGENT_CAP[plano] != null) ? AGENT_CAP[plano] : Infinity;
+  }
+
   function renderAgentCatalog(){
     var wrap = document.getElementById("agentCatalog");
     if (!wrap) return;
     var html = "";
     var all = allAgentsList();
+    var limite = limiteAgentesAtual();
+    var qtd = Object.keys(selectedAgentIds).length;
     AREA_ORDER.forEach(function(area){
       var inArea = all.filter(function(a){ return a.area === area; });
       if (!inArea.length) return;
       html += '<div class="agent-area">' + area + '</div>';
       inArea.forEach(function(a){
         var checked = !!selectedAgentIds[a.id];
-        html += '<label class="agent-item' + (checked ? ' on' : '') + '" data-agent="' + a.id + '">' +
-          '<input type="checkbox" data-agent-cb="' + a.id + '"' + (checked ? ' checked' : '') + '>' +
+        var bloqueado = !checked && qtd >= limite;
+        html += '<label class="agent-item' + (checked ? ' on' : '') + '" data-agent="' + a.id + '"' +
+          (bloqueado ? ' style="opacity:.45; cursor:not-allowed;" title="Limite de agentes do plano atingido — troque de plano ou desmarque outro agente."' : '') + '>' +
+          '<input type="checkbox" data-agent-cb="' + a.id + '"' + (checked ? ' checked' : '') + (bloqueado ? ' disabled' : '') + '>' +
           '<span class="atxt"><strong>' + escapeHtml(a.nome) + (checked && suggestedIds[a.id] ? ' <span class="sug-tag">sugerido</span>' : '') + (a.custom ? ' <span class="tag-custom">personalizado</span>' : '') + '</strong>' +
           '<span>' + escapeHtml(a.oque || "") + ' · turno: ' + escapeHtml(a.turno || "") + '</span></span>' +
           (a.custom ? '<button type="button" class="btn-del-agent" data-del-agent="' + a.id + '" aria-label="Remover agente personalizado">✕</button>' : '') +
@@ -1907,6 +2121,10 @@
         var id = cb.getAttribute("data-agent-cb");
         manuallyToggled[id] = true;
         if (cb.checked){
+          if (Object.keys(selectedAgentIds).length >= limiteAgentesAtual()){
+            cb.checked = false; // guarda extra — o disabled já deveria impedir isso
+            return;
+          }
           selectedAgentIds[id] = true;
           if (horasProposta[id] === undefined){
             var ag = allAgentsList().filter(function(a){ return a.id === id; })[0];
@@ -1915,7 +2133,7 @@
         } else {
           delete selectedAgentIds[id]; delete suggestedIds[id]; delete horasProposta[id];
         }
-        cb.closest(".agent-item").classList.toggle("on", cb.checked);
+        renderAgentCatalog(); // reavalia o disabled dos outros checkboxes, nao só o clicado
         if (typeof renderHorasSim === "function") renderHorasSim();
         refreshPropSummary();
       });
@@ -1935,17 +2153,21 @@
     var text = normalize(document.getElementById("p-dores").value);
     if (!text) return;
     var changed = false;
+    var travado = false;
+    var limite = limiteAgentesAtual();
     allAgentsList().forEach(function(a){
       if (manuallyToggled[a.id]) return; // respect explicit user choice
+      if (selectedAgentIds[a.id]) return;
       var matches = (a.keywords || []).some(function(k){ return text.indexOf(normalize(k)) !== -1; });
-      if (matches && !selectedAgentIds[a.id]){
-        selectedAgentIds[a.id] = true;
-        suggestedIds[a.id] = true;
-        if (horasProposta[a.id] === undefined) horasProposta[a.id] = a.horasMes != null ? a.horasMes : 0;
-        changed = true;
-      }
+      if (!matches) return;
+      if (Object.keys(selectedAgentIds).length >= limite){ travado = true; return; }
+      selectedAgentIds[a.id] = true;
+      suggestedIds[a.id] = true;
+      if (horasProposta[a.id] === undefined) horasProposta[a.id] = a.horasMes != null ? a.horasMes : 0;
+      changed = true;
     });
     if (changed){ renderAgentCatalog(); if (typeof renderHorasSim === "function") renderHorasSim(); refreshPropSummary(); }
+    if (travado && typeof showToast === "function") showToast("A IA encontrou mais agentes do que o plano permite — ajuste manualmente.");
   }
 
   var doresDebounce = null;
@@ -1955,19 +2177,32 @@
   });
 
   // ---- Analisar transcrição com IA (cliente/segmento/dores + outros produtos) ----
+  // governanca/auditoria/automacao/enterprisePorVolume so existem aqui como
+  // sinal que a IA extraiu da transcricao — nunca viram campo de tela (ver
+  // aplicarPlano). Servem só pra recommend() calcular uma SUGESTÃO inicial de
+  // plano+motivo; o CSM continua livre pra trocar o plano e editar o motivo
+  // depois, igual já funciona em "Outras oportunidades".
   function aplicarWaipeDiagnostico(wd){
     if (!wd) return;
-    document.getElementById("f-usuarios").value = wd.usuarios;
-    document.getElementById("f-empresas").value = wd.empresas;
-    ["governanca", "auditoria", "enterprisePorVolume"].forEach(function(grupo){
-      var btn = document.querySelector('.seg[data-group="' + grupo + '"] button[data-val="' + wd[grupo] + '"]');
-      if (btn) btn.click();
-    });
-    var opt = document.querySelector('input[name="automacao"][value="' + wd.automacao + '"]');
-    opt = opt ? opt.closest(".radio-opt") : null;
-    if (opt) opt.click();
-    var btnCalcular = document.getElementById("btnCalcular");
-    if (btnCalcular) btnCalcular.click();
+    if (wd.usuarios != null) document.getElementById("f-usuarios").value = wd.usuarios;
+    if (wd.empresas != null) document.getElementById("f-empresas").value = wd.empresas;
+
+    var input = {
+      usuarios: parseInt(wd.usuarios, 10) || 1,
+      empresas: parseInt(wd.empresas, 10) || 1,
+      governanca: wd.governanca || "nao",
+      auditoria: wd.auditoria || "nao",
+      automacao: wd.automacao || "pronta",
+      agentesSelecionados: Object.keys(selectedAgentIds).length
+    };
+    var rec = recommend(input);
+    aplicarPlano(rec.plan, { motivo: rec.reasons.join(" ") });
+
+    if (wd.enterprisePorVolume === "sim" && rec.plan !== "Enterprise"){
+      showToast("A transcrição sugere pedido de Enterprise só por volume/usuários/empresas — isso não justifica Enterprise sozinho, tudo isso escala dentro do Time.");
+    } else if (wd.enterprisePorVolume === "sim" && rec.plan === "Enterprise"){
+      showToast("Confirme com o cliente que a necessidade do Enterprise é integração externa ou automação personalizada — não só volume.");
+    }
   }
 
   // Espelha tabela-precos-cs.html (período Anual — a mensalidade mais baixa).
@@ -2333,18 +2568,10 @@
             outros.map(function(o){ return ' · ' + escapeHtml(o.produto) + (o.planoSugerido ? ' (' + escapeHtml(o.planoSugerido) + ')' : '') + ': ' + fmtBRL(o.total) + '/mês' + (o.desconto > 0 ? ' (' + o.descontoPercent + '% off)' : ''); }).join("") +
           '</div>'
         : "";
-      // O diagnóstico só é recalculado quando "Indicar plano ideal" é clicado —
-      // se os agentes mudarem depois disso (adicionar/remover), o plano exibido
-      // fica desatualizado em relação à quantidade real de automações
-      // selecionadas (Individual = 1, Time = até 3). Confere aqui, ao vivo.
-      var qtdAgentesAtual = Object.keys(selectedAgentIds).length;
-      var planoDesatualizado = "";
-      if (lastDiagnostic.rec.plan === "Individual" && qtdAgentesAtual > 1){
-        planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados, mas o plano indicado (Individual) só permite 1 automação — clique em "Indicar plano ideal" de novo no card do Waipe pra atualizar (deve subir pra Time).</span></div>';
-      } else if (lastDiagnostic.rec.plan === "Time" && qtdAgentesAtual > 3){
-        planoDesatualizado = '<div class="volume-note warn">' + svgFlag("currentColor") + '<span>' + qtdAgentesAtual + ' agentes selecionados ultrapassam os 3 modelos prontos do Time — confirme com a coordenação se cabe como excedente ou se algum agente fica de fora do pacote inicial.</span></div>';
-      }
-      warnBox.innerHTML = planoDesatualizado + breakdownHtml;
+      // O teto de agentes por plano (renderAgentCatalog/AGENT_CAP) já impede a
+      // seleção de ultrapassar o plano escolhido, então não tem mais como esse
+      // estado ficar inconsistente aqui.
+      warnBox.innerHTML = breakdownHtml;
     } else if (outros.length){
       planStat.textContent = "—";
       priceStat.textContent = fmtBRL(outrosTotal) + "/mês";
@@ -2459,7 +2686,7 @@
   // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
   var CHAVE_RASCUNHO = "waipeArquiteturaSolucao.rascunho.v1";
   var CAMPOS_RASCUNHO = ["p-transcricao", "p-cliente", "p-segmento", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
-    "waipeIncluidoCheck", "f-usuarios", "f-empresas", "f-conversas", "f-execucoes",
+    "waipeIncluidoCheck", "f-usuarios", "f-empresas", "f-motivo", "f-conversas", "f-execucoes",
     "p-desc-tipo", "p-desc-valor", "p-ent-base",
     "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento"];
 
@@ -2530,12 +2757,19 @@
     if (d.selectedAgentIds) selectedAgentIds = d.selectedAgentIds;
     if (d.horasProposta) horasProposta = d.horasProposta;
     if (Array.isArray(d.additionalItems)) extraState.additionalItems = d.additionalItems;
-    if (d.lastDiagnostic) lastDiagnostic = d.lastDiagnostic;
     if (Array.isArray(d.recomendacoesState)) recomendacoesState = d.recomendacoesState;
     if (d.propostaSalvaId) propostaSalvaId = d.propostaSalvaId;
 
     updatePacoteHint();
-    renderAgentCatalog();
+    // Recompoe o card de resultado + destaque do botao de plano a partir do
+    // que foi salvo (aplicarPlano() ja recalcula o preco com usuarios/
+    // empresas recem-restaurados acima, entao o resultado bate exatamente
+    // com o que estava antes de recarregar).
+    if (d.lastDiagnostic && d.lastDiagnostic.rec && d.lastDiagnostic.rec.plan){
+      aplicarPlano(d.lastDiagnostic.rec.plan, { motivo: d.lastDiagnostic.rec.motivo || "" });
+    } else {
+      renderAgentCatalog();
+    }
     renderHorasSim();
     renderAddlItems();
     renderPriceSim();
@@ -2605,11 +2839,8 @@
       diagnosticoWaipe: (waipeIncluido && lastDiagnostic) ? {
         usuarios: lastDiagnostic.input.usuarios,
         empresas: lastDiagnostic.input.empresas,
-        governanca: lastDiagnostic.input.governanca,
-        auditoria: lastDiagnostic.input.auditoria,
-        automacao: lastDiagnostic.input.automacao,
-        enterprisePorVolume: lastDiagnostic.input.enterprisePorVolume,
         plano: lastDiagnostic.rec.plan,
+        motivo: lastDiagnostic.rec.motivo || "",
         valorMensal: computePricing().total
       } : null
     };
@@ -2689,7 +2920,16 @@
         // Waipe naquela rodada — o toggle já carrega refletindo isso.
         waipeIncluido = !!projeto.diagnosticoWaipe;
         document.getElementById("waipeIncluidoCheck").checked = waipeIncluido;
-        if (projeto.diagnosticoWaipe) aplicarWaipeDiagnostico(projeto.diagnosticoWaipe);
+        // Aqui é restaurar a decisão que já foi tomada (não sugerir uma nova) —
+        // por isso usa aplicarPlano() direto com o plano/motivo já salvos, e
+        // não aplicarWaipeDiagnostico() (essa é só pra sugestão logo após a
+        // IA analisar a transcrição).
+        if (projeto.diagnosticoWaipe){
+          var diagSalvo = projeto.diagnosticoWaipe;
+          if (diagSalvo.usuarios != null) document.getElementById("f-usuarios").value = diagSalvo.usuarios;
+          if (diagSalvo.empresas != null) document.getElementById("f-empresas").value = diagSalvo.empresas;
+          if (diagSalvo.plano) aplicarPlano(diagSalvo.plano, { motivo: diagSalvo.motivo || "" });
+        }
         recomendacoesState = (projeto.outrasSolucoesPropostas || []).map(function(o){
           return {
             produto: o.produto, planoSugerido: o.planoSugerido, motivo: o.motivo, atencao: "",
