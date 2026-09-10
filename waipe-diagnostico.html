@@ -3425,7 +3425,7 @@
     '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
     '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@600;700&display=swap" rel="stylesheet">' +
     '<style>' +
-    ':root{--azul:#3A86FF;--noite:#000035;--profundo:#0A41B4;--claro:#A8C5FF;--quasebranco:#F0F4FF;--branco:#FFFFFF;--cinzaclaro:#E5E7EB;--cinzamedio:#6B7280;--cinzaescuro:#374151;--verde:#16A34A;--verdebg:#ECFDF5;--amarelo:#CA8A04}' +
+    ':root{--azul:#3A86FF;--noite:#000035;--profundo:#0A41B4;--claro:#A8C5FF;--quasebranco:#F0F4FF;--branco:#FFFFFF;--cinzaclaro:#E5E7EB;--cinzamedio:#6B7280;--cinzaescuro:#374151;--verde:#16A34A;--verdebg:#ECFDF5;--amarelo:#CA8A04;--vermelho:#DC2626;--vermelhobg:#FEF2F2}' +
     '*{box-sizing:border-box;margin:0;padding:0}' +
     'html{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
     'body{font-family:"Inter",Arial,sans-serif;color:var(--cinzaescuro);line-height:1.6;background:var(--cinzaclaro);font-size:15px}' +
@@ -3458,17 +3458,35 @@
     '.callout{background:var(--quasebranco);border-left:4px solid var(--azul);padding:15px 19px;border-radius:0 8px 8px 0;margin:16px 0;font-size:13px}' +
     '.callout.green{background:var(--verdebg);border-left-color:var(--verde)}' +
     '.callout.warn{background:#FEF9C3;border-left-color:var(--amarelo)}' +
+    '.callout.red{background:var(--vermelhobg);border-left-color:var(--vermelho)}' +
     '.callout .lbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--azul);margin-bottom:6px}' +
     '.callout.green .lbl{color:var(--verde)}' +
     '.callout.warn .lbl{color:var(--amarelo)}' +
+    '.callout.red .lbl{color:var(--vermelho)}' +
+    // "Frase de impacto" — um destaque visual pra UMA frase-chave por seção,
+    // pedido explicitamente pra quebrar parede de texto corrido nas seções
+    // narrativas geradas por IA (ver INSTRUCOES_SECOES_PROPOSTA, api/ia.js).
+    '.destaque{font-family:"Poppins","Inter",sans-serif;font-weight:700;font-size:18px;color:var(--profundo);line-height:1.35;margin:18px 0;padding-left:16px;border-left:3px solid var(--azul)}' +
+    '.tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--quasebranco);color:var(--azul);white-space:nowrap}' +
+    '.tag.green{background:var(--verdebg);color:var(--verde)}' +
+    '.tag.warn{background:#FEF9C3;color:var(--amarelo)}' +
+    '.tag.red{background:var(--vermelhobg);color:var(--vermelho)}' +
     'table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}' +
     'th{background:var(--azul);color:#fff;text-align:left;padding:10px 12px;font-weight:600;font-size:12.5px}' +
     'td{padding:10px 12px;border:1px solid var(--cinzaclaro);vertical-align:top}' +
     'tr:nth-child(even) td{background:var(--quasebranco)}' +
     'td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}' +
+    // Veredito colorido dentro de uma célula de tabela — pro comparativo de
+    // cenários vir em TABELA com destaque de cor, não em texto corrido.
+    'td.bom{color:var(--verde);font-weight:700}' +
+    'td.atencao{color:var(--amarelo);font-weight:700}' +
+    'td.risco{color:var(--vermelho);font-weight:700}' +
+    'tr.destaque-linha td{background:var(--quasebranco);border-top:1.5px solid var(--azul);border-bottom:1.5px solid var(--azul)}' +
     'ul.clean{list-style:none;padding:0}' +
     'ul.clean li{padding-left:24px;position:relative;margin-bottom:8px;font-size:13.5px}' +
     'ul.clean li:before{content:"→";position:absolute;left:0;color:var(--azul);font-weight:700}' +
+    'ul.check li:before{content:"✔";color:var(--verde)}' +
+    'ul.no li:before{content:"✕";color:var(--vermelho)}' +
     '.ficha{border:1.5px solid var(--azul);border-radius:14px;margin:18px 0;overflow:hidden;background:#fff;page-break-inside:avoid}' +
     '.ficha .topo{background:linear-gradient(120deg,var(--azul),var(--profundo));color:#fff;padding:13px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}' +
     '.ficha .topo .av{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;flex:0 0 auto}' +

@@ -562,17 +562,27 @@ Você recebe: o nome do cliente, um resumo de contexto/dores (texto livre do CSM
 
 REGRA MAIS IMPORTANTE: nunca invente número (hora, valor, quantidade, percentual) que não esteja explicitamente nos dados recebidos. Quando não houver dado numérico suficiente pra uma seção, escreva de forma qualitativa (sem inventar a estimativa) em vez de forçar um número.
 
+REGRA DE FORMATO — NUNCA escreva parede de texto corrido. Cada seção é um documento visual, não um parágrafo de e-mail: intercale os elementos abaixo, nunca mais de 2 frases seguidas dentro do mesmo <p> sem quebrar pra um componente visual. Um CSM que abrir a proposta tem que entender o ponto principal so de bater o olho, antes de ler qualquer frase inteira.
+
 Catálogo de seções (escreva só as pedidas):
 
-- "abertura_narrativa": abertura curta (2 a 3 parágrafos) que nomeia a dor central do cliente em linguagem direta, no estilo "Hoje a empresa X funciona, mas funciona presa em [gargalo específico]" — usa o contexto/dores recebido, nunca genérico. Fecha com uma frase que conecta a dor à motivação de resolver agora.
-- "custo_do_problema": quantifica o que o problema custa hoje, em tempo e/ou dinheiro, usando SOMENTE números presentes no contexto recebido (se não houver número, descreva o custo qualitativamente — trabalho manual, retrabalho, risco — sem estimar).
-- "tempo_devolvido_agentes": só faz sentido quando a lista de agentes foi enviada. Para cada agente (ou agrupado, se forem muitos), resuma o que ele substitui e o tempo que devolve à gestão, citando o texto de "substitui" de cada agente quando disponível — não crie uma tabela de horas que não veio nos dados.
-- "cenarios_comparativos": compara o cenário atual (sem a solução) com o cenário proposto, e — se houver outras soluções incluídas além do Waipe — um terceiro cenário combinando as duas. Baseie a comparação nos dados de investimento/diagnóstico recebidos, nunca em receita ou resultado financeiro hipotético do cliente.
+- "abertura_narrativa": abertura curta (2 a 3 parágrafos curtos, nunca um bloco só) que nomeia a dor central do cliente em linguagem direta, no estilo "Hoje a empresa X funciona, mas funciona presa em [gargalo específico]" — usa o contexto/dores recebido, nunca genérico. Feche com UMA frase de impacto em <p class="destaque">.
+- "custo_do_problema": quantifica o que o problema custa hoje, em tempo e/ou dinheiro, usando SOMENTE números presentes no contexto recebido (se não houver número, descreva o custo qualitativamente — trabalho manual, retrabalho, risco — sem estimar). Separe cada ponto de risco/custo num <div class="callout red"> ou <div class="callout warn"> (risco maior = red, atenção = warn) com <span class="lbl">RÓTULO CURTO</span> — nunca deixe o "custo" só narrado em parágrafo.
+- "tempo_devolvido_agentes": só faz sentido quando a lista de agentes foi enviada. Para cada agente, uma linha objetiva (nome + o que substitui + tempo devolvido, citando o texto de "substitui" de cada agente quando disponível) — prefira <table> (colunas: Agente | Substitui | Tempo devolvido) a parágrafo corrido quando houver 2+ agentes; com 1 agente só, pode ser um <div class="callout green">. Nunca invente uma linha de horas que não veio nos dados.
+- "cenarios_comparativos": SEMPRE em <table>, nunca em parágrafo — colunas são os cenários (ex: "Hoje" / "Com a solução proposta" / se houver outras soluções incluídas, mais uma coluna combinando as duas), linhas são os pontos de comparação. Use <td class="bom"> pra o que resolve/melhora, <td class="atencao"> pra ressalva, <td class="risco"> pra o que continua sendo problema se nada mudar; marque a linha mais decisiva com <tr class="destaque-linha">. Baseie tudo nos dados de investimento/diagnóstico recebidos, nunca em receita ou resultado financeiro hipotético do cliente.
 
 Formato de saída — responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código markdown):
 {"secoes":[{"id":"um dos ids pedidos","titulo":"título curto e específico para este cliente (não repita o nome genérico do catálogo)","html":"conteúdo HTML desta seção"}]}
 
-Regras do campo "html": só o corpo da seção (nunca <html>, <head> ou <style>); pode usar <p>, <h3>, <h4>, <strong>, <ul class="clean"><li>...</li></ul>, <table><tr><th>...</th></tr><tr><td>...</td></tr></table>, e <div class="callout"><span class="lbl">RÓTULO</span>texto</div> (variantes: class="callout green" pra destaque positivo, class="callout warn" pra atenção/risco) — não use nenhuma outra classe CSS, elas não existem no template. Um item por id pedido, na mesma ordem recebida.`;
+Regras do campo "html": só o corpo da seção (nunca <html>, <head> ou <style>). Classes disponíveis, e SÓ estas (nenhuma outra existe no template):
+- <p>, <h3>, <h4>, <strong> — texto corrido, sempre curto.
+- <p class="destaque">frase de impacto</p> — UM destaque em negrito/cor por seção, não mais que isso.
+- <div class="callout"><span class="lbl">RÓTULO</span>texto</div> — neutro/informativo. Variantes: "callout green" (positivo, resolve o problema), "callout warn" (atenção), "callout red" (risco/urgente).
+- <span class="tag">texto</span> — selo inline curto (variantes: "tag green", "tag warn", "tag red").
+- <ul class="clean"><li>...</li></ul> — lista com seta; variantes "clean check" (✔ verde, pra o que já resolve) e "clean no" (✕ vermelho, pra o que NÃO resolve/ainda falta).
+- <table><tr><th>...</th></tr><tr><td>...</td></tr></table> — sempre que houver comparação (cenários, agentes, prós/contras). Células: "num" (número alinhado à direita), "bom"/"atencao"/"risco" (veredito colorido). Linha inteira em destaque: <tr class="destaque-linha">.
+
+Use emoji com moderação (no máximo 1 por rótulo de callout ou item de lista) só quando ajudar a escanear rápido (ex: ⚠️ em risco, ✅ em resolvido, 📈 em crescimento) — nunca em toda frase. Um item de "secoes" por id pedido, na mesma ordem recebida.`;
 
 /** Remove <script>...</script> e atributos on*="..." do HTML gerado — defesa
  * barata contra o modelo emitir algo executável; o CSM ainda revisa o texto
