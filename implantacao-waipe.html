@@ -358,6 +358,56 @@
     .card{padding:18px;}
   }
 
+
+  /* ---- Layout operacional: conteúdo + sidebar de projeto ---- */
+  .project-detail-layout{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(320px,370px);
+    gap:24px;
+    align-items:start;
+  }
+  .project-detail-main{min-width:0;}
+  .project-detail-sidebar{
+    min-width:0;
+    position:sticky;
+    top:80px;
+    max-height:calc(100vh - 96px);
+    overflow-y:auto;
+    scrollbar-width:thin;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .project-detail-sidebar > .card{margin:0;}
+  .project-detail-sidebar .card h2{font-size:15px;}
+  .project-detail-sidebar .card .sub{line-height:1.5;}
+  .project-summary-card .sp-k{margin-top:12px;}
+  .project-summary-card .sp-k:first-child{margin-top:0;}
+  .project-summary-card .sp-v{line-height:1.5;}
+  .project-summary-card [data-projeto-fase]{max-width:100%;}
+  .project-sidebar-card .build-check{padding:9px 0;}
+  .project-sidebar-card .form-input{min-height:38px;}
+  .today-agenda{margin:0 0 18px; padding:18px 20px; border-color:var(--claro,#A8C5FF); background:var(--surface); box-shadow:var(--shadow);}
+  .today-agenda-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;}
+  .today-agenda-title{font-size:15px; font-weight:800; color:var(--noite,#000035);}
+  .today-agenda-date{font-size:11px; color:var(--muted); white-space:nowrap;}
+  .today-appointment{display:flex; width:100%; align-items:flex-start; gap:10px; padding:10px 0; border:0; border-top:1px solid var(--border); background:transparent; color:inherit; text-align:left; font:inherit; cursor:pointer;}
+  .today-appointment:hover .today-appointment-title{color:var(--brand-dark); text-decoration:underline;}
+  .today-appointment-time{flex:0 0 72px; font-size:12px; font-weight:800; color:var(--brand-dark); font-variant-numeric:tabular-nums;}
+  .today-appointment-body{min-width:0; flex:1;}
+  .today-appointment-title{font-size:12.5px; font-weight:700; line-height:1.35;}
+  .today-appointment-meta{font-size:11.5px; color:var(--muted); margin-top:3px; line-height:1.4;}
+  .today-appointment-link{flex:0 0 auto; font-size:11px; color:var(--brand-dark); margin-top:1px;}
+  .sidebar-loading{font-size:12px; color:var(--muted);}
+  @media (max-width:980px){
+    .project-detail-layout{grid-template-columns:minmax(0,1fr) minmax(280px,320px); gap:18px;}
+  }
+  @media (max-width:760px){
+    .project-detail-layout{display:flex; flex-direction:column; gap:18px;}
+    .project-detail-sidebar{position:relative; top:auto; max-height:none; overflow:visible; width:100%; order:-1;}
+    .today-agenda{padding:16px 18px;}
+  }
+
 </style>
 
 <div class="page">
@@ -952,6 +1002,57 @@
     renderListaProjetos(root);
   }
 
+  function chaveDataSP(ms){
+    if (!ms) return "";
+    try{
+      var d = new Date(Number(ms));
+      var parts = new Intl.DateTimeFormat("en-CA", { timeZone:"America/Sao_Paulo", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(d);
+      var out = {};
+      parts.forEach(function(p){ if (p.type !== "literal") out[p.type] = p.value; });
+      return out.year + "-" + out.month + "-" + out.day;
+    } catch(e){ return ""; }
+  }
+  function horaSP(ms){
+    if (!ms) return "—";
+    try{
+      return new Date(Number(ms)).toLocaleTimeString("pt-BR", { timeZone:"America/Sao_Paulo", hour:"2-digit", minute:"2-digit" });
+    } catch(e){ return "—"; }
+  }
+  function renderCompromissosHoje(container){
+    if (!container) return;
+    var agora = new Date();
+    var hoje = chaveDataSP(agora.getTime());
+    var rotuloHoje = agora.toLocaleDateString("pt-BR", { timeZone:"America/Sao_Paulo", day:"2-digit", month:"2-digit", year:"numeric" });
+    container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
+      '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' +
+      '<div class="sidebar-loading">Carregando agenda…</div></section>';
+    apiGet("listar-reservas").then(function(resp){
+      var nomes = {};
+      (projetosCache || []).forEach(function(p){ nomes[String(p.id)] = p.cliente || "Projeto"; });
+      var reservas = (resp.reservas || []).filter(function(r){ return chaveDataSP(r.inicio) === hoje; })
+        .sort(function(a,b){ return (a.inicio || 0) - (b.inicio || 0); });
+      var itens = reservas.length ? reservas.map(function(r){
+        var projetoId = String(r.projetoId || "");
+        var projeto = nomes[projetoId] || "Projeto não encontrado";
+        return '<button type="button" class="today-appointment" data-open-project="' + esc(projetoId) + '">' +
+          '<span class="today-appointment-time">' + horaSP(r.inicio) + '<br><span style="font-weight:500; color:var(--muted)">' + horaSP(r.fim) + '</span></span>' +
+          '<span class="today-appointment-body"><span class="today-appointment-title">' + esc(r.titulo || "Compromisso") + '</span><span class="today-appointment-meta">' + esc(r.ismNome || "ISM não informado") + ' · ' + esc(projeto) + '</span></span>' +
+          (r.linkReuniao ? '<span class="today-appointment-link" title="Abrir reunião">↗</span>' : '') +
+        '</button>';
+      }).join("") : '<div class="sidebar-loading">Nenhum compromisso registrado para hoje.</div>';
+      container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
+        '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' + itens + '</section>';
+      container.querySelectorAll("[data-open-project]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var id = btn.getAttribute("data-open-project");
+          if (id && id !== "undefined") abrirProjeto(id);
+        });
+      });
+    }).catch(function(){
+      container.innerHTML = '<section class="today-agenda"><div class="today-agenda-title">Compromissos do dia</div><div class="sidebar-loading">Não foi possível carregar a agenda.</div></section>';
+    });
+  }
+
   // ---- Lista de projetos ----
   function renderListaProjetos(root){
     var entregues = filtroProjetosAtivo === "entregues";
@@ -961,6 +1062,7 @@
     root.innerHTML =
       '<div class="callout"><div class="dot"></div><div>' + introTexto + ' Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
       (entregues ? "" : '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>') +
+      (!entregues ? '<div id="compromissosHojeWrap"></div>' : '') +
       '<div data-lista-wrap><div class="sub">Carregando…</div></div>';
     var btnNovo = document.getElementById("btnNovoProjeto");
     if (btnNovo) btnNovo.addEventListener("click", function(){
@@ -987,6 +1089,7 @@
     var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
     if (!wrap) return;
     var entregues = filtroProjetosAtivo === "entregues";
+    if (!entregues) renderCompromissosHoje(root.querySelector("#compromissosHojeWrap"));
     var todasCsm = Array.from(new Set((projetosCache || []).map(function(p){ return p.csm; }).filter(Boolean)))
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var lista = (projetosCache || []).filter(function(p){
@@ -1208,16 +1311,48 @@
         '<div style="text-align:right"><h2 style="font-size:16px; margin:0;">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
         '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") + '</div></div>' +
       '</div>' +
-      '<div class="backlog-strip" id="backlogStrip"></div>' +
-      '<div class="stepper" id="stepper"></div>' +
-      '<div id="stepContent"></div>';
+      '<div class="project-detail-layout">' +
+        '<main class="project-detail-main">' +
+          '<div class="backlog-strip" id="backlogStrip"></div>' +
+          '<div class="stepper" id="stepper"></div>' +
+          '<div id="stepContent"></div>' +
+        '</main>' +
+        '<aside class="project-detail-sidebar" aria-label="Resumo operacional do projeto">' +
+          '<div id="projetoResumoSidebar"></div>' +
+          '<div id="agendaProjetoWrap"></div>' +
+          '<div id="comentariosProjetoWrap"></div>' +
+        '</aside>' +
+      '</div>';
     document.getElementById("btnVoltarLista").addEventListener("click", function(){
       projetoAtualId = null;
       dadosProjeto = null;
       itemAtual = null;
       renderProjetosPanel();
     });
+    renderResumoProjetoSidebar();
+    renderComentarios(dadosProjeto.projeto.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
+    renderAgenda(dadosProjeto.projeto.id, document.getElementById("agendaProjetoWrap"));
     renderConteudoProjeto();
+  }
+
+  function renderResumoProjetoSidebar(){
+    if (!dadosProjeto) return;
+    var p = dadosProjeto.projeto;
+    var el = document.getElementById("projetoResumoSidebar");
+    if (!el) return;
+    el.innerHTML = '<div class="card project-summary-card">' +
+      '<h2>Resumo do projeto</h2>' +
+      '<div class="sp-k">Fase do projeto</div>' +
+      '<div>' + seletorFaseProjeto(p) + '</div>' +
+      '<div class="sp-k">Contexto</div>' +
+      '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>' +
+      '<div id="ismProjetoWrap"></div>' +
+    '</div>';
+    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
+    var selFaseProjeto = el.querySelector("[data-projeto-fase]");
+    if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
+      persistirFaseProjeto(selFaseProjeto.value || null);
+    });
   }
 
   // Dispatcher de 2º nível, dentro de um projeto já aberto: lista unificada
@@ -1388,6 +1523,7 @@
       faseProjetoManual: faseProjetoManual
     }).then(function(){
       dadosProjeto.projeto.faseProjetoManual = faseProjetoManual;
+      renderResumoProjetoSidebar();
       renderListaItens();
     }).catch(function(){ showSimToast("Não deu para salvar a fase do projeto."); });
   }
@@ -1548,17 +1684,6 @@
     var agentes = agentesReais();
     var solucoes = solucoesFechadas();
     var html = '<div class="card">' +
-      '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">' +
-        '<div class="sp-k" style="margin:0;">Fase do projeto</div>' +
-        '<div>' + seletorFaseProjeto(p) + '</div>' +
-      '</div>' +
-      '<div class="sp-k" style="margin-top:8px">Contexto do projeto</div>' +
-      '<p style="font-size:13px; margin:2px 0 10px; white-space:pre-wrap;">' + esc(p.contexto || "—") + '</p>' +
-      '<div id="ismProjetoWrap"></div>' +
-    '</div>' +
-    '<div id="comentariosProjetoWrap"></div>' +
-    '<div id="agendaProjetoWrap"></div>' +
-    '<div class="card">' +
       '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
       '<div class="agent-pick-grid">' +
         solucoes.map(function(o){
@@ -1576,19 +1701,12 @@
       '</div>' +
     '</div>';
     document.getElementById("stepContent").innerHTML = html;
-    renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
-    renderComentarios(p.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");
-    renderAgenda(p.id, document.getElementById("agendaProjetoWrap"));
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");
         if (itemAtual === "__waipe__") waipeVisaoGeral = true;
         renderConteudoProjeto();
       });
-    });
-    var selFaseProjeto = document.querySelector("[data-projeto-fase]");
-    if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
-      persistirFaseProjeto(selFaseProjeto.value || null);
     });
   }
 
