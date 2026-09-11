@@ -204,7 +204,7 @@ const carregarMoskitWebhook = (libClickupUrl, moskitLibUrl) =>
 const stubMoskit = `
   export class ErroConfigMoskit extends Error {}
   export class ErroUpstreamMoskit extends Error { constructor(s){ super('up'); this.status = s; } }
-  export const CF_NEGOCIO = { ID_NUCLEO: 'CF_ID_NUCLEO', OBSERVACAO: 'CF_OBS' };
+  export const CF_NEGOCIO = { ID_NUCLEO: 'CF_ID_NUCLEO', CNPJ: 'CF_CNPJ', OBSERVACAO: 'CF_OBS' };
   export async function buscarNegocio(id) { return globalThis.__moskitFixtures.negocios[id] || null; }
   export async function buscarContato(id) { return globalThis.__moskitFixtures.contatos[id] || null; }
   export async function buscarEmpresa(id) { return globalThis.__moskitFixtures.empresas[id] || null; }
@@ -3781,15 +3781,21 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
   const respGanho = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
     id: 503, status: 'WON', contact: { id: 9 }, company: { id: 8 },
     dealProducts: [{ product: { id: 77 }, quantity: 3, finalPrice: 30000 }],
-    customFieldValues: [{ id: 'CF_ID_NUCLEO', numberValue: 0 }, { id: 'CF_OBS', textValue: 'Observacao do negocio de teste' }],
+    customFieldValues: [
+      { id: 'CF_ID_NUCLEO', numberValue: 0 },
+      { id: 'CF_CNPJ', numberValue: 12345678000199 },
+      { id: 'CF_OBS', textValue: 'Observacao do negocio de teste' },
+    ],
   }));
   checar('moskit-webhook: WON com produto mapeado -> 200, cria projeto + subtask', [respGanho.code, escritasMw.length], [200, 2]);
   const [corpoProjeto, corpoSubtask] = escritasMw;
   checar('  nome do projeto usa a razao social da empresa', corpoProjeto.name.startsWith('ACME LTDA'), true);
   checar('  grava origemMoskitDealId no estado (idempotencia)', corpoProjeto.markdown_description.includes('"origemMoskitDealId":503'), true);
   checar(
-    '  grava idNucleo "0" (placeholder do comercial) e cnpj vindos do Moskit',
-    corpoProjeto.markdown_description.includes('"idNucleo":"0"') && corpoProjeto.markdown_description.includes('"cnpj":"00.000.000/0001-00"'),
+    '  grava idNucleo "0" (placeholder do comercial) e prioriza o CNPJ do NEGOCIO sobre o da empresa',
+    corpoProjeto.markdown_description.includes('"idNucleo":"0"') &&
+      corpoProjeto.markdown_description.includes('"cnpj":"12345678000199"') &&
+      !corpoProjeto.markdown_description.includes('00.000.000/0001-00'),
     true
   );
   checar(

@@ -62,6 +62,13 @@ export async function buscarProduto(id) {
  */
 export const CF_NEGOCIO = {
   ID_NUCLEO: 'CF_g40MLBiYSjOzYD29', // campo "ID NÚCLEO" (module DEAL, type NUMBER)
+  // Mesmo id de CF_DEAL.CNPJ em api/moskit.js — o Comercial preenche o CNPJ
+  // no PRÓPRIO NEGÓCIO, não no cadastro da empresa (aquele fica em branco na
+  // prática), por isso o webhook lê daqui, não de buscarEmpresa(...).cnpj.
+  // Campo tipo NUMBER: atenção que um CNPJ começando com "0" perde o zero à
+  // esquerda quando salvo como número — limitação do campo no Moskit, não
+  // do código.
+  CNPJ: 'CF_Lo1qjyidSaYRODer',
   // Inferido de um evento real de teste (negócio "TESTE - Cliente novo"): o
   // único campo personalizado do negócio com um texto livre parecido com
   // observação ("Já e cliente Londrisoft cnpj: ..., tem várias outras

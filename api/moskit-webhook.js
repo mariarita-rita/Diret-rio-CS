@@ -159,7 +159,10 @@ async function processarEvento(corpo) {
   );
 
   const cliente = texto200(empresa?.name) || texto200(contato?.name) || 'Cliente sem nome';
-  const cnpj = texto200(empresa?.cnpj);
+  // O Comercial preenche o CNPJ no próprio negócio, não no cadastro da
+  // empresa (esse fica em branco na prática) — por isso prioriza o campo
+  // personalizado do negócio, só cai pro da empresa se aquele vier vazio.
+  const cnpj = valorCampoPersonalizado(negocio.entityCustomFields, CF_NEGOCIO.CNPJ) || texto200(empresa?.cnpj);
   const telefone = telefoneDe(contato) || telefoneDe(empresa);
   const email = emailDe(contato) || emailDe(empresa);
   const idNucleo = valorCampoPersonalizado(negocio.entityCustomFields, CF_NEGOCIO.ID_NUCLEO);
