@@ -561,7 +561,6 @@
     order:-4;
   }
   .prop-summary #btnCopyHtml{order:-3;}
-  .prop-summary #btnPrompt{order:-2;}
   .prop-summary #btnLimparFormulario{
     order:-1;
     margin-top:8px !important;
@@ -605,6 +604,115 @@
     .prop-summary .prop-stat-row{
       grid-template-columns:1fr;
     }
+  }
+
+
+
+  /* ===== UI/UX revision: presentation only ===== */
+/* Ajuste UI/UX — somente apresentação; IDs e lógica permanecem intactos. */
+:root{
+  --bg:#f5f7fb;--surface:#fff;--surface-2:#f7f9fc;--border:#dfe5ef;
+  --border-strong:#b8c4d6;--ink:#101936;--ink-2:#35415f;--muted:#65708a;
+  --muted-2:#8a95aa;--brand:#2563eb;--brand-dark:#1d4ed8;--brand-soft:#eff5ff;
+  --brand-night:#0b1640;--success:#15803d;--success-bg:#ecfdf3;
+  --warning:#a16207;--warning-bg:#fff8e6;--shadow-sm:0 1px 2px rgba(16,25,54,.04);
+  --shadow-md:0 8px 24px rgba(16,25,54,.06);
+}
+body{background:var(--bg);color:var(--ink)}
+.page{max-width:1280px;padding:28px 32px 72px}
+.topbar{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:18px;padding:20px 24px;margin-bottom:14px;border-radius:16px;background:linear-gradient(135deg,#0b1640,#13265d);box-shadow:var(--shadow-md)}
+.brand{padding-right:18px;border-right:1px solid rgba(255,255,255,.18)}
+.brand svg{height:22px}.header-title{gap:5px}.header-title h1{font-size:22px;letter-spacing:-.02em}.header-title p{font-size:12.5px;line-height:1.5;max-width:820px;color:rgba(255,255,255,.72)}
+.tabs{position:sticky;top:12px;z-index:20;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:4px;margin:0 0 28px;padding:4px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.94);box-shadow:0 4px 14px rgba(16,25,54,.06);backdrop-filter:blur(12px)}
+.tab-btn{min-height:44px;padding:10px 14px;border-radius:9px;color:var(--muted);font-size:13px;font-weight:700;transition:background .15s,color .15s}.tab-btn:hover{background:var(--brand-soft);color:var(--brand-dark)}.tab-btn.active{background:var(--brand);color:#fff;box-shadow:none}.tab-btn.active:hover{background:var(--brand-dark);color:#fff}
+.panel.active{animation:panelIn .18s ease-out}@keyframes panelIn{from{opacity:.75;transform:translateY(3px)}to{opacity:1;transform:none}}
+.prop-warn,.callout{border:1px solid #d6e2f7;border-left:4px solid var(--brand);border-radius:12px;background:#f4f8ff;box-shadow:none;color:var(--ink-2)}.prop-warn{max-width:980px;padding:14px 16px;margin-bottom:20px;font-size:12.5px;line-height:1.55}.callout{font-size:12.5px;line-height:1.55}
+.prop-grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:start;gap:20px}.card,.prop-summary,.result-card,.table-wrap,.accordion,.limit-card,.pitch-card{border-color:var(--border);box-shadow:var(--shadow-sm)}.card{padding:22px}.card h2,.prop-summary h2{color:var(--ink);font-size:16px;letter-spacing:-.01em}.card .sub,.section-sub{color:var(--muted);line-height:1.55}
+.prop-summary{top:76px;padding:20px;border-radius:14px;background:var(--surface)}.prop-summary h2{margin:-20px -20px 16px;padding:16px 20px 14px;background:var(--surface);border-bottom:1px solid var(--border);border-radius:14px 14px 0 0}.prop-summary .prop-stat-row{gap:8px;margin-bottom:16px}.prop-summary .prop-stat{padding:11px 12px;background:var(--surface-2);border:1px solid #e7ebf3}.prop-summary .prop-stat .k{font-size:10px;color:var(--muted)}.prop-summary .prop-stat .v{font-size:16px;color:var(--ink)}.prop-summary .prop-actions{gap:8px}.prop-summary .prop-actions button{min-height:42px}.prop-summary #btnPreview{background:var(--brand-soft);border-color:#b9cff9;color:var(--brand-dark)}.prop-summary #btnBaixar{box-shadow:0 3px 8px rgba(37,99,235,.2)}.prop-note{font-size:11.5px;line-height:1.55;color:var(--muted)}
+#waipeSolucaoCard{margin-top:20px!important;padding:0!important;overflow:hidden;border:1px solid var(--border)!important;border-radius:16px!important;background:var(--surface)!important}#waipeSolucaoCard>label{display:flex!important;padding:18px 22px;background:var(--brand-night);color:#fff}#waipeSolucaoCard>label h3{font-size:16px!important;letter-spacing:-.01em}#waipeSolucaoCard>.callout{margin:18px 22px!important}#waipeSolucaoCard>.diag-grid{padding:0 22px}#waipeSolucaoCard>.divider{margin:24px 22px}
+#diagForm{box-shadow:none;border-color:#d7e0ee;background:#fbfcfe}#resultWrap .result-card{box-shadow:none;border-color:#c9d8f2;background:#fff}#resultWrap .result-head{background:var(--brand-soft)}#resultWrap .result-price{color:var(--brand-dark)}#priceSimCard,#horasSimCard,#implantacaoCard{padding:18px;border:1px solid #e5eaf2;border-radius:12px;background:#fbfcfe}#priceSimCard{margin:0 22px}#horasSimCard{margin:18px 22px}#implantacaoCard{margin-left:22px!important;margin-right:22px!important}
+#agentCatalog{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#agentCatalog .agent-area{grid-column:1/-1;margin-top:12px}#agentCatalog .agent-item{margin:0;min-height:58px;background:#fff}#agentCatalog .agent-item.on{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 0 0 2px rgba(37,99,235,.08)}
+.section-title{font-size:20px;margin-top:32px;letter-spacing:-.02em}.section-sub{max-width:780px;margin-bottom:18px}.table-wrap{overflow:auto;background:#fff}table.cmp{font-size:13px}table.cmp caption{padding:16px 18px 8px;color:var(--ink)}table.cmp thead th{background:#f3f6fb;color:var(--muted)}table.cmp tbody tr:hover{background:#f4f8ff}.accordion{background:#fff}.accordion summary{min-height:54px}
+.field{margin-bottom:18px}.field label,legend{color:var(--ink-2)}.num-input,textarea.ta,select.sel{border-color:#bdc9db;background:#fff}.num-input:focus-visible,textarea.ta:focus-visible,select.sel:focus-visible{outline:3px solid #c9dcff;outline-offset:1px;border-color:var(--brand)}.btn-primary{background:var(--brand)}.btn-primary:hover{background:var(--brand-dark)}.btn-secondary{background:#fff}.btn-secondary:hover{border-color:var(--brand);color:var(--brand-dark);background:var(--brand-soft)}footer.page-footer{margin-top:42px}
+#panel-prop>.prop-warn{position:relative;padding-left:18px;background:#f8fbff}#panel-prop>.prop-warn:before{content:"FLUXO PRINCIPAL";display:block;margin-bottom:5px;color:var(--brand-dark);font-size:10px;font-weight:800;letter-spacing:.09em}
+#priceSimCard:before,#horasSimCard:before,#implantacaoCard:before{display:block;margin:-3px 0 16px;color:var(--brand-dark);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}#priceSimCard:before{content:"3 · Ajuste comercial"}#horasSimCard:before{content:"4 · Impacto operacional"}#implantacaoCard:before{content:"5 · Implantação, quando aplicável";margin:0 0 16px}
+#waipeSolucaoCard>.diag-grid{position:relative;padding-top:18px}#waipeSolucaoCard>.diag-grid:before{content:"1 · Defina o plano e revise o diagnóstico";position:absolute;left:22px;top:-2px;transform:translateY(-100%);color:var(--brand-dark);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+#waipeSolucaoCard>.diag-grid+.divider+label{display:block;margin:0 22px 5px!important;font-size:15px!important;color:var(--ink)!important}#waipeSolucaoCard>.diag-grid+.divider+label:before{content:"2 · ";color:var(--brand-dark);font-size:11px;font-weight:800;letter-spacing:.06em}#waipeSolucaoCard>.diag-grid+.divider+label+.hint,#waipeSolucaoCard>.diag-grid+.divider+label+.hint+div,#waipeSolucaoCard>.diag-grid+.divider+label+.hint+div+#agentCatalog{margin-left:22px;margin-right:22px}
+#implantacaoWrap:before{content:"Depois de revisar";display:block;margin-bottom:6px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}#propPlanWarn:empty{display:none}#propPlanWarn:not(:empty){margin-bottom:12px}
+@media(max-width:960px){.prop-grid{grid-template-columns:minmax(0,1fr) 300px}}@media(max-width:760px){.page{padding:16px 16px 56px}.topbar{grid-template-columns:1fr;gap:12px;padding:18px}.brand{padding:0 0 12px;border-right:0;border-bottom:1px solid rgba(255,255,255,.18)}.tabs{top:8px;overflow-x:auto;display:flex}.tab-btn{flex:1 0 170px}.prop-grid{display:flex;flex-direction:column;gap:16px}.prop-summary{order:-1;position:relative;top:auto;width:100%}#agentCatalog{grid-template-columns:1fr}#agentCatalog .agent-area{grid-column:auto}#waipeSolucaoCard>.diag-grid{padding:0 16px;padding-top:18px}#waipeSolucaoCard>.callout{margin:16px!important}#waipeSolucaoCard>.divider{margin:20px 16px}#priceSimCard,#horasSimCard{margin-left:16px;margin-right:16px}#implantacaoCard{margin-left:16px!important;margin-right:16px!important}#waipeSolucaoCard>.diag-grid:before{left:16px}#waipeSolucaoCard>.diag-grid+.divider+label,#waipeSolucaoCard>.diag-grid+.divider+label+.hint,#waipeSolucaoCard>.diag-grid+.divider+label+.hint+div,#waipeSolucaoCard>.diag-grid+.divider+label+.hint+div+#agentCatalog{margin-left:16px;margin-right:16px}}@media(max-width:520px){.page{padding-left:12px;padding-right:12px}.topbar{border-radius:14px}.card,.prop-summary{padding:16px}.prop-summary h2{margin:-16px -16px 14px;padding:14px 16px 12px}.prop-warn{font-size:12px;padding:12px 13px}}
+@media(prefers-reduced-motion:reduce){.panel.active{animation:none}}
+@media print{.tabs{position:static;box-shadow:none}.prop-summary{position:static;max-height:none;overflow:visible}.topbar{box-shadow:none}}
+:root[data-theme="dark"] .seg button.on{background:var(--brand);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline-color:var(--brand)}
+
+  /* ===== end UI/UX revision ===== */
+
+  /* ===== V2: ações fora do resumo e revisão por IA contextual ===== */
+  .prop-summary{position:relative;top:auto;max-height:none;overflow:visible;}
+  .proposal-actions-bar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:14px 16px;margin:0 0 20px;border:1px solid var(--border);border-radius:14px;
+    background:var(--surface);box-shadow:var(--shadow-sm);
+  }
+  .proposal-actions-heading{display:flex;flex-direction:column;gap:3px;min-width:220px;}
+  .proposal-actions-heading strong{font-size:13px;color:var(--ink);}
+  .proposal-actions-heading span{font-size:11.5px;color:var(--muted);}
+  .proposal-actions-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto;}
+  .proposal-actions-buttons button{width:auto!important;min-height:38px;margin:0!important;padding:9px 12px;font-size:12px;}
+  .proposal-actions-buttons #btnConfirmarFechamento{order:4;}
+  .proposal-actions-buttons #btnLimparFormulario{color:var(--muted)!important;}
+  .proposal-actions-bar #carregarPropostaWrap{flex-basis:100%;margin-top:2px!important;padding-top:12px;border-top:1px solid var(--border);}
+  .proposal-output-actions{margin-top:12px;}
+  .summary-ai-review{margin:14px 0 0;padding:13px 0 2px;border-top:1px solid var(--border);}
+  .summary-ai-review .field{margin-bottom:0;}
+  .summary-ai-review .field>label{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .summary-ai-review .hint{font-size:11.5px;line-height:1.45;max-width:330px;}
+  .summary-ai-review [data-secao-check]{accent-color:var(--brand);}
+  .summary-ai-review #btnGerarSecoesProposta{width:100%;min-height:38px;margin-top:10px!important;}
+  .summary-ai-review textarea{min-height:100px;}
+  .prop-note{display:block;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);color:var(--muted);font-size:11.5px;line-height:1.5;}
+  .prop-note summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;font-weight:700;color:var(--ink-2);}
+  .prop-note summary::-webkit-details-marker{display:none;}
+  .prop-note-body{margin-top:10px;}
+  @media(max-width:760px){
+    .proposal-actions-bar{align-items:stretch;}
+    .proposal-actions-buttons{margin-left:0;width:100%;}
+    .proposal-actions-buttons button{flex:1 1 calc(50% - 8px);}
+    .proposal-actions-buttons #btnConfirmarFechamento{flex-basis:100%;}
+  }
+
+
+  /* ===== V3: carregamento como modal e contraste do catálogo ===== */
+  .proposal-actions-bar #carregarPropostaWrap{
+    position:fixed;
+    z-index:80;
+    top:50%;
+    left:50%;
+    width:min(460px,calc(100vw - 32px));
+    transform:translate(-50%,-50%);
+    margin:0!important;
+    padding:22px;
+    border:1px solid var(--border-strong);
+    border-radius:16px;
+    background:var(--surface);
+    box-shadow:0 24px 70px rgba(11,22,64,.24),0 0 0 100vmax rgba(11,22,64,.48);
+  }
+  .load-dialog-title{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:-.01em;margin-bottom:5px;}
+  .load-dialog-help{font-size:12.5px;line-height:1.5;color:var(--muted);margin-bottom:16px;}
+  .proposal-actions-bar #carregarPropostaWrap>label{display:block!important;padding:0!important;margin:0 0 5px!important;background:transparent!important;color:var(--ink-2)!important;font-size:12px;font-weight:700;}
+  .proposal-actions-bar #carregarPropostaWrap .sel{background:var(--surface);}
+  .proposal-actions-bar #carregarPropostaWrap #btnUsarPropostaSelecionada{width:100%;margin-top:12px!important;}
+  /* O seletor geral do cabeçalho não deve pintar o rótulo de agentes como se fosse o título do Waipe. */
+  #waipeSolucaoCard>.divider+label{
+    display:block!important;
+    padding:0!important;
+    margin:0 22px 5px!important;
+    background:transparent!important;
+    color:var(--ink)!important;
+  }
+  #waipeSolucaoCard>.divider+label input{accent-color:var(--brand);}
+  @media(max-width:760px){
+    #waipeSolucaoCard>.divider+label{margin-left:16px!important;margin-right:16px!important;}
   }
 
 </style>
@@ -984,15 +1092,38 @@
 
     <div class="prop-warn">
       <div>
-        <b>Sobre esta aba:</b> cole a transcrição da consultoria e a IA preenche cliente/segmento/dores, calcula o diagnóstico e o plano do Waipe e aponta outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) — tudo na seção "Soluções desta proposta" abaixo, cada uma com um "Incluir" independente (o Waipe não é obrigatório: desmarque se o cliente não for fechar). A IA ainda não escreve a proposta inteira. O que este gerador faz: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação (no visual que vocês já usam), e monta um <b>prompt pronto</b> para colar no Gem do Waipe que os CSMs já usam no Gemini — sem precisar redigitar o contexto do cliente.
+        <b>Sobre esta aba:</b> cole a transcrição da consultoria e a IA preenche cliente/segmento/dores, calcula o diagnóstico e o plano do Waipe e aponta outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) — tudo na seção "Soluções desta proposta" abaixo, cada uma com um "Incluir" independente (o Waipe não é obrigatório: desmarque se o cliente não for fechar). A IA ainda não escreve a proposta inteira. O que este gerador faz: monta um <b>modelo de proposta em HTML</b> já preenchido com o plano, o preço e os agentes desta simulação — sem precisar redigitar o contexto do cliente.
       </div>
+    </div>
+
+    <div class="proposal-actions-bar" aria-label="Ações da proposta">
+      <div class="proposal-actions-heading">
+        <strong>Ações da proposta</strong>
+        <span>Salve, carregue ou confirme o projeto sem misturar essas ações ao resumo.</span>
+      </div>
+      <div class="proposal-actions-buttons">
+        <button type="button" class="btn-secondary" id="btnSalvarProposta">💾 Salvar proposta enviada</button>
+        <button type="button" class="btn-secondary" id="btnCarregarProposta">📂 Carregar proposta salva</button>
+        <button type="button" class="btn-secondary" id="btnLimparFormulario" style="margin-top:14px; color:var(--muted);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
+            Limpar formulário desta simulação
+          </button>
+        <button type="button" class="btn-primary" id="btnConfirmarFechamento" style="margin-top:0" disabled>✅ Confirmar fechamento e criar projeto de implantação</button>
+      </div>
+      <div id="carregarPropostaWrap" role="dialog" aria-modal="true" aria-label="Carregar proposta salva" style="display:none; margin-top:10px;">
+            <div class="load-dialog-title">Carregar proposta salva</div>
+            <div class="load-dialog-help">Selecione uma proposta da lista para carregar os dados desta simulação.</div>
+            <label>Propostas aguardando fechamento</label>
+            <select id="selCarregarProposta" class="sel" style="width:100%; margin-top:4px;"></select>
+            <button type="button" class="btn-secondary" id="btnUsarPropostaSelecionada" style="margin-top:8px;">Usar esta proposta →</button>
+          </div>
     </div>
 
     <div class="prop-grid">
       <!-- FORM -->
       <div class="card">
         <h2>Contexto do cliente para a proposta</h2>
-        <div class="sub">Estas informações alimentam o modelo de proposta e o prompt do Gemini.</div>
+        <div class="sub">Estas informações alimentam o modelo de proposta e as análises opcionais por IA.</div>
 
         <div class="field-row">
           <div class="field">
@@ -1095,7 +1226,9 @@
         </div>
         <div id="propPlanWarn"></div>
 
-        <div class="prop-actions">
+        <div id="secoesPropostaWrap" class="summary-ai-review"></div>
+
+        <div class="prop-actions proposal-output-actions">
           <button type="button" class="btn-secondary" id="btnPreview">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
             Pré-visualizar proposta
@@ -1105,14 +1238,6 @@
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             Copiar HTML da proposta
           </button>
-          <button type="button" class="btn-secondary" id="btnPrompt">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            Copiar prompt para o Gemini (Gem do Waipe)
-          </button>
-          <button type="button" class="btn-secondary" id="btnLimparFormulario" style="margin-top:14px; color:var(--muted);">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
-            Limpar formulário desta simulação
-          </button>
         </div>
 
         <div class="divider"></div>
@@ -1120,23 +1245,16 @@
         <div id="implantacaoWrap">
           <div class="sub" style="margin-bottom:10px;">Salve a proposta enviada pra reabrir depois — quando o cliente responder, ajuste o que foi fechado aqui mesmo e gere o projeto de implantação.</div>
           <div id="propostaStatus" style="font-size:13px; color:var(--muted); margin-bottom:10px;">Nenhuma proposta salva nesta simulação ainda.</div>
-          <div class="prop-actions">
-            <button type="button" class="btn-secondary" id="btnSalvarProposta">💾 Salvar proposta enviada</button>
-            <button type="button" class="btn-secondary" id="btnCarregarProposta">📂 Carregar proposta salva</button>
-            <button type="button" class="btn-primary" id="btnConfirmarFechamento" style="margin-top:0" disabled>✅ Confirmar fechamento e criar projeto de implantação</button>
-          </div>
-          <div id="carregarPropostaWrap" style="display:none; margin-top:10px;">
-            <label>Propostas aguardando fechamento</label>
-            <select id="selCarregarProposta" class="sel" style="width:100%; margin-top:4px;"></select>
-            <button type="button" class="btn-secondary" id="btnUsarPropostaSelecionada" style="margin-top:8px;">Usar esta proposta →</button>
-          </div>
           <div id="implantacaoErro" style="display:none; color:var(--danger, #B91C1C); font-size:13px; margin-top:8px;"></div>
         </div>
 
-        <div class="prop-note">
-          O modelo sai com plano, preço e fichas de agente já preenchidos, no layout que vocês usam hoje — revise números, ajuste o tom e confirme os agentes com o cliente antes de enviar. Os cargos dos agentes são denominações comerciais; o desenho final de cada um é definido na implantação.<br><br>
-          <strong>Prefira enviar o .html:</strong> abre com um duplo-clique em qualquer navegador (o cliente não precisa de PDF), e o layout sai idêntico ao da pré-visualização, sem os cortes de página que a impressão em PDF pode gerar. Se o e-mail do cliente costuma bloquear anexo .html, use "Copiar HTML" para colar o conteúdo em outro lugar (ex: um link hospedado), em vez de anexar o arquivo.
-        </div>
+        <details class="prop-note">
+          <summary>Orientações para revisar e enviar <span aria-hidden="true">ⓘ</span></summary>
+          <div class="prop-note-body">
+            O modelo sai com plano, preço e fichas de agente já preenchidos, no layout que vocês usam hoje — revise números, ajuste o tom e confirme os agentes com o cliente antes de enviar. Os cargos dos agentes são denominações comerciais; o desenho final de cada um é definido na implantação.<br><br>
+            <strong>Prefira enviar o .html:</strong> abre com um duplo-clique em qualquer navegador (o cliente não precisa de PDF), e o layout sai idêntico ao da pré-visualização, sem os cortes de página que a impressão em PDF pode gerar. Se o e-mail do cliente costuma bloquear anexo .html, use "Copiar HTML" para colar o conteúdo em outro lugar (ex: um link hospedado), em vez de anexar o arquivo.
+          </div>
+        </details>
       </div>
     </div>
 
@@ -1334,7 +1452,6 @@
       </div>
 
       <div id="analiseIaResultado"></div>
-      <div id="secoesPropostaWrap"></div>
     </div>
   </section>
 
@@ -3769,35 +3886,6 @@
     });
   }
 
-  document.getElementById("btnPrompt").addEventListener("click", function(){
-    var ctx = getProposalContext();
-    var diag = waipeIncluido ? lastDiagnostic : null;
-    var lines = [];
-    lines.push("Cliente: " + ctx.cliente + (ctx.segmento ? " (" + ctx.segmento + ")" : ""));
-    if (ctx.contato) lines.push("Contato: " + ctx.contato);
-    if (ctx.csm) lines.push("Gerente de contas (CSM): " + ctx.csm);
-    lines.push("ERP utilizado: " + ctx.erp);
-    if (diag){
-      lines.push("Plano recomendado pelo simulador: Waipe " + diag.rec.plan + " (" + (diag.price.total != null ? fmtBRL(diag.price.total) + "/mês" : "sob negociação") + ")");
-      lines.push("Usuários: " + diag.input.usuarios + " · Empresas: " + diag.input.empresas);
-    }
-    lines.push("");
-    lines.push("Dores e contexto do cliente hoje:");
-    lines.push(ctx.dores || "(preencher)");
-    lines.push("");
-    if (ctx.agents.length){
-      lines.push("Agentes de IA já sinalizados como relevantes pelo CSM (pode ajustar ou expandir):");
-      ctx.agents.forEach(function(a){ lines.push("- " + a.nome + ": " + a.oque); });
-      lines.push("");
-    }
-    lines.push("Com base nisso, gere a Proposta Estratégica e Comercial completa do Time Digital Waipe, seguindo a estrutura: 1) Conceito e Racional Estratégico; 2) O Time Digital Proposto (Escala de Agentes); 3) Tempo Devolvido à Gestão e Impacto Financeiro (ROI); 4) Proposta Comercial e Planos de Precificação.");
-
-    copyToClipboard(lines.join("\n")).then(function(){
-      showToast("Prompt copiado — cole no Gem do Waipe no Gemini");
-    }).catch(function(){
-      showToast("Não foi possível copiar automaticamente. Selecione o texto manualmente.");
-    });
-  });
 })();
 </script>
 </body>
