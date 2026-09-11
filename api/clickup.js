@@ -7,7 +7,13 @@
 //   POST /api/clickup?action=log-proposta          cria task de log em 901328973414
 //   GET  /api/clickup?action=listar-implantacoes   lista 901328976497 (projetos em andamento)
 //   GET  /api/clickup?action=obter-implantacao     { id } -> projeto + agentes
-//   POST /api/clickup?action=criar-implantacao     { cliente, contexto, agentes[] }
+//   POST /api/clickup?action=criar-implantacao     { cliente, contexto, agentes[], solucoes[] }
+//        -> exige pelo menos 1 agente OU 1 solucao (nao precisa ser baseado
+//        em agente Waipe — projeto pode ser so troca de plano Gestor, BIME
+//        etc.). `solucoes[]` no mesmo formato de outrasSolucoesPropostas do
+//        simulador (ver sanearOutraSolucao). Tambem chamada pela automacao
+//        do webhook do Moskit (api/moskit-webhook.js), via a funcao
+//        criarProjetoImplantacao exportada aqui.
 //   POST /api/clickup?action=atualizar-implantacao { id, etapaAtual, prioridade[], ... }
 //   POST /api/clickup?action=atualizar-agente      { taskId, buildChecks?, testChecks?, ... }
 //   POST /api/clickup?action=comentar-implantacao  { taskId, texto, imagem? }
@@ -916,7 +922,7 @@ function sanearAgenteProposto(a) {
 }
 
 /** Uma "outra solução" (Gestor/Simplaz/Unique/BIME APP/Treinamento/Outro) proposta pelo simulador. */
-function sanearOutraSolucao(o) {
+export function sanearOutraSolucao(o) {
   if (!o || typeof o !== 'object') return null;
   const produto = typeof o.produto === 'string' && PRODUTOS_SOLUCAO_VALIDOS.has(o.produto) ? o.produto : null;
   if (!produto) return null;
@@ -984,7 +990,7 @@ function sanearSecaoPropostaGerada(s) {
 
 /** ID Núcleo/CNPJ/e-mail/telefone do cliente, saneados — sempre string (nunca null),
  * pra poder ir direto no bloco de estado sem checagem extra em cada call site. */
-function sanearDadosCliente(d) {
+export function sanearDadosCliente(d) {
   const origem = d && typeof d === 'object' ? d : {};
   return {
     idNucleo: texto(origem.idNucleo, 60),
@@ -1000,7 +1006,7 @@ function sanearDadosCliente(d) {
  * proposta), porque o ID Núcleo é o campo que amarra a identificação do
  * cliente entre as ferramentas depois.
  */
-function dadosClienteFaltando(dados) {
+export function dadosClienteFaltando(dados) {
   const faltando = [];
   if (!dados.idNucleo) faltando.push('ID Núcleo');
   if (!dados.cnpj) faltando.push('CNPJ');
@@ -1055,6 +1061,36 @@ function descricaoSolucao(o) {
     o.observacoes ? `**Observações para a implantação:** ${o.observacoes}` : null,
   ].filter(Boolean);
   return linhas.join('\n\n');
+}
+
+/**
+ * Cria uma subtask tipo "solucao" por item de `solucoes` — usado tanto na
+ * criação direta do projeto (solucoes vindas do Moskit ou digitadas à mão)
+ * quanto na promoção de uma proposta (outrasSolucoesPropostas), que antes
+ * duplicava este mesmo laço.
+ */
+export async function criarSubtasksSolucao(projetoId, solucoes) {
+  for (const o of solucoes) {
+    await criarSubtaskAgente(projetoId, {
+      name: o.produto + (o.planoSugerido ? ` — ${o.planoSugerido}` : ''),
+      markdown_description: stringifyWaipeState(descricaoSolucao(o), {
+        tipo: 'solucao',
+        produto: o.produto,
+        planoSugerido: o.planoSugerido,
+        variante: o.variante,
+        motivo: o.motivo,
+        observacoes: o.observacoes,
+        ambienteMuda: o.ambienteMuda,
+        quantidade: o.quantidade,
+        valorTabela: o.valorTabela,
+        valorManual: o.valorManual,
+        descontoPercent: o.descontoPercent,
+        checklist: jornadaPara(o.produto, o.ambienteMuda),
+        checklistChecks: {},
+        fase: FASE_ITEM_PADRAO,
+      }),
+    });
+  }
 }
 
 /**
@@ -1243,6 +1279,62 @@ async function obterImplantacaoAcao(req, res, sessao) {
  * a pessoa revisou/editou o resultado da extração por IA na tela — a chamada
  * de IA em si roda no navegador (capability `sample`), nunca aqui.
  */
+/**
+ * Núcleo comum de "criar o projeto de implantação de verdade" — task-pai +
+ * subtasks de agente e/ou solução. Chamado tanto por criarImplantacaoAcao
+ * (via HTTP, sessão de CSM) quanto pela automação do webhook do Moskit
+ * (api/moskit-webhook.js, sem sessão nenhuma) — por isso não recebe req/res,
+ * só dados já saneados e validados por quem chama.
+ *
+ * `origemMoskitDealId` (opcional) marca projetos nascidos da automação — é
+ * a chave de idempotência que o webhook usa pra não criar duplicata quando
+ * o mesmo evento chega mais de uma vez.
+ */
+export async function criarProjetoImplantacao({
+  cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, origemMoskitDealId,
+}) {
+  const descricaoProjeto = stringifyWaipeState(
+    [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
+    {
+      etapaAtual: 'escopo',
+      prioridade: [],
+      agenteAtualId: null,
+      concluidos: [],
+      agentesTotal: agentes.length + solucoes.length,
+      origemMoskitDealId: origemMoskitDealId ?? null,
+      ...dadosCliente,
+    }
+  );
+
+  const projeto = await criarTaskImplantacao({
+    name: `${cliente} — Implantação Waipe`,
+    markdown_description: descricaoProjeto,
+    assignees: ismProjeto,
+  });
+
+  for (const a of agentes) {
+    const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a.estrutura), {
+      tipo: 'agente',
+      estrutura: a.estrutura,
+      buildChecks: {},
+      testChecks: {},
+      entregaChecks: {},
+      prereqChecks: {},
+      diagnostico: {},
+      validacao: { status: 'pendente', motivo: '' },
+    });
+    await criarSubtaskAgente(projeto.id, {
+      name: a.estrutura.nome,
+      markdown_description: descricaoAgenteTask,
+      assignees: a.ism,
+    });
+  }
+
+  await criarSubtasksSolucao(projeto.id, solucoes);
+
+  return projeto;
+}
+
 async function criarImplantacaoAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   if (!podeEscrever(sessao)) {
@@ -1276,40 +1368,22 @@ async function criarImplantacaoAcao(req, res, sessao) {
   const agentes = agentesRaw
     .map((a) => ({ estrutura: sanearAgente(a), ism: sanearAssignees(a?.ism) }))
     .filter((a) => a.estrutura);
-  if (!agentes.length) {
-    return erro(res, 400, 'agentes_invalidos', 'É preciso ao menos um agente.');
+
+  const solucoesRaw = Array.isArray(corpo.solucoes) ? corpo.solucoes.slice(0, MAX_OUTRAS_SOLUCOES) : [];
+  const solucoes = solucoesRaw.map(sanearOutraSolucao).filter(Boolean);
+
+  // Projeto não precisa mais ser baseado em agente Waipe — pode nascer só
+  // com solução (troca de plano Gestor, inclusão de usuário BIME, etc.).
+  if (!agentes.length && !solucoes.length) {
+    return erro(res, 400, 'nada_para_promover', 'É preciso ao menos um agente ou uma solução.');
   }
   const ismProjeto = sanearAssignees(corpo.ismProjeto);
 
   const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
-  const descricaoProjeto = stringifyWaipeState(
-    [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
-    { etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: agentes.length, ...dadosCliente }
-  );
 
-  const projeto = await criarTaskImplantacao({
-    name: `${cliente} — Implantação Waipe`,
-    markdown_description: descricaoProjeto,
-    assignees: ismProjeto,
+  const projeto = await criarProjetoImplantacao({
+    cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
   });
-
-  for (const a of agentes) {
-    const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a.estrutura), {
-      tipo: 'agente',
-      estrutura: a.estrutura,
-      buildChecks: {},
-      testChecks: {},
-      entregaChecks: {},
-      prereqChecks: {},
-      diagnostico: {},
-      validacao: { status: 'pendente', motivo: '' },
-    });
-    await criarSubtaskAgente(projeto.id, {
-      name: a.estrutura.nome,
-      markdown_description: descricaoAgenteTask,
-      assignees: a.ism,
-    });
-  }
 
   return res.status(200).json({ ok: true, id: projeto.id });
 }
@@ -1820,27 +1894,7 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     });
   }
 
-  for (const o of outrasSolucoesPropostas) {
-    await criarSubtaskAgente(projeto.id, {
-      name: o.produto + (o.planoSugerido ? ` — ${o.planoSugerido}` : ''),
-      markdown_description: stringifyWaipeState(descricaoSolucao(o), {
-        tipo: 'solucao',
-        produto: o.produto,
-        planoSugerido: o.planoSugerido,
-        variante: o.variante,
-        motivo: o.motivo,
-        observacoes: o.observacoes,
-        ambienteMuda: o.ambienteMuda,
-        quantidade: o.quantidade,
-        valorTabela: o.valorTabela,
-        valorManual: o.valorManual,
-        descontoPercent: o.descontoPercent,
-        checklist: jornadaPara(o.produto, o.ambienteMuda),
-        checklistChecks: {},
-        fase: FASE_ITEM_PADRAO,
-      }),
-    });
-  }
+  await criarSubtasksSolucao(projeto.id, outrasSolucoesPropostas);
 
   const novoEstadoProjeto = {
     etapaAtual: 'escopo',

@@ -169,6 +169,64 @@ const libGoogleUnica = (tag) => dataUrl(ler('api/_lib/google.js') + `\n// varian
 /** data: URL do _lib/umbler.js real, UNICA por variante (mesmo motivo de libClickupUnica). */
 const libUmblerUnica = (tag) => dataUrl(ler('api/_lib/umbler.js') + `\n// variante:${tag}\n`);
 
+/**
+ * data: URL de api/clickup.js REAL (mesmo texto/imports que carregarCom
+ * usaria), pra quando OUTRO arquivo (moskit-webhook) importa './clickup.js'
+ * diretamente — precisa existir como URL (nao como Promise ja resolvida)
+ * pra poder ser embutida como string dentro do texto de outro modulo.
+ */
+const clickupHandlerUrl = (libClickupUrl, libGoogleUrl = googleLibUrl, libUmblerUrl = umblerLibUrl) =>
+  dataUrl(
+    ler('api/clickup.js')
+      .replace("'./_lib/http.js'", `'${httpUrl}'`)
+      .replace("'./_lib/auth.js'", `'${authUrl}'`)
+      .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
+      .replace("'./_lib/google.js'", `'${libGoogleUrl}'`)
+      .replace("'./_lib/umbler.js'", `'${libUmblerUrl}'`)
+  );
+
+/** Carrega api/moskit-webhook.js com './_lib/clickup.js' (real) e './clickup.js'
+ * (mesma instancia, via clickupHandlerUrl) e './_lib/moskit.js' (stub) trocados. */
+const carregarMoskitWebhook = (libClickupUrl, moskitLibUrl) =>
+  import(
+    dataUrl(
+      ler('api/moskit-webhook.js')
+        .replace("'./_lib/http.js'", `'${httpUrl}'`)
+        .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
+        .replace("'./clickup.js'", `'${clickupHandlerUrl(libClickupUrl)}'`)
+        .replace("'./_lib/moskit.js'", `'${moskitLibUrl}'`)
+    )
+  ).then((m) => m.default);
+
+/** Stub de _lib/moskit.js — fixtures controladas via globalThis.__moskitFixtures
+ * (nao da pra fechar sobre variavel do arquivo de teste: o stub roda como
+ * modulo separado, carregado de uma data: URL). */
+const stubMoskit = `
+  export class ErroConfigMoskit extends Error {}
+  export class ErroUpstreamMoskit extends Error { constructor(s){ super('up'); this.status = s; } }
+  export const CF_NEGOCIO = { ID_NUCLEO: 'CF_ID_NUCLEO', OBSERVACAO: 'CF_OBS' };
+  export async function buscarNegocio(id) { return globalThis.__moskitFixtures.negocios[id] || null; }
+  export async function buscarContato(id) { return globalThis.__moskitFixtures.contatos[id] || null; }
+  export async function buscarEmpresa(id) { return globalThis.__moskitFixtures.empresas[id] || null; }
+  export async function buscarNotasNegocio(id) { return globalThis.__moskitFixtures.notas[id] || []; }
+  export async function buscarProduto(id) { return globalThis.__moskitFixtures.produtos[id] || null; }
+  export function valorCampoPersonalizado(campos, id) {
+    if (!id || !Array.isArray(campos)) return '';
+    const c = campos.find((x) => x.id === id);
+    if (!c) return '';
+    if (c.textValue != null) return String(c.textValue);
+    if (c.numericValue != null) return String(c.numericValue);
+    if (c.dateValue != null) return String(c.dateValue);
+    return '';
+  }
+  export function mapearProdutoSolucao(p) {
+    const mapa = globalThis.__moskitFixtures.mapaProduto || {};
+    const mapeado = p && p.id != null ? mapa[p.id] : null;
+    return { produto: mapeado || 'Outro', nomeOriginal: (p && p.name) || '' };
+  }
+`;
+const moskitLibUnica = (tag) => dataUrl(stubMoskit + `\n// variante:${tag}\n`);
+
 // ── Harness ───────────────────────────────────────────────────────────────
 
 /** Reproduz o getter do runtime da Vercel: acessar .body LANÇA. */
@@ -1881,12 +1939,12 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   const obterInvalido = await chamarAcao(GESTAO, 'GET', 'obter-implantacao', { query: { id: 'zzz!!' } });
   checar('obter-implantacao: id invalido -> 400', [obterInvalido.code, obterInvalido.corpo.code], [400, 'task_invalida']);
 
-  // criar-implantacao: consulta nao pode, sem agente 400, gestao cria pai + subtask
+  // criar-implantacao: consulta nao pode, sem agente NEM solucao 400, gestao cria pai + subtask
   const criarConsulta = await chamarAcao(CONSULTA, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [{ nome: 'A' }] } });
   checar('criar-implantacao: consulta -> 403', [criarConsulta.code, criarConsulta.corpo.code], [403, 'somente_leitura']);
   const DADOS_CLIENTE_TESTE = { idNucleo: '123', cnpj: '00.000.000/0001-00', email: 'contato@cliente.com.br', telefone: '(43) 90000-0000' };
   const criarSemAgente = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [], ...DADOS_CLIENTE_TESTE } });
-  checar('criar-implantacao: sem agentes -> 400', [criarSemAgente.code, criarSemAgente.corpo.code], [400, 'agentes_invalidos']);
+  checar('criar-implantacao: sem agentes nem solucoes -> 400', [criarSemAgente.code, criarSemAgente.corpo.code], [400, 'nada_para_promover']);
   const criarSemDadosCliente = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', { body: { cliente: 'X', agentes: [{ nome: 'A' }] } });
   checar('criar-implantacao: sem ID Nucleo/CNPJ/e-mail/telefone -> 400', [criarSemDadosCliente.code, criarSemDadosCliente.corpo.code], [400, 'dados_cliente_incompletos']);
   escritas.length = 0;
@@ -1897,6 +1955,21 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
   checar('  cria 1 projeto + 1 subtask', escritas.filter((e) => e.alvo === 'criar').length, 2);
   const criarBody = escritas.find((e) => e.alvo === 'criar')?.body;
   checar('  grava idNucleo/cnpj/email/telefone no bloco de estado', criarBody.markdown_description.includes('"idNucleo":"123"') && criarBody.markdown_description.includes('"cnpj":"00.000.000/0001-00"'), true);
+
+  // criar-implantacao: so solucao, ZERO agente Waipe -> continua criando (migracao:
+  // o painel deixou de exigir agente, projeto pode ser so troca de plano/produto).
+  escritas.length = 0;
+  const criarSoSolucao = await chamarAcao(GESTAO, 'POST', 'criar-implantacao', {
+    body: {
+      cliente: 'Cliente Sem Agente', contexto: 'Só troca de plano', agentes: [],
+      solucoes: [{ produto: 'Gestor', planoSugerido: 'Plano Básico Cloud', quantidade: 3, valorManual: 300, incluir: true }],
+      ...DADOS_CLIENTE_TESTE,
+    },
+  });
+  checar('criar-implantacao: so solucao (sem agente) -> 200', [criarSoSolucao.code, criarSoSolucao.corpo.ok], [200, true]);
+  checar('  cria 1 projeto + 1 subtask de solucao', escritas.filter((e) => e.alvo === 'criar').length, 2);
+  const subtaskSolucao = escritas.filter((e) => e.alvo === 'criar')[1]?.body;
+  checar('  subtask de solucao com tipo:"solucao" e produto certo', subtaskSolucao.markdown_description.includes('"tipo":"solucao"') && subtaskSolucao.markdown_description.includes('"produto":"Gestor"'), true);
 
   // atualizar-implantacao: dono grava o estado, etapa invalida 400, outro csm 403
   escritas.length = 0;
@@ -3621,6 +3694,137 @@ console.log('\n[47] anexar-arquivo-implantacao + print colado em comentario');
   checar('  comentario carrega texto e a URL do anexo', comentariosCriados[0]?.comment_text, 'Segue o print do erro\nhttps://clickup-attachments.example/print.png');
 
   globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria projeto de implantacao');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.MOSKIT_WEBHOOK_TOKEN = 'segredo-moskit-teste';
+
+  const LISTA = '901328976497';
+  let projetosExistentes = [];
+  const escritasMw = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
+      const body = JSON.parse(init.body);
+      escritasMw.push(body);
+      return ok({ id: `novo-${escritasMw.length}` });
+    }
+    if (u.includes(`/list/${LISTA}/task?`)) {
+      return ok({ tasks: projetosExistentes, last_page: true });
+    }
+    return ok({});
+  };
+
+  globalThis.__moskitFixtures = { negocios: {}, contatos: {}, empresas: {}, notas: {}, produtos: {}, mapaProduto: {} };
+
+  const libClickupUrl = libClickupUnica('moskit-webhook');
+  const moskitLibUrl = moskitLibUnica('moskit-webhook');
+  const webhook = await carregarMoskitWebhook(libClickupUrl, moskitLibUrl);
+
+  const chamarWebhook = async (token, corpo) => {
+    const r = res();
+    await webhook({ method: 'POST', headers: cabecalhos(), query: { token }, body: corpo }, r);
+    return r;
+  };
+
+  const semToken = await chamarWebhook('token-errado', { dealId: 501 });
+  checar('moskit-webhook: token invalido -> 403', [semToken.code, semToken.corpo.code], [403, 'token_invalido']);
+
+  delete process.env.MOSKIT_WEBHOOK_TOKEN;
+  const semConfig = await chamarWebhook('qualquer', { dealId: 501 });
+  checar('moskit-webhook: sem MOSKIT_WEBHOOK_TOKEN configurado -> 500', [semConfig.code, semConfig.corpo.error], [500, 'nao_configurado']);
+  process.env.MOSKIT_WEBHOOK_TOKEN = 'segredo-moskit-teste';
+
+  // Negocio ainda OPEN -> o evento de "editado" cobre qualquer edicao, so importa quando vira WON.
+  globalThis.__moskitFixtures.negocios[501] = { status: 'OPEN', contacts: [], companies: [], dealProducts: [], entityCustomFields: [] };
+  escritasMw.length = 0;
+  const respAberto = await chamarWebhook('segredo-moskit-teste', { dealId: 501 });
+  checar('moskit-webhook: negocio ainda OPEN -> 200, nao cria projeto', [respAberto.code, escritasMw.length], [200, 0]);
+
+  // Negocio WON mas sem nenhum produto vinculado -> nada pra promover, nao cria.
+  globalThis.__moskitFixtures.negocios[502] = {
+    status: 'WON', contacts: [{ id: 9 }], companies: [{ id: 8 }], dealProducts: [],
+    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }],
+  };
+  globalThis.__moskitFixtures.contatos[9] = {
+    name: 'Fulano', phones: [{ id: 1, number: '4399999999' }], primaryPhone: { id: 1 },
+    emails: [{ id: 2, address: 'a@a.com' }], primaryEmail: { id: 2 },
+  };
+  globalThis.__moskitFixtures.empresas[8] = { name: 'ACME LTDA', cnpj: '00.000.000/0001-00' };
+  escritasMw.length = 0;
+  const respSemProduto = await chamarWebhook('segredo-moskit-teste', { dealId: 502 });
+  checar('moskit-webhook: WON sem produtos vinculados -> 200, nao cria projeto', [respSemProduto.code, escritasMw.length], [200, 0]);
+
+  // Negocio WON com produto MAPEADO -> cria projeto + 1 subtask de solucao,
+  // gravando origemMoskitDealId (chave de idempotencia) e os dados vindos do Moskit.
+  globalThis.__moskitFixtures.negocios[503] = {
+    status: 'WON', contacts: [{ id: 9 }], companies: [{ id: 8 }],
+    dealProducts: [{ product: { id: 77 }, quantity: 3, finalPrice: 30000 }],
+    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }, { id: 'CF_OBS', textValue: 'Observacao do negocio de teste' }],
+  };
+  globalThis.__moskitFixtures.produtos[77] = { id: 77, name: 'Plano Básico Cloud' };
+  globalThis.__moskitFixtures.notas[503] = [{ description: 'Nota registrada no Moskit' }];
+  globalThis.__moskitFixtures.mapaProduto[77] = 'Gestor';
+  escritasMw.length = 0;
+  const respGanho = await chamarWebhook('segredo-moskit-teste', { dealId: 503 });
+  checar('moskit-webhook: WON com produto mapeado -> 200, cria projeto + subtask', [respGanho.code, escritasMw.length], [200, 2]);
+  const [corpoProjeto, corpoSubtask] = escritasMw;
+  checar('  nome do projeto usa a razao social da empresa', corpoProjeto.name.startsWith('ACME LTDA'), true);
+  checar('  grava origemMoskitDealId no estado (idempotencia)', corpoProjeto.markdown_description.includes('"origemMoskitDealId":503'), true);
+  checar(
+    '  grava idNucleo "0" (placeholder do comercial) e cnpj vindos do Moskit',
+    corpoProjeto.markdown_description.includes('"idNucleo":"0"') && corpoProjeto.markdown_description.includes('"cnpj":"00.000.000/0001-00"'),
+    true
+  );
+  checar(
+    '  contexto leva a observacao do negocio + a nota',
+    corpoProjeto.markdown_description.includes('Observacao do negocio de teste') && corpoProjeto.markdown_description.includes('Nota registrada no Moskit'),
+    true
+  );
+  checar('  subtask de solucao com o produto mapeado (Gestor)', corpoSubtask.markdown_description.includes('"produto":"Gestor"'), true);
+
+  // Idempotencia: mesmo dealId de novo, com o projeto ja existente na lista -> nao duplica.
+  projetosExistentes = [{ id: 'projExistente', description: JSON.stringify({ origemMoskitDealId: 503 }) }];
+  escritasMw.length = 0;
+  const respRepetido = await chamarWebhook('segredo-moskit-teste', { dealId: 503 });
+  checar('moskit-webhook: mesmo dealId de novo -> nao duplica o projeto', [respRepetido.code, escritasMw.length], [200, 0]);
+  projetosExistentes = [];
+
+  // Produto SEM mapeamento -> cai em "Outro", preservando o nome original do Moskit.
+  globalThis.__moskitFixtures.negocios[504] = {
+    status: 'WON', contacts: [{ id: 9 }], companies: [{ id: 8 }],
+    dealProducts: [{ product: { id: 88 }, quantity: 1, finalPrice: 9900 }],
+    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }],
+  };
+  globalThis.__moskitFixtures.produtos[88] = { id: 88, name: 'Produto Sem Mapa Nenhum' };
+  escritasMw.length = 0;
+  const respOutro = await chamarWebhook('segredo-moskit-teste', { dealId: 504 });
+  checar('moskit-webhook: produto sem mapeamento -> 200, cria com produto "Outro"', [respOutro.code, escritasMw.length], [200, 2]);
+  const subtaskOutro = escritasMw[1];
+  checar('  cai em produto "Outro"', subtaskOutro.markdown_description.includes('"produto":"Outro"'), true);
+  checar('  preserva o nome original do Moskit nas observacoes', subtaskOutro.markdown_description.includes('Produto Sem Mapa Nenhum'), true);
+
+  // Sem contato/empresa vinculado -> falta cnpj/telefone/email -> nao cria (so loga, nao quebra).
+  globalThis.__moskitFixtures.negocios[505] = {
+    status: 'WON', contacts: [], companies: [],
+    dealProducts: [{ product: { id: 77 }, quantity: 1, finalPrice: 10000 }],
+    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }],
+  };
+  escritasMw.length = 0;
+  const respSemContato = await chamarWebhook('segredo-moskit-teste', { dealId: 505 });
+  checar('moskit-webhook: sem contato/empresa (falta cnpj/telefone/email) -> 200, nao cria', [respSemContato.code, escritasMw.length], [200, 0]);
+
+  globalThis.fetch = fetchOriginal;
+  delete globalThis.__moskitFixtures;
 }
 
 console.log(`\n${total - falhas}/${total} passaram`);
