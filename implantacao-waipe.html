@@ -214,6 +214,8 @@
   .btn-flow:disabled{background:var(--border-strong); color:var(--muted-2); cursor:not-allowed;}
   .btn-flow-secondary{background:transparent; color:var(--muted); border:1px solid var(--border-strong); font-family:inherit; font-size:13px; font-weight:600; padding:11px 18px; border-radius:10px; cursor:pointer;}
   .btn-flow-secondary:hover{color:var(--ink); border-color:var(--ink-2);}
+  .btn-flow-secondary:disabled{color:var(--muted-2); cursor:not-allowed; opacity:.6;}
+  .btn-flow-secondary:disabled:hover{color:var(--muted-2); border-color:var(--border-strong);}
 
   .build-check{display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-top:1px solid var(--border);}
   .build-check:first-child{border-top:none;}
@@ -1618,7 +1620,8 @@
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">' +
         '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
         '<div style="text-align:right"><h2 style="font-size:16px; margin:0;">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
-        '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") + '</div></div>' +
+        '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") +
+          (dadosProjeto.projeto.vendedor ? ' · Vendedor: ' + esc(dadosProjeto.projeto.vendedor) : '') + '</div></div>' +
       '</div>' +
       '<div class="project-detail-layout">' +
         '<main class="project-detail-main">' +
@@ -2210,6 +2213,23 @@
 
   // Lista única de itens do projeto (Gestor/Simplaz/Treinamento/BIME APP são
   // itens irmãos do Waipe — abrir cada um leva ao detalhe dele).
+  // Item "concluído" = agente validado/cancelado, ou solução entregue/cancelada
+  // — nada mais pendente ali. Serve pra travar o botão de gerar relatório de
+  // finalização enquanto o projeto ainda tem item em aberto (evita clique em
+  // engano no meio da implantação).
+  function itemConcluido(a){
+    if (a.tipo === "solucao"){
+      var fase = a.fase || "nao_iniciado";
+      return fase === "entregue" || fase === "cancelado";
+    }
+    var status = (a.validacao || {}).status || "pendente";
+    return status === "validado" || status === "cancelado";
+  }
+  function todosItensConcluidos(){
+    var todos = (dadosProjeto && dadosProjeto.agentes) || [];
+    return todos.length > 0 && todos.every(itemConcluido);
+  }
+
   function renderListaItens(){
     var p = dadosProjeto.projeto;
     var agentes = agentesReais();
@@ -2246,7 +2266,9 @@
     '<div class="card">' +
       '<h2>Finalização do projeto</h2>' +
       '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
-      '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;">🤖 Gerar relatório de finalização</button>' +
+      '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;"' +
+        (todosItensConcluidos() ? '' : ' disabled title="Só disponível quando todos os itens do projeto estiverem concluídos/cancelados."') +
+        '>🤖 Gerar relatório de finalização</button>' +
       '<div id="finalizacaoCampos" style="margin-top:12px;' + (p.finalizacao && p.finalizacao.resumoGeral ? '' : 'display:none;') + '">' +
         '<div class="form-field"><label>Resumo geral</label><textarea class="form-input" id="finResumoGeral" rows="3" style="width:100%;">' + esc((p.finalizacao && p.finalizacao.resumoGeral) || "") + '</textarea></div>' +
         '<div class="form-grid-2">' +

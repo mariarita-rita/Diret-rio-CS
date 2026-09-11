@@ -210,6 +210,8 @@ const stubMoskit = `
   export async function buscarEmpresa(id) { return globalThis.__moskitFixtures.empresas[id] || null; }
   export async function buscarNotasNegocio(id) { return globalThis.__moskitFixtures.notas[id] || []; }
   export async function buscarProduto(id) { return globalThis.__moskitFixtures.produtos[id] || null; }
+  export async function buscarUsuario(id) { return globalThis.__moskitFixtures.usuarios[id] || null; }
+  export async function buscarAnexosNegocio(dealId) { return globalThis.__moskitFixtures.anexos[dealId] || []; }
   export function valorCampoPersonalizado(campos, id) {
     if (!id || !Array.isArray(campos)) return '';
     const c = campos.find((x) => x.id === id);
@@ -3705,6 +3707,7 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
   const LISTA = '901328976497';
   let projetosExistentes = [];
   const escritasMw = [];
+  const anexosCriados = [];
 
   function ok(corpo) {
     return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
@@ -3721,10 +3724,17 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
     if (u.includes(`/list/${LISTA}/task?`)) {
       return ok({ tasks: projetosExistentes, last_page: true });
     }
+    if (metodo === 'POST' && u.endsWith('/attachment')) {
+      anexosCriados.push({ ehFormData: init.body instanceof FormData });
+      return ok({ id: 'anexo-clickup', title: 'arquivo' });
+    }
+    if (u === 'https://moskit-files.example/certificado.p12' || u === 'https://moskit-files.example/virus.exe') {
+      return { ok: true, status: 200, arrayBuffer: async () => new TextEncoder().encode('conteudo-fake').buffer, text: async () => '' };
+    }
     return ok({});
   };
 
-  globalThis.__moskitFixtures = { contatos: {}, empresas: {}, notas: {}, produtos: {}, mapaProduto: {} };
+  globalThis.__moskitFixtures = { contatos: {}, empresas: {}, notas: {}, produtos: {}, mapaProduto: {}, usuarios: {}, anexos: {} };
 
   const libClickupUrl = libClickupUnica('moskit-webhook');
   const moskitLibUrl = moskitLibUnica('moskit-webhook');
@@ -3777,9 +3787,15 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
   globalThis.__moskitFixtures.produtos[77] = { id: 77, name: 'Plano Básico Cloud' };
   globalThis.__moskitFixtures.notas[503] = [{ description: 'Nota registrada no Moskit' }];
   globalThis.__moskitFixtures.mapaProduto[77] = 'Gestor';
+  globalThis.__moskitFixtures.usuarios[50] = { id: 50, name: 'Clayton Buzinhani' };
+  globalThis.__moskitFixtures.anexos[503] = [
+    { filename: 'certificado.p12', mimeType: 'application/x-pkcs12', size: 2048, url: 'https://moskit-files.example/certificado.p12' },
+    { filename: 'virus.exe', mimeType: 'application/x-msdownload', size: 100, url: 'https://moskit-files.example/virus.exe' },
+  ];
   escritasMw.length = 0;
+  anexosCriados.length = 0;
   const respGanho = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
-    id: 503, status: 'WON', contact: { id: 9 }, company: { id: 8 },
+    id: 503, status: 'WON', name: 'PEDRALHA LTDA', contact: { id: 9 }, company: { id: 8 }, responsible: { id: 50 },
     dealProducts: [{ product: { id: 77 }, quantity: 3, finalPrice: 30000 }],
     customFieldValues: [
       { id: 'CF_ID_NUCLEO', numberValue: 0 },
@@ -3789,7 +3805,10 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
   }));
   checar('moskit-webhook: WON com produto mapeado -> 200, cria projeto + subtask', [respGanho.code, escritasMw.length], [200, 2]);
   const [corpoProjeto, corpoSubtask] = escritasMw;
-  checar('  nome do projeto usa a razao social da empresa', corpoProjeto.name.startsWith('ACME LTDA'), true);
+  checar('  nome do projeto usa o nome do NEGOCIO, padronizado "Cliente Novo - X"', corpoProjeto.name, 'Cliente Novo - PEDRALHA LTDA');
+  checar('  grava o vendedor (responsavel do negocio), separado do CSM', corpoProjeto.markdown_description.includes('"vendedor":"Clayton Buzinhani"'), true);
+  checar('  CSM fica em branco (a definir depois, nao "Automacao Moskit")', corpoProjeto.markdown_description.includes('Automação Moskit'), false);
+  checar('  copia só o anexo com MIME permitido (certificado), ignora o .exe', anexosCriados.length, 1);
   checar('  grava origemMoskitDealId no estado (idempotencia)', corpoProjeto.markdown_description.includes('"origemMoskitDealId":503'), true);
   checar(
     '  grava idNucleo "0" (placeholder do comercial) e prioriza o CNPJ do NEGOCIO sobre o da empresa',

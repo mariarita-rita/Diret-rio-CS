@@ -54,6 +54,12 @@ export async function buscarNotasNegocio(id) {
 export async function buscarProduto(id) {
   return moskitGet(`/products/${id}`);
 }
+export async function buscarUsuario(id) {
+  return moskitGet(`/users/${id}`);
+}
+export async function buscarAnexosNegocio(dealId) {
+  return moskitGet(`/deals/${dealId}/attachments`);
+}
 
 /**
  * Ids dos campos personalizados do NEGÓCIO no Moskit — cadastrados na

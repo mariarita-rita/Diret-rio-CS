@@ -136,7 +136,7 @@ const MAX_LABELS = 10;
 // tamanho é sobre o arquivo CRU; o corpo da requisição em si (base64 + JSON)
 // precisa de um teto maior, por isso o `limiteBytes` custom passado a
 // `lerCorpo` nas duas ações que aceitam arquivo.
-const MIME_ANEXOS_VALIDOS = new Set([
+export const MIME_ANEXOS_VALIDOS = new Set([
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
   'application/pdf',
   'application/msword',
@@ -144,8 +144,9 @@ const MIME_ANEXOS_VALIDOS = new Set([
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/csv', 'text/plain',
+  'application/x-pkcs12', // certificado digital (.p12/.pfx) — copiado do negócio do Moskit
 ]);
-const MAX_ANEXO_BYTES = 4 * 1024 * 1024;
+export const MAX_ANEXO_BYTES = 4 * 1024 * 1024;
 const LIMITE_CORPO_ANEXO = 6 * 1024 * 1024;
 const RE_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
@@ -1266,6 +1267,10 @@ async function obterImplantacaoAcao(req, res, sessao) {
       cnpj: texto(estadoProjeto.cnpj, 20),
       email: texto(estadoProjeto.email, 200),
       telefone: texto(estadoProjeto.telefone, 30),
+      // Vendedor do negócio no Moskit (quem fechou a venda) — separado do CSM
+      // de propósito: CSM aqui é o gerente de contas que assume a partir da
+      // implantação, um papel diferente.
+      vendedor: texto(estadoProjeto.vendedor, 120),
       finalizacao: sanearFinalizacao(estadoProjeto.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estadoProjeto, sessao),
       anexos: mapearAnexos(pai.attachments),
@@ -1291,7 +1296,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
  * o mesmo evento chega mais de uma vez.
  */
 export async function criarProjetoImplantacao({
-  cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, origemMoskitDealId,
+  nomeProjeto, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor, origemMoskitDealId,
 }) {
   const descricaoProjeto = stringifyWaipeState(
     [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
@@ -1301,13 +1306,14 @@ export async function criarProjetoImplantacao({
       agenteAtualId: null,
       concluidos: [],
       agentesTotal: agentes.length + solucoes.length,
+      vendedor: texto(vendedor, 120),
       origemMoskitDealId: origemMoskitDealId ?? null,
       ...dadosCliente,
     }
   );
 
   const projeto = await criarTaskImplantacao({
-    name: `${cliente} — Implantação Waipe`,
+    name: nomeProjeto,
     markdown_description: descricaoProjeto,
     assignees: ismProjeto,
   });
@@ -1382,7 +1388,7 @@ async function criarImplantacaoAcao(req, res, sessao) {
   const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
 
   const projeto = await criarProjetoImplantacao({
-    cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
+    nomeProjeto: `${cliente} — Implantação Waipe`, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
   });
 
   return res.status(200).json({ ok: true, id: projeto.id });

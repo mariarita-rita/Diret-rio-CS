@@ -3,11 +3,18 @@
 // Recebe o evento "Edição no status de negócio" (metadata.event =
 // "deal-statusChanged") do Moskit/Ollow e, quando o negócio muda pra GANHO
 // (status WON), cria o projeto de implantação no ClickUp automaticamente —
-// puxando cliente, CNPJ, contato, notas e produtos direto do negócio, em
-// vez de alguém preencher tudo de novo à mão. O "criar projeto automático"
-// nativo do Moskit existe mas não copia nenhum campo personalizado, por
-// isso esta automação bypassa ele e cria direto no painel de implantação em
-// ClickUp (ver plano: o Projeto nativo do Moskit deixa de ser usado).
+// puxando cliente, CNPJ, contato, notas, produtos e anexos (ex: certificado
+// digital) direto do negócio, em vez de alguém preencher tudo de novo à
+// mão. O "criar projeto automático" nativo do Moskit existe mas não copia
+// nenhum campo personalizado, por isso esta automação bypassa ele e cria
+// direto no painel de implantação em ClickUp (ver plano: o Projeto nativo
+// do Moskit deixa de ser usado).
+//
+// Nome do projeto: "Cliente Novo - {nome do negócio}" — o nome do cliente é
+// o nome do PRÓPRIO negócio no Moskit (é assim que o Comercial já trabalha),
+// não o cadastro da empresa/contato. CSM fica em branco (é o gerente de
+// contas, atribuído depois — automação ainda não existe); o responsável
+// pelo negócio no Moskit vira o campo separado `vendedor`.
 //
 // Protegido por token compartilhado na query (mesmo esquema de
 // UMBLER_WEBHOOK_TOKEN em api/umbler-webhook.js). Sem sessão de usuário:
@@ -32,13 +39,22 @@
 // erro nosso.
 
 import { aplicarCors, erro, lerCorpo, ErroCorpo } from './_lib/http.js';
-import { listarImplantacoes, parseWaipeState } from './_lib/clickup.js';
-import { criarProjetoImplantacao, sanearDadosCliente, dadosClienteFaltando, sanearOutraSolucao } from './clickup.js';
+import { listarImplantacoes, parseWaipeState, anexarArquivoTask } from './_lib/clickup.js';
+import {
+  criarProjetoImplantacao,
+  sanearDadosCliente,
+  dadosClienteFaltando,
+  sanearOutraSolucao,
+  MIME_ANEXOS_VALIDOS,
+  MAX_ANEXO_BYTES,
+} from './clickup.js';
 import {
   buscarContato,
   buscarEmpresa,
   buscarNotasNegocio,
   buscarProduto,
+  buscarUsuario,
+  buscarAnexosNegocio,
   CF_NEGOCIO,
   valorCampoPersonalizado,
   mapearProdutoSolucao,
@@ -112,9 +128,11 @@ function extrairNegocioDoEvento(corpo) {
   if (!negocio || !Number.isFinite(Number(negocio.id))) return null;
   return {
     id: Number(negocio.id),
+    nome: typeof negocio.name === 'string' ? negocio.name : '',
     status: negocio.status,
     contatoId: negocio.contact?.id ?? null,
     empresaId: negocio.company?.id ?? null,
+    responsavelId: negocio.responsible?.id ?? null,
     dealProducts: Array.isArray(negocio.dealProducts) ? negocio.dealProducts : [],
     entityCustomFields: normalizarCustomFields(negocio.customFieldValues),
   };
@@ -147,10 +165,11 @@ async function processarEvento(corpo) {
   const jaExiste = projetos.some((t) => Number(parseWaipeState(t.description)?.origemMoskitDealId) === dealId);
   if (jaExiste) return;
 
-  const [contato, empresa, notas] = await Promise.all([
+  const [contato, empresa, notas, vendedorUsuario] = await Promise.all([
     negocio.contatoId ? buscarContato(negocio.contatoId).catch(() => null) : Promise.resolve(null),
     negocio.empresaId ? buscarEmpresa(negocio.empresaId).catch(() => null) : Promise.resolve(null),
     buscarNotasNegocio(dealId).catch(() => []),
+    negocio.responsavelId ? buscarUsuario(negocio.responsavelId).catch(() => null) : Promise.resolve(null),
   ]);
 
   const dealProducts = Array.isArray(negocio.dealProducts) ? negocio.dealProducts : [];
@@ -158,7 +177,11 @@ async function processarEvento(corpo) {
     dealProducts.map((dp) => (dp?.product?.id ? buscarProduto(dp.product.id).catch(() => null) : Promise.resolve(null)))
   );
 
-  const cliente = texto200(empresa?.name) || texto200(contato?.name) || 'Cliente sem nome';
+  // O nome do cliente é o nome do PRÓPRIO negócio (é assim que o Comercial já
+  // trabalha — o negócio nasce com o nome do cliente), não o cadastro da
+  // empresa/contato (que pode ser um registro-pai incompleto ou diferente).
+  const cliente = texto200(negocio.nome) || texto200(empresa?.name) || texto200(contato?.name) || 'Cliente sem nome';
+  const vendedor = texto200(vendedorUsuario?.name);
   // O Comercial preenche o CNPJ no próprio negócio, não no cadastro da
   // empresa (esse fica em branco na prática) — por isso prioriza o campo
   // personalizado do negócio, só cai pro da empresa se aquele vier vazio.
@@ -200,17 +223,59 @@ async function processarEvento(corpo) {
   }
 
   const projeto = await criarProjetoImplantacao({
-    cliente,
+    nomeProjeto: `Cliente Novo - ${cliente}`,
     contexto,
     dadosCliente,
     agentes: [],
     solucoes,
     ismProjeto: [],
-    csmNome: 'Automação Moskit',
+    // CSM fica em branco de propósito: é o gerente de contas que assume a
+    // partir da implantação (papel ainda sem automação de atribuição) — não
+    // confundir com o vendedor, que é quem fechou o negócio no Comercial.
+    csmNome: '',
+    vendedor,
     origemMoskitDealId: dealId,
   });
 
+  await copiarAnexosDoNegocio(projeto.id, dealId);
+
   console.log(`[moskit-webhook] projeto ${projeto.id} criado a partir do negócio ${dealId} (${cliente})`);
+}
+
+/**
+ * Copia pro projeto todo arquivo já anexado ao negócio no Moskit (ex:
+ * certificado digital + senha, mencionados na nota do negócio). Cada arquivo
+ * passa pela MESMA allowlist de MIME/tamanho do upload manual — um anexo que
+ * não passa é só ignorado (logado), nunca derruba a criação do projeto.
+ */
+async function copiarAnexosDoNegocio(projetoId, dealId) {
+  const anexos = await buscarAnexosNegocio(dealId).catch((e) => {
+    console.error(`[moskit-webhook] falha ao listar anexos do negócio ${dealId}:`, e?.message);
+    return [];
+  });
+  for (const anexo of Array.isArray(anexos) ? anexos : []) {
+    const nomeArquivo = texto200(anexo?.filename) || 'arquivo';
+    try {
+      const mimeType = String(anexo?.mimeType || '').toLowerCase();
+      if (!MIME_ANEXOS_VALIDOS.has(mimeType)) {
+        console.error(`[moskit-webhook] anexo "${nomeArquivo}" do negócio ${dealId} ignorado: tipo "${mimeType}" não permitido.`);
+        continue;
+      }
+      if (Number(anexo?.size) > MAX_ANEXO_BYTES) {
+        console.error(`[moskit-webhook] anexo "${nomeArquivo}" do negócio ${dealId} ignorado: maior que o limite (${anexo.size} bytes).`);
+        continue;
+      }
+      const resposta = await fetch(anexo.url);
+      if (!resposta.ok) {
+        console.error(`[moskit-webhook] falha ao baixar anexo "${nomeArquivo}" do negócio ${dealId}: ${resposta.status}`);
+        continue;
+      }
+      const buffer = Buffer.from(await resposta.arrayBuffer());
+      await anexarArquivoTask(projetoId, { nomeArquivo, mimeType, base64: buffer.toString('base64') });
+    } catch (e) {
+      console.error(`[moskit-webhook] falha ao copiar anexo "${nomeArquivo}" do negócio ${dealId}:`, e?.message);
+    }
+  }
 }
 
 function texto200(v) {
