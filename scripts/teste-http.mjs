@@ -3724,7 +3724,7 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
     return ok({});
   };
 
-  globalThis.__moskitFixtures = { negocios: {}, contatos: {}, empresas: {}, notas: {}, produtos: {}, mapaProduto: {} };
+  globalThis.__moskitFixtures = { contatos: {}, empresas: {}, notas: {}, produtos: {}, mapaProduto: {} };
 
   const libClickupUrl = libClickupUnica('moskit-webhook');
   const moskitLibUrl = moskitLibUnica('moskit-webhook');
@@ -3736,46 +3736,53 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
     return r;
   };
 
-  const semToken = await chamarWebhook('token-errado', { dealId: 501 });
+  // Formato real confirmado com um evento de teste (2026-09-11): o negocio
+  // inteiro vem embutido em `after` — campos personalizados em
+  // `customFieldValues`/`numberValue`, contact/company como objeto unico.
+  const eventoStatusChanged = (after) => ({
+    metadata: { entity: 'deal', operation: 'statusChanged', event: 'deal-statusChanged', hash: 'hash-teste', actor: { platform: 'USER', identifier: 1 } },
+    before: { id: after.id, status: 'OPEN' },
+    after: Object.assign({ dealProducts: [], customFieldValues: [] }, after),
+  });
+
+  const semToken = await chamarWebhook('token-errado', eventoStatusChanged({ id: 501, status: 'OPEN' }));
   checar('moskit-webhook: token invalido -> 403', [semToken.code, semToken.corpo.code], [403, 'token_invalido']);
 
   delete process.env.MOSKIT_WEBHOOK_TOKEN;
-  const semConfig = await chamarWebhook('qualquer', { dealId: 501 });
+  const semConfig = await chamarWebhook('qualquer', eventoStatusChanged({ id: 501, status: 'OPEN' }));
   checar('moskit-webhook: sem MOSKIT_WEBHOOK_TOKEN configurado -> 500', [semConfig.code, semConfig.corpo.error], [500, 'nao_configurado']);
   process.env.MOSKIT_WEBHOOK_TOKEN = 'segredo-moskit-teste';
 
-  // Negocio ainda OPEN -> o evento de "editado" cobre qualquer edicao, so importa quando vira WON.
-  globalThis.__moskitFixtures.negocios[501] = { status: 'OPEN', contacts: [], companies: [], dealProducts: [], entityCustomFields: [] };
+  // Negocio ainda OPEN -> o evento cobre qualquer mudanca de status, so importa quando vira WON.
   escritasMw.length = 0;
-  const respAberto = await chamarWebhook('segredo-moskit-teste', { dealId: 501 });
+  const respAberto = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({ id: 501, status: 'OPEN' }));
   checar('moskit-webhook: negocio ainda OPEN -> 200, nao cria projeto', [respAberto.code, escritasMw.length], [200, 0]);
 
-  // Negocio WON mas sem nenhum produto vinculado -> nada pra promover, nao cria.
-  globalThis.__moskitFixtures.negocios[502] = {
-    status: 'WON', contacts: [{ id: 9 }], companies: [{ id: 8 }], dealProducts: [],
-    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }],
-  };
   globalThis.__moskitFixtures.contatos[9] = {
     name: 'Fulano', phones: [{ id: 1, number: '4399999999' }], primaryPhone: { id: 1 },
     emails: [{ id: 2, address: 'a@a.com' }], primaryEmail: { id: 2 },
   };
   globalThis.__moskitFixtures.empresas[8] = { name: 'ACME LTDA', cnpj: '00.000.000/0001-00' };
+
+  // Negocio WON mas sem nenhum produto vinculado -> nada pra promover, nao cria.
   escritasMw.length = 0;
-  const respSemProduto = await chamarWebhook('segredo-moskit-teste', { dealId: 502 });
+  const respSemProduto = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
+    id: 502, status: 'WON', contact: { id: 9 }, company: { id: 8 },
+    customFieldValues: [{ id: 'CF_ID_NUCLEO', numberValue: 0 }],
+  }));
   checar('moskit-webhook: WON sem produtos vinculados -> 200, nao cria projeto', [respSemProduto.code, escritasMw.length], [200, 0]);
 
   // Negocio WON com produto MAPEADO -> cria projeto + 1 subtask de solucao,
   // gravando origemMoskitDealId (chave de idempotencia) e os dados vindos do Moskit.
-  globalThis.__moskitFixtures.negocios[503] = {
-    status: 'WON', contacts: [{ id: 9 }], companies: [{ id: 8 }],
-    dealProducts: [{ product: { id: 77 }, quantity: 3, finalPrice: 30000 }],
-    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }, { id: 'CF_OBS', textValue: 'Observacao do negocio de teste' }],
-  };
   globalThis.__moskitFixtures.produtos[77] = { id: 77, name: 'Plano Básico Cloud' };
   globalThis.__moskitFixtures.notas[503] = [{ description: 'Nota registrada no Moskit' }];
   globalThis.__moskitFixtures.mapaProduto[77] = 'Gestor';
   escritasMw.length = 0;
-  const respGanho = await chamarWebhook('segredo-moskit-teste', { dealId: 503 });
+  const respGanho = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
+    id: 503, status: 'WON', contact: { id: 9 }, company: { id: 8 },
+    dealProducts: [{ product: { id: 77 }, quantity: 3, finalPrice: 30000 }],
+    customFieldValues: [{ id: 'CF_ID_NUCLEO', numberValue: 0 }, { id: 'CF_OBS', textValue: 'Observacao do negocio de teste' }],
+  }));
   checar('moskit-webhook: WON com produto mapeado -> 200, cria projeto + subtask', [respGanho.code, escritasMw.length], [200, 2]);
   const [corpoProjeto, corpoSubtask] = escritasMw;
   checar('  nome do projeto usa a razao social da empresa', corpoProjeto.name.startsWith('ACME LTDA'), true);
@@ -3792,35 +3799,37 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
   );
   checar('  subtask de solucao com o produto mapeado (Gestor)', corpoSubtask.markdown_description.includes('"produto":"Gestor"'), true);
 
-  // Idempotencia: mesmo dealId de novo, com o projeto ja existente na lista -> nao duplica.
+  // Idempotencia: mesmo negocio de novo, com o projeto ja existente na lista -> nao duplica.
   projetosExistentes = [{ id: 'projExistente', description: JSON.stringify({ origemMoskitDealId: 503 }) }];
   escritasMw.length = 0;
-  const respRepetido = await chamarWebhook('segredo-moskit-teste', { dealId: 503 });
-  checar('moskit-webhook: mesmo dealId de novo -> nao duplica o projeto', [respRepetido.code, escritasMw.length], [200, 0]);
+  const respRepetido = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
+    id: 503, status: 'WON', contact: { id: 9 }, company: { id: 8 },
+    dealProducts: [{ product: { id: 77 }, quantity: 3, finalPrice: 30000 }],
+    customFieldValues: [{ id: 'CF_ID_NUCLEO', numberValue: 0 }],
+  }));
+  checar('moskit-webhook: mesmo negocio de novo -> nao duplica o projeto', [respRepetido.code, escritasMw.length], [200, 0]);
   projetosExistentes = [];
 
   // Produto SEM mapeamento -> cai em "Outro", preservando o nome original do Moskit.
-  globalThis.__moskitFixtures.negocios[504] = {
-    status: 'WON', contacts: [{ id: 9 }], companies: [{ id: 8 }],
-    dealProducts: [{ product: { id: 88 }, quantity: 1, finalPrice: 9900 }],
-    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }],
-  };
   globalThis.__moskitFixtures.produtos[88] = { id: 88, name: 'Produto Sem Mapa Nenhum' };
   escritasMw.length = 0;
-  const respOutro = await chamarWebhook('segredo-moskit-teste', { dealId: 504 });
+  const respOutro = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
+    id: 504, status: 'WON', contact: { id: 9 }, company: { id: 8 },
+    dealProducts: [{ product: { id: 88 }, quantity: 1, finalPrice: 9900 }],
+    customFieldValues: [{ id: 'CF_ID_NUCLEO', numberValue: 0 }],
+  }));
   checar('moskit-webhook: produto sem mapeamento -> 200, cria com produto "Outro"', [respOutro.code, escritasMw.length], [200, 2]);
   const subtaskOutro = escritasMw[1];
   checar('  cai em produto "Outro"', subtaskOutro.markdown_description.includes('"produto":"Outro"'), true);
   checar('  preserva o nome original do Moskit nas observacoes', subtaskOutro.markdown_description.includes('Produto Sem Mapa Nenhum'), true);
 
   // Sem contato/empresa vinculado -> falta cnpj/telefone/email -> nao cria (so loga, nao quebra).
-  globalThis.__moskitFixtures.negocios[505] = {
-    status: 'WON', contacts: [], companies: [],
-    dealProducts: [{ product: { id: 77 }, quantity: 1, finalPrice: 10000 }],
-    entityCustomFields: [{ id: 'CF_ID_NUCLEO', textValue: '0' }],
-  };
   escritasMw.length = 0;
-  const respSemContato = await chamarWebhook('segredo-moskit-teste', { dealId: 505 });
+  const respSemContato = await chamarWebhook('segredo-moskit-teste', eventoStatusChanged({
+    id: 505, status: 'WON', contact: null, company: null,
+    dealProducts: [{ product: { id: 77 }, quantity: 1, finalPrice: 10000 }],
+    customFieldValues: [{ id: 'CF_ID_NUCLEO', numberValue: 0 }],
+  }));
   checar('moskit-webhook: sem contato/empresa (falta cnpj/telefone/email) -> 200, nao cria', [respSemContato.code, escritasMw.length], [200, 0]);
 
   globalThis.fetch = fetchOriginal;

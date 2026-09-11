@@ -62,7 +62,13 @@ export async function buscarProduto(id) {
  */
 export const CF_NEGOCIO = {
   ID_NUCLEO: 'CF_g40MLBiYSjOzYD29', // campo "ID NÚCLEO" (module DEAL, type NUMBER)
-  OBSERVACAO: 'CF_0WGqoEiKCad6GmnP', // mesmo id de CF_DEAL.OBSERVACAO em api/moskit.js
+  // Inferido de um evento real de teste (negócio "TESTE - Cliente novo"): o
+  // único campo personalizado do negócio com um texto livre parecido com
+  // observação ("Já e cliente Londrisoft cnpj: ..., tem várias outras
+  // empresas") tinha este id — NÃO é o mesmo campo de CF_DEAL.OBSERVACAO em
+  // api/moskit.js (aquele é de outro pipeline, Renovações). Ainda precisa
+  // confirmar o nome exato do campo com a usuária.
+  OBSERVACAO: 'CF_POEMywieC5JWdDdk',
 };
 
 /** Valor de um campo personalizado pelo id, já como texto — '' se ausente. */
