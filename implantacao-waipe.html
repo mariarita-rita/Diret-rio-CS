@@ -1835,6 +1835,26 @@
     }).catch(function(){ showSimToast("Não deu para salvar os dados do cliente."); });
   }
 
+  // Rodízio fixo (Gian → Guilherme → Lucineia → Patricia → Gian → ...) +
+  // criação automática na Carteira — ver definir-gerente-contas em
+  // api/clickup.js. Exige ID Núcleo preenchido (nem vazio, nem o "0" que o
+  // Comercial usa como placeholder) ANTES de chamar a API, pra não gerar
+  // uma ida e volta só pra descobrir que falta esse dado.
+  function definirGerenteContas(){
+    if (!dadosProjeto) return;
+    var p = dadosProjeto.projeto;
+    var idNucleo = (p.idNucleo || "").trim();
+    if (!idNucleo || idNucleo === "0"){
+      showSimToast("Preencha o ID Núcleo antes de definir o gerente de contas.");
+      return;
+    }
+    apiPost("definir-gerente-contas", { id: p.id }).then(function(resp){
+      p.csm = resp.gerente;
+      showSimToast("Gerente de contas definido: " + resp.gerente + ".");
+      renderProjetosPanel();
+    }).catch(function(e){ showSimToast(mensagemErro(e)); });
+  }
+
   function textoAberturaPadrao(p){
     var nomeIsm = (p.ism && p.ism[0]) || "[seu nome]";
     return "Olá tudo bem? Sou a " + nomeIsm + " da Londrisoft e gostaria de agendar um horário pra iniciar a implantação do seu Waipe.";
@@ -2251,6 +2271,7 @@
         '<div class="form-field"><label>Telefone</label><input type="text" class="form-input" id="cliTelefone" value="' + esc(p.telefone || "") + '"></div>' +
       '</div>' +
       '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosCliente" style="margin-top:6px;">Salvar dados do cliente</button>' +
+      (!p.csm ? '<button type="button" class="btn-flow-secondary" id="btnDefinirGerente" style="margin-top:6px;margin-left:8px;">🎯 Definir Gerente de Contas</button>' : '') +
       '<button type="button" class="btn-flow-secondary" id="btnIniciarConversaUmbler" style="margin-top:6px;margin-left:8px;">💬 Iniciar conversa no Utalk</button>' +
       '<div id="umblerMsgPainel" style="display:none;margin-top:10px;">' +
         '<label class="sp-k" style="display:block;">Mensagem de abertura (edite à vontade, ou apague pra só abrir a conversa sem mandar nada)</label>' +
@@ -2315,6 +2336,8 @@
         telefone: document.getElementById("cliTelefone").value.trim()
       });
     });
+    var btnDefinirGerente = document.getElementById("btnDefinirGerente");
+    if (btnDefinirGerente) btnDefinirGerente.addEventListener("click", definirGerenteContas);
     var btnIniciarConversaUmbler = document.getElementById("btnIniciarConversaUmbler");
     var umblerMsgPainel = document.getElementById("umblerMsgPainel");
     if (btnIniciarConversaUmbler) btnIniciarConversaUmbler.addEventListener("click", function(){

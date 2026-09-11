@@ -817,6 +817,44 @@ export async function criarSubtaskAgente(parentId, payload) {
   });
 }
 
+/**
+ * Ids das opções do campo dropdown "👤 Gerente de Contas" (CF.GERENTE) na
+ * lista Carteiras — confirmados ao vivo via GET /list/{LISTA_CARTEIRA}/field
+ * (não tem como descobrir isso só lendo tasks, já que cfVal traduz o id pra
+ * nome e descarta o id). Ordem AQUI é a ordem do rodízio (ver
+ * definir-gerente-contas em clickup.js) — não é ordem alfabética nem a
+ * mesma do ClickUp.
+ */
+export const GERENTE_OPCOES = [
+  { nome: 'Gian Luca', id: '7fe6407b-3c75-48b1-bfb5-d429be6d68d8' },
+  { nome: 'Guilherme Camargo', id: 'e9e55de1-cf37-48c9-9760-c6d50c474dde' },
+  { nome: 'Lucineia Felix', id: 'cbcf04f4-da02-4ff7-8515-c2e3ab53961e' },
+  { nome: 'Patricia Carvalho', id: 'c6e1ad22-ed55-42ea-9ea7-88ff3df65a18' },
+];
+
+/**
+ * Cria o cliente na lista Carteiras — parte do fluxo "Definir Gerente de
+ * Contas" (definir-gerente-contas, em clickup.js): junto com o rodízio,
+ * isso substitui o processo manual de "rodar a API do ClickUp pra buscar
+ * no Londriconnect" pra dar entrada num cliente novo. `idNucleo` é
+ * NUMBER no ClickUp (campo "ID NÚCLEO"); `cnpj` é texto curto.
+ */
+export async function criarClienteCarteira({ nome, idNucleo, cnpj, gerenteOpcaoId }) {
+  const criado = await cu(`/list/${LISTA_CARTEIRA}/task`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: nome,
+      custom_fields: [
+        { id: CF.ID_NUCLEO, value: Number(idNucleo) || 0 },
+        { id: CF.CNPJ, value: cnpj },
+        { id: CF.GERENTE, value: gerenteOpcaoId },
+      ],
+    }),
+  });
+  invalidarCarteira();
+  return criado;
+}
+
 /** PUT generico em /task/{id} — nome, descricao, status, due_date. */
 export async function atualizarTask(taskId, payload) {
   return cu(`/task/${taskId}`, {

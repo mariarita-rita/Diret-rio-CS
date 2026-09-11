@@ -14,6 +14,12 @@
 //        simulador (ver sanearOutraSolucao). Tambem chamada pela automacao
 //        do webhook do Moskit (api/moskit-webhook.js), via a funcao
 //        criarProjetoImplantacao exportada aqui.
+//   POST /api/clickup?action=definir-gerente-contas { id } -> so em projeto
+//        sem CSM ainda e com ID Nucleo preenchido (!= "" e != "0"): sorteia
+//        o proximo Gerente de Contas em rodizio fixo (GERENTE_OPCOES, em
+//        _lib/clickup.js), grava no projeto e ja cria o cliente na lista
+//        Carteiras (901327787926) — substitui o processo manual via
+//        Londriconnect.
 //   POST /api/clickup?action=atualizar-implantacao { id, etapaAtual, prioridade[], ... }
 //   POST /api/clickup?action=atualizar-agente      { taskId, buildChecks?, testChecks?, ... }
 //   POST /api/clickup?action=comentar-implantacao  { taskId, texto, imagem? }
@@ -84,6 +90,7 @@ import {
   CAMPOS_ESCRITA,
   cnpjDoAgendamentoGoogle,
   contextoSemEstado,
+  criarClienteCarteira,
   criarComentario,
   criarModeloMensagem,
   criarReserva,
@@ -95,6 +102,7 @@ import {
   ErroConfigClickUp,
   ErroUpstream,
   excluirTask,
+  GERENTE_OPCOES,
   getCarteira,
   getMetas,
   googleEventIdDaDescricaoReserva,
@@ -216,6 +224,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && acao === 'listar-implantacoes') return await listarImplantacoesAcao(res, sessao);
     if (req.method === 'GET' && acao === 'obter-implantacao') return await obterImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'criar-implantacao') return await criarImplantacaoAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'definir-gerente-contas') {
+      return await definirGerenteContasAcao(req, res, sessao);
+    }
     if (req.method === 'POST' && acao === 'atualizar-implantacao') {
       return await atualizarImplantacaoAcao(req, res, sessao);
     }
@@ -262,6 +273,7 @@ export default async function handler(req, res) {
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
+      'definir-gerente-contas',
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
       'listar-comentarios', 'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
@@ -1271,6 +1283,9 @@ async function obterImplantacaoAcao(req, res, sessao) {
       // de propósito: CSM aqui é o gerente de contas que assume a partir da
       // implantação, um papel diferente.
       vendedor: texto(estadoProjeto.vendedor, 120),
+      // Nome puro do cliente (sem prefixo do nome do projeto) — usado por
+      // definir-gerente-contas pra criar o cliente na Carteira.
+      clienteNome: texto(estadoProjeto.cliente, 120),
       finalizacao: sanearFinalizacao(estadoProjeto.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estadoProjeto, sessao),
       anexos: mapearAnexos(pai.attachments),
@@ -1296,16 +1311,24 @@ async function obterImplantacaoAcao(req, res, sessao) {
  * o mesmo evento chega mais de uma vez.
  */
 export async function criarProjetoImplantacao({
-  nomeProjeto, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor, origemMoskitDealId,
+  nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor, origemMoskitDealId,
 }) {
   const descricaoProjeto = stringifyWaipeState(
-    [`**CSM:** ${csmNome}`, contexto].filter(Boolean).join('\n\n'),
+    // Sem csmNome (projeto ainda sem gerente de contas, ver
+    // definir-gerente-contas), a linha "**CSM:**" nem entra — deixá-la vazia
+    // faria csmDaDescricaoImplantacao (regex "CSM:\s*(.+)", \s cruza linha
+    // em branco) capturar o começo do CONTEXTO como se fosse o nome do CSM.
+    [csmNome ? `**CSM:** ${csmNome}` : null, contexto].filter(Boolean).join('\n\n'),
     {
       etapaAtual: 'escopo',
       prioridade: [],
       agenteAtualId: null,
       concluidos: [],
       agentesTotal: agentes.length + solucoes.length,
+      // Nome puro do cliente (sem prefixo tipo "Cliente Novo - ") — usado
+      // depois por definir-gerente-contas pra criar o cliente na Carteira
+      // sem precisar re-parsear o nome do projeto.
+      cliente: texto(cliente, 120),
       vendedor: texto(vendedor, 120),
       origemMoskitDealId: origemMoskitDealId ?? null,
       ...dadosCliente,
@@ -1388,10 +1411,93 @@ async function criarImplantacaoAcao(req, res, sessao) {
   const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
 
   const projeto = await criarProjetoImplantacao({
-    nomeProjeto: `${cliente} — Implantação Waipe`, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
+    nomeProjeto: `${cliente} — Implantação Waipe`, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
   });
 
   return res.status(200).json({ ok: true, id: projeto.id });
+}
+
+/**
+ * POST ?action=definir-gerente-contas { id } — sorteia (rodízio fixo,
+ * ordem de GERENTE_OPCOES) o próximo Gerente de Contas pra um projeto
+ * ainda sem CSM, grava a atribuição no projeto e já cria o cliente na
+ * lista Carteiras — substitui o processo manual de buscar no
+ * Londriconnect pra dar entrada num cliente novo. Exige ID Núcleo já
+ * preenchido (e diferente do placeholder "0" que o Comercial usa): sem
+ * isso o cliente entraria na carteira sem identificação nenhuma.
+ */
+async function definirGerenteContasAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { tarefa, projeto } = resolvido;
+  if (tarefa.id !== projeto.id) {
+    return erro(res, 400, 'task_invalida', 'Defina o gerente a partir da task do projeto, não de uma subtask.');
+  }
+
+  const csmAtual = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csmAtual, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (csmAtual) {
+    return erro(res, 409, 'gerente_ja_definido', 'Este projeto já tem um gerente de contas definido.');
+  }
+
+  const estadoAtual = parseWaipeState(projeto.description);
+  const idNucleo = texto(estadoAtual.idNucleo, 60);
+  if (!idNucleo || idNucleo === '0') {
+    return erro(res, 400, 'id_nucleo_pendente', 'Preencha o ID Núcleo antes de definir o gerente de contas.');
+  }
+
+  // Rodízio: acha, entre os projetos que já passaram por este fluxo, o de
+  // rodizioEm mais recente, e soma 1 (mod N) ao índice dele. Sem nenhum
+  // ainda, começa do primeiro da lista (índice 0).
+  const projetos = await listarImplantacoes();
+  let ultimoIndex = -1;
+  let ultimoEm = -1;
+  for (const t of projetos) {
+    const e = parseWaipeState(t.description);
+    const em = Number(e.rodizioEm);
+    if (Number.isFinite(em) && em > ultimoEm && Number.isInteger(e.rodizioIndex)) {
+      ultimoEm = em;
+      ultimoIndex = e.rodizioIndex;
+    }
+  }
+  const proximoIndex = (ultimoIndex + 1) % GERENTE_OPCOES.length;
+  const gerente = GERENTE_OPCOES[proximoIndex];
+
+  const contexto = contextoSemEstado(projeto.description);
+  await atualizarTask(projeto.id, {
+    markdown_description: stringifyWaipeState(
+      [`**CSM:** ${gerente.nome}`, contexto].filter(Boolean).join('\n\n'),
+      { ...estadoAtual, rodizioIndex: proximoIndex, rodizioEm: Date.now() }
+    ),
+  });
+
+  await criarClienteCarteira({
+    nome: texto(estadoAtual.cliente, 120) || projeto.name,
+    idNucleo,
+    cnpj: texto(estadoAtual.cnpj, 20),
+    gerenteOpcaoId: gerente.id,
+  });
+
+  return res.status(200).json({ ok: true, gerente: gerente.nome });
 }
 
 async function atualizarImplantacaoAcao(req, res, sessao) {

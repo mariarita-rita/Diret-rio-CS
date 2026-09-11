@@ -96,6 +96,13 @@ const stubClickup = `
   export async function listarTokensGoogle() { return []; }
   export async function listarModelosMensagem() { return []; }
   export async function criarModeloMensagem() { return { id: 'stub-modelo' }; }
+  export const GERENTE_OPCOES = [
+    { nome: 'Gian Luca', id: 'stub-gerente-gian' },
+    { nome: 'Guilherme Camargo', id: 'stub-gerente-guilherme' },
+    { nome: 'Lucineia Felix', id: 'stub-gerente-lucineia' },
+    { nome: 'Patricia Carvalho', id: 'stub-gerente-patricia' },
+  ];
+  export async function criarClienteCarteira() { return { id: 'stub-cliente-carteira' }; }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -3807,7 +3814,11 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
   const [corpoProjeto, corpoSubtask] = escritasMw;
   checar('  nome do projeto usa o nome do NEGOCIO, padronizado "Cliente Novo - X"', corpoProjeto.name, 'Cliente Novo - PEDRALHA LTDA');
   checar('  grava o vendedor (responsavel do negocio), separado do CSM', corpoProjeto.markdown_description.includes('"vendedor":"Clayton Buzinhani"'), true);
-  checar('  CSM fica em branco (a definir depois, nao "Automacao Moskit")', corpoProjeto.markdown_description.includes('Automação Moskit'), false);
+  checar(
+    '  CSM fica em branco de verdade: nem a linha "**CSM:**" entra (senão csmDaDescricaoImplantacao capturaria o contexto)',
+    corpoProjeto.markdown_description.includes('**CSM:**') || corpoProjeto.markdown_description.includes('Automação Moskit'),
+    false
+  );
   checar('  copia só o anexo com MIME permitido (certificado), ignora o .exe', anexosCriados.length, 1);
   checar('  grava origemMoskitDealId no estado (idempotencia)', corpoProjeto.markdown_description.includes('"origemMoskitDealId":503'), true);
   checar(
@@ -3859,6 +3870,94 @@ console.log('\n[48] api/moskit-webhook.js — negocio ganho no Moskit cria proje
 
   globalThis.fetch = fetchOriginal;
   delete globalThis.__moskitFixtures;
+}
+
+console.log('\n[49] definir-gerente-contas: rodizio fixo + criacao na Carteira');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  const LISTA = '901328976497';
+  const LISTA_CARTEIRA = '901327787926';
+  const escritasProjeto = [];
+  const carteiraCriada = [];
+  let projetosExistentes = [];
+  let estadoProjeto = { idNucleo: '', cnpj: '00.000.000/0001-00', cliente: 'Cliente Teste', concluidos: [] };
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+  // Sem CSM ainda, a linha "**CSM:**" nem existe na descrição (ver o fix em
+  // criarProjetoImplantacao — omitir a linha evita que csmDaDescricaoImplantacao
+  // capture o começo do contexto como se fosse o nome do CSM).
+  const descProjeto = () => `Contexto de teste.\n\n${JSON.stringify(estadoProjeto)}`;
+  const taskProjeto = () => ({ id: 'tProjGerente', name: 'Cliente Novo - Cliente Teste', list: { id: LISTA }, parent: null, description: descProjeto() });
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'PUT' && u.endsWith('/task/tProjGerente')) {
+      escritasProjeto.push(JSON.parse(init.body));
+      return ok({});
+    }
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_CARTEIRA}/task`)) {
+      carteiraCriada.push(JSON.parse(init.body));
+      return ok({ id: 'novo-carteira' });
+    }
+    if (u.includes(`/list/${LISTA}/task?`)) {
+      return ok({ tasks: projetosExistentes, last_page: true });
+    }
+    if (u.includes('/task/tProjGerente')) return ok(taskProjeto());
+    return ok({});
+  };
+
+  const libUrl = libClickupUnica('gerente-contas');
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const chamarPost = async (perfil, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action: 'definir-gerente-contas' }, body }, r);
+    return r;
+  };
+
+  const semPermissao = await chamarPost(CONSULTA, { id: 'tProjGerente' });
+  checar('definir-gerente-contas: consulta -> 403', [semPermissao.code, semPermissao.corpo.code], [403, 'somente_leitura']);
+
+  const semIdNucleo = await chamarPost(GESTAO, { id: 'tProjGerente' });
+  checar('definir-gerente-contas: ID Nucleo vazio -> 400', [semIdNucleo.code, semIdNucleo.corpo.code], [400, 'id_nucleo_pendente']);
+
+  estadoProjeto = { ...estadoProjeto, idNucleo: '0' };
+  const idNucleoZero = await chamarPost(GESTAO, { id: 'tProjGerente' });
+  checar('definir-gerente-contas: ID Nucleo "0" (placeholder) -> 400', [idNucleoZero.code, idNucleoZero.corpo.code], [400, 'id_nucleo_pendente']);
+
+  // Primeiro rodizio (nenhum projeto com rodizioIndex ainda) -> cai no primeiro da lista (Gian Luca).
+  estadoProjeto = { ...estadoProjeto, idNucleo: '123456' };
+  escritasProjeto.length = 0;
+  carteiraCriada.length = 0;
+  const primeiroRodizio = await chamarPost(GESTAO, { id: 'tProjGerente' });
+  checar('definir-gerente-contas: primeiro rodizio -> 200, Gian Luca', [primeiroRodizio.code, primeiroRodizio.corpo.gerente], [200, 'Gian Luca']);
+  checar('  grava rodizioIndex 0 e o CSM no projeto', escritasProjeto[0]?.markdown_description.includes('**CSM:** Gian Luca') && escritasProjeto[0]?.markdown_description.includes('"rodizioIndex":0'), true);
+  checar('  cria o cliente na Carteira com idNucleo NUMERICO e o id da opcao certa', carteiraCriada[0]?.custom_fields?.some((c) => c.value === 123456) && carteiraCriada[0]?.custom_fields?.some((c) => c.value === '7fe6407b-3c75-48b1-bfb5-d429be6d68d8'), true);
+
+  // Rodizio seguinte: ja existe 1 projeto com rodizioIndex:0 -> cai no proximo (Guilherme).
+  projetosExistentes = [{ id: 'outroProjeto', description: `Contexto\n\n${JSON.stringify({ rodizioIndex: 0, rodizioEm: Date.now() - 1000 })}` }];
+  escritasProjeto.length = 0;
+  const segundoRodizio = await chamarPost(GESTAO, { id: 'tProjGerente' });
+  checar('definir-gerente-contas: rodizio seguinte -> 200, Guilherme Camargo', [segundoRodizio.code, segundoRodizio.corpo.gerente], [200, 'Guilherme Camargo']);
+
+  // CSM ja definido -> 409, nao roda de novo.
+  estadoProjeto = { ...estadoProjeto };
+  const comCsmDefinido = () => ({ id: 'tProjGerente', name: 'x', list: { id: LISTA }, parent: null, description: `**CSM:** Gian Luca\n\nContexto\n\n${JSON.stringify(estadoProjeto)}` });
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    if (u.includes('/task/tProjGerente') && (init?.method || 'GET') === 'GET') return ok(comCsmDefinido());
+    return ok({});
+  };
+  const jaDefinido = await chamarPost(GESTAO, { id: 'tProjGerente' });
+  checar('definir-gerente-contas: CSM ja definido -> 409', [jaDefinido.code, jaDefinido.corpo.code], [409, 'gerente_ja_definido']);
+
+  globalThis.fetch = fetchOriginal;
 }
 
 console.log(`\n${total - falhas}/${total} passaram`);

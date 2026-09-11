@@ -224,6 +224,7 @@ async function processarEvento(corpo) {
 
   const projeto = await criarProjetoImplantacao({
     nomeProjeto: `Cliente Novo - ${cliente}`,
+    cliente,
     contexto,
     dadosCliente,
     agentes: [],
