@@ -230,6 +230,17 @@
   .proj-card-top h3{font-size:15px; font-weight:700;}
   .proj-card-meta{font-size:12px; color:var(--muted); margin-top:6px;}
 
+  /* ---- Kanban (mesma fase da lista, só reorganizada em colunas) ---- */
+  .modo-visualizacao{display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:12px;}
+  .modo-visualizacao button{border:none; background:var(--surface); padding:6px 12px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;}
+  .modo-visualizacao button.ativo{background:var(--azul); color:#fff;}
+  .kanban-board{display:flex; gap:14px; overflow-x:auto; padding-bottom:8px;}
+  .kanban-col{flex:0 0 260px; width:260px; background:var(--surface-2); border-radius:12px; padding:10px;}
+  .kanban-col-header{font-size:12.5px; font-weight:700; color:var(--ink); display:flex; justify-content:space-between; align-items:center; padding:2px 4px 10px;}
+  .kanban-col-count{font-size:11px; font-weight:600; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px;}
+  .kanban-col .proj-card{margin-bottom:8px;}
+  .kanban-col-vazia{font-size:12px; color:var(--muted); padding:8px 4px;}
+
   .form-field{margin-bottom:14px;}
   .form-field label{display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px;}
   .form-input, .form-textarea{width:100%; padding:9px 12px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px;}
@@ -1118,6 +1129,8 @@
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
+  var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM), vale pra lista e pro Kanban
+  var modoVisualizacaoProjetos = "lista"; // "lista" | "kanban" — mesmos projetos, só reorganizados em colunas por fase no Kanban
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
@@ -1324,6 +1337,11 @@
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var todasIsm = Array.from(new Set((projetosCache || []).flatMap(function(p){ return p.ism || []; }).filter(Boolean)))
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+    // Fase (manual ou derivada) é o rótulo principal do card — Status
+    // nativo do ClickUp já não agrega nada acima dela, então some do
+    // card (continua disponível no detalhe do projeto). Mesmo valor
+    // usado no filtro e nas colunas do Kanban.
+    function faseEfetiva(p){ return p.faseProjetoManual || p.faseProjetoDerivada; }
     var lista = (projetosCache || []).filter(function(p){
       // Proposta ainda nao fechada nao e projeto de implantacao de verdade
       // ainda — so aparece/edita pelo simulador ("Carregar proposta salva"),
@@ -1332,6 +1350,7 @@
       if (entregues ? p.status !== "concluído" : p.status === "concluído") return false;
       if (filtroCsmAtivo && p.csm !== filtroCsmAtivo) return false;
       if (filtroIsmAtivo && !(p.ism || []).includes(filtroIsmAtivo)) return false;
+      if (filtroFaseAtiva && faseEfetiva(p) !== filtroFaseAtiva) return false;
       return true;
     });
     // Só mostra o filtro quando faz diferença — 1 CSM só ou nenhum não precisa.
@@ -1343,39 +1362,63 @@
         '</select></div>'
       : "") +
       (todasIsm.length > 1
-      ? '<div style="margin-bottom:12px;display:inline-block;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por ISM</label>' +
+      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por ISM</label>' +
         '<select id="filtroIsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroIsmAtivo ? "" : " selected") + '>Todos</option>' +
         todasIsm.map(function(i){ return '<option value="' + esc(i) + '"' + (i === filtroIsmAtivo ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") +
         '</select></div>'
-      : "");
+      : "") +
+      '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por fase</label>' +
+      '<select id="filtroFaseProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+      '<option value=""' + (filtroFaseAtiva ? "" : " selected") + '>Todas</option>' +
+      FASES_ORDEM.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
+      '</select></div>' +
+      '<div class="modo-visualizacao" style="vertical-align:top;">' +
+      '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
+      '<button type="button" id="btnModoKanban" class="' + (modoVisualizacaoProjetos === "kanban" ? "ativo" : "") + '">🗂️ Kanban</button>' +
+      '</div>';
+
+    function cardHtml(p){
+      var diasAberto = p.dataCriacao ? Math.max(0, Math.floor((Date.now() - p.dataCriacao) / 86400000)) : null;
+      var fase = faseEfetiva(p);
+      var faseTag = fase
+        ? ' <span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span>'
+        : "";
+      var statusCor = p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)");
+      var statusDot = '<span title="Status: ' + esc(STATUS_LABEL[p.status] || p.status || "—") + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
+      var pct = p.agentesTotal ? Math.round((p.agentesConcluidos / p.agentesTotal) * 100) : 0;
+      var novaMsgDot = p.temMensagemNova
+        ? '<span title="Mensagem nova do cliente" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
+        : '';
+      return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
+        '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + novaMsgDot + '</div>' +
+        '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
+        (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
+        (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
+      '</div>';
+    }
+
     if (!lista.length){
       wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
-        (filtroCsmAtivo || filtroIsmAtivo ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
+        (filtroCsmAtivo || filtroIsmAtivo || filtroFaseAtiva ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
         '</div></div>';
-    } else {
-      wrap.innerHTML = filtroHtml + lista.map(function(p){
-        var diasAberto = p.dataCriacao ? Math.max(0, Math.floor((Date.now() - p.dataCriacao) / 86400000)) : null;
-        // Fase (manual ou derivada) é o rótulo principal do card — Status
-        // nativo do ClickUp já não agrega nada acima dela, então some do
-        // card (continua disponível no detalhe do projeto).
-        var faseEfetiva = p.faseProjetoManual || p.faseProjetoDerivada;
-        var faseTag = faseEfetiva
-          ? ' <span class="tag ' + (FASE_TAG_CLASS[faseEfetiva] || "neutro") + '">' + esc(FASE_LABEL[faseEfetiva] || faseEfetiva) + '</span>'
-          : "";
-        var statusCor = p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)");
-        var statusDot = '<span title="Status: ' + esc(STATUS_LABEL[p.status] || p.status || "—") + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
-        var pct = p.agentesTotal ? Math.round((p.agentesConcluidos / p.agentesTotal) * 100) : 0;
-        var novaMsgDot = p.temMensagemNova
-          ? '<span title="Mensagem nova do cliente" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
-          : '';
-        return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
-          '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + novaMsgDot + '</div>' +
-          '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
-          (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
-          (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
+    } else if (modoVisualizacaoProjetos === "kanban"){
+      var porFase = {};
+      lista.forEach(function(p){
+        var f = faseEfetiva(p) || "";
+        (porFase[f] = porFase[f] || []).push(p);
+      });
+      wrap.innerHTML = filtroHtml + '<div class="kanban-board">' +
+        FASES_ORDEM.map(function(f){
+          var doGrupo = porFase[f] || [];
+          return '<div class="kanban-col">' +
+            '<div class="kanban-col-header"><span>' + esc(FASE_LABEL[f] || f) + '</span><span class="kanban-col-count">' + doGrupo.length + '</span></div>' +
+            (doGrupo.length ? doGrupo.map(cardHtml).join("") : '<div class="kanban-col-vazia">Nenhum projeto</div>') +
+            '</div>';
+        }).join("") +
         '</div>';
-      }).join("");
+    } else {
+      wrap.innerHTML = filtroHtml + lista.map(cardHtml).join("");
     }
     wrap.querySelectorAll("[data-proj]").forEach(function(card){
       card.addEventListener("click", function(){ abrirProjeto(card.getAttribute("data-proj")); });
@@ -1388,6 +1431,21 @@
     var selIsm = document.getElementById("filtroIsmProjetos");
     if (selIsm) selIsm.addEventListener("change", function(){
       filtroIsmAtivo = selIsm.value;
+      renderListaProjetosWrap();
+    });
+    var selFase = document.getElementById("filtroFaseProjetos");
+    if (selFase) selFase.addEventListener("change", function(){
+      filtroFaseAtiva = selFase.value;
+      renderListaProjetosWrap();
+    });
+    var btnModoLista = document.getElementById("btnModoLista");
+    if (btnModoLista) btnModoLista.addEventListener("click", function(){
+      modoVisualizacaoProjetos = "lista";
+      renderListaProjetosWrap();
+    });
+    var btnModoKanban = document.getElementById("btnModoKanban");
+    if (btnModoKanban) btnModoKanban.addEventListener("click", function(){
+      modoVisualizacaoProjetos = "kanban";
       renderListaProjetosWrap();
     });
   }
