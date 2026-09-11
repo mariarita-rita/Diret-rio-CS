@@ -161,6 +161,41 @@ details[open]>summary.section-label::before{transform:rotate(90deg);}
   .card{padding:1.75rem 1.5rem}
   .hero-title{font-size:22px}
 }
+
+/* ===== Revisão UI/UX do CS Hub — apresentação בלבד ===== */
+:root{--hub-bg:#f4f7fb;--hub-surface:#fff;--hub-surface-soft:#f8faff;--hub-ink:#111a33;--hub-ink-2:#3d4963;--hub-muted:#6e7b93;--hub-border:#dfe6f0;--hub-brand:#2563eb;--hub-brand-dark:#1746ad;--hub-brand-soft:#edf4ff;--hub-shadow:0 12px 34px rgba(22,45,88,.08)}
+html{background:var(--hub-bg)}
+body{background:var(--hub-bg);color:var(--hub-ink);padding:32px 20px 48px;overflow-x:hidden}
+body::before{background:radial-gradient(ellipse 70% 45% at 10% 0%,rgba(37,99,235,.09),transparent 65%),linear-gradient(180deg,#f8fbff 0%,#f4f7fb 62%,#eef3fa 100%);z-index:0}
+body::after{background-image:radial-gradient(circle,rgba(37,99,235,.06) 1px,transparent 1px);background-size:34px 34px}
+.container{max-width:1040px;align-items:stretch;gap:0}
+.logo-wrap{margin:0 0 24px;padding:0 4px;align-items:center;gap:12px}.logo-img{width:44px;height:44px;border-radius:12px;box-shadow:0 5px 12px rgba(37,99,235,.16)}.logo-name{color:var(--hub-ink);font-size:18px}.logo-sub{color:var(--hub-brand);font-size:10px}
+.card{padding:36px 40px 32px;background:var(--hub-surface);border:1px solid var(--hub-border);border-radius:20px;box-shadow:var(--hub-shadow);backdrop-filter:none;-webkit-backdrop-filter:none}
+.hero-label{color:var(--hub-brand-dark);background:var(--hub-brand-soft);border-color:#cbdcfb;margin-bottom:14px}.hero-title{color:var(--hub-ink);font-size:32px;letter-spacing:-.8px}.hero-title span{color:var(--hub-brand)}.hero-desc{max-width:720px;color:var(--hub-ink-2);font-size:14px;line-height:1.65;margin-bottom:0}.hero-tip{color:var(--hub-muted);background:var(--hub-surface-soft);border-left-color:var(--hub-brand);margin:16px 0 24px;padding:11px 14px}
+.divider{background:var(--hub-border);margin:0 0 24px}.login-bar{padding:14px 16px;margin-bottom:26px;border:1px solid var(--hub-border);border-radius:12px;background:#f8faff}.login-bar-row{gap:10px}.login-bar-input{padding:10px 12px;border-color:#c9d5e6;background:#fff;color:var(--hub-ink)}.login-bar-input::placeholder{color:#8b97aa}.login-bar-input:focus{border-color:var(--hub-brand);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.login-bar-btn{padding:10px 20px;background:var(--hub-brand);box-shadow:0 3px 8px rgba(37,99,235,.18)}.login-bar-btn:hover{background:var(--hub-brand-dark);opacity:1}.login-bar-status-text{color:var(--hub-muted)}.login-bar-status-text b{color:var(--hub-ink)}.login-bar-logout{color:var(--hub-ink-2);background:#fff;border-color:#cbd5e1}.login-bar-logout:hover{background:var(--hub-brand-soft);border-color:#a9c5f4}.login-bar-error{color:#b42318}
+.section{margin-top:0}.section-label{display:flex;align-items:center;gap:8px;color:var(--hub-ink);font-size:12px;letter-spacing:.08em;margin:26px 0 12px;padding-bottom:9px;border-bottom:1px solid var(--hub-border)}summary.section-label{cursor:pointer}.section-label::before{color:var(--hub-brand);font-size:10px}.section-label:hover{color:var(--hub-brand-dark)}
+.tools-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:4px}.tool-btn{min-height:124px;padding:18px;border:1px solid var(--hub-border);border-radius:13px;background:var(--hub-surface-soft);box-shadow:0 2px 5px rgba(16,35,70,.025)}.tool-btn::before{background:linear-gradient(90deg,var(--hub-brand),#73a5ff)}.tool-btn:hover{background:var(--hub-brand-soft);border-color:#a9c5f4;transform:translateY(-2px);box-shadow:0 8px 16px rgba(37,99,235,.09)}.tool-icon{width:36px;height:36px;border-radius:10px;margin-bottom:13px}.tool-name{color:var(--hub-ink);font-size:13.5px}.tool-desc{color:var(--hub-muted);font-size:12px;line-height:1.5;max-width:360px}.tool-arrow{color:#7893bd;bottom:15px;right:16px}.tool-btn:hover .tool-arrow{color:var(--hub-brand)}.badge-restrito{color:#9a6700;background:#fff7df;border-color:#efd48a}.footer{margin-top:18px;color:#8a96a9;font-size:11px}
+@media(max-width:700px){body{padding:20px 14px 36px}.card{padding:26px 20px 24px}.hero-title{font-size:27px}.hero-desc{font-size:13.5px}.login-bar-row{align-items:stretch;flex-wrap:wrap}.login-bar-input{min-width:0;flex-basis:100%}.login-bar-btn{flex:1}.login-bar-status-text{min-width:0}.tools-grid{grid-template-columns:1fr}.tool-full{grid-column:span 1}.tool-btn{min-height:108px}}
+@media(max-width:420px){.card{padding:22px 16px}.logo-wrap{margin-bottom:18px}.hero-title{font-size:24px}.section-label{margin-top:22px}}@media(prefers-reduced-motion:reduce){.tool-btn{transition:none}}
+
+
+/* ===== V2: tema alternável, login em modal e cartões compactos ===== */
+.hub-toolbar{display:flex;justify-content:flex-end;margin:-8px 0 10px}.theme-toggle{border:1px solid var(--hub-border);background:var(--hub-surface);color:var(--hub-ink-2);border-radius:999px;padding:8px 13px;font:600 11px Inter,system-ui,sans-serif;cursor:pointer;box-shadow:0 2px 7px rgba(22,45,88,.05)}.theme-toggle:hover{border-color:#9dbcf0;color:var(--hub-brand-dark);background:var(--hub-brand-soft)}
+.tool-btn{min-height:104px;padding:14px 16px}.tool-icon{width:32px;height:32px;font-size:16px;margin-bottom:9px}.tool-name{font-size:13px;margin-bottom:3px}.tool-desc{font-size:11.5px;line-height:1.4}.tool-arrow{bottom:12px;right:13px}.tools-grid{gap:10px}
+body:not(.hub-authenticated):not(.hub-guest) #loginBar{position:fixed;z-index:100;top:50%;left:50%;width:min(420px,calc(100vw - 32px));transform:translate(-50%,-50%);margin:0;padding:24px;border:1px solid #cbd8eb;border-radius:16px;background:var(--hub-surface);box-shadow:0 24px 70px rgba(11,22,64,.23),0 0 0 100vmax rgba(11,22,64,.48)}
+body:not(.hub-authenticated):not(.hub-guest) #loginBar::before{content:'Acesso ao CS Hub';display:block;color:var(--hub-ink);font-size:18px;font-weight:800;letter-spacing:-.02em;margin-bottom:5px}body:not(.hub-authenticated):not(.hub-guest) #loginBar::after{content:'Digite sua senha para acessar as ferramentas do time.';display:block;color:var(--hub-muted);font-size:12.5px;line-height:1.5;margin-top:-63px;margin-bottom:48px;pointer-events:none}
+body:not(.hub-authenticated):not(.hub-guest) #loginBar .login-bar-row{display:flex}.login-bar-input{font-size:13px}.login-bar-btn{min-width:86px}
+body.hub-authenticated #loginBar{margin-bottom:22px}
+body.hub-authenticated #loginBar .login-bar-error{min-height:0}
+.login-bar-guest{display:block;width:100%;margin-top:12px;padding:9px 4px 0;border:none;border-top:1px solid var(--hub-border);background:transparent;color:var(--hub-muted);font:600 11.5px Inter,system-ui,sans-serif;text-align:center;cursor:pointer}
+.login-bar-guest:hover{color:var(--hub-brand-dark)}
+body.hub-authenticated .login-bar-guest,body.hub-guest .login-bar-guest{display:none}
+:root.hub-dark .login-bar-guest{color:var(--hub-muted)}
+:root.hub-dark .login-bar-guest:hover{color:#fff}
+:root.hub-dark{--hub-bg:#0d1730;--hub-surface:#14213d;--hub-surface-soft:#182949;--hub-ink:#f4f7ff;--hub-ink-2:#c2cee4;--hub-muted:#94a5c2;--hub-border:#2d4165;--hub-brand-soft:#1b3565;--hub-shadow:0 14px 36px rgba(0,0,0,.24)}
+:root.hub-dark body{background:var(--hub-bg);color:var(--hub-ink)}:root.hub-dark body::before{background:radial-gradient(ellipse 70% 45% at 10% 0%,rgba(58,134,255,.18),transparent 65%),linear-gradient(180deg,#0c1730,#0d1730)}:root.hub-dark body::after{background-image:radial-gradient(circle,rgba(126,166,255,.1) 1px,transparent 1px)}:root.hub-dark .logo-name,:root.hub-dark .hero-title,:root.hub-dark .tool-name,:root.hub-dark .section-label,:root.hub-dark .theme-toggle,:root.hub-dark body:not(.hub-authenticated):not(.hub-guest) #loginBar::before{color:var(--hub-ink)}:root.hub-dark .hero-desc{color:var(--hub-ink-2)}:root.hub-dark .hero-tip{color:var(--hub-muted);background:#172746}:root.hub-dark .card,:root.hub-dark .theme-toggle,:root.hub-dark .login-bar,:root.hub-dark body:not(.hub-authenticated):not(.hub-guest) #loginBar{background:var(--hub-surface);border-color:var(--hub-border)}:root.hub-dark .login-bar-input{background:#0d1932;border-color:#3a527b;color:#fff}:root.hub-dark .login-bar-input::placeholder{color:#8fa1c0}:root.hub-dark .login-bar-logout{color:var(--hub-ink-2);background:#1b2c4d;border-color:#3a527b}:root.hub-dark .tool-btn{background:var(--hub-surface-soft);border-color:var(--hub-border)}:root.hub-dark .tool-btn:hover{background:#203967;border-color:#4b78c2}:root.hub-dark .tool-desc{color:var(--hub-muted)}:root.hub-dark .divider{background:var(--hub-border)}:root.hub-dark .section-label{border-color:var(--hub-border)}:root.hub-dark .footer{color:#7183a1}:root.hub-dark body:not(.hub-authenticated):not(.hub-guest) #loginBar::after{color:var(--hub-muted)}
+@media(max-width:700px){.hub-toolbar{margin-top:-4px}.tool-btn{min-height:96px;padding:13px 14px}}
+
 </style>
 </head>
 <body>
@@ -172,6 +207,10 @@ details[open]>summary.section-label::before{transform:rotate(90deg);}
       <div class="logo-name">Londrisoft</div>
       <div class="logo-sub">Customer Success</div>
     </div>
+  </div>
+
+  <div class="hub-toolbar">
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar modo escuro">◐ <span>Modo escuro</span></button>
   </div>
 
   <div class="card">
@@ -195,6 +234,7 @@ details[open]>summary.section-label::before{transform:rotate(90deg);}
         <button type="button" class="login-bar-logout" onclick="hubDoLogout()">Sair</button>
       </div>
       <div class="login-bar-error" id="loginBarError"></div>
+      <button type="button" class="login-bar-guest" id="loginBarGuestBtn" onclick="hubContinuarSemSenha()">Continuar sem senha — ver só as ferramentas que não precisam de login →</button>
     </div>
 
     <div class="divider"></div>
@@ -316,6 +356,62 @@ async function hubDoLogout(){
     var s=await r.json();
     if(s&&s.autenticado)hubMostrarLogado(s.nome||'');
   }catch(_){}
+})();
+</script>
+
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var toggle=document.getElementById('themeToggle');
+  function applyTheme(dark){
+    root.classList.toggle('hub-dark',dark);
+    if(toggle){toggle.innerHTML=dark?'☼ <span>Modo claro</span>':'◐ <span>Modo escuro</span>';toggle.setAttribute('aria-label',dark?'Alternar modo claro':'Alternar modo escuro');}
+    try{localStorage.setItem('csHubTheme',dark?'dark':'light');}catch(_){ }
+  }
+  var saved='';try{saved=localStorage.getItem('csHubTheme')||'';}catch(_){ }
+  applyTheme(saved==='dark');
+  if(toggle)toggle.addEventListener('click',function(){applyTheme(!root.classList.contains('hub-dark'));});
+  // "Continuar sem senha": só dispensa o popup de login — não autentica nada
+  // (o cookie de sessão continua sendo a única fonte de verdade pra cada
+  // ferramenta restrita, que pede a senha de novo se for aberta sem sessão).
+  // Aqui só escondemos os cartões marcados "Senha necessária" e a seção
+  // some junto se ficar sem nenhum cartão visível, pra não sobrar título vazio.
+  function hubAplicarVisibilidadeRestritos(esconder){
+    document.querySelectorAll('.section').forEach(function(sec){
+      var algumVisivel=false;
+      sec.querySelectorAll('.tool-btn').forEach(function(a){
+        var restrito=!!a.querySelector('.badge-restrito');
+        if(restrito){ a.style.display=esconder?'none':''; }
+        if(!restrito||!esconder) algumVisivel=true;
+      });
+      sec.style.display=algumVisivel?'':'none';
+    });
+  }
+  window.hubContinuarSemSenha=function(){
+    document.body.classList.add('hub-guest');
+    hubAplicarVisibilidadeRestritos(true);
+    try{localStorage.setItem('csHubGuest','1');}catch(_){ }
+  };
+  var oldLogged=window.hubMostrarLogado, oldOut=window.hubMostrarDeslogado;
+  window.hubMostrarLogado=function(nome){
+    oldLogged(nome);
+    document.body.classList.add('hub-authenticated');
+    document.body.classList.remove('hub-guest');
+    hubAplicarVisibilidadeRestritos(false);
+    try{localStorage.removeItem('csHubGuest');}catch(_){ }
+  };
+  window.hubMostrarDeslogado=function(){oldOut();document.body.classList.remove('hub-authenticated');setTimeout(function(){var i=document.getElementById('loginBarInput');if(i)i.focus();},50);};
+  if(document.getElementById('loginBarInput'))setTimeout(function(){if(!document.body.classList.contains('hub-authenticated'))document.getElementById('loginBarInput').focus();},120);
+  function syncAuth(){var s=document.getElementById('loginBarStatus');if(s&&s.style.display==='flex')document.body.classList.add('hub-authenticated');}
+  setTimeout(syncAuth,250);setTimeout(syncAuth,900);
+  // Escolha de "continuar sem senha" persiste entre visitas — só some se a
+  // pessoa efetivamente logar depois (hubMostrarLogado acima já limpa isso).
+  var guestSalvo='';try{guestSalvo=localStorage.getItem('csHubGuest')||'';}catch(_){ }
+  if(guestSalvo==='1'&&!document.body.classList.contains('hub-authenticated')){
+    document.body.classList.add('hub-guest');
+    hubAplicarVisibilidadeRestritos(true);
+  }
 })();
 </script>
 
