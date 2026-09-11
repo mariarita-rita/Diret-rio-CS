@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dados tributários — Londrisoft</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--azul:#3A86FF;--noite:#000035;--profundo:#0A41B4;--claro:#A8C5FF;--quasebranco:#F0F4FF;--cinzaclaro:#E5E7EB;--cinzamedio:#6B7280;--cinzaescuro:#374151;--verde:#16A34A;--verdebg:#ECFDF5;--vermelho:#DC2626;--vermelhobg:#FEF2F2}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Inter",Arial,sans-serif;color:var(--cinzaescuro);line-height:1.5;background:var(--quasebranco);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:#fff;max-width:520px;width:100%;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,53,.08);padding:32px}
+  .brand{display:flex;align-items:center;gap:8px;margin-bottom:20px;color:var(--noite);font-weight:700;font-size:15px}
+  h1{font-size:19px;color:var(--noite);margin-bottom:6px}
+  .sub{font-size:13.5px;color:var(--cinzamedio);margin-bottom:20px}
+  .aviso{background:#FEF9C3;border-left:4px solid #CA8A04;border-radius:0 8px 8px 0;padding:10px 14px;font-size:13px;margin-bottom:18px}
+  .erro{background:var(--vermelhobg);border-left:4px solid var(--vermelho);border-radius:0 8px 8px 0;padding:12px 14px;font-size:13.5px;color:#991B1B;margin-bottom:16px}
+  .campo{margin-bottom:16px}
+  label{display:block;font-size:13px;font-weight:600;color:var(--noite);margin-bottom:5px}
+  .hint{font-size:12px;color:var(--cinzamedio);margin-top:4px}
+  input[type=text],select{width:100%;padding:10px 12px;border:1px solid var(--cinzaclaro);border-radius:8px;font-size:14px;font-family:inherit;background:#fff}
+  input[type=text]:focus,select:focus{outline:2px solid var(--azul);outline-offset:1px;border-color:var(--azul)}
+  .radios{display:flex;gap:16px;margin-top:4px}
+  .radios label{display:flex;align-items:center;gap:6px;font-weight:400;font-size:14px;color:var(--cinzaescuro)}
+  input[type=file]{width:100%;font-size:13px;margin-top:8px}
+  .btn{width:100%;background:var(--azul);color:#fff;border:none;padding:13px 18px;border-radius:9px;font-weight:700;font-size:14.5px;cursor:pointer;margin-top:8px}
+  .btn:hover{background:var(--profundo)}
+  .btn:disabled{background:var(--cinzaclaro);color:var(--cinzamedio);cursor:not-allowed}
+  .sucesso{text-align:center;padding:20px 0}
+  .sucesso .selo{width:56px;height:56px;border-radius:50%;background:var(--verdebg);color:var(--verde);font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+  .carregando{text-align:center;color:var(--cinzamedio);padding:20px 0;font-size:14px}
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#3A86FF"/><path d="M7 8.5v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3" stroke="#fff" stroke-width="1.6"/><circle cx="6" cy="6" r="2" fill="#fff"/><circle cx="18" cy="6" r="2" fill="#fff"/><circle cx="12" cy="18" r="2" fill="#fff"/></svg>
+      Londrisoft
+    </div>
+    <div id="conteudo" class="carregando">Carregando…</div>
+  </div>
+
+<script>
+(function(){
+  var params = new URLSearchParams(location.search);
+  var id = params.get("id") || "";
+  var token = params.get("token") || "";
+  var qs = "id=" + encodeURIComponent(id) + "&token=" + encodeURIComponent(token);
+  var MAX_ANEXO_BYTES = 4 * 1024 * 1024;
+  var conteudo = document.getElementById("conteudo");
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function telaErro(msg){
+    conteudo.innerHTML = '<div class="erro">' + escapeHtml(msg) + '</div>';
+  }
+
+  function tratarResposta(r){
+    return r.json().then(function(j){
+      if (!r.ok) throw j;
+      return j;
+    });
+  }
+
+  if (!id || !token){
+    telaErro("Este link está incompleto. Peça um novo link pra Londrisoft.");
+    return;
+  }
+
+  fetch("/api/formulario-tributario?" + qs).then(tratarResposta).then(function(dados){
+    renderFormulario(dados);
+  }).catch(function(){
+    telaErro("Este link não é válido ou expirou. Peça um novo link pra Londrisoft.");
+  });
+
+  function renderFormulario(dados){
+    conteudo.innerHTML =
+      '<h1>Dados tributários — ' + escapeHtml(dados.cliente) + '</h1>' +
+      '<div class="sub">Essas informações são usadas pra configurar corretamente a emissão fiscal do seu sistema, antes da reunião de início.</div>' +
+      (dados.jaPreenchido ? '<div class="aviso">Este formulário já foi respondido antes. Enviar de novo atualiza as informações.</div>' : "") +
+      '<div id="erroFormulario"></div>' +
+      '<div class="campo"><label>Regime tributário</label>' +
+        '<select id="fRegime">' +
+          '<option value="">Selecione…</option>' +
+          '<option value="Simples Nacional">Simples Nacional</option>' +
+          '<option value="Lucro Presumido">Lucro Presumido</option>' +
+          '<option value="Lucro Real">Lucro Real</option>' +
+        '</select></div>' +
+      '<div class="campo"><label>CST ICMS / CSOSN</label>' +
+        '<input type="text" id="fCst" placeholder="ex: CSOSN 103"></div>' +
+      '<div class="campo"><label>PIS e COFINS</label>' +
+        '<input type="text" id="fPisCofins" placeholder="ex: 49 (outras operações de saída)"></div>' +
+      '<div class="campo"><label>CFOP de vendas</label>' +
+        '<input type="text" id="fCfop" placeholder="ex: 5101 / 6101 / 5901"></div>' +
+      '<div class="campo"><label>Número da última nota fiscal emitida</label>' +
+        '<input type="text" id="fNf" placeholder="ex: 1234, ou \"não emitiu nenhuma NF\""></div>' +
+      '<div class="campo"><label>Já tem certificado digital?</label>' +
+        '<div class="radios">' +
+          '<label><input type="radio" name="fCert" value="sim"> Sim</label>' +
+          '<label><input type="radio" name="fCert" value="nao" checked> Não</label>' +
+        '</div>' +
+        '<div id="anexoWrap" style="display:none;">' +
+          '<input type="file" id="fCertArquivo" accept=".p12,.pfx,.pdf,.png,.jpg,.jpeg">' +
+          '<div class="hint">Certificado (.p12/.pfx) ou uma foto/PDF dele — até 4MB.</div>' +
+        '</div>' +
+      '</div>' +
+      '<button type="button" class="btn" id="btnEnviar">Enviar</button>';
+
+    var radiosCert = conteudo.querySelectorAll('input[name="fCert"]');
+    var anexoWrap = document.getElementById("anexoWrap");
+    radiosCert.forEach(function(r){
+      r.addEventListener("change", function(){
+        var marcado = document.querySelector('input[name="fCert"]:checked');
+        anexoWrap.style.display = (marcado && marcado.value === "sim") ? "block" : "none";
+      });
+    });
+
+    document.getElementById("btnEnviar").addEventListener("click", enviar);
+  }
+
+  function lerArquivoComoBase64(arquivo){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onload = function(){
+        var base64 = String(reader.result).split(",")[1] || "";
+        resolve(base64);
+      };
+      reader.onerror = function(){ reject(new Error("Não deu para ler o arquivo.")); };
+      reader.readAsDataURL(arquivo);
+    });
+  }
+
+  function enviar(){
+    var erroEl = document.getElementById("erroFormulario");
+    erroEl.innerHTML = "";
+    var certMarcado = document.querySelector('input[name="fCert"]:checked').value === "sim";
+    var arquivoInput = document.getElementById("fCertArquivo");
+    var arquivo = certMarcado && arquivoInput.files[0] ? arquivoInput.files[0] : null;
+
+    if (arquivo && arquivo.size > MAX_ANEXO_BYTES){
+      erroEl.innerHTML = '<div class="erro">Arquivo maior que 4MB — escolha um arquivo menor.</div>';
+      return;
+    }
+
+    var btn = document.getElementById("btnEnviar");
+    btn.disabled = true;
+    btn.textContent = "Enviando…";
+
+    var dadosTributarios = {
+      regimeTributario: document.getElementById("fRegime").value,
+      cstIcmsCsosn: document.getElementById("fCst").value,
+      pisCofins: document.getElementById("fPisCofins").value,
+      cfopVendas: document.getElementById("fCfop").value,
+      numeroUltimaNf: document.getElementById("fNf").value,
+      temCertificadoDigital: certMarcado
+    };
+
+    var promessaArquivo = arquivo ? lerArquivoComoBase64(arquivo) : Promise.resolve(null);
+    promessaArquivo.then(function(base64){
+      var corpo = { dadosTributarios: dadosTributarios };
+      if (base64){
+        corpo.certificadoArquivo = { nomeArquivo: arquivo.name, mimeType: arquivo.type || "application/octet-stream", base64: base64 };
+      }
+      return fetch("/api/formulario-tributario?" + qs, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corpo)
+      }).then(tratarResposta);
+    }).then(function(){
+      conteudo.innerHTML =
+        '<div class="sucesso"><div class="selo">✓</div>' +
+        '<h1>Recebemos, obrigado!</h1>' +
+        '<div class="sub">Suas informações já estão no projeto — a equipe Londrisoft vai usar isso pra preparar a implantação.</div>' +
+        '</div>';
+    }).catch(function(e){
+      btn.disabled = false;
+      btn.textContent = "Enviar";
+      var msg = (e && e.error) || "Não foi possível enviar. Tente novamente em instantes.";
+      erroEl.innerHTML = '<div class="erro">' + escapeHtml(msg) + '</div>';
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,8 @@
 //
 // Nada aqui aceita path livre vindo do cliente.
 
+import crypto from 'node:crypto';
+
 const BASE = 'https://api.clickup.com/api/v2';
 
 // Os dois IDs de lista vivem SO aqui. Jamais chegam do cliente.
@@ -853,6 +855,61 @@ export async function criarClienteCarteira({ nome, idNucleo, cnpj, gerenteOpcaoI
   });
   invalidarCarteira();
   return criado;
+}
+
+// ── Token assinado de projeto ────────────────────────────────────────────
+// Mesmo esquema HMAC de assinarEstadoGoogle/verificarEstadoGoogle
+// (api/_lib/google.js) — payload base64url + HMAC-SHA256 com
+// SESSION_SECRET, comparação em tempo constante. Usado pelo link público do
+// formulário de dados tributários (api/formulario-tributario.js): sem isso,
+// bastaria adivinhar/iterar o id de outro projeto pra ler/escrever nele.
+// Sem expiração de propósito — o cliente pode levar dias pra preencher.
+
+export class ErroConfigToken extends Error {
+  constructor() {
+    super('SESSION_SECRET ausente ou com menos de 32 caracteres.');
+    this.name = 'ErroConfigToken';
+  }
+}
+
+function segredoToken() {
+  const s = process.env.SESSION_SECRET;
+  if (!s || s.length < 32) throw new ErroConfigToken();
+  return s;
+}
+
+function hmacToken(dados) {
+  return crypto.createHmac('sha256', segredoToken()).update(dados).digest();
+}
+
+const b64Token = (buf) => Buffer.from(buf).toString('base64url');
+
+/** Token que amarra um link público a UM projeto específico (taskId). */
+export function assinarTokenProjeto(taskId) {
+  const corpo = b64Token(JSON.stringify({ taskId: String(taskId) }));
+  return `${corpo}.${b64Token(hmacToken(corpo))}`;
+}
+
+/** Valida o token; devolve o taskId amarrado, ou null se inválido/adulterado. */
+export function verificarTokenProjeto(token) {
+  if (typeof token !== 'string' || token.length > 512) return null;
+  const ponto = token.indexOf('.');
+  if (ponto < 1 || ponto === token.length - 1) return null;
+
+  const corpo = token.slice(0, ponto);
+  const assinatura = Buffer.from(token.slice(ponto + 1));
+  const esperada = Buffer.from(b64Token(hmacToken(corpo)));
+  if (assinatura.length !== esperada.length) return null;
+  if (!crypto.timingSafeEqual(assinatura, esperada)) return null;
+
+  let p;
+  try {
+    p = JSON.parse(Buffer.from(corpo, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!p || typeof p.taskId !== 'string' || !p.taskId) return null;
+  return p.taskId;
 }
 
 /** PUT generico em /task/{id} — nome, descricao, status, due_date. */

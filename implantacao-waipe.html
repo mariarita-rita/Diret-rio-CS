@@ -1836,6 +1836,23 @@
     }).catch(function(){ showSimToast("Não deu para salvar os dados do cliente."); });
   }
 
+  // Reenvia SEMPRE o dadosTributarios inteiro, junto com o preenchidoEm que
+  // já estava salvo — uma edição manual do CSM nunca pode apagar sozinha o
+  // registro de que o cliente já respondeu o formulário.
+  function persistirDadosTributarios(dados){
+    if (!dadosProjeto) return;
+    var atual = dadosProjeto.projeto.dadosTributarios || {};
+    var novo = Object.assign({}, atual, dados);
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
+      dadosTributarios: novo
+    }).then(function(){
+      dadosProjeto.projeto.dadosTributarios = novo;
+      showSimToast("Dados tributários salvos.");
+    }).catch(function(){ showSimToast("Não deu para salvar os dados tributários."); });
+  }
+
   // Rodízio fixo (Gian → Guilherme → Lucineia → Patricia → Gian → ...) +
   // criação automática na Carteira — ver definir-gerente-contas em
   // api/clickup.js. Exige ID Núcleo preenchido (nem vazio, nem o "0" que o
@@ -2251,6 +2268,49 @@
     return todos.length > 0 && todos.every(itemConcluido);
   }
 
+  function fmtDataHora(ms){
+    if (!ms) return "";
+    try{ return new Date(Number(ms)).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" }); }
+    catch(e){ return ""; }
+  }
+
+  // Dados Tributários — só aparece pra "Cliente Novo" (origem Moskit) com
+  // Gestor ou Bime na proposta (p.precisaDadosTributarios, calculado no
+  // servidor). Enquanto o cliente não respondeu, mostra o botão de copiar o
+  // link do formulário; depois de preenchido, mostra quando foi.
+  function cardDadosTributarios(p){
+    if (!p.precisaDadosTributarios) return "";
+    var t = p.dadosTributarios || {};
+    var regimes = ["", "Simples Nacional", "Lucro Presumido", "Lucro Real"];
+    return '<div class="card">' +
+      '<h2>Dados Tributários</h2>' +
+      '<div class="sub">Usado pra configurar a emissão fiscal antes da reunião de início.</div>' +
+      (t.preenchidoEm
+        ? '<div class="callout" style="margin-top:8px;"><div class="dot"></div><div>Preenchido pelo cliente em ' + fmtDataHora(t.preenchidoEm) + '.</div></div>'
+        : (p.linkFormularioTributario
+            ? '<button type="button" class="btn-flow-secondary" id="btnCopiarLinkTributario" style="margin-top:6px;">🔗 Copiar link do formulário</button>'
+            : "")) +
+      '<div class="form-grid-2" style="margin-top:12px;">' +
+        '<div class="form-field"><label>Regime tributário</label><select class="form-input" id="tribRegime">' +
+          regimes.map(function(v){ return '<option value="' + v + '"' + (t.regimeTributario === v ? " selected" : "") + '>' + (v || "—") + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div class="form-field"><label>CST ICMS / CSOSN</label><input type="text" class="form-input" id="tribCst" value="' + esc(t.cstIcmsCsosn || "") + '"></div>' +
+      '</div>' +
+      '<div class="form-grid-2">' +
+        '<div class="form-field"><label>PIS e COFINS</label><input type="text" class="form-input" id="tribPisCofins" value="' + esc(t.pisCofins || "") + '"></div>' +
+        '<div class="form-field"><label>CFOP de vendas</label><input type="text" class="form-input" id="tribCfop" value="' + esc(t.cfopVendas || "") + '"></div>' +
+      '</div>' +
+      '<div class="form-grid-2">' +
+        '<div class="form-field"><label>Nº da última NF emitida</label><input type="text" class="form-input" id="tribNf" value="' + esc(t.numeroUltimaNf || "") + '"></div>' +
+        '<div class="form-field"><label>Certificado digital</label><select class="form-input" id="tribCertificado">' +
+          '<option value="nao"' + (!t.temCertificadoDigital ? " selected" : "") + '>Não</option>' +
+          '<option value="sim"' + (t.temCertificadoDigital ? " selected" : "") + '>Sim</option>' +
+        '</select></div>' +
+      '</div>' +
+      '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosTributarios" style="margin-top:6px;">Salvar dados tributários</button>' +
+    '</div>';
+  }
+
   function renderListaItens(){
     var p = dadosProjeto.projeto;
     var agentes = agentesReais();
@@ -2285,6 +2345,7 @@
         '</div>' +
       '</div>' +
     '</div>' +
+    cardDadosTributarios(p) +
     '<div class="card">' +
       '<h2>Finalização do projeto</h2>' +
       '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
@@ -2339,6 +2400,23 @@
     });
     var btnDefinirGerente = document.getElementById("btnDefinirGerente");
     if (btnDefinirGerente) btnDefinirGerente.addEventListener("click", definirGerenteContas);
+    var btnCopiarLinkTributario = document.getElementById("btnCopiarLinkTributario");
+    if (btnCopiarLinkTributario) btnCopiarLinkTributario.addEventListener("click", function(){
+      copyToClipboard(location.origin + p.linkFormularioTributario).then(function(){
+        showSimToast("Link do formulário copiado.");
+      }).catch(function(){ showSimToast("Não deu para copiar o link."); });
+    });
+    var btnSalvarDadosTributarios = document.getElementById("btnSalvarDadosTributarios");
+    if (btnSalvarDadosTributarios) btnSalvarDadosTributarios.addEventListener("click", function(){
+      persistirDadosTributarios({
+        regimeTributario: document.getElementById("tribRegime").value,
+        cstIcmsCsosn: document.getElementById("tribCst").value.trim(),
+        pisCofins: document.getElementById("tribPisCofins").value.trim(),
+        cfopVendas: document.getElementById("tribCfop").value.trim(),
+        numeroUltimaNf: document.getElementById("tribNf").value.trim(),
+        temCertificadoDigital: document.getElementById("tribCertificado").value === "sim"
+      });
+    });
     var btnIniciarConversaUmbler = document.getElementById("btnIniciarConversaUmbler");
     var umblerMsgPainel = document.getElementById("umblerMsgPainel");
     if (btnIniciarConversaUmbler) btnIniciarConversaUmbler.addEventListener("click", function(){

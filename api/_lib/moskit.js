@@ -129,13 +129,12 @@ export const MAPA_PRODUTO_MOSKIT = new Map([
   [514271, 'Simplaz Unique'], // Simplaz Prata - Unique
   [514273, 'Simplaz Unique'], // Simplaz Ouro - Unique
   [711508, 'Simplaz Gestor'], // Simplaz Personalizado - Gestor
+  [607645, 'Bime'], // Bime (funcionalidades básicas) — dispara Dados Tributários, diferente de Bime APP
   [607646, 'BIME APP'], // Bime APP
   [732083, 'Treinamento'], // Treinamento
   //
   // Deliberadamente de fora (caem no fallback "Outro", com o nome original
   // do Moskit preservado nas observações da subtask — nada some):
-  // - 607645 "Bime" (funcionalidade básica, produto diferente do "Bime APP"
-  //   acima — não presumi que seja a mesma coisa).
   // - Certificados digitais, Classificador tributário, Analytics, Mobile,
   //   Consulta CPF, Reajuste Anual, Incremento/Redução Downsell, Projeto
   //   Sob Demanda, Cota Londrisoft Camp — nenhum bate com um valor de

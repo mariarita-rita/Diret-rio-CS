@@ -86,6 +86,7 @@ import {
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
   anexarArquivoTask,
+  assinarTokenProjeto,
   atualizarTask,
   CAMPOS_ESCRITA,
   cnpjDoAgendamentoGoogle,
@@ -159,7 +160,7 @@ const LIMITE_CORPO_ANEXO = 6 * 1024 * 1024;
 const RE_BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /** Anexo (arquivo ou print) saneado a partir do corpo — nunca confia no que vem sem checar tipo/tamanho antes de gastar uma chamada de upload no ClickUp. */
-function lerArquivoAnexo(corpo) {
+export function lerArquivoAnexo(corpo) {
   const nomeArquivo = texto(corpo?.nomeArquivo, 150);
   const mimeType = typeof corpo?.mimeType === 'string' ? corpo.mimeType.trim().toLowerCase() : '';
   const base64 = typeof corpo?.base64 === 'string' ? corpo.base64.trim() : '';
@@ -863,7 +864,7 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Deploy', 'Treinamento', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
 // 'vigencia': desconto do item vem da vigência contratada (3/6/12 meses,
 // Londrisoft Deploy), não de alçada negociável — ver VIGENCIAS_DEPLOY_VALIDAS.
@@ -1019,6 +1020,30 @@ export function sanearDadosCliente(d) {
     cnpj: texto(origem.cnpj, 20),
     email: texto(origem.email, 200),
     telefone: texto(origem.telefone, 30),
+  };
+}
+
+const REGIMES_TRIBUTARIOS_VALIDOS = new Set(['Simples Nacional', 'Lucro Presumido', 'Lucro Real']);
+
+/**
+ * Dados tributários — só relevantes pra Cliente Novo (origem Moskit) com
+ * Gestor ou Bime na proposta (ver precisaDadosTributarios em
+ * obterImplantacaoAcao). `preenchidoEm` só é gravado pelo formulário
+ * público que o cliente preenche (api/formulario-tributario.js) — uma
+ * edição manual do CSM não mexe nesse campo.
+ */
+export function sanearDadosTributarios(d) {
+  const origem = d && typeof d === 'object' ? d : {};
+  return {
+    regimeTributario: typeof origem.regimeTributario === 'string' && REGIMES_TRIBUTARIOS_VALIDOS.has(origem.regimeTributario)
+      ? origem.regimeTributario
+      : '',
+    cstIcmsCsosn: texto(origem.cstIcmsCsosn, 60),
+    pisCofins: texto(origem.pisCofins, 60),
+    cfopVendas: texto(origem.cfopVendas, 100),
+    numeroUltimaNf: texto(origem.numeroUltimaNf, 60),
+    temCertificadoDigital: !!origem.temCertificadoDigital,
+    preenchidoEm: Number.isFinite(Number(origem.preenchidoEm)) && Number(origem.preenchidoEm) > 0 ? Number(origem.preenchidoEm) : null,
   };
 }
 
@@ -1303,9 +1328,27 @@ async function obterImplantacaoAcao(req, res, sessao) {
       finalizacao: sanearFinalizacao(estadoProjeto.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estadoProjeto, sessao),
       anexos: mapearAnexos(pai.attachments),
+      ...dadosTributariosCampos(estadoProjeto, agentes, pai.id),
     },
     agentes,
   });
+}
+
+/**
+ * Dados tributários só existem (e o link do formulário só é útil) quando o
+ * projeto veio da automação do Moskit ("Cliente Novo") E tem pelo menos uma
+ * solução Gestor ou Bime — clientes já existentes, ou sem nenhum dos dois,
+ * não passam pelo processo de coleta tributária. `agentes` é a lista já
+ * montada por obterImplantacaoAcao (agentes + soluções da task).
+ */
+function dadosTributariosCampos(estadoProjeto, agentes, projetoId) {
+  const dadosTributarios = sanearDadosTributarios(estadoProjeto.dadosTributarios);
+  const precisaDadosTributarios = !!estadoProjeto.origemMoskitDealId
+    && agentes.some((a) => a.tipo === 'solucao' && (a.produto === 'Gestor' || a.produto === 'Bime'));
+  const linkFormularioTributario = precisaDadosTributarios && !dadosTributarios.preenchidoEm
+    ? `/formulario-tributario.html?id=${projetoId}&token=${assinarTokenProjeto(projetoId)}`
+    : null;
+  return { dadosTributarios, precisaDadosTributarios, linkFormularioTributario };
 }
 
 /**
@@ -1579,6 +1622,13 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     finalizacao: 'finalizacao' in corpo
       ? sanearFinalizacao(corpo.finalizacao)
       : sanearFinalizacao(estadoAtual.finalizacao),
+    // Dados tributários — mesmo padrão de faseProjetoManual/dadosCliente:
+    // só muda quando vem no corpo (edição no "Resumo do projeto"), senão
+    // preserva o que já estava salvo (inclusive o preenchidoEm gravado pelo
+    // formulário público, que uma edição manual do CSM não deve apagar).
+    dadosTributarios: 'dadosTributarios' in corpo
+      ? sanearDadosTributarios(corpo.dadosTributarios)
+      : sanearDadosTributarios(estadoAtual.dadosTributarios),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };

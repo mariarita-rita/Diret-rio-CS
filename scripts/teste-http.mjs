@@ -103,6 +103,11 @@ const stubClickup = `
     { nome: 'Patricia Carvalho', id: 'stub-gerente-patricia' },
   ];
   export async function criarClienteCarteira() { return { id: 'stub-cliente-carteira' }; }
+  export function assinarTokenProjeto(taskId) { return 'stub-token-' + taskId; }
+  export function verificarTokenProjeto(token) {
+    var m = /^stub-token-(.+)$/.exec(String(token || ''));
+    return m ? m[1] : null;
+  }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -202,6 +207,18 @@ const carregarMoskitWebhook = (libClickupUrl, moskitLibUrl) =>
         .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
         .replace("'./clickup.js'", `'${clickupHandlerUrl(libClickupUrl)}'`)
         .replace("'./_lib/moskit.js'", `'${moskitLibUrl}'`)
+    )
+  ).then((m) => m.default);
+
+/** Como carregarMoskitWebhook, mas pra api/formulario-tributario.js (mesmo
+ * padrao: importa './clickup.js' e './_lib/clickup.js' diretamente). */
+const carregarFormularioTributario = (libClickupUrl) =>
+  import(
+    dataUrl(
+      ler('api/formulario-tributario.js')
+        .replace("'./_lib/http.js'", `'${httpUrl}'`)
+        .replace("'./_lib/clickup.js'", `'${libClickupUrl}'`)
+        .replace("'./clickup.js'", `'${clickupHandlerUrl(libClickupUrl)}'`)
     )
   ).then((m) => m.default);
 
@@ -3960,6 +3977,161 @@ console.log('\n[49] definir-gerente-contas: rodizio fixo + criacao na Carteira')
   };
   const jaDefinido = await chamarPost(GESTAO, { id: 'tProjGerente' });
   checar('definir-gerente-contas: CSM ja definido -> 409', [jaDefinido.code, jaDefinido.corpo.code], [409, 'gerente_ja_definido']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[50] Dados Tributarios: trigger, atualizar-implantacao preserva, formulario publico');
+{
+  const fetchOriginal = globalThis.fetch;
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  const LISTA = '901328976497';
+  const escritas = [];
+
+  function ok(corpo) {
+    return { ok: true, status: 200, headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]), json: async () => corpo, text: async () => '' };
+  }
+
+  let estadoProjeto = {
+    etapaAtual: 'escopo', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: 2,
+    origemMoskitDealId: 503, idNucleo: '123', cnpj: '00.000.000/0001-00', email: 'a@a.com', telefone: '43900000000',
+  };
+  const descProjeto = () => `Contexto\n\n${JSON.stringify(estadoProjeto)}`;
+  const taskProjeto = () => ({
+    id: 'tProjTrib', name: 'Cliente Novo - Teste', list: { id: LISTA }, parent: null,
+    subtasks: [{ id: 'tSolGestor' }, { id: 'tAgenteX' }], description: descProjeto(),
+  });
+  const taskSolGestor = () => ({
+    id: 'tSolGestor', name: 'Gestor', list: { id: LISTA }, parent: 'tProjTrib',
+    description: `Contexto\n\n${JSON.stringify({ tipo: 'solucao', produto: 'Gestor', quantidade: 1, valorManual: 300, descontoPercent: 0, checklistChecks: {} })}`,
+  });
+  const taskAgenteX = () => ({
+    id: 'tAgenteX', name: 'Agente X', list: { id: LISTA }, parent: 'tProjTrib',
+    description: `Contexto\n\n${JSON.stringify({ tipo: 'agente', estrutura: { nome: 'Agente X' } })}`,
+  });
+
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'PUT' && u.endsWith('/task/tProjTrib')) {
+      escritas.push(JSON.parse(init.body));
+      return ok({});
+    }
+    if (u.includes('/task/tProjTrib?include_subtasks=true')) return ok(taskProjeto());
+    if (u.endsWith('/task/tSolGestor')) return ok(taskSolGestor());
+    if (u.endsWith('/task/tAgenteX')) return ok(taskAgenteX());
+    if (u.includes('/task/tProjTrib')) return ok(taskProjeto());
+    return ok({});
+  };
+
+  const libUrl = libClickupUnica('dados-tributarios');
+  const cu = await carregarCom('api/clickup.js', libUrl);
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const chamarAcao = async (perfil, method, action, extra = {}) => {
+    const r = res();
+    await cu({ method, headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action, ...(extra.query || {}) }, body: extra.body }, r);
+    return r;
+  };
+
+  // precisaDadosTributarios: origemMoskitDealId + solucao Gestor -> true, com link (ainda nao preenchido).
+  const obterOk = await chamarAcao(GESTAO, 'GET', 'obter-implantacao', { query: { id: 'tProjTrib' } });
+  checar('obter-implantacao: precisaDadosTributarios true (Cliente Novo + Gestor)', obterOk.corpo.projeto.precisaDadosTributarios, true);
+  checar('  linkFormularioTributario presente (ainda nao preenchido)', typeof obterOk.corpo.projeto.linkFormularioTributario, 'string');
+  checar('  link aponta pro id certo', obterOk.corpo.projeto.linkFormularioTributario.includes('id=tProjTrib'), true);
+
+  // Sem origemMoskitDealId (projeto nao veio do Moskit) -> false, mesmo com Gestor.
+  estadoProjeto = { ...estadoProjeto, origemMoskitDealId: null };
+  const semOrigem = await chamarAcao(GESTAO, 'GET', 'obter-implantacao', { query: { id: 'tProjTrib' } });
+  checar('obter-implantacao: sem origemMoskitDealId -> precisaDadosTributarios false', semOrigem.corpo.projeto.precisaDadosTributarios, false);
+  checar('  sem link', semOrigem.corpo.projeto.linkFormularioTributario, null);
+  estadoProjeto = { ...estadoProjeto, origemMoskitDealId: 503 };
+
+  // Ja preenchido -> continua precisando (mostra os dados), mas sem link (nao precisa reenviar).
+  estadoProjeto = { ...estadoProjeto, dadosTributarios: { regimeTributario: 'Simples Nacional', preenchidoEm: Date.now() } };
+  const jaPreenchido = await chamarAcao(GESTAO, 'GET', 'obter-implantacao', { query: { id: 'tProjTrib' } });
+  checar('obter-implantacao: ja preenchido -> sem link', jaPreenchido.corpo.projeto.linkFormularioTributario, null);
+  checar('  dadosTributarios devolvido certo', jaPreenchido.corpo.projeto.dadosTributarios.regimeTributario, 'Simples Nacional');
+  estadoProjeto = { ...estadoProjeto, dadosTributarios: undefined };
+
+  // atualizar-implantacao SEM dadosTributarios no corpo -> preserva o que ja tinha.
+  estadoProjeto = { ...estadoProjeto, dadosTributarios: { regimeTributario: 'Lucro Presumido', preenchidoEm: 123456 } };
+  escritas.length = 0;
+  await chamarAcao(GESTAO, 'POST', 'atualizar-implantacao', { body: { id: 'tProjTrib', etapaAtual: 'construcao', prioridade: [], concluidos: [] } });
+  checar(
+    'atualizar-implantacao sem dadosTributarios no corpo: preserva o que tinha',
+    escritas[0]?.markdown_description.includes('"regimeTributario":"Lucro Presumido"') && escritas[0]?.markdown_description.includes('"preenchidoEm":123456'),
+    true
+  );
+
+  // atualizar-implantacao COM dadosTributarios -> atualiza.
+  escritas.length = 0;
+  await chamarAcao(GESTAO, 'POST', 'atualizar-implantacao', {
+    body: {
+      id: 'tProjTrib', etapaAtual: 'construcao', prioridade: [], concluidos: [],
+      dadosTributarios: { regimeTributario: 'Lucro Real', cstIcmsCsosn: '0101', preenchidoEm: 123456 },
+    },
+  });
+  checar(
+    'atualizar-implantacao com dadosTributarios: atualiza os campos',
+    escritas[0]?.markdown_description.includes('"regimeTributario":"Lucro Real"') && escritas[0]?.markdown_description.includes('"cstIcmsCsosn":"0101"'),
+    true
+  );
+
+  // ---- formulario-tributario (endpoint publico, sem sessao) ----
+  const clickupLibReal = await import(libUrl);
+  const tokenValido = clickupLibReal.assinarTokenProjeto('tProjTrib');
+  const anexosCriados = [];
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (metodo === 'PUT' && u.endsWith('/task/tProjTrib')) {
+      escritas.push(JSON.parse(init.body));
+      return ok({});
+    }
+    if (metodo === 'POST' && u.endsWith('/attachment')) {
+      anexosCriados.push({ ehFormData: init.body instanceof FormData });
+      return ok({ id: 'anexo-cert' });
+    }
+    if (u.includes('/task/tProjTrib')) return ok(taskProjeto());
+    return ok({});
+  };
+  const formulario = await carregarFormularioTributario(libUrl);
+  const chamarFormulario = async (method, query, body) => {
+    const r = res();
+    await formulario({ method, headers: cabecalhos(), query, body }, r);
+    return r;
+  };
+
+  const getTokenInvalido = await chamarFormulario('GET', { id: 'tProjTrib', token: 'lixo' });
+  checar('formulario-tributario GET: token invalido -> 403', [getTokenInvalido.code, getTokenInvalido.corpo.code], [403, 'link_invalido']);
+  const postTokenInvalido = await chamarFormulario('POST', { id: 'tProjTrib', token: 'lixo' }, { dadosTributarios: {} });
+  checar('formulario-tributario POST: token invalido -> 403', [postTokenInvalido.code, postTokenInvalido.corpo.code], [403, 'link_invalido']);
+
+  const tokenDeOutraTask = clickupLibReal.assinarTokenProjeto('tOutraTask');
+  const tokenTrocado = await chamarFormulario('GET', { id: 'tProjTrib', token: tokenDeOutraTask });
+  checar('formulario-tributario: token de OUTRA task -> 403 (nao serve pra essa)', [tokenTrocado.code, tokenTrocado.corpo.code], [403, 'link_invalido']);
+
+  estadoProjeto = { ...estadoProjeto, dadosTributarios: undefined };
+  const getOk = await chamarFormulario('GET', { id: 'tProjTrib', token: tokenValido });
+  checar('formulario-tributario GET: token valido -> 200 com cliente e jaPreenchido', [getOk.code, getOk.corpo.cliente, getOk.corpo.jaPreenchido], [200, 'Cliente Novo - Teste', false]);
+
+  const arquivoInvalido = await chamarFormulario('POST', { id: 'tProjTrib', token: tokenValido }, {
+    dadosTributarios: { regimeTributario: 'Simples Nacional' },
+    certificadoArquivo: { nomeArquivo: 'virus.exe', mimeType: 'application/x-msdownload', base64: Buffer.from('x').toString('base64') },
+  });
+  checar('formulario-tributario POST: certificado com MIME invalido -> 400', [arquivoInvalido.code, arquivoInvalido.corpo.code], [400, 'arquivo_invalido']);
+
+  escritas.length = 0;
+  anexosCriados.length = 0;
+  const postOk = await chamarFormulario('POST', { id: 'tProjTrib', token: tokenValido }, {
+    dadosTributarios: { regimeTributario: 'Simples Nacional', cstIcmsCsosn: 'CSOSN 103', temCertificadoDigital: true },
+    certificadoArquivo: { nomeArquivo: 'certificado.p12', mimeType: 'application/x-pkcs12', base64: Buffer.from('conteudo-fake').toString('base64') },
+  });
+  checar('formulario-tributario POST: valido -> 200', [postOk.code, postOk.corpo.ok], [200, true]);
+  checar('  grava dadosTributarios + preenchidoEm', escritas[0]?.markdown_description.includes('"regimeTributario":"Simples Nacional"') && /"preenchidoEm":\d+/.test(escritas[0]?.markdown_description || ''), true);
+  checar('  preserva o resto do estado (idNucleo)', escritas[0]?.markdown_description.includes('"idNucleo":"123"'), true);
+  checar('  sobe o certificado como anexo de verdade (multipart)', anexosCriados[0]?.ehFormData, true);
 
   globalThis.fetch = fetchOriginal;
 }
