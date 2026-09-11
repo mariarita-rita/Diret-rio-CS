@@ -2194,6 +2194,7 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
       { produto: 'BIME APP', planoSugerido: '', variante: null, motivo: 'Recusado pelo cliente.', quantidade: 4, valorTabela: 69.9, valorManual: 0, pol: 'sem', descontoPercent: 0, incluir: false },
       { produto: 'Unique', planoSugerido: 'Plus', variante: null, motivo: 'Troca de plano com migração de ambiente.', ambienteMuda: true, quantidade: 1, valorTabela: 447, valorManual: 0, pol: 'padrao', descontoPercent: 0, incluir: true },
       { produto: 'Treinamento', planoSugerido: '', variante: null, motivo: 'Nunca usou o módulo financeiro.', quantidade: 1, valorTabela: null, valorManual: 0, pol: null, descontoPercent: 0, incluir: true },
+      { produto: 'Deploy', planoSugerido: 'Essencial', variante: null, motivo: 'Quer assessoria mensal olhando os dados.', quantidade: 1, valorTabela: 2400, valorManual: 0, pol: 'vigencia', descontoPercent: 20, vigenciaMeses: 12, isencaoSetup: true, incluir: true },
     ],
     diagnosticoWaipe: { usuarios: 3, empresas: 1, governanca: 'nao', auditoria: 'nao', automacao: 'pronta', enterprisePorVolume: 'nao', plano: 'Time', valorMensal: 249 },
     idNucleo: '123', cnpj: '00.000.000/0001-00', email: 'contato@cliente.com.br', telefone: '(43) 90000-0000',
@@ -2357,10 +2358,13 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   escritas.length = 0;
   const confirmarOk = await chamarAcao(GIAN, 'confirmar-fechamento-implantacao', { id: 'tProposta' });
   checar('confirmar-fechamento: 200', [confirmarOk.code, confirmarOk.corpo.ok], [200, true]);
-  checar('  cria 1 agente + 3 solucoes incluidas (BIME APP recusado fica de fora)', confirmarOk.corpo.criados, 4);
+  checar('  cria 1 agente + 4 solucoes incluidas (BIME APP recusado fica de fora)', confirmarOk.corpo.criados, 5);
   const criadas = escritas.filter((e) => e.alvo === 'criar').map((e) => e.body);
   checar('  subtask do agente', criadas.some((c) => c.name === 'Agente Novo'), true);
   checar('  solucao recusada NAO virou subtask', criadas.some((c) => c.name.includes('BIME APP')), false);
+  const deployBody = criadas.find((c) => c.name === 'Deploy — Essencial');
+  checar('  Deploy: grava vigencia e a isencao de setup na subtask', deployBody.markdown_description.includes('"vigenciaMeses":12') && deployBody.markdown_description.includes('"isencaoSetup":true'), true);
+  checar('  Deploy: nota interna menciona a vigencia e o setup isento', deployBody.markdown_description.includes('**Vigência:** 12 meses (setup dos produtos contratados isento)'), true);
   const gestorBody = criadas.find((c) => c.name === 'Gestor — Avançado');
   checar('  Gestor sem troca de ambiente: checklist de 1 passo', gestorBody.markdown_description.includes('"checklist":["Alterar o plano no Núcleo"]'), true);
   checar('  Gestor: observacoes gravada', gestorBody.markdown_description.includes('Cliente pediu para zerar a base'), true);

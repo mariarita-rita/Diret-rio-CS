@@ -2367,7 +2367,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     { produto: "Simplaz Unique", variante: null, tokens: ["prata", "silver"], valor: 240.00, pol: "limite10" },
     { produto: "Simplaz Unique", variante: null, tokens: ["ouro", "gold"], valor: 480.00, pol: "limite10" },
     { produto: "BIME APP", variante: null, tokens: [], valor: 69.90, pol: "sem", porUsuario: true },
+    // Londrisoft Deploy — assessoria mensal, 4 faixas (fonte: lsdeploy.vercel.app).
+    // O desconto de cada item de Deploy vem da vigência (3/6/12 meses), não de
+    // alçada negociável — por isso "vigencia" em vez de padrao/limite10/sem.
+    { produto: "Deploy", variante: null, tokens: ["entrada"], valor: 1500.00, pol: "vigencia" },
+    { produto: "Deploy", variante: null, tokens: ["essencial"], valor: 2400.00, pol: "vigencia" },
+    { produto: "Deploy", variante: null, tokens: ["crescimento"], valor: 4900.00, pol: "vigencia" },
+    { produto: "Deploy", variante: null, tokens: ["performance"], valor: 8900.00, pol: "vigencia" },
   ];
+
+  /** Descrição fixa do que é o Deploy — entra na proposta sempre que um item
+   * "Deploy" for incluído, além do "Como isso ajuda este cliente" que o CSM
+   * escreve (fonte: lsdeploy.vercel.app / Notion "Londrisoft Deploy — Apresentação Comercial"). */
+  var DESCRICAO_DEPLOY = "O Londrisoft Deploy é uma assessoria mensal de tecnologia e inteligência artificial: um time especializado que assume, dentro da operação do cliente, a leitura recorrente dos dados, a verificação do que já está contratado no ecossistema Londrisoft (Gestor, Simplaz, Unique, BIME APP, Waipe), um roadmap priorizado e a execução — parametrização, integração, construção de fluxos de automação e desdobramento junto ao time —, com uma entrega concreta a cada ciclo.";
 
   /** Casa produto+plano sugerido pela IA com um preço de tabela conhecido — nunca inventa um valor. */
   function precoEcossistema(produto, planoSugerido, variante){
@@ -2384,6 +2396,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     if (pol === "padrao") return "Alçada padrão: até 15% sem autorização da Coordenação.";
     if (pol === "limite10") return "Simplaz: até 10% sem autorização da Coordenação.";
     if (pol === "sem") return "Sem desconto para este item.";
+    if (pol === "vigencia") return "Desconto definido pela vigência contratada (3/6/12 meses), não por alçada.";
     return "";
   }
 
@@ -2415,8 +2428,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     "Simplaz Gestor": ["Bronze", "Prata", "Ouro"],
     "Simplaz Unique": ["Bronze", "Prata", "Ouro"],
     "Unique": ["Light", "Plus", "Premium", "Empresarial"],
+    "Deploy": ["Entrada", "Essencial", "Crescimento", "Performance"],
   };
-  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Treinamento", "Outro"];
+  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Deploy", "Treinamento", "Outro"];
 
   function novoItemRecomendacao(r){
     var variante = r.produto === "Gestor" ? "Nuvem" : null;
@@ -2437,6 +2451,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       valorManual: 0,
       pol: match ? match.pol : null,
       descontoPercent: 0,
+      vigenciaMeses: null,
+      isencaoSetup: false,
     };
   }
 
@@ -2454,6 +2470,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       variante: "Nuvem",
       porUsuario: false,
       quantidade: 1,
+      vigenciaMeses: null,
+      isencaoSetup: false,
       valorTabela: null,
       valorManual: 0,
       pol: null,
@@ -2465,6 +2483,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   function recalcularPrecoItem(item){
     if (item.produto !== "Gestor") item.variante = null;
     else if (!item.variante) item.variante = "Nuvem";
+    if (item.produto !== "Deploy"){
+      item.vigenciaMeses = null;
+      item.isencaoSetup = false;
+    }
     var match = precoEcossistema(item.produto, item.planoSugerido, item.variante);
     item.valorTabela = match ? match.valor : null;
     item.pol = match ? match.pol : null;
@@ -2545,6 +2567,21 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
             'Envolve troca de ambiente (Local ↔ Nuvem)' +
           '</label>'
         : "";
+      var deployInfoHtml = item.produto === "Deploy"
+        ? '<div style="font-size:12.5px; color:var(--muted); background:var(--bg2, #F5F7FC); border-radius:8px; padding:8px 10px; margin-top:6px;">' + escapeHtml(DESCRICAO_DEPLOY) + '</div>'
+        : "";
+      var vigenciaHtml = item.produto === "Deploy"
+        ? campo("Vigência", '<select data-rec-vigencia="' + i + '" class="sel" style="display:block; margin-top:2px;">' +
+            '<option value="">Selecione...</option>' +
+            [3, 6, 12].map(function(v){ return '<option value="' + v + '"' + (item.vigenciaMeses === v ? " selected" : "") + '>' + v + ' meses</option>'; }).join("") +
+          '</select>')
+        : "";
+      var isencaoHtml = item.produto === "Deploy"
+        ? '<label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); margin-top:6px;">' +
+            '<input type="checkbox" data-rec-isencao="' + i + '"' + (item.isencaoSetup ? " checked" : "") + ' style="width:14px; height:14px; accent-color:var(--ink);">' +
+            'Isenção de setup dos produtos contratados (benefício da vigência de 12 meses)' +
+          '</label>'
+        : "";
       var qtdHtml = item.porUsuario
         ? campo("Usuários", '<input type="number" min="1" step="1" class="num-input tabular" data-rec-qtd="' + i + '" value="' + item.quantidade + '" style="display:block; margin-top:2px; width:80px;">')
         : "";
@@ -2562,6 +2599,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           '<div style="flex:1;">' +
             '<div style="display:flex; gap:18px; flex-wrap:wrap;">' + produtoHtml + planoHtml + '</div>' +
             ambienteMudaHtml +
+            deployInfoHtml +
+            isencaoHtml +
             campo("Como isso ajuda este cliente", '<textarea data-rec-motivo="' + i + '" class="ta" style="display:block; margin-top:2px; min-height:44px; font-size:13px;" placeholder="Descreva o que esse item resolve para o cliente...">' + escapeHtml(item.motivo) + '</textarea>') +
             campo("Observações para a implantação (opcional)", '<textarea data-rec-observacoes="' + i + '" class="ta" style="display:block; margin-top:2px; min-height:36px; font-size:13px;" placeholder="ex: cliente pediu para zerar a base, duplicar dados de outra empresa, horário específico...">' + escapeHtml(item.observacoes || "") + '</textarea>') +
             aviso +
@@ -2569,7 +2608,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           '<button type="button" class="btn-remove" data-rec-remover="' + i + '" aria-label="Remover" style="flex:0 0 auto;">✕</button>' +
         '</div>' +
         '<div style="display:flex; gap:18px; flex-wrap:wrap; margin:10px 0 0 26px;">' +
-          varianteHtml + qtdHtml + valorHtml + '<div>' + descontoHtml + '</div>' +
+          varianteHtml + vigenciaHtml + qtdHtml + valorHtml + '<div>' + descontoHtml + '</div>' +
           '<div><span style="font-size:11px; color:var(--muted); display:block;">Subtotal</span><b data-rec-subtotal="' + i + '">' + fmtBRL(calc.total) + '/mês</b></div>' +
         '</div>' +
       '</div>';
@@ -2638,6 +2677,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         item.variante = sel.value;
         recalcularPrecoItem(item);
         renderRecomendacoes();
+      });
+    });
+    // Vigência do Deploy (3/6/12 meses) — deriva o desconto (0/10/20%) direto da
+    // tabela de condições, e liga a isenção de setup por padrão nos 12 meses
+    // (a pessoa ainda pode desmarcar/marcar manualmente depois).
+    var DESCONTO_POR_VIGENCIA = { 3: 0, 6: 10, 12: 20 };
+    wrap.querySelectorAll("[data-rec-vigencia]").forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var item = recomendacoesState[parseInt(sel.getAttribute("data-rec-vigencia"), 10)];
+        var meses = parseInt(sel.value, 10) || null;
+        item.vigenciaMeses = meses;
+        item.descontoPercent = meses ? DESCONTO_POR_VIGENCIA[meses] : 0;
+        item.isencaoSetup = meses === 12;
+        renderRecomendacoes();
+      });
+    });
+    wrap.querySelectorAll("[data-rec-isencao]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        recomendacoesState[parseInt(cb.getAttribute("data-rec-isencao"), 10)].isencaoSetup = cb.checked;
       });
     });
     var atualizarSubtotal = function(i){
@@ -3435,17 +3493,28 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   // vai pro cliente. Fica só no painel editável (renderRecomendacoes).
   function buildOutrosProdutosSection(outros){
     return outros.map(function(o){
-      var titulo = escapeHtml(o.produto) + (o.planoSugerido ? " — " + escapeHtml(o.planoSugerido) : "") + (o.variante ? " (" + o.variante + ")" : "");
+      var titulo = escapeHtml(o.produto) + (o.planoSugerido ? " — " + escapeHtml(o.planoSugerido) : "") + (o.variante ? " (" + o.variante + ")" : "")
+        + (o.vigenciaMeses ? " · vigência " + o.vigenciaMeses + " meses" : "");
       var linhaItem = o.porUsuario
         ? '<tr><td>' + escapeHtml(o.produto) + ' — ' + o.qtd + ' usuário(s) × ' + fmtBRL(o.unit) + '</td><td class="num">' + fmtBRL(o.base) + '</td></tr>'
         : '<tr><td>' + titulo + '</td><td class="num">' + fmtBRL(o.base) + '</td></tr>';
       var linhaDesconto = o.desconto > 0
         ? '<tr><td>Desconto (' + o.descontoPercent + '%)</td><td class="num">-' + fmtBRL(o.desconto) + '</td></tr>'
         : "";
+      // Deploy tem descrição fixa do que é (a Arquitetura de Solução ainda não
+      // tinha essa oferta) — entra antes do "como ajuda este cliente" que o
+      // CSM escreve. A isenção de setup (benefício da vigência de 12 meses)
+      // vira um destaque visual, não só mais uma linha de texto.
+      var descricaoFixaHtml = o.produto === "Deploy" ? '<p>' + escapeHtml(DESCRICAO_DEPLOY) + '</p>' : "";
+      var isencaoHtml = o.isencaoSetup
+        ? '<div class="callout green" style="margin-top:10px;"><span class="lbl">Benefício da vigência de 12 meses</span>O setup de todos os produtos contratados durante esta vigência fica por conta da Londrisoft.</div>'
+        : "";
       return '<div class="pricebox" style="margin-bottom:18px;">' +
         '<div class="tier">' + titulo + '</div>' +
         '<div class="val">' + fmtBRL(o.total) + ' <small>/ mês</small></div>' +
+        descricaoFixaHtml +
         '<p style="margin-top:10px;">' + escapeHtml(o.motivo) + '</p>' +
+        isencaoHtml +
         '<table><tr><th>Item</th><th style="text-align:right">Valor</th></tr>' + linhaItem + linhaDesconto + '</table>' +
       '</div>';
     }).join("");

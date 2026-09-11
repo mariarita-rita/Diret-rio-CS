@@ -863,9 +863,12 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Treinamento', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Deploy', 'Treinamento', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
-const POL_SOLUCAO_VALIDOS = new Set(['padrao', 'limite10', 'sem']);
+// 'vigencia': desconto do item vem da vigência contratada (3/6/12 meses,
+// Londrisoft Deploy), não de alçada negociável — ver VIGENCIAS_DEPLOY_VALIDAS.
+const POL_SOLUCAO_VALIDOS = new Set(['padrao', 'limite10', 'sem', 'vigencia']);
+const VIGENCIAS_DEPLOY_VALIDAS = new Set([3, 6, 12]);
 const GOV_WAIPE_VALIDOS = new Set(['sim', 'nao']);
 const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
 
@@ -952,6 +955,12 @@ export function sanearOutraSolucao(o) {
     pol: typeof o.pol === 'string' && POL_SOLUCAO_VALIDOS.has(o.pol) ? o.pol : null,
     descontoPercent: numeroOuNulo(o.descontoPercent, 0, 100) ?? 0,
     incluir: !!o.incluir,
+    // Só fazem sentido pra produto "Deploy" (vigência do contrato e a
+    // isenção de setup, benefício exclusivo da vigência de 12 meses) — mas
+    // saneados de forma genérica, sem checar o produto: outros produtos
+    // simplesmente nunca os preenchem.
+    vigenciaMeses: VIGENCIAS_DEPLOY_VALIDAS.has(Number(o.vigenciaMeses)) ? Number(o.vigenciaMeses) : null,
+    isencaoSetup: !!o.isencaoSetup,
   };
 }
 
@@ -1071,6 +1080,7 @@ function descricaoSolucao(o) {
     `**Quantidade:** ${o.quantidade}`,
     `**Valor unitário:** R$ ${valor.toFixed(2)}`,
     o.descontoPercent ? `**Desconto:** ${o.descontoPercent}%` : null,
+    o.vigenciaMeses ? `**Vigência:** ${o.vigenciaMeses} meses${o.isencaoSetup ? ' (setup dos produtos contratados isento)' : ''}` : null,
     o.observacoes ? `**Observações para a implantação:** ${o.observacoes}` : null,
   ].filter(Boolean);
   return linhas.join('\n\n');
@@ -1098,6 +1108,8 @@ export async function criarSubtasksSolucao(projetoId, solucoes) {
         valorTabela: o.valorTabela,
         valorManual: o.valorManual,
         descontoPercent: o.descontoPercent,
+        vigenciaMeses: o.vigenciaMeses ?? null,
+        isencaoSetup: !!o.isencaoSetup,
         checklist: jornadaPara(o.produto, o.ambienteMuda),
         checklistChecks: {},
         fase: FASE_ITEM_PADRAO,
@@ -1204,6 +1216,8 @@ async function obterImplantacaoAcao(req, res, sessao) {
           valorTabela: Number.isFinite(e.valorTabela) ? e.valorTabela : null,
           valorManual: Number.isFinite(e.valorManual) ? e.valorManual : 0,
           descontoPercent: Number.isFinite(e.descontoPercent) ? e.descontoPercent : 0,
+          vigenciaMeses: VIGENCIAS_DEPLOY_VALIDAS.has(e.vigenciaMeses) ? e.vigenciaMeses : null,
+          isencaoSetup: !!e.isencaoSetup,
           checklist,
           checklistChecks: sanearChecks(e.checklistChecks) || {},
           fase: FASES_ITEM_VALIDAS.has(e.fase) ? e.fase : FASE_ITEM_PADRAO,

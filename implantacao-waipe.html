@@ -1785,6 +1785,7 @@
       '</div>' +
       (o.motivo ? '<div class="sub">' + esc(o.motivo) + '</div>' : "") +
       '<div class="sp-k" style="margin-top:8px">Valor</div><div class="sp-v">' + fmtBRLSim(valor) + (o.quantidade > 1 ? " × " + o.quantidade : "") + '/mês</div>' +
+      (o.vigenciaMeses ? '<div class="sp-k" style="margin-top:10px">Vigência</div><div class="sp-v">' + o.vigenciaMeses + ' meses' + (o.isencaoSetup ? ' — setup dos produtos contratados isento' : '') + '</div>' : "") +
       (o.observacoes ? '<div class="sp-k" style="margin-top:10px">Observações para a implantação</div><div class="sp-v" style="white-space:pre-wrap;">' + esc(o.observacoes) + '</div>' : "") +
       '<div class="sp-k" style="margin-top:10px">Checklist</div>' +
       checklistHtml +
