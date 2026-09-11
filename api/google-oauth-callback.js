@@ -1,13 +1,15 @@
 // GET /api/google-oauth-callback?code=...&state=...
 //
 // Destino do redirect que o Google manda de volta depois do consentimento
-// OAuth de um ISM. Fica FORA do dispatcher de api/clickup.js de proposito:
+// OAuth (agenda OU e-mail — duas finalidades independentes, ver
+// _lib/google.js). Fica FORA do dispatcher de api/clickup.js de proposito:
 // la, toda acao passa por exigirSessao incondicionalmente (cookie de
 // sessao), mas o cookie deste app e SameSite=Strict — nunca chega aqui,
 // porque a navegacao vem de accounts.google.com (outro site), mesmo sendo
-// um redirect de topo. A identidade de qual ISM esta conectando vem inteira
-// do `state` assinado (ver assinarEstadoGoogle/verificarEstadoGoogle em
-// _lib/google.js), gerado por conectar-agenda-google (esse sim, dentro do
+// um redirect de topo. A identidade de quem esta conectando (e PRA QUE)
+// vem inteira do `state` assinado (ver assinarEstadoGoogle/
+// verificarEstadoGoogle em _lib/google.js), gerado por
+// conectar-agenda-google/conectar-email-google (esses sim, dentro do
 // dispatcher normal, com sessao exigida).
 //
 // Nunca cacheavel, e nunca devolve JSON de erro pro usuario final — sempre
@@ -15,11 +17,12 @@
 // pessoa "presa" numa tela de callback.
 
 import { aplicarCors, erro } from './_lib/http.js';
-import { verificarEstadoGoogle, trocarCodigoPorToken, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
-import { salvarTokenGoogle } from './_lib/clickup.js';
+import { verificarEstadoGoogle, trocarCodigoPorToken, obterEmailConectado, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { salvarTokenGoogle, salvarTokenEmail } from './_lib/clickup.js';
 
-const DESTINO_OK = '/implantacao-waipe.html?googleConectado=1';
-const DESTINO_ERRO = '/implantacao-waipe.html?googleErro=1';
+const DESTINOS_OK = { calendar: '/implantacao-waipe.html?googleConectado=1', email: '/implantacao-waipe.html?emailConectado=1' };
+const DESTINOS_ERRO = { calendar: '/implantacao-waipe.html?googleErro=1', email: '/implantacao-waipe.html?emailErro=1' };
+const DESTINO_ERRO = '/implantacao-waipe.html?googleErro=1'; // fallback quando nem o `state` deu pra validar (nao sabemos a finalidade)
 
 function redirecionar(res, destino) {
   res.setHeader('Location', destino);
@@ -28,6 +31,9 @@ function redirecionar(res, destino) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
+  // So sabemos se era pra agenda ou e-mail depois de validar o `state` — ate
+  // la, cai no generico (raro: state ausente/adulterado/expirado).
+  let destinoErro = DESTINO_ERRO;
 
   try {
     if (!aplicarCors(req, res)) {
@@ -40,28 +46,35 @@ export default async function handler(req, res) {
 
     const code = String(req.query?.code || '');
     const state = String(req.query?.state || '');
-    if (!code || !state) return redirecionar(res, DESTINO_ERRO);
+    if (!code || !state) return redirecionar(res, destinoErro);
 
     const estado = verificarEstadoGoogle(state);
-    if (!estado) return redirecionar(res, DESTINO_ERRO);
+    if (!estado) return redirecionar(res, destinoErro);
+    destinoErro = DESTINOS_ERRO[estado.finalidade] || DESTINO_ERRO;
 
     let tokens;
     try {
       tokens = await trocarCodigoPorToken(code);
     } catch (e) {
-      if (e instanceof ErroGoogle) return redirecionar(res, DESTINO_ERRO);
+      if (e instanceof ErroGoogle) return redirecionar(res, destinoErro);
       throw e;
     }
-    if (!tokens?.refresh_token) return redirecionar(res, DESTINO_ERRO);
+    if (!tokens?.refresh_token) return redirecionar(res, destinoErro);
 
-    await salvarTokenGoogle(estado.ismId, tokens.refresh_token);
-    return redirecionar(res, DESTINO_OK);
+    if (estado.finalidade === 'email') {
+      const emailConectado = await obterEmailConectado(tokens.access_token);
+      if (!emailConectado) return redirecionar(res, destinoErro);
+      await salvarTokenEmail(estado.alvo, tokens.refresh_token, emailConectado);
+    } else {
+      await salvarTokenGoogle(estado.alvo, tokens.refresh_token);
+    }
+    return redirecionar(res, DESTINOS_OK[estado.finalidade] || DESTINOS_OK.calendar);
   } catch (e) {
     if (e instanceof ErroConfigGoogle) {
       console.error('[google-oauth-callback] config ausente:', e.message);
     } else {
       console.error('[google-oauth-callback] falha inesperada:', e);
     }
-    return redirecionar(res, DESTINO_ERRO);
+    return redirecionar(res, destinoErro);
   }
 }

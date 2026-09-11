@@ -90,12 +90,18 @@ const stubClickup = `
   export function projetoDaDescricaoReserva() { return ''; }
   export function linkDaDescricaoReserva() { return ''; }
   export function googleEventIdDaDescricaoReserva() { return ''; }
+  export function convidadosDaDescricaoReserva() { return []; }
   export function soDigitos(v) { return String(v || '').replace(/\\D/g, ''); }
   export function cnpjDoAgendamentoGoogle() { return null; }
   export async function obterTokenGoogle() { return null; }
   export async function listarTokensGoogle() { return []; }
+  export const CONTA_EMAIL_COMPARTILHADA = 'compartilhada';
+  export async function obterTokenEmail() { return null; }
+  export async function salvarTokenEmail() { return { id: 'stub-token-email' }; }
   export async function listarModelosMensagem() { return []; }
   export async function criarModeloMensagem() { return { id: 'stub-modelo' }; }
+  export function assuntoDoModelo() { return ''; }
+  export function corpoDoModelo(description) { return description || ''; }
   export const GERENTE_OPCOES = [
     { nome: 'Gian Luca', id: 'stub-gerente-gian' },
     { nome: 'Guilherme Camargo', id: 'stub-gerente-guilherme' },
@@ -123,6 +129,8 @@ const stubGoogle = `
   export async function consultarFreeBusy() { return null; }
   export async function criarEventoComMeet() { return null; }
   export async function listarEventos() { return []; }
+  export async function obterEmailConectado() { return 'stub@example.com'; }
+  export async function enviarEmailGmail() { return { id: 'stub-mensagem-email' }; }
 `;
 const googleLibUrl = dataUrl(stubGoogle);
 
@@ -2471,7 +2479,7 @@ console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link
   const reservaBruno = () => ({
     id: 'tReservaBruno', name: 'Camada 1 — Cliente X', list: { id: LISTA_RESERVAS },
     assignees: [{ id: BRUNO }], start_date: String(INICIO), due_date: String(INICIO + UMA_HORA),
-    description: '**Projeto:** tProjetoX',
+    description: '**Projeto:** tProjetoX\n\n**Convidados:** cliente@teste.com',
   });
   const reservaForaDaLista = () => ({
     id: 'tOutraLista', name: 'Task de outra lista', list: { id: '999' }, assignees: [],
@@ -2551,17 +2559,37 @@ console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link
   checar('  start_date_time/due_date_time marcados (sincroniza com hora, nao dia inteiro)', [criada.start_date_time, criada.due_date_time], [true, true]);
   checar('  projeto gravado na descricao', criada.markdown_description.includes('**Projeto:** tProjetoY'), true);
 
-  // listar-reservas: mapeia ismNome/projetoId/linkReuniao a partir da task crua
+  // convidados: saneia (invalido/duplicado descartado em silencio), grava na descricao e devolve na resposta
+  escritas.length = 0;
+  const comConvidados = await chamarAcao(GESTAO, 'POST', 'criar-reserva', {
+    titulo: 'Treinamento', ismId: ERICA, inicio: INICIO + 3 * UMA_HORA, fim: INICIO + 4 * UMA_HORA,
+    convidados: ['Cliente@Teste.com', 'nao-e-email', 'cliente@teste.com', ' outro@teste.com '],
+  });
+  checar('criar-reserva com convidados: 200', [comConvidados.code, comConvidados.corpo.ok], [200, true]);
+  checar('  resposta devolve so os validos, sem duplicata (case-insensitive)', comConvidados.corpo.convidados, ['cliente@teste.com', 'outro@teste.com']);
+  const criadaComConvidados = escritas.find((e) => e.alvo === 'criar')?.body;
+  checar('  grava a linha Convidados saneada na descricao', criadaComConvidados.markdown_description.includes('**Convidados:** cliente@teste.com,outro@teste.com'), true);
+
+  // listar-reservas: mapeia ismNome/projetoId/linkReuniao/convidados a partir da task crua
   const listar = await chamarAcao(GESTAO, 'GET', 'listar-reservas');
   const linha = listar.corpo.reservas?.[0];
   checar('listar-reservas: 200 com ismNome resolvido', [listar.code, linha?.ismNome, linha?.projetoId], [200, 'Bruno Vaz', 'tProjetoX']);
+  checar('  convidados extraidos da descricao', linha?.convidados, ['cliente@teste.com']);
 
-  // atualizar-reserva: cola o link do Meet, preserva o projeto ja gravado
+  // atualizar-reserva: cola o link do Meet, preserva o projeto e os convidados ja gravados (nao manda convidados no corpo)
   escritas.length = 0;
   const colarLink = await chamarAcao(GESTAO, 'POST', 'atualizar-reserva', { id: 'tReservaBruno', linkReuniao: 'https://meet.google.com/abc-defg-hij' });
   checar('atualizar-reserva: 200', [colarLink.code, colarLink.corpo.ok], [200, true]);
   const atualizada = escritas.find((e) => e.alvo === 'atualizar')?.body;
   checar('  projeto preservado + link gravado', [atualizada.markdown_description.includes('**Projeto:** tProjetoX'), atualizada.markdown_description.includes('**Link:** https://meet.google.com/abc-defg-hij')], [true, true]);
+  checar('  convidados preservados (nao vieram no corpo)', atualizada.markdown_description.includes('**Convidados:** cliente@teste.com'), true);
+
+  // atualizar-reserva: convidados EXPLICITO no corpo substitui o que tinha
+  escritas.length = 0;
+  const trocarConvidados = await chamarAcao(GESTAO, 'POST', 'atualizar-reserva', { id: 'tReservaBruno', linkReuniao: 'https://meet.google.com/abc-defg-hij', convidados: ['novo@teste.com'] });
+  checar('atualizar-reserva com convidados novo: 200', [trocarConvidados.code, trocarConvidados.corpo.ok], [200, true]);
+  const atualizadaConvidadosNovos = escritas.find((e) => e.alvo === 'atualizar')?.body;
+  checar('  substitui os convidados antigos pelos novos', [atualizadaConvidadosNovos.markdown_description.includes('**Convidados:** novo@teste.com'), atualizadaConvidadosNovos.markdown_description.includes('cliente@teste.com')], [true, false]);
 
   const atualizarForaDaLista = await chamarAcao(GESTAO, 'POST', 'atualizar-reserva', { id: 'tOutraLista', linkReuniao: 'x' });
   checar('atualizar-reserva: task de outra lista -> 404', [atualizarForaDaLista.code, atualizarForaDaLista.corpo.code], [404, 'nao_encontrado']);
@@ -2577,7 +2605,7 @@ console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link
   globalThis.fetch = fetchOriginal;
 }
 
-console.log('\n[38] Google Calendar: state assinado do OAuth (mesmo esquema HMAC da sessao)');
+console.log('\n[38] Google: state assinado do OAuth (mesmo esquema HMAC da sessao), calendar e email separados');
 {
   const google = await import(libGoogleUnica('state'));
   process.env.SESSION_SECRET = 'T'.repeat(48);
@@ -2585,27 +2613,37 @@ console.log('\n[38] Google Calendar: state assinado do OAuth (mesmo esquema HMAC
   process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
   process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
 
-  const estado = google.assinarEstadoGoogle(118125102);
-  checar('assina e verifica: ismId volta certo', google.verificarEstadoGoogle(estado)?.ismId, 118125102);
+  const estado = google.assinarEstadoGoogle('calendar', 118125102);
+  checar('assina e verifica: finalidade+alvo voltam certos', google.verificarEstadoGoogle(estado), { finalidade: 'calendar', alvo: 118125102 });
   checar('adulterado: recusado', google.verificarEstadoGoogle(estado.slice(0, -3) + 'aaa'), null);
   checar('lixo: recusado', google.verificarEstadoGoogle('nao-e-um-state'), null);
+
+  const estadoEmail = google.assinarEstadoGoogle('email', 'Gian Luca');
+  checar('finalidade email: alvo string tambem funciona', google.verificarEstadoGoogle(estadoEmail), { finalidade: 'email', alvo: 'Gian Luca' });
 
   // TTL de 10min, mesmo truque de HMAC(iat) manual do teste [19] (sem esperar de verdade)
   const b64u = (b) => Buffer.from(b).toString('base64url');
   const stateComIat = (iat) => {
-    const corpo = b64u(JSON.stringify({ ismId: 118125102, iat }));
+    const corpo = b64u(JSON.stringify({ finalidade: 'calendar', alvo: 118125102, iat }));
     return `${corpo}.${b64u(crypto.createHmac('sha256', process.env.SESSION_SECRET).update(corpo).digest())}`;
   };
   const agora = Date.now();
-  checar('9min59: valido', google.verificarEstadoGoogle(stateComIat(agora - 9.98 * 60000))?.ismId, 118125102);
+  checar('9min59: valido', google.verificarEstadoGoogle(stateComIat(agora - 9.98 * 60000))?.alvo, 118125102);
   checar('10min01: expirado', google.verificarEstadoGoogle(stateComIat(agora - 10.02 * 60000)), null);
 
-  const url = google.urlAutorizacaoGoogle(118125102);
-  checar('urlAutorizacaoGoogle: aponta pro Google, com os 2 escopos e state', [
-    url.startsWith('https://accounts.google.com/o/oauth2/v2/auth?'),
-    url.includes('calendar.events'), url.includes('calendar.freebusy'),
-    url.includes('access_type=offline'), url.includes('prompt=consent'),
-  ], [true, true, true, true, true]);
+  const urlCalendar = google.urlAutorizacaoGoogle('calendar', 118125102);
+  checar('urlAutorizacaoGoogle(calendar): so os 2 escopos de agenda, sem gmail.send', [
+    urlCalendar.startsWith('https://accounts.google.com/o/oauth2/v2/auth?'),
+    urlCalendar.includes('calendar.events'), urlCalendar.includes('calendar.freebusy'),
+    urlCalendar.includes('gmail.send'),
+    urlCalendar.includes('access_type=offline'), urlCalendar.includes('prompt=consent'),
+  ], [true, true, true, false, true, true]);
+
+  const urlEmail = google.urlAutorizacaoGoogle('email', 'Gian Luca');
+  checar('urlAutorizacaoGoogle(email): so gmail.send+userinfo.email, sem escopo de agenda', [
+    urlEmail.includes('gmail.send'), urlEmail.includes('userinfo.email'),
+    urlEmail.includes('calendar.events'), urlEmail.includes('calendar.freebusy'),
+  ], [true, true, false, false]);
 }
 
 console.log('\n[39] criar-reserva com ISM conectado ao Google: freebusy real + Meet automatico');
@@ -2627,6 +2665,7 @@ console.log('\n[39] criar-reserva com ISM conectado ao Google: freebusy real + M
   }
 
   const escritas = [];
+  const eventosGoogle = [];
   let freeBusyOcupado = false; // alternado entre os dois cenarios abaixo
 
   globalThis.fetch = async (url, init) => {
@@ -2658,6 +2697,7 @@ console.log('\n[39] criar-reserva com ISM conectado ao Google: freebusy real + M
     }
     // Google: criar evento com Meet
     if (u.includes('/calendar/v3/calendars/primary/events')) {
+      eventosGoogle.push({ url: u, body: JSON.parse(init.body) });
       return ok({ hangoutLink: 'https://meet.google.com/bruno-teste' });
     }
     return ok({});
@@ -2691,6 +2731,17 @@ console.log('\n[39] criar-reserva com ISM conectado ao Google: freebusy real + M
   checar('ISM conectado + agenda real livre: 200 com linkReuniao', [semConflitoGoogle.code, semConflitoGoogle.corpo.linkReuniao], [200, 'https://meet.google.com/bruno-teste']);
   const criada = escritas.find((e) => e.alvo === 'criar-reserva')?.body;
   checar('  link do Meet ja vai gravado na descricao (sem passo manual)', criada.markdown_description.includes('**Link:** https://meet.google.com/bruno-teste'), true);
+  const eventoSemConvidados = eventosGoogle[0];
+  checar('  sem convidados: sendUpdates=none e sem campo attendees', [eventoSemConvidados.url.includes('sendUpdates=none'), 'attendees' in eventoSemConvidados.body], [true, false]);
+
+  // Com convidados: vira attendees no evento do Google + sendUpdates=all (Google manda o convite por e-mail)
+  const comConvidadosGoogle = await chamarAcao('criar-reserva', {
+    titulo: 'Camada 1', ismId: BRUNO, inicio: INICIO + 2 * UMA_HORA, fim: INICIO + 3 * UMA_HORA,
+    convidados: ['cliente@teste.com', 'outro@teste.com'],
+  });
+  checar('ISM conectado + convidados: 200', [comConvidadosGoogle.code, comConvidadosGoogle.corpo.linkReuniao], [200, 'https://meet.google.com/bruno-teste']);
+  const eventoComConvidados = eventosGoogle[eventosGoogle.length - 1];
+  checar('  vira attendees no evento + sendUpdates=all', [eventoComConvidados.url.includes('sendUpdates=all'), eventoComConvidados.body.attendees], [true, [{ email: 'cliente@teste.com' }, { email: 'outro@teste.com' }]]);
 
   // Erica NAO tem Google conectado: comportamento identico ao de sempre (sem Meet, sem checar freebusy)
   const semGoogle = await chamarAcao('criar-reserva', { titulo: 'Treinamento', ismId: ERICA, inicio: INICIO, fim: INICIO + UMA_HORA });
@@ -3221,7 +3272,13 @@ console.log('\n[43] historico-conversa-umbler + modelos de mensagem');
       });
     }
     if (u.includes(`/list/${LISTA_MODELOS}/task?`)) {
-      return ok({ tasks: [{ id: 'tModelo1', name: 'Abertura padrão', description: 'Olá tudo bem?' }], last_page: true });
+      return ok({
+        tasks: [
+          { id: 'tModelo1', name: 'Abertura padrão', description: 'Olá tudo bem?' },
+          { id: 'tModelo2', name: 'Modelo com assunto', description: '**Assunto:** Follow-up da reunião\n\nSegue o combinado.' },
+        ],
+        last_page: true,
+      });
     }
     if (metodo === 'POST' && u.endsWith(`/list/${LISTA_MODELOS}/task`)) {
       escritas.push({ alvo: 'criar-modelo', body: JSON.parse(init.body) });
@@ -3282,8 +3339,10 @@ console.log('\n[43] historico-conversa-umbler + modelos de mensagem');
 
   // listar-modelos-mensagem
   const listaModelos = await chamarGet(CONSULTA, 'listar-modelos-mensagem');
-  checar('listar-modelos-mensagem: 200 (leitura franqueada, so nao pode gestao/carteira)', [listaModelos.code, listaModelos.corpo.modelos.length], [200, 1]);
+  checar('listar-modelos-mensagem: 200 (leitura franqueada, so nao pode gestao/carteira)', [listaModelos.code, listaModelos.corpo.modelos.length], [200, 2]);
   checar('  nome e texto vem certos', [listaModelos.corpo.modelos[0].nome, listaModelos.corpo.modelos[0].texto], ['Abertura padrão', 'Olá tudo bem?']);
+  checar('  modelo sem assunto vem com assunto vazio (nao quebra o sem-assunto de sempre)', listaModelos.corpo.modelos[0].assunto, '');
+  checar('  modelo COM assunto: separa a linha "**Assunto:**" do corpo', [listaModelos.corpo.modelos[1].nome, listaModelos.corpo.modelos[1].assunto, listaModelos.corpo.modelos[1].texto], ['Modelo com assunto', 'Follow-up da reunião', 'Segue o combinado.']);
 
   // salvar-modelo-mensagem
   const salvarSemPermissao = await chamarPost(CONSULTA, 'salvar-modelo-mensagem', { nome: 'X', texto: 'Y' });
@@ -3304,6 +3363,13 @@ console.log('\n[43] historico-conversa-umbler + modelos de mensagem');
   const BRUNO_SESSAO = { nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' };
   const salvarComoIsm = await chamarPost(BRUNO_SESSAO, 'salvar-modelo-mensagem', { nome: 'Modelo ISM', texto: 'Oi!' });
   checar('salvar-modelo-mensagem: ism tambem pode -> 200', [salvarComoIsm.code, salvarComoIsm.corpo.ok], [200, true]);
+
+  // assunto opcional (reaproveitado pelo e-mail) — salvar-modelo-mensagem grava
+  // a linha "**Assunto:**" na frente do texto quando enviado
+  escritas.length = 0;
+  const salvarComAssunto = await chamarPost(GESTAO, 'salvar-modelo-mensagem', { nome: 'Modelo novo', texto: 'Segue o combinado.', assunto: 'Follow-up da reunião' });
+  checar('salvar-modelo-mensagem com assunto: 200', [salvarComAssunto.code, salvarComAssunto.corpo.ok], [200, true]);
+  checar('  grava a linha Assunto na frente do texto', escritas[0]?.body.markdown_description, '**Assunto:** Follow-up da reunião\n\nSegue o combinado.');
 
   globalThis.fetch = fetchOriginal;
 }
@@ -4132,6 +4198,257 @@ console.log('\n[50] Dados Tributarios: trigger, atualizar-implantacao preserva, 
   checar('  grava dadosTributarios + preenchidoEm', escritas[0]?.markdown_description.includes('"regimeTributario":"Simples Nacional"') && /"preenchidoEm":\d+/.test(escritas[0]?.markdown_description || ''), true);
   checar('  preserva o resto do estado (idNucleo)', escritas[0]?.markdown_description.includes('"idNucleo":"123"'), true);
   checar('  sobe o certificado como anexo de verdade (multipart)', anexosCriados[0]?.ehFormData, true);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[51] api/google-oauth-callback.js — branch por finalidade (calendar inalterado, email novo)');
+{
+  const fetchOriginal = globalThis.fetch;
+  const LISTA_TOKENS = '901329032234';
+  process.env.SESSION_SECRET = 'T'.repeat(48);
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+  function falhaHttp(status, corpo) {
+    return { ok: false, status, headers: new Map(), json: async () => corpo, text: async () => '' };
+  }
+
+  let tokenExchangeFalha = false;
+  const escritas = [];
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.includes(`/list/${LISTA_TOKENS}/task?`)) return ok({ tasks: [], last_page: true });
+    if (metodo === 'POST' && u.endsWith(`/list/${LISTA_TOKENS}/task`)) {
+      escritas.push(JSON.parse(init.body));
+      return ok({ id: 'tNovoToken' });
+    }
+    if (u === 'https://oauth2.googleapis.com/token') {
+      return tokenExchangeFalha ? falhaHttp(400, { error: 'invalid_grant' }) : ok({ access_token: 'at-x', refresh_token: 'rt-x' });
+    }
+    if (u === 'https://www.googleapis.com/oauth2/v2/userinfo') return ok({ email: 'gianluca@gmail.com' });
+    return ok({});
+  };
+
+  const googleLibUrlReal = libGoogleUnica('callback');
+  const clickupLibUrlReal = libClickupUnica('callback');
+  const callback = await carregarCom('api/google-oauth-callback.js', clickupLibUrlReal, googleLibUrlReal);
+  const googleDireto = await import(googleLibUrlReal);
+
+  const chamar = async (query) => {
+    const r = res();
+    await callback({ method: 'GET', headers: cabecalhos({}), query }, r);
+    return r;
+  };
+
+  const semCodeOuState = await chamar({});
+  checar('sem code/state -> redirect erro generico', [semCodeOuState.code, semCodeOuState.headers.Location], [302, '/implantacao-waipe.html?googleErro=1']);
+
+  const stateLixo = await chamar({ code: 'abc', state: 'lixo-nao-e-state' });
+  checar('state invalido -> redirect erro generico', [stateLixo.code, stateLixo.headers.Location], [302, '/implantacao-waipe.html?googleErro=1']);
+
+  const stateCalendar = googleDireto.assinarEstadoGoogle('calendar', 118125102);
+  const okCalendar = await chamar({ code: 'abc', state: stateCalendar });
+  checar('finalidade calendar: redirect googleConectado (comportamento identico ao de sempre)', [okCalendar.code, okCalendar.headers.Location], [302, '/implantacao-waipe.html?googleConectado=1']);
+  const estadoSalvoCalendar = JSON.parse(escritas[0]?.markdown_description || '{}');
+  checar('  salva o token de calendar (ismId numerico, sem tipo/chave)', estadoSalvoCalendar, { ismId: 118125102, refreshToken: 'rt-x', conectadoEm: estadoSalvoCalendar.conectadoEm });
+
+  escritas.length = 0;
+  const stateEmailPessoal = googleDireto.assinarEstadoGoogle('email', 'Gian Luca');
+  const okEmail = await chamar({ code: 'abc', state: stateEmailPessoal });
+  checar('finalidade email: redirect emailConectado (flag diferente do calendar)', [okEmail.code, okEmail.headers.Location], [302, '/implantacao-waipe.html?emailConectado=1']);
+  const estadoSalvoEmail = JSON.parse(escritas[0]?.markdown_description || '{}');
+  checar('  salva o token de e-mail com tipo/chave/emailConectado (descobre via userinfo)', estadoSalvoEmail, {
+    tipo: 'email', chave: 'Gian Luca', refreshToken: 'rt-x', emailConectado: 'gianluca@gmail.com', conectadoEm: estadoSalvoEmail.conectadoEm,
+  });
+
+  escritas.length = 0;
+  const stateEmailCompartilhado = googleDireto.assinarEstadoGoogle('email', 'compartilhada');
+  await chamar({ code: 'abc', state: stateEmailCompartilhado });
+  checar('  conta compartilhada usa a MESMA chave sentinel', JSON.parse(escritas[0]?.markdown_description || '{}').chave, 'compartilhada');
+
+  // Falha na troca do code -> redirect de erro usa a finalidade certa (nao o generico)
+  tokenExchangeFalha = true;
+  const stateEmailFalha = googleDireto.assinarEstadoGoogle('email', 'Gian Luca');
+  const falhaEmail = await chamar({ code: 'abc', state: stateEmailFalha });
+  checar('falha na troca do code (finalidade email): redirect emailErro, nao googleErro', [falhaEmail.code, falhaEmail.headers.Location], [302, '/implantacao-waipe.html?emailErro=1']);
+
+  const stateCalendarFalha = googleDireto.assinarEstadoGoogle('calendar', 118125102);
+  const falhaCalendar = await chamar({ code: 'abc', state: stateCalendarFalha });
+  checar('falha na troca do code (finalidade calendar): redirect googleErro', [falhaCalendar.code, falhaCalendar.headers.Location], [302, '/implantacao-waipe.html?googleErro=1']);
+  tokenExchangeFalha = false;
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[52] conectar-email-google / status-email-google / enviar-email-implantacao');
+{
+  const fetchOriginal = globalThis.fetch;
+  const LISTA_TOKENS = '901329032234';
+  process.env.SESSION_SECRET = 'T'.repeat(48);
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+
+  // tokens de e-mail ja conectados: um pessoal (Gian Luca) e um da conta compartilhada
+  const tokenPessoal = () => ({
+    id: 'tTokenGian', assignees: [],
+    description: JSON.stringify({ tipo: 'email', chave: 'Gian Luca', refreshToken: 'rt-gian', emailConectado: 'gianluca@gmail.com', conectadoEm: Date.now() }),
+  });
+  const tokenCompartilhado = () => ({
+    id: 'tTokenCompartilhado', assignees: [],
+    description: JSON.stringify({ tipo: 'email', chave: 'compartilhada', refreshToken: 'rt-compartilhada', emailConectado: 'contato@londrisoft.com.br', conectadoEm: Date.now() }),
+  });
+  let tokensExistentes = [];
+
+  const projeto = () => ({
+    id: 'tProjEmail', name: 'Cliente Email', list: { id: '901328976497' }, parent: null,
+    description: 'CSM: Gian Luca\n\n' + JSON.stringify({ etapaAtual: 'construcao', email: 'cliente@empresa.com' }),
+  });
+
+  let comentarios = [];
+  let chamadasGmail = [];
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    const metodo = init?.method || 'GET';
+    if (u.includes(`/list/${LISTA_TOKENS}/task?`)) return ok({ tasks: tokensExistentes, last_page: true });
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjEmail/comment')) {
+      if (metodo === 'POST') { comentarios.push(JSON.parse(init.body)); return ok({ id: 'c-novo' }); }
+      return ok({ comments: [] });
+    }
+    if (u.startsWith('https://api.clickup.com/api/v2/task/tProjEmail')) return ok(projeto());
+    if (u === 'https://oauth2.googleapis.com/token') return ok({ access_token: 'at-envio', expires_in: 3600 });
+    if (u === 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send') {
+      chamadasGmail.push(JSON.parse(init.body));
+      return ok({ id: 'msg-1' });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('email-acoes');
+  const googleLibUrl = libGoogleUnica('email-acoes');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrl);
+
+  const cookieDe = (perfil) => `${auth.COOKIE_NOME}=${auth.assinarSessao(perfil)}`;
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const GIAN = { nivel: 'csm', csm: 'Gian Luca', nome: 'Gian Luca' };
+  const PATRICIA = { nivel: 'csm', csm: 'Patricia Carvalho', nome: 'Patricia Carvalho' };
+  const CONSULTA = { nivel: 'consulta', csm: null, nome: 'Consulta' };
+  const BRUNO_ISM = { nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' };
+  const chamarGet = async (perfil, action, query = {}) => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action, ...query } }, r);
+    return r;
+  };
+  const chamarPost = async (perfil, action, body) => {
+    const r = res();
+    await cu({ method: 'POST', headers: cabecalhos({ cookie: cookieDe(perfil) }), query: { action }, body: JSON.stringify(body) }, r);
+    return r;
+  };
+
+  // conectar-email-google
+  const conectarCompartilhadaComoCsm = await chamarGet(GIAN, 'conectar-email-google', { tipo: 'compartilhada' });
+  checar('conectar-email-google tipo=compartilhada como CSM -> 403', [conectarCompartilhadaComoCsm.code, conectarCompartilhadaComoCsm.corpo.code], [403, 'fora_do_escopo']);
+
+  const conectarCompartilhadaComoGestao = await chamarGet(GESTAO, 'conectar-email-google', { tipo: 'compartilhada' });
+  checar('conectar-email-google tipo=compartilhada como Gestao -> 302', [conectarCompartilhadaComoGestao.code, conectarCompartilhadaComoGestao.headers.Location?.startsWith('https://accounts.google.com/')], [302, true]);
+
+  const conectarPessoal = await chamarGet(GIAN, 'conectar-email-google');
+  checar('conectar-email-google (pessoal, default) -> 302', [conectarPessoal.code, conectarPessoal.headers.Location?.startsWith('https://accounts.google.com/')], [302, true]);
+
+  // status-email-google: ninguem conectado ainda
+  tokensExistentes = [];
+  const statusVazio = await chamarGet(GIAN, 'status-email-google');
+  checar('status-email-google: nada conectado', statusVazio.corpo, {
+    pessoal: { conectado: false, email: null }, compartilhada: { conectado: false, email: null }, podeConectarCompartilhada: false,
+  });
+
+  const statusVazioGestao = await chamarGet(GESTAO, 'status-email-google');
+  checar('  podeConectarCompartilhada so pra gestao', statusVazioGestao.corpo.podeConectarCompartilhada, true);
+
+  // status-email-google: com as duas conexoes ja feitas
+  tokensExistentes = [tokenPessoal(), tokenCompartilhado()];
+  const statusCompleto = await chamarGet(GIAN, 'status-email-google');
+  checar('status-email-google: reflete pessoal e compartilhada conectados', statusCompleto.corpo, {
+    pessoal: { conectado: true, email: 'gianluca@gmail.com' },
+    compartilhada: { conectado: true, email: 'contato@londrisoft.com.br' },
+    podeConectarCompartilhada: false,
+  });
+  // outra pessoa (Patricia) nao tem conexao PROPRIA, mesmo com a de Gian existindo
+  const statusOutraPessoa = await chamarGet(PATRICIA, 'status-email-google');
+  checar('  conexao pessoal e por identidade — Patricia nao ve a do Gian como propria', statusOutraPessoa.corpo.pessoal, { conectado: false, email: null });
+
+  // enviar-email-implantacao: validacoes
+  tokensExistentes = [];
+  const semPermissao = await chamarPost(CONSULTA, 'enviar-email-implantacao', { id: 'tProjEmail', destinatarios: ['x@y.com'], assunto: 'A', corpo: 'B' });
+  checar('enviar-email-implantacao: consulta -> 403', [semPermissao.code, semPermissao.corpo.code], [403, 'somente_leitura']);
+
+  const outraCarteira = await chamarPost(PATRICIA, 'enviar-email-implantacao', { id: 'tProjEmail', destinatarios: ['x@y.com'], assunto: 'A', corpo: 'B' });
+  checar('enviar-email-implantacao: csm de outra carteira -> 403', [outraCarteira.code, outraCarteira.corpo.code], [403, 'fora_da_carteira']);
+
+  const semDestinatario = await chamarPost(GIAN, 'enviar-email-implantacao', { id: 'tProjEmail', destinatarios: ['nao-e-email'], assunto: 'A', corpo: 'B' });
+  checar('enviar-email-implantacao: destinatarios invalidos -> 400', [semDestinatario.code, semDestinatario.corpo.code], [400, 'destinatarios_invalidos']);
+
+  const semAssunto = await chamarPost(GIAN, 'enviar-email-implantacao', { id: 'tProjEmail', destinatarios: ['x@y.com'], assunto: '', corpo: 'B' });
+  checar('enviar-email-implantacao: sem assunto -> 400', [semAssunto.code, semAssunto.corpo.code], [400, 'assunto_invalido']);
+
+  const semCorpo = await chamarPost(GIAN, 'enviar-email-implantacao', { id: 'tProjEmail', destinatarios: ['x@y.com'], assunto: 'A', corpo: '' });
+  checar('enviar-email-implantacao: sem corpo -> 400', [semCorpo.code, semCorpo.corpo.code], [400, 'corpo_invalido_email']);
+
+  // sem conexao nenhuma -> 409 com o codigo certo pro remetente escolhido
+  const semConexaoPessoal = await chamarPost(GIAN, 'enviar-email-implantacao', { id: 'tProjEmail', destinatarios: ['cliente@empresa.com'], assunto: 'Oi', corpo: 'Mensagem' });
+  checar('enviar-email-implantacao: sem Gmail pessoal conectado -> 409', [semConexaoPessoal.code, semConexaoPessoal.corpo.code], [409, 'email_nao_conectado']);
+
+  const semConexaoCompartilhada = await chamarPost(GIAN, 'enviar-email-implantacao', { id: 'tProjEmail', remetente: 'compartilhada', destinatarios: ['cliente@empresa.com'], assunto: 'Oi', corpo: 'Mensagem' });
+  checar('enviar-email-implantacao: sem conta compartilhada conectada -> 409', [semConexaoCompartilhada.code, semConexaoCompartilhada.corpo.code], [409, 'email_compartilhado_nao_conectado']);
+
+  // envio de verdade, com a conexao pessoal do Gian
+  tokensExistentes = [tokenPessoal()];
+  const envioOk = await chamarPost(GIAN, 'enviar-email-implantacao', {
+    id: 'tProjEmail', destinatarios: ['cliente@empresa.com', ' cliente2@empresa.com '], assunto: 'Início da implantação', corpo: 'Olá! Vamos começar amanhã às 10h — ação: confirmar presença.',
+  });
+  checar('enviar-email-implantacao: 200, enviado do e-mail conectado', [envioOk.code, envioOk.corpo.ok, envioOk.corpo.enviadoComo], [200, true, 'gianluca@gmail.com']);
+  checar('  destinatarios saneados (trim) na resposta', envioOk.corpo.destinatarios, ['cliente@empresa.com', 'cliente2@empresa.com']);
+
+  const raw = chamadasGmail[0]?.raw;
+  const mensagemDecodificada = Buffer.from(raw, 'base64url').toString('utf8');
+  checar('  monta o From/To certos na mensagem RFC 2822', [
+    mensagemDecodificada.includes('From: gianluca@gmail.com'),
+    mensagemDecodificada.includes('To: cliente@empresa.com, cliente2@empresa.com'),
+  ], [true, true]);
+  checar('  assunto vai como encoded-word (RFC 2047) por causa do acento', mensagemDecodificada.includes('Subject: =?UTF-8?B?'), true);
+  checar('  corpo vai em base64 com charset UTF-8 (acento/emoji chegam certos)', [
+    mensagemDecodificada.includes('Content-Type: text/plain; charset="UTF-8"'),
+    mensagemDecodificada.includes('Content-Transfer-Encoding: base64'),
+  ], [true, true]);
+
+  checar('  registra o envio como comentario no projeto', comentarios[0]?.comment_text.includes('E-mail enviado por Gian Luca') && comentarios[0]?.comment_text.includes('cliente@empresa.com'), true);
+
+  // ISM tambem pode enviar (nao esta em ACOES_PROIBIDAS_ISM) — usando a conta compartilhada
+  tokensExistentes = [tokenCompartilhado()];
+  chamadasGmail = [];
+  const envioComoIsm = await chamarPost(BRUNO_ISM, 'enviar-email-implantacao', {
+    id: 'tProjEmail', remetente: 'compartilhada', destinatarios: ['cliente@empresa.com'], assunto: 'Combinado', corpo: 'Segue o que combinamos.',
+  });
+  checar('enviar-email-implantacao: ISM tambem pode, remetente compartilhada -> 200', [envioComoIsm.code, envioComoIsm.corpo.enviadoComo], [200, 'contato@londrisoft.com.br']);
 
   globalThis.fetch = fetchOriginal;
 }

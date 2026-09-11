@@ -1692,6 +1692,7 @@
           '<div id="anexosProjetoWrap"></div>' +
           '<div id="comentariosProjetoWrap"></div>' +
           '<div id="conversaUmblerWrap"></div>' +
+          '<div id="emailProjetoWrap"></div>' +
           '<div id="analiseReuniaoWrap"></div>' +
         '</aside>' +
       '</div>';
@@ -1706,6 +1707,7 @@
     renderConversaUmbler(dadosProjeto.projeto.id, document.getElementById("conversaUmblerWrap"));
     renderAnaliseReuniao(dadosProjeto.projeto.id, document.getElementById("analiseReuniaoWrap"));
     renderAgenda(dadosProjeto.projeto.id, document.getElementById("agendaProjetoWrap"));
+    renderEmailProjeto(dadosProjeto.projeto.id, document.getElementById("emailProjetoWrap"));
     renderConteudoProjeto();
   }
 
@@ -1993,15 +1995,17 @@
         return;
       }
       lista.innerHTML = modelos.map(function(m, i){
+        var assuntoHtml = m.assunto ? '<div class="apmeta"><b>Assunto:</b> ' + esc(m.assunto) + '</div>' : "";
         return '<div class="agent-pick" data-modelo="' + i + '" style="cursor:pointer;margin-top:8px;">' +
           '<div class="apname">' + esc(m.nome) + '</div>' +
+          assuntoHtml +
           '<div class="apmeta" style="white-space:pre-wrap;">' + esc(m.texto) + '</div>' +
         '</div>';
       }).join("");
       lista.querySelectorAll("[data-modelo]").forEach(function(el){
         el.addEventListener("click", function(){
           var i = Number(el.getAttribute("data-modelo"));
-          aoEscolher(modelos[i].texto);
+          aoEscolher(modelos[i].texto, modelos[i].assunto);
           overlay.style.display = "none";
         });
       });
@@ -2010,13 +2014,16 @@
     });
   }
 
-  function salvarModeloAtual(){
-    var campoTexto = document.getElementById("umblerMsgTexto");
+  // assuntoInputId e opcional — so o compose de e-mail tem assunto pra salvar junto.
+  function salvarModeloAtual(textareaId, assuntoInputId){
+    var campoTexto = document.getElementById(textareaId);
     var conteudo = campoTexto ? campoTexto.value.trim() : "";
     if (!conteudo){ showSimToast("Escreva a mensagem antes de salvar como modelo."); return; }
+    var campoAssunto = assuntoInputId ? document.getElementById(assuntoInputId) : null;
+    var assunto = campoAssunto ? campoAssunto.value.trim() : "";
     var nome = window.prompt("Nome do modelo:");
     if (!nome || !nome.trim()) return;
-    apiPost("salvar-modelo-mensagem", { nome: nome.trim(), texto: conteudo }).then(function(){
+    apiPost("salvar-modelo-mensagem", { nome: nome.trim(), texto: conteudo, assunto: assunto }).then(function(){
       showSimToast("Modelo salvo.");
     }).catch(function(e){
       showSimToast(mensagemErro(e) || "Não deu para salvar o modelo.");
@@ -2054,6 +2061,98 @@
       if (btnResumir) btnResumir.addEventListener("click", function(){ resumirConversaComIa(btnResumir, projetoId); });
     }).catch(function(){
       container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Não deu para carregar.</div></div>';
+    });
+  }
+
+  // Card de e-mail: cada pessoa conecta o proprio Gmail (autorizacao SEPARADA
+  // da agenda — ver conectar-email-google), ou usa a conta compartilhada da
+  // Londrisoft (conectada uma vez pela Gestão). So mostra o formulario de
+  // envio quando pelo menos uma das duas ja foi conectada.
+  function renderEmailProjeto(projetoId, container){
+    if (!container) return;
+    container.innerHTML = '<div class="card"><h2>📧 E-mail</h2><div class="sidebar-loading">Carregando…</div></div>';
+    apiGet("status-email-google").then(function(status){
+      var emailCliente = (dadosProjeto && dadosProjeto.projeto && dadosProjeto.projeto.email) || "";
+      var conexaoHtml = "";
+      if (status.pessoal.conectado){
+        conexaoHtml += '<div class="sp-v">Você: conectado como <strong>' + esc(status.pessoal.email) + '</strong></div>';
+      } else {
+        conexaoHtml += '<div class="sp-v"><a href="/api/clickup?action=conectar-email-google">Conectar seu Gmail</a></div>';
+      }
+      if (status.compartilhada.conectado){
+        conexaoHtml += '<div class="sp-v">Conta compartilhada: <strong>' + esc(status.compartilhada.email) + '</strong></div>';
+      } else if (status.podeConectarCompartilhada){
+        conexaoHtml += '<div class="sp-v"><a href="/api/clickup?action=conectar-email-google&tipo=compartilhada">Conectar conta compartilhada</a></div>';
+      }
+
+      if (!status.pessoal.conectado && !status.compartilhada.conectado){
+        container.innerHTML = '<div class="card"><h2>📧 E-mail</h2>' + conexaoHtml +
+          '<div class="hint" style="margin-top:6px;">Conecte um Gmail pra poder mandar e-mail pro cliente direto daqui.</div></div>';
+        return;
+      }
+
+      var opcoesRemetente = [];
+      if (status.pessoal.conectado) opcoesRemetente.push({ valor: "pessoal", label: "Meu e-mail (" + status.pessoal.email + ")" });
+      if (status.compartilhada.conectado) opcoesRemetente.push({ valor: "compartilhada", label: "Conta compartilhada (" + status.compartilhada.email + ")" });
+      var remetenteHtml = opcoesRemetente.length > 1
+        ? '<select class="form-input" id="emailRemetente" style="width:auto;">' +
+            opcoesRemetente.map(function(o){ return '<option value="' + o.valor + '">' + esc(o.label) + '</option>'; }).join("") +
+          '</select>'
+        : '<input type="hidden" id="emailRemetente" value="' + opcoesRemetente[0].valor + '">';
+
+      container.innerHTML = '<div class="card"><h2>📧 E-mail</h2>' + conexaoHtml +
+        '<div class="sp-k" style="margin-top:10px;display:block;">Remetente</div>' + remetenteHtml +
+        '<div class="sp-k" style="margin-top:10px;display:block;">Para</div>' +
+        '<input type="text" class="form-input" id="emailDestinatarios" value="' + esc(emailCliente) + '" placeholder="E-mails separados por vírgula" style="width:100%;">' +
+        '<div class="sp-k" style="margin-top:8px;display:block;">Assunto</div>' +
+        '<input type="text" class="form-input" id="emailAssunto" style="width:100%;">' +
+        '<div class="sp-k" style="margin-top:8px;display:block;">Mensagem</div>' +
+        '<textarea id="emailCorpo" class="form-input" rows="5" style="width:100%;"></textarea>' +
+        '<div style="margin-top:8px;">' +
+          '<button type="button" class="btn-flow-secondary" id="btnEnviarEmail">Enviar</button> ' +
+          '<button type="button" class="btn-flow-secondary" id="btnUsarModeloEmail">Usar modelo</button> ' +
+          '<button type="button" class="btn-flow-secondary" id="btnSalvarModeloEmail">💾 Salvar como modelo</button>' +
+        '</div>' +
+        '<div id="emailErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
+      '</div>';
+
+      var btnEnviarEmail = document.getElementById("btnEnviarEmail");
+      btnEnviarEmail.addEventListener("click", function(){
+        var erroEl = document.getElementById("emailErro");
+        erroEl.style.display = "none";
+        var destinatariosRaw = document.getElementById("emailDestinatarios").value.trim();
+        var destinatarios = destinatariosRaw ? destinatariosRaw.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
+        var assunto = document.getElementById("emailAssunto").value.trim();
+        var corpoTexto = document.getElementById("emailCorpo").value.trim();
+        if (!destinatarios.length || !assunto || !corpoTexto){
+          erroEl.textContent = "Preencha destinatário, assunto e mensagem.";
+          erroEl.style.display = "block";
+          return;
+        }
+        btnEnviarEmail.disabled = true;
+        apiPost("enviar-email-implantacao", {
+          id: projetoId, remetente: document.getElementById("emailRemetente").value,
+          destinatarios: destinatarios, assunto: assunto, corpo: corpoTexto,
+        }).then(function(resp){
+          showSimToast("E-mail enviado de " + resp.enviadoComo + "!");
+          document.getElementById("emailAssunto").value = "";
+          document.getElementById("emailCorpo").value = "";
+        }).catch(function(e){
+          erroEl.textContent = mensagemErro(e) || "Não deu para enviar o e-mail.";
+          erroEl.style.display = "block";
+        }).finally(function(){ btnEnviarEmail.disabled = false; });
+      });
+      document.getElementById("btnUsarModeloEmail").addEventListener("click", function(){
+        abrirModalModelos(function(texto, assunto){
+          document.getElementById("emailCorpo").value = texto;
+          if (assunto) document.getElementById("emailAssunto").value = assunto;
+        });
+      });
+      document.getElementById("btnSalvarModeloEmail").addEventListener("click", function(){
+        salvarModeloAtual("emailCorpo", "emailAssunto");
+      });
+    }).catch(function(){
+      container.innerHTML = '<div class="card"><h2>📧 E-mail</h2><div class="sub">Não deu para carregar.</div></div>';
     });
   }
 
@@ -2179,12 +2278,16 @@
           '<input type="text" class="form-input" data-link-input="' + esc(r.id) + '" placeholder="Cole aqui o link do Meet depois de criar a reunião" style="flex:1; min-width:200px; font-size:12px; padding:6px 8px;">' +
           '<button type="button" class="btn-flow-secondary" data-salvar-link="' + esc(r.id) + '" style="width:auto; padding:6px 12px;">Salvar link</button>' +
         '</div>';
+    var convidadosHtml = (r.convidados && r.convidados.length)
+      ? '<div class="apmeta" style="margin-top:2px">Convidados: ' + esc(r.convidados.join(', ')) + '</div>'
+      : '';
     return '<div class="build-check" style="align-items:flex-start; flex-direction:column;">' +
       '<div style="display:flex; justify-content:space-between; width:100%; align-items:flex-start; gap:8px;">' +
         '<span><b>' + esc(r.titulo) + '</b> — ' + esc(r.ismNome || "—") + '<br><span style="font-size:11px; color:var(--muted)">' + fmtDataHoraSim(r.inicio) + ' até ' + fmtDataHoraSim(r.fim) + '</span></span>' +
         '<button type="button" class="btn-reset" data-cancelar-reserva="' + esc(r.id) + '" style="color:var(--danger); flex:0 0 auto;">Cancelar</button>' +
       '</div>' +
       linkHtml +
+      convidadosHtml +
     '</div>';
   }
 
@@ -2208,6 +2311,7 @@
   }
 
   function formNovaReservaHtml(statusGoogle){
+    var emailCliente = (dadosProjeto && dadosProjeto.projeto && dadosProjeto.projeto.email) || "";
     return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
       '<div class="sp-k">Agendar novo horário</div>' +
       agendaGoogleLinksHtml(statusGoogle) +
@@ -2224,6 +2328,13 @@
         '<span style="font-size:12px; color:var(--muted);">até</span>' +
         '<input type="time" class="form-input" id="novaReservaHoraFim" style="width:auto;">' +
         '<button type="button" class="btn-flow-secondary" id="btnReservarHorario" style="width:auto;">Registrar reserva</button>' +
+      '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<input type="text" class="form-input" id="novaReservaConvidados" value="' + esc(emailCliente) + '" placeholder="E-mails dos convidados, separados por vírgula" style="width:100%;">' +
+        '<div class="hint" style="margin-top:3px;">' +
+          (emailCliente ? "Já veio com o e-mail cadastrado do cliente — edite ou adicione mais separando por vírgula." : "Adicione os e-mails de quem vai participar, separados por vírgula.") +
+          ' Convite por e-mail só sai automático se o ISM tiver a agenda do Google conectada.' +
+        '</div>' +
       '</div>' +
       '<div id="reservaErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
     '</div>';
@@ -2265,10 +2376,16 @@
       }
       var inicio = new Date(data + "T" + horaIni + ":00").getTime();
       var fim = new Date(data + "T" + horaFim + ":00").getTime();
+      var convidadosRaw = container.querySelector("#novaReservaConvidados").value.trim();
+      var convidados = convidadosRaw ? convidadosRaw.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
       btnReservar.disabled = true;
-      apiPost("criar-reserva", { projetoId: projetoId, titulo: titulo, ismId: ismId, inicio: inicio, fim: fim })
+      apiPost("criar-reserva", { projetoId: projetoId, titulo: titulo, ismId: ismId, inicio: inicio, fim: fim, convidados: convidados })
         .then(function(resp){
-          if (resp && resp.linkReuniao) showSimToast("Reservado! Meet criado automático: " + resp.linkReuniao);
+          if (resp && resp.linkReuniao){
+            var msg = "Reservado! Meet criado automático: " + resp.linkReuniao;
+            if (resp.convidados && resp.convidados.length) msg += " — convite enviado pra " + resp.convidados.length + " convidado(s).";
+            showSimToast(msg);
+          }
           renderAgenda(projetoId, container);
         })
         .catch(function(e){
@@ -2497,7 +2614,7 @@
       });
     });
     var btnSalvarModeloUmbler = document.getElementById("btnSalvarModeloUmbler");
-    if (btnSalvarModeloUmbler) btnSalvarModeloUmbler.addEventListener("click", salvarModeloAtual);
+    if (btnSalvarModeloUmbler) btnSalvarModeloUmbler.addEventListener("click", function(){ salvarModeloAtual("umblerMsgTexto"); });
     var btnGerarFinalizacao = document.getElementById("btnGerarFinalizacao");
     if (btnGerarFinalizacao) btnGerarFinalizacao.addEventListener("click", function(){
       gerarFinalizacao(btnGerarFinalizacao);
@@ -3232,11 +3349,17 @@
       showSimToast("Agenda do Google conectada!");
     } else if (params.has("googleErro")){
       showSimToast("Não deu para conectar a agenda do Google — tenta de novo.");
+    } else if (params.has("emailConectado")){
+      showSimToast("Gmail conectado!");
+    } else if (params.has("emailErro")){
+      showSimToast("Não deu para conectar o Gmail — tenta de novo.");
     } else {
       return;
     }
     params.delete("googleConectado");
     params.delete("googleErro");
+    params.delete("emailConectado");
+    params.delete("emailErro");
     var resto = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (resto ? "?" + resto : ""));
   })();

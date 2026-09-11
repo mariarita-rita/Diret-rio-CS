@@ -1,17 +1,29 @@
-// Integração com a Google Calendar API — OAuth por ISM (conexão individual,
-// não delegação por dominio): cada ISM autoriza a propria conta uma vez, o
-// backend guarda so o refresh token (ver LISTA_GOOGLE_TOKENS em clickup.js) e
-// usa isso pra checar disponibilidade real e criar reuniao com Meet
-// automatico ao registrar uma reserva.
+// Integração com contas Google — OAuth por PESSOA (conexão individual, não
+// delegação por dominio): cada um autoriza a propria conta uma vez, o
+// backend guarda so o refresh token (ver LISTA_GOOGLE_TOKENS em clickup.js).
+// Duas finalidades independentes, com escopos e autorizacoes separadas —
+// conectar a agenda NAO da permissao de mandar e-mail, e vice-versa, entao
+// quem ja tinha conectado a agenda antes do envio de e-mail existir continua
+// sem gmail.send ate conectar o e-mail tambem (sem reconsentimento forçado):
+//   - calendar: checar disponibilidade real + criar reuniao com Meet
+//     automatico ao registrar uma reserva.
+//   - email: mandar e-mail pro cliente direto do painel (por pessoa, ou por
+//     uma conta compartilhada — ver CONTA_EMAIL_COMPARTILHADA em clickup.js).
 //
 // Escopos minimos: calendar.events (criar evento) + calendar.freebusy (checar
-// disponibilidade) — nao precisa do escopo `calendar` inteiro.
+// disponibilidade) pra agenda; gmail.send (mandar e-mail) + userinfo.email
+// (descobrir qual endereco foi autorizado, so pra mostrar na tela) pro e-mail.
 
 import crypto from 'node:crypto';
 
-const ESCOPOS = [
+const ESCOPOS_CALENDAR = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.freebusy',
+].join(' ');
+
+const ESCOPOS_EMAIL = [
+  'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ');
 
 const ESTADO_TTL_MS = 10 * 60 * 1000; // 10min — so precisa durar o consentimento no Google
@@ -59,12 +71,17 @@ function hmac(dados) {
 
 const b64 = (buf) => Buffer.from(buf).toString('base64url');
 
-export function assinarEstadoGoogle(ismId) {
-  const corpo = b64(JSON.stringify({ ismId: Number(ismId), iat: Date.now() }));
+/**
+ * `alvo` e o `ismId` numerico (finalidade "calendar") ou uma chave string
+ * (finalidade "email" — nome de login ou CONTA_EMAIL_COMPARTILHADA). O tipo
+ * de `alvo` fica por conta de quem assina; aqui so carrega o que foi dado.
+ */
+export function assinarEstadoGoogle(finalidade, alvo) {
+  const corpo = b64(JSON.stringify({ finalidade, alvo, iat: Date.now() }));
   return `${corpo}.${b64(hmac(corpo))}`;
 }
 
-/** Valida assinatura e validade do state. Retorna { ismId } ou null. */
+/** Valida assinatura, validade e forma do state. Retorna { finalidade, alvo } ou null. */
 export function verificarEstadoGoogle(token) {
   if (typeof token !== 'string' || token.length > 512) return null;
   const ponto = token.indexOf('.');
@@ -82,22 +99,23 @@ export function verificarEstadoGoogle(token) {
   } catch {
     return null;
   }
-  if (!p || typeof p.ismId !== 'number' || typeof p.iat !== 'number') return null;
+  if (!p || (p.finalidade !== 'calendar' && p.finalidade !== 'email')) return null;
+  if (p.alvo === undefined || p.alvo === null || typeof p.iat !== 'number') return null;
   if (Date.now() - p.iat > ESTADO_TTL_MS) return null;
-  return { ismId: p.ismId };
+  return { finalidade: p.finalidade, alvo: p.alvo };
 }
 
-/** URL de consentimento do Google pra um ISM especifico (state carrega o id). */
-export function urlAutorizacaoGoogle(ismId) {
+/** URL de consentimento do Google pra uma finalidade+alvo especificos (state carrega os dois). */
+export function urlAutorizacaoGoogle(finalidade, alvo) {
   const { clientId, redirectUri } = credenciais();
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: ESCOPOS,
+    scope: finalidade === 'email' ? ESCOPOS_EMAIL : ESCOPOS_CALENDAR,
     access_type: 'offline',
     prompt: 'consent',
-    state: assinarEstadoGoogle(ismId),
+    state: assinarEstadoGoogle(finalidade, alvo),
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
@@ -125,14 +143,54 @@ export async function renovarAccessToken(refreshToken) {
   return r.access_token;
 }
 
-async function calendarRequest(path, accessToken, init = {}) {
-  const r = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+/** Fetch autenticado (Bearer) generico contra qualquer API do Google — usado
+ * pelos wrappers de path fixo abaixo (calendarRequest) e diretamente por
+ * quem chama uma API de base diferente (userinfo, Gmail). */
+async function googleApiRequest(url, accessToken, init = {}) {
+  const r = await fetch(url, {
     ...init,
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
   });
   const corpo = await r.json().catch(() => null);
   if (!r.ok) throw new ErroGoogle(r.status, corpo);
   return corpo;
+}
+
+async function calendarRequest(path, accessToken, init = {}) {
+  return googleApiRequest(`https://www.googleapis.com/calendar/v3${path}`, accessToken, init);
+}
+
+/** Endereco de e-mail da conta que acabou de autorizar (usado logo apos trocar
+ * o code por token, pra saber QUAL Gmail foi conectado e mostrar na tela). */
+export async function obterEmailConectado(accessToken) {
+  const r = await googleApiRequest('https://www.googleapis.com/oauth2/v2/userinfo', accessToken);
+  return r?.email || null;
+}
+
+/**
+ * Monta a mensagem RFC 2822 e manda via Gmail API (`users.messages.send`).
+ * Assunto e corpo em portugues tem acento — Subject vai como "encoded-word"
+ * (RFC 2047, base64) e o corpo como base64 com charset UTF-8 explicito,
+ * senao acento chega quebrado do outro lado.
+ */
+export async function enviarEmailGmail(accessToken, { de, para, assunto, corpoTexto }) {
+  const assuntoCodificado = `=?UTF-8?B?${Buffer.from(String(assunto || ''), 'utf8').toString('base64')}?=`;
+  const corpoBase64 = Buffer.from(String(corpoTexto || ''), 'utf8').toString('base64');
+  const mensagem = [
+    `From: ${de}`,
+    `To: ${para.join(', ')}`,
+    `Subject: ${assuntoCodificado}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    corpoBase64,
+  ].join('\r\n');
+  const raw = Buffer.from(mensagem, 'utf8').toString('base64url');
+  return googleApiRequest('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ raw }),
+  });
 }
 
 /** Consulta se a agenda primária do ISM tem algo marcado entre inicio/fim (epoch ms). */
@@ -166,16 +224,28 @@ export async function listarEventos(accessToken, inicio, fim) {
   return r?.items || [];
 }
 
-/** Cria o evento na agenda primária do ISM com Meet automático. Devolve o hangoutLink (ou null). */
-export async function criarEventoComMeet(accessToken, { titulo, inicio, fim }) {
-  const r = await calendarRequest('/calendars/primary/events?conferenceDataVersion=1', accessToken, {
-    method: 'POST',
-    body: JSON.stringify({
-      summary: titulo,
-      start: { dateTime: new Date(inicio).toISOString() },
-      end: { dateTime: new Date(fim).toISOString() },
-      conferenceData: { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } },
-    }),
-  });
+/**
+ * Cria o evento na agenda primária do ISM com Meet automático. Devolve o
+ * hangoutLink (ou null). `attendees`, quando presente, e-mail o cliente/
+ * outros participantes como convidados do evento — `sendUpdates=all` faz o
+ * Google mandar o convite por e-mail pra eles (sem convidados, mantém o
+ * comportamento de sempre: nenhuma notificação).
+ */
+export async function criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees }) {
+  const corpo = {
+    summary: titulo,
+    start: { dateTime: new Date(inicio).toISOString() },
+    end: { dateTime: new Date(fim).toISOString() },
+    conferenceData: { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } },
+  };
+  const temConvidados = Array.isArray(attendees) && attendees.length > 0;
+  if (temConvidados) {
+    corpo.attendees = attendees.map((email) => ({ email }));
+  }
+  const r = await calendarRequest(
+    `/calendars/primary/events?conferenceDataVersion=1&sendUpdates=${temConvidados ? 'all' : 'none'}`,
+    accessToken,
+    { method: 'POST', body: JSON.stringify(corpo) },
+  );
   return r?.hangoutLink || null;
 }

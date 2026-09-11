@@ -37,10 +37,14 @@
 //   POST /api/clickup?action=confirmar-fechamento-implantacao { id } -> promove
 //        a proposta a projeto de implantacao de verdade (cria as subtasks)
 //   GET  /api/clickup?action=listar-reservas       lista 901329017742 (agenda dos ISMs)
-//   POST /api/clickup?action=criar-reserva         { projetoId?, titulo, ismId, inicio, fim }
+//   POST /api/clickup?action=criar-reserva         { projetoId?, titulo, ismId, inicio, fim, convidados? }
 //        -> 409 'conflito_horario' se o ISM ja tiver reserva nesse intervalo
-//   POST /api/clickup?action=atualizar-reserva     { id, linkReuniao } — cola o
-//        link do Meet depois que a reuniao foi criada (a API do ClickUp nao gera isso)
+//        convidados: e-mails (max 10, invalidos sao descartados em silencio) —
+//        viram convidados do evento do Google (convite por e-mail automatico,
+//        so quando o ISM tem a agenda conectada)
+//   POST /api/clickup?action=atualizar-reserva     { id, linkReuniao, convidados? } — cola o
+//        link do Meet depois que a reuniao foi criada (a API do ClickUp nao gera isso);
+//        convidados so muda quando enviado, senao preserva o que ja tinha
 //   POST /api/clickup?action=cancelar-reserva      { id } -> libera o horario
 //   GET  /api/clickup?action=conectar-agenda-google { ismId } -> 302 pro
 //        consentimento OAuth do Google (volta em api/google-oauth-callback.js)
@@ -64,8 +68,19 @@
 //        e aceso por api/umbler-webhook.js quando o cliente responde
 //   GET  /api/clickup?action=listar-modelos-mensagem -> modelos salvos de
 //        mensagem de abertura, compartilhados entre todo o time
-//   POST /api/clickup?action=salvar-modelo-mensagem { nome, texto } -> salva
-//        um modelo novo
+//   POST /api/clickup?action=salvar-modelo-mensagem { nome, texto, assunto? } ->
+//        salva um modelo novo (assunto so faz sentido pro canal de e-mail)
+//   GET  /api/clickup?action=conectar-email-google { tipo? } -> 302 pro
+//        consentimento OAuth do Gmail (envio), AUTORIZACAO SEPARADA da
+//        agenda (escopo so gmail.send+userinfo.email, nao mexe no calendar).
+//        tipo="compartilhada" conecta a conta unica (so gestao); default
+//        ("pessoal") conecta o Gmail da propria sessao
+//   GET  /api/clickup?action=status-email-google -> { pessoal:{conectado,
+//        email}, compartilhada:{conectado,email}, podeConectarCompartilhada }
+//   POST /api/clickup?action=enviar-email-implantacao { id, remetente:
+//        "pessoal"|"compartilhada", destinatarios[], assunto, corpo } -> manda
+//        e-mail de verdade via Gmail (conexao ja feita) e registra como
+//        comentario no projeto
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -87,10 +102,13 @@ import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/au
 import {
   anexarArquivoTask,
   assinarTokenProjeto,
+  assuntoDoModelo,
   atualizarTask,
   CAMPOS_ESCRITA,
   cnpjDoAgendamentoGoogle,
+  CONTA_EMAIL_COMPARTILHADA,
   contextoSemEstado,
+  corpoDoModelo,
   criarClienteCarteira,
   criarComentario,
   criarModeloMensagem,
@@ -98,6 +116,7 @@ import {
   criarSubtaskAgente,
   criarTaskImplantacao,
   criarTaskPropostaWaipe,
+  convidadosDaDescricaoReserva,
   csmDaDescricaoImplantacao,
   EQUIPE_OPCAO,
   ErroConfigClickUp,
@@ -122,6 +141,7 @@ import {
   localizarTask,
   obterTask,
   obterTaskComSubtasks,
+  obterTokenEmail,
   obterTokenGoogle,
   parseWaipeState,
   projetoDaDescricaoReserva,
@@ -130,7 +150,7 @@ import {
   STATUS_MES_ATUAL,
   stringifyWaipeState,
 } from './_lib/clickup.js';
-import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -270,6 +290,11 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'salvar-modelo-mensagem') {
       return await salvarModeloMensagemAcao(req, res, sessao);
     }
+    if (req.method === 'GET' && acao === 'conectar-email-google') return await conectarEmailGoogleAcao(req, res, sessao);
+    if (req.method === 'GET' && acao === 'status-email-google') return await statusEmailGoogleAcao(res, sessao);
+    if (req.method === 'POST' && acao === 'enviar-email-implantacao') {
+      return await enviarEmailImplantacaoAcao(req, res, sessao);
+    }
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
@@ -282,7 +307,8 @@ export default async function handler(req, res) {
       'status-google-agenda', 'iniciar-conversa-umbler',
       'sincronizar-agendamentos-google', 'vincular-agendamento-google',
       'historico-conversa-umbler', 'listar-modelos-mensagem', 'salvar-modelo-mensagem',
-      'marcar-conversa-vista',
+      'marcar-conversa-vista', 'conectar-email-google', 'status-email-google',
+      'enviar-email-implantacao',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -1791,7 +1817,7 @@ async function listarModelosMensagemAcao(res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   const tasks = await listarModelosMensagem();
   const modelos = tasks
-    .map((t) => ({ id: t.id, nome: t.name, texto: contextoSemEstado(t.description) }))
+    .map((t) => ({ id: t.id, nome: t.name, texto: corpoDoModelo(t.description), assunto: assuntoDoModelo(t.description) }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   return res.status(200).json({ modelos });
 }
@@ -1812,10 +1838,12 @@ async function salvarModeloMensagemAcao(req, res, sessao) {
 
   const nome = texto(corpo.nome, 100);
   const conteudo = texto(corpo.texto, 4096);
+  const assunto = texto(corpo.assunto, 200);
   if (!nome) return erro(res, 400, 'nome_invalido', 'Dê um nome pro modelo.');
   if (!conteudo) return erro(res, 400, 'texto_invalido', 'O modelo não pode ficar vazio.');
 
-  const nova = await criarModeloMensagem({ name: nome, markdown_description: conteudo });
+  const descricao = assunto ? `**Assunto:** ${assunto}\n\n${conteudo}` : conteudo;
+  const nova = await criarModeloMensagem({ name: nome, markdown_description: descricao });
   return res.status(200).json({ ok: true, id: nova.id });
 }
 
@@ -2097,13 +2125,16 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
 
 // ── Reservas de agenda (Camada 1/Treinamento/reunião) ──────────────────────
 // Lista à parte (LISTA_RESERVAS_AGENDA), sem o formato WAIPE_STATE — o
-// projeto e o link do Meet ficam em 2 linhas simples na descrição
-// (**Projeto:**/**Link:**), extraídas por projetoDaDescricaoReserva/
-// linkDaDescricaoReserva. Não há filtro por carteira aqui: agenda dos ISMs
-// é recurso compartilhado do time, não de um CSM.
+// projeto, o link do Meet e os convidados ficam em linhas simples na
+// descrição (**Projeto:**/**Link:**/**Convidados:**), extraídas por
+// projetoDaDescricaoReserva/linkDaDescricaoReserva/convidadosDaDescricaoReserva.
+// Não há filtro por carteira aqui: agenda dos ISMs é recurso compartilhado
+// do time, não de um CSM.
 
 const RESERVA_DURACAO_MAX_MS = 24 * 60 * 60 * 1000;
 const RESERVA_JANELA_MS = 5 * 365 * 24 * 60 * 60 * 1000; // +/- 5 anos, só pra barrar lixo
+const MAX_EMAILS_LISTA = 10;
+const EMAIL_REGEX_SIMPLES = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Epoch (ms) dentro de uma janela sã, ou null se vier algo fora do esperado. */
 function epocaOuNula(v) {
@@ -2112,6 +2143,26 @@ function epocaOuNula(v) {
   const agora = Date.now();
   if (n < agora - RESERVA_JANELA_MS || n > agora + RESERVA_JANELA_MS) return null;
   return n;
+}
+
+/**
+ * E-mails válidos (formato simples), sem duplicata e com teto — usado tanto
+ * pros convidados do Meet criado pela reserva quanto pros destinatários do
+ * envio de e-mail. Silenciosamente descarta o que não é um e-mail plausível,
+ * em vez de rejeitar a operação inteira por causa disso.
+ */
+function sanearListaEmails(lista) {
+  if (!Array.isArray(lista)) return [];
+  const vistos = new Set();
+  const validos = [];
+  for (const item of lista) {
+    const email = texto(item, 200).toLowerCase();
+    if (!email || !EMAIL_REGEX_SIMPLES.test(email) || vistos.has(email)) continue;
+    vistos.add(email);
+    validos.push(email);
+    if (validos.length >= MAX_EMAILS_LISTA) break;
+  }
+  return validos;
 }
 
 function reservaParaFora(t) {
@@ -2124,6 +2175,7 @@ function reservaParaFora(t) {
     fim: Number(t.due_date) || null,
     projetoId: projetoDaDescricaoReserva(t.description) || null,
     linkReuniao: linkDaDescricaoReserva(t.description) || '',
+    convidados: convidadosDaDescricaoReserva(t.description),
   };
 }
 
@@ -2175,6 +2227,8 @@ async function criarReservaAcao(req, res, sessao) {
     projetoId = corpo.projetoId;
   }
 
+  const convidados = sanearListaEmails(corpo.convidados);
+
   // Conflito: mesma pessoa, intervalos que se cruzam. Checa contra a lista
   // inteira de reservas (é pequena — só os horários já marcados).
   const existentes = await listarReservas();
@@ -2214,13 +2268,14 @@ async function criarReservaAcao(req, res, sessao) {
           conflito: ocupado,
         });
       }
-      linkReuniao = await criarEventoComMeet(accessToken, { titulo, inicio, fim });
+      linkReuniao = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados });
     }
   }
 
   const linhasDescricao = [
     projetoId ? `**Projeto:** ${projetoId}` : null,
     linkReuniao ? `**Link:** ${linkReuniao}` : null,
+    convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
   ].filter(Boolean);
 
   const nova = await criarReserva({
@@ -2232,7 +2287,7 @@ async function criarReservaAcao(req, res, sessao) {
     assignees: [ismId],
     markdown_description: linhasDescricao.join('\n\n'),
   });
-  return res.status(200).json({ ok: true, id: nova.id, linkReuniao });
+  return res.status(200).json({ ok: true, id: nova.id, linkReuniao, convidados });
 }
 
 async function atualizarReservaAcao(req, res, sessao) {
@@ -2263,9 +2318,16 @@ async function atualizarReservaAcao(req, res, sessao) {
 
   const projetoId = projetoDaDescricaoReserva(tarefa.description);
   const linkReuniao = texto(corpo.linkReuniao, 300);
+  // Convidados so muda quando vem explicito no corpo — senao preserva o que
+  // ja tinha (essa acao e usada hoje so pra colar o link manualmente, nao
+  // pode apagar os convidados marcados na criacao por causa disso).
+  const convidados = Array.isArray(corpo.convidados)
+    ? sanearListaEmails(corpo.convidados)
+    : convidadosDaDescricaoReserva(tarefa.description);
   const linhas = [
     projetoId ? `**Projeto:** ${projetoId}` : null,
     linkReuniao ? `**Link:** ${linkReuniao}` : null,
+    convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
   ].filter(Boolean);
 
   await atualizarTask(corpo.id, { markdown_description: linhas.join('\n\n') });
@@ -2482,7 +2544,7 @@ async function conectarAgendaGoogleAcao(req, res, sessao) {
   }
   let url;
   try {
-    url = urlAutorizacaoGoogle(ismId);
+    url = urlAutorizacaoGoogle('calendar', ismId);
   } catch (e) {
     if (e instanceof ErroConfigGoogle) {
       return erro(res, 500, 'google_nao_configurado', 'Integração com o Google ainda não foi configurada.');
@@ -2501,6 +2563,121 @@ async function statusGoogleAgendaAcao(res) {
     status[o.id] = !!(await obterTokenGoogle(o.id));
   }));
   return res.status(200).json({ status });
+}
+
+/**
+ * 302 pro consentimento OAuth do GMAIL (envio) — AUTORIZACAO SEPARADA da
+ * agenda, mesmo esquema de redirect (troca de code por token acontece em
+ * api/google-oauth-callback.js). `tipo=compartilhada` conecta a conta unica
+ * da Londrisoft (so Gestao); default conecta o Gmail da propria sessao.
+ */
+async function conectarEmailGoogleAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const tipo = req.query?.tipo === 'compartilhada' ? 'compartilhada' : 'pessoal';
+  if (tipo === 'compartilhada' && sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'fora_do_escopo', 'Só a Gestão pode conectar a conta compartilhada.');
+  }
+  const alvo = tipo === 'compartilhada' ? CONTA_EMAIL_COMPARTILHADA : sessao.nome;
+  let url;
+  try {
+    url = urlAutorizacaoGoogle('email', alvo);
+  } catch (e) {
+    if (e instanceof ErroConfigGoogle) {
+      return erro(res, 500, 'google_nao_configurado', 'Integração com o Google ainda não foi configurada.');
+    }
+    throw e;
+  }
+  res.setHeader('Location', url);
+  return res.status(302).end();
+}
+
+/** Se a propria sessao (e a conta compartilhada) ja conectaram o Gmail pra envio. */
+async function statusEmailGoogleAcao(res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const [tokenPessoal, tokenCompartilhado] = await Promise.all([
+    obterTokenEmail(sessao.nome),
+    obterTokenEmail(CONTA_EMAIL_COMPARTILHADA),
+  ]);
+  return res.status(200).json({
+    pessoal: { conectado: !!tokenPessoal, email: tokenPessoal?.emailConectado || null },
+    compartilhada: { conectado: !!tokenCompartilhado, email: tokenCompartilhado?.emailConectado || null },
+    podeConectarCompartilhada: sessao.nivel === 'gestao',
+  });
+}
+
+async function enviarEmailImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const destinatarios = sanearListaEmails(corpo.destinatarios);
+  if (!destinatarios.length) {
+    return erro(res, 400, 'destinatarios_invalidos', 'Informe ao menos um e-mail válido de destinatário.');
+  }
+  const assunto = texto(corpo.assunto, 200);
+  const corpoTexto = texto(corpo.corpo, 10000);
+  if (!assunto) return erro(res, 400, 'assunto_invalido', 'O e-mail precisa de um assunto.');
+  if (!corpoTexto) return erro(res, 400, 'corpo_invalido_email', 'O e-mail não pode ficar vazio.');
+
+  const remetenteCompartilhado = corpo.remetente === 'compartilhada';
+  const alvo = remetenteCompartilhado ? CONTA_EMAIL_COMPARTILHADA : sessao.nome;
+  const tokenEmail = await obterTokenEmail(alvo);
+  if (!tokenEmail) {
+    return erro(
+      res, 409,
+      remetenteCompartilhado ? 'email_compartilhado_nao_conectado' : 'email_nao_conectado',
+      remetenteCompartilhado
+        ? 'A conta compartilhada ainda não foi conectada.'
+        : 'Conecte seu Gmail antes de enviar (veja o card de e-mail no projeto).',
+    );
+  }
+
+  let accessToken;
+  try {
+    accessToken = await renovarAccessToken(tokenEmail.refreshToken);
+  } catch (e) {
+    if (!(e instanceof ErroGoogle)) throw e;
+    return erro(res, 409, 'email_conexao_invalida', 'A conexão do Gmail expirou ou foi revogada — reconecte.');
+  }
+
+  try {
+    await enviarEmailGmail(accessToken, {
+      de: tokenEmail.emailConectado, para: destinatarios, assunto, corpoTexto,
+    });
+  } catch (e) {
+    if (!(e instanceof ErroGoogle)) throw e;
+    return erro(res, 502, 'erro_envio_email', 'O Gmail recusou o envio — tente de novo em instantes.');
+  }
+
+  await criarComentario(
+    projeto.id,
+    `📧 **E-mail enviado por ${sessao.nome}** (${tokenEmail.emailConectado})\n` +
+      `**Para:** ${destinatarios.join(', ')}\n**Assunto:** ${assunto}\n\n${corpoTexto}`,
+  );
+
+  return res.status(200).json({ ok: true, enviadoComo: tokenEmail.emailConectado, destinatarios });
 }
 
 async function listarComentariosAcao(req, res, sessao) {

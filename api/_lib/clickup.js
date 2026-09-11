@@ -989,6 +989,52 @@ export async function salvarTokenGoogle(ismId, refreshToken) {
   });
 }
 
+// ── Conexao de e-mail (envio via Gmail) — mesma lista LISTA_GOOGLE_TOKENS,
+// autorizacao INDEPENDENTE da agenda (escopo separado, ver _lib/google.js).
+// Cada pessoa conecta o proprio Gmail (chave = sessao.nome), ou a Gestao
+// conecta uma conta unica compartilhada (chave = CONTA_EMAIL_COMPARTILHADA)
+// pra quem nao quiser conectar a propria. Tasks de e-mail tem `tipo:'email'`
+// e uma `chave` STRING (nunca `ismId`), entao convivem na mesma lista sem
+// colidir com os tokens de calendar (que nao tem `tipo`/`chave`). Sem
+// assignee — `chave` nao e necessariamente um id de usuario do ClickUp. ──
+
+export const CONTA_EMAIL_COMPARTILHADA = 'compartilhada';
+
+function tokenDeEmail(tasks, chave) {
+  return tasks.find((t) => {
+    const estado = parseWaipeState(t.description);
+    return estado.tipo === 'email' && estado.chave === chave;
+  });
+}
+
+/** Refresh token de e-mail salvo pra essa chave (nome de login, ou a conta
+ * compartilhada), ou null se nunca foi conectado. */
+export async function obterTokenEmail(chave) {
+  const tasks = await listarTokensGoogle();
+  const task = tokenDeEmail(tasks, chave);
+  if (!task) return null;
+  const estado = parseWaipeState(task.description);
+  return estado.refreshToken ? { ...estado, taskId: task.id } : null;
+}
+
+/** Cria ou atualiza a task de token de e-mail dessa chave (1 por chave). */
+export async function salvarTokenEmail(chave, refreshToken, emailConectado) {
+  const nomeExibicao = chave === CONTA_EMAIL_COMPARTILHADA ? 'Conta compartilhada' : chave;
+  const estado = { tipo: 'email', chave, refreshToken, emailConectado, conectadoEm: Date.now() };
+  const tasks = await listarTokensGoogle();
+  const existente = tokenDeEmail(tasks, chave);
+  if (existente) {
+    return atualizarTask(existente.id, { markdown_description: JSON.stringify(estado) });
+  }
+  return cu(`/list/${LISTA_GOOGLE_TOKENS}/task`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: `Gmail (envio) — ${nomeExibicao}`,
+      markdown_description: JSON.stringify(estado),
+    }),
+  });
+}
+
 /** DELETE /task/{id} — usado pra cancelar uma reserva. Responde 200 com corpo vazio. */
 export async function excluirTask(taskId) {
   return cu(`/task/${taskId}`, { method: 'DELETE' }, { semCorpo: true });
@@ -1162,6 +1208,27 @@ export function linkDaDescricaoReserva(description) {
 export function googleEventIdDaDescricaoReserva(description) {
   const m = /\*{0,2}GoogleEventId:\*{0,2}\s*(\S+)/.exec(String(description || ''));
   return m ? m[1].trim() : '';
+}
+
+/** Idem, pros e-mails de convidados do Meet (cliente + outros participantes) — lista separada por virgula, sem espaco. */
+export function convidadosDaDescricaoReserva(description) {
+  const m = /\*{0,2}Convidados:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].split(',').filter(Boolean) : [];
+}
+
+/**
+ * Modelo de mensagem com assunto opcional (pra reuso no e-mail, alem do
+ * corpo livre ja usado pelo Utalk) — uma linha `**Assunto:**` na frente do
+ * texto, mesmo estilo de extracao por linha das outras funcoes aqui.
+ */
+export function assuntoDoModelo(description) {
+  const m = /^\*{0,2}Assunto:\*{0,2}\s*(.+)$/m.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Corpo do modelo, sem a linha de assunto (se tiver uma). */
+export function corpoDoModelo(description) {
+  return contextoSemEstado(description).replace(/^\*{0,2}Assunto:\*{0,2}\s*.+\n*/, '').trim();
 }
 
 export function soDigitos(v) {
