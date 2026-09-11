@@ -69,6 +69,11 @@ export default async function handler(req, res) {
       throw e;
     }
 
+    // Formato real do payload ainda em confirmação (ver cabeçalho) — loga TODO
+    // evento autenticado (token já validado acima) até o parsing ser fechado
+    // em definitivo; depois disso vira só um log pontual de depuração.
+    console.log('[moskit-webhook] evento recebido:', JSON.stringify(corpo).slice(0, 2000));
+
     await processarEvento(corpo);
     return res.status(200).json({ ok: true });
   } catch (e) {
