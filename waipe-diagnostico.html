@@ -2801,7 +2801,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     wrap.innerHTML =
       '<div class="field" style="margin-top:14px;border-top:1px solid var(--linha,#E5E7EB);padding-top:14px;">' +
         '<label>🤖 Análise detalhada (seções opcionais geradas por IA)</label>' +
-        '<div class="hint">Marque as seções que fazem sentido pra este cliente — o automático já vem sugerido, mas edite à vontade antes de gerar.</div>' +
+        '<div class="hint">Marque as seções que fazem sentido pra este cliente — o automático já vem sugerido, mas edite à vontade antes de gerar. Se aparecer <code>{{INVESTIMENTO_TOTAL}}</code> no texto gerado, deixe como está — vira o valor de investimento atual, calculado na hora de montar a proposta, nunca um número congelado.</div>' +
         checklistHtml +
         '<button type="button" class="btn-secondary" id="btnGerarSecoesProposta" style="margin-top:8px;">Gerar análise detalhada</button>' +
         '<div id="secoesPropostaErro" style="display:none; font-size:12.5px; color:#B91C1C; margin-top:8px;"></div>' +
@@ -3657,11 +3657,18 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     '.tag.green{background:var(--verdebg);color:var(--verde)}' +
     '.tag.warn{background:#FEF9C3;color:var(--amarelo)}' +
     '.tag.red{background:var(--vermelhobg);color:var(--vermelho)}' +
-    'table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px}' +
-    'th{background:var(--azul);color:#fff;text-align:left;padding:10px 12px;font-weight:600;font-size:12.5px}' +
-    'td{padding:10px 12px;border:1px solid var(--cinzaclaro);vertical-align:top}' +
+    // table-layout:fixed + overflow-wrap forçam a tabela a nunca passar da
+    // largura da página, mesmo com uma tabela de 3-4 colunas (comparativo de
+    // cenários) ou um HTML gerado por IA que tente evitar quebra de linha
+    // (ex: um style inline "white-space:nowrap") — !important garante que
+    // isso vence um style inline, já que a .page tem overflow:hidden e
+    // qualquer conteúdo mais largo que ela simplesmente some, cortado, em
+    // vez de aparecer com um scroll.
+    'table{width:100%!important;max-width:100%!important;table-layout:fixed;border-collapse:collapse;margin:14px 0;font-size:13.5px}' +
+    'th{background:var(--azul);color:#fff;text-align:left;padding:10px 12px;font-weight:600;font-size:12.5px;white-space:normal!important;overflow-wrap:anywhere;word-break:break-word}' +
+    'td{padding:10px 12px;border:1px solid var(--cinzaclaro);vertical-align:top;white-space:normal!important;overflow-wrap:anywhere;word-break:break-word}' +
     'tr:nth-child(even) td{background:var(--quasebranco)}' +
-    'td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}' +
+    'td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap!important}' +
     // Veredito colorido dentro de uma célula de tabela — pro comparativo de
     // cenários vir em TABELA com destaque de cor, não em texto corrido.
     'td.bom{color:var(--verde);font-weight:700}' +
@@ -3744,14 +3751,27 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       var isEnterprise = diag && diag.rec.plan === "Enterprise";
       var impl = isEnterprise ? computeImplantacao() : null;
 
+      // Investimento total mensal (Waipe + outras soluções) — calculado uma
+      // vez aqui, sempre a partir do estado ATUAL do simulador, nunca de um
+      // valor que a IA tenha escrito. É o mesmo número usado no resumo
+      // abaixo e no que substitui {{INVESTIMENTO_TOTAL}} nas seções geradas
+      // por IA (ver substituirPlaceholdersSecao) — nunca pode ficar
+      // desatualizado, porque nasce de novo toda vez que a proposta é montada.
+      var totalGeral = (waipeIncluido ? pricing.total : 0) + outros.reduce(function(s, o){ return s + o.total; }, 0);
+
+      /** Troca marcadores tipo {{INVESTIMENTO_TOTAL}} pelo valor calculado
+       * agora — nunca pelo que a IA escreveu na hora em que a seção foi
+       * gerada (ver INSTRUCOES_SECOES_PROPOSTA, api/ia.js). */
+      function substituirPlaceholdersSecao(html){
+        return String(html || "").replace(/\{\{\s*INVESTIMENTO_TOTAL\s*\}\}/g, fmtBRL(totalGeral));
+      }
+
       var resumoTotalHtml = "";
       if (waipeIncluido && outros.length){
         var linhasResumo = '<tr><td>Waipe ' + escapeHtml(planNome) + '</td><td class="num">' + fmtBRL(pricing.total) + '</td></tr>';
-        var totalGeral = pricing.total;
         outros.forEach(function(o){
           var rotulo = o.produto + (o.planoSugerido ? " — " + o.planoSugerido : "") + (o.variante ? " (" + o.variante + ")" : "");
           linhasResumo += '<tr><td>' + escapeHtml(rotulo) + '</td><td class="num">' + fmtBRL(o.total) + '</td></tr>';
-          totalGeral += o.total;
         });
         linhasResumo += '<tr><td><strong>Investimento total mensal</strong></td><td class="num"><strong>' + fmtBRL(totalGeral) + '</strong></td></tr>';
         resumoTotalHtml = '<div class="callout" style="margin-top:22px;"><span class="lbl">Resumo do Investimento Total</span>' +
@@ -3769,7 +3789,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       // escreveu o texto/dados de dentro do que já foi gerado.
       CATALOGO_SECOES_PROPOSTA.forEach(function(s){
         if (s.posicao === "antes_solucao" && secoesSelecionadas[s.id] && secoesGeradasState[s.id]){
-          sections.push({ title: secoesGeradasState[s.id].titulo || s.titulo, body: secoesGeradasState[s.id].html });
+          sections.push({ title: secoesGeradasState[s.id].titulo || s.titulo, body: substituirPlaceholdersSecao(secoesGeradasState[s.id].html) });
         }
       });
 
@@ -3786,7 +3806,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       CATALOGO_SECOES_PROPOSTA.forEach(function(s){
         if (s.posicao === "depois_solucao" && secoesSelecionadas[s.id] && secoesGeradasState[s.id]){
-          sections.push({ title: secoesGeradasState[s.id].titulo || s.titulo, body: secoesGeradasState[s.id].html });
+          sections.push({ title: secoesGeradasState[s.id].titulo || s.titulo, body: substituirPlaceholdersSecao(secoesGeradasState[s.id].html) });
         }
       });
 
