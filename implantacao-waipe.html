@@ -226,21 +226,21 @@
   /* ---- Projetos em Andamento ---- */
   .proj-card{border:1px solid var(--border); border-radius:14px; padding:16px 18px; background:var(--surface); margin-bottom:10px; cursor:pointer; transition:border-color .15s;}
   .proj-card:hover{border-color:var(--azul);}
-  .proj-card-top{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
-  .proj-card-top h3{font-size:15px; font-weight:700;}
+  .proj-card-top{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .proj-card-top h3{font-size:15px; font-weight:700; margin-right:auto;}
   .proj-card-meta{font-size:12px; color:var(--muted); margin-top:6px;}
   /* Bandeirinha de prioridade (cor por prioridade, setada inline via border-left-color) */
   .urgencia-flag{display:inline-block; width:0; height:0; border-top:5px solid transparent; border-bottom:5px solid transparent; border-left:8px solid var(--muted); flex-shrink:0;}
 
-  /* ---- Tela cheia só na aba de Projetos (as outras abas continuam em
-     .page{max-width:1080px}) — técnica "full-bleed": escapa do container
-     centralizado sem mexer nele, então nada mais no arquivo é afetado. ---- */
-  #projetosRoot, #projetosEntreguesRoot{
-    width:100vw; position:relative; left:50%; right:50%;
-    margin-left:-50vw; margin-right:-50vw;
-    max-width:1600px; /* teto pra nao esticar demais em monitor ultrawide */
-    padding-left:24px; padding-right:24px; box-sizing:border-box;
-  }
+  /* ---- #projetosRoot/#projetosEntreguesRoot tinham um truque "full-bleed"
+     aqui (escapar do .page{max-width:1080px} de então pra ficar mais largo
+     que ele) — regra de verdade ficou só na mais nova, "Revisão UI/UX", mais
+     abaixo. Não redeclarar aqui: foi exatamente ter o mesmo full-bleed
+     calibrado pra um .page antigo, mais estreito, que sobrou defasado depois
+     que o .page foi alargado (linha 459) — sobrava um vão em branco à
+     direita porque o "escape" media um valor que não existe mais. Mais
+     simples e sem essa sincronização frágil: agora ele só preenche o .page
+     normalmente, do mesmo jeito que o resto do conteúdo. */
 
   /* ---- Alternar Lista / Agrupado por fase (mesmos projetos e filtros —
      só muda como sao organizados na tela) ---- */
@@ -418,35 +418,19 @@
   }
 
 
-  /* ---- Layout operacional: conteúdo + sidebar de projeto ---- */
-  .project-detail-layout{
-    display:grid;
-    grid-template-columns:minmax(0,1fr) minmax(320px,370px);
-    gap:24px;
-    align-items:start;
-  }
-  .project-detail-main{min-width:0;}
-  .project-detail-sidebar{
-    min-width:0;
-    position:sticky;
-    top:80px;
-    max-height:calc(100vh - 96px);
-    overflow-y:auto;
-    scrollbar-width:thin;
-    display:flex;
-    flex-direction:column;
-    gap:14px;
-  }
-  .project-detail-sidebar > .card{margin:0;}
-  .project-detail-sidebar .card h2{font-size:15px;}
-  .project-detail-sidebar .card .sub{line-height:1.5;}
+  /* ---- Layout operacional: conteúdo + sidebar de projeto ----
+     A regra de verdade pra .project-detail-layout/.project-detail-main/
+     .project-detail-sidebar vive só no bloco "V3 — colunas auxiliares
+     agrupadas", mais abaixo — não duplicar aqui (três gerações dessas
+     mesmas classes empilhadas, cada uma por cima da anterior sem tirar
+     a de baixo, foi o que causou o desalinhamento reportado). */
   .project-summary-card .sp-k{margin-top:12px;}
   .project-summary-card .sp-k:first-child{margin-top:0;}
   .project-summary-card .sp-v{line-height:1.5;}
   .project-summary-card [data-projeto-fase]{max-width:100%;}
   .project-sidebar-card .build-check{padding:9px 0;}
   .project-sidebar-card .form-input{min-height:38px;}
-  .today-agenda{margin:0 0 18px; padding:18px 20px; border-color:var(--claro,#A8C5FF); background:var(--surface); box-shadow:var(--shadow);}
+  .today-agenda{margin:0 0 18px; padding:18px 20px; border-color:var(--claro,#A8C5FF); background:var(--surface-2); box-shadow:var(--shadow);}
   .today-agenda-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;}
   .today-agenda-title{font-size:15px; font-weight:800; color:var(--noite,#000035);}
   .today-agenda-date{font-size:11px; color:var(--muted); white-space:nowrap;}
@@ -458,15 +442,77 @@
   .today-appointment-meta{font-size:11.5px; color:var(--muted); margin-top:3px; line-height:1.4;}
   .today-appointment-link{flex:0 0 auto; font-size:11px; color:var(--brand-dark); margin-top:1px;}
   .sidebar-loading{font-size:12px; color:var(--muted);}
-  @media (max-width:980px){
-    .project-detail-layout{grid-template-columns:minmax(0,1fr) minmax(280px,320px); gap:18px;}
-  }
+  /* Ícone de informação: texto explicativo só aparece ao passar o mouse ou
+     clicar (toque, sem hover) — tira texto longo de dentro das colunas da
+     barra lateral, que senão cresce e adiciona mais rolagem. */
+  .info-tip{position:relative; display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; margin-left:5px; border-radius:50%; background:var(--claro,#A8C5FF); color:var(--brand-dark,#0A41B4); font-size:10.5px; font-weight:800; line-height:1; cursor:pointer; vertical-align:middle; flex:0 0 auto;}
+  .info-tip .info-tip-bubble{position:absolute; left:0; top:22px; z-index:30; width:250px; max-width:min(70vw,300px); padding:8px 10px; border-radius:8px; background:var(--noite,#000035); color:#fff; font-size:11.5px; font-weight:400; line-height:1.45; box-shadow:var(--shadow); display:none;}
+  .info-tip:hover .info-tip-bubble, .info-tip:focus .info-tip-bubble, .info-tip.show .info-tip-bubble{display:block;}
+  /* Sinaliza que um campo ligado a esse botão foi editado e ainda não foi
+     salvo — sem isso dá a impressão de que digitar já grava sozinho. */
+  .btn-flow-secondary.tem-pendencia{background:var(--success); border-color:var(--success); color:var(--noite,#000035);}
   @media (max-width:760px){
-    .project-detail-layout{display:flex; flex-direction:column; gap:18px;}
-    .project-detail-sidebar{position:relative; top:auto; max-height:none; overflow:visible; width:100%; order:-1;}
     .today-agenda{padding:16px 18px;}
   }
 
+
+/* ===== Revisão UI/UX — largura, leitura e responsividade =====
+   (regras de .project-detail-layout/.project-detail-main/.project-detail-sidebar
+   consolidadas no bloco "V3 — colunas auxiliares agrupadas", mais abaixo) */
+.page{max-width:min(1680px,95vw);padding:28px 28px 80px}
+.topbar{padding:18px 22px;border-radius:14px;gap:16px}
+.header-title h1{font-size:22px}.header-title p{max-width:760px;line-height:1.5}.header-meta{font-size:11px}
+.tabs{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-bottom:24px;padding:4px}.tab-btn{min-height:42px;padding:10px 12px;white-space:nowrap}
+.card{padding:22px;margin-bottom:16px}.card h2{font-size:16px}.card .sub{line-height:1.5}
+/* A aba de projetos usa mais largura, mas permanece limitada para não ficar esticada em ultrawide. */
+#projetosRoot,#projetosEntreguesRoot{position:static;width:auto;left:auto;right:auto;margin-left:0;margin-right:0;max-width:none;padding:0}
+#projetosRoot .proj-card,#projetosEntreguesRoot .proj-card{padding:14px 16px}
+#projetosRoot .proj-card-top h3,#projetosEntreguesRoot .proj-card-top h3{font-size:14px}
+.today-agenda{padding:16px 18px;margin-bottom:16px}.today-appointment{padding:9px 0}
+.stepper{margin-bottom:18px}.stepper-item{min-width:0}
+.form-grid-2{column-gap:16px}.form-field{margin-bottom:14px}.form-input,.form-textarea{font-size:13px}
+.flow-actions{justify-content:space-between;gap:8px;margin-top:16px}.flow-actions .btn-flow,.flow-actions .btn-flow-secondary{min-height:40px}
+.struct-panel .sp-body{gap:12px}.build-check{padding:9px 0}
+@media(max-width:1100px){.page{max-width:min(1320px,96vw);padding-left:22px;padding-right:22px}}
+@media(max-width:860px){.tabs{grid-template-columns:repeat(3,minmax(150px,1fr));overflow-x:auto;display:flex}.tab-btn{flex:1 0 150px}.topbar{align-items:flex-start}.header-meta{text-align:left}}
+@media(max-width:760px){.page{padding:16px 16px 56px}.topbar{padding:16px 18px}.card{padding:18px}.flow-actions{justify-content:stretch}.flow-actions button{flex:1 1 220px}}
+@media(max-width:560px){.page{padding-left:12px;padding-right:12px}.topbar{border-radius:12px}.tabs{margin-bottom:18px}.today-agenda-head{display:block}.today-agenda-date{display:block;margin-top:4px}.flow-actions button{width:100%;flex-basis:100%}}
+@media print{.project-detail-sidebar{position:static;max-height:none;overflow:visible}.tabs{position:static;box-shadow:none}}
+
+
+/* ===== V3 — colunas auxiliares agrupadas, sem espalhar cards =====
+   Cada aside (.project-detail-sidebar-ops / -comunicacao) é uma coluna
+   real da grade, mantendo sticky (gruda perto do topo enquanto rola) —
+   sem isso, cada coluna rola solta no fluxo normal da página e desalinha
+   do conteúdo principal conforme a altura de cada uma diverge. Foi
+   exatamente esse sticky que se perdia: os blocos "Layout operacional" e
+   "Revisão UI/UX" antigos, mais acima no arquivo, definiam as mesmas
+   classes de formas diferentes e por cascata (mesma especificidade, quem
+   vem depois vence) a última declaração no arquivo sempre ganhava —
+   inclusive um position:static que anulava o sticky.
+   max-height/overflow-y aqui NÃO é só estética: sem eles, cada coluna
+   descola do sticky assim que a PRÓPRIA altura dela esgota o espaço da
+   linha da grade (a altura da coluna principal) — e como "acompanhamento"
+   e "comunicação" quase nunca têm a mesma altura (uma conversa longa de
+   Utalk deixa "comunicação" bem mais alta que "agenda", por exemplo), cada
+   uma descola num ponto diferente da rolagem, dando a impressão de que uma
+   "cai" e a outra fica parada. Com as duas limitadas à MESMA altura, as
+   duas descolam sempre juntas — o preço é que uma coluna cujo conteúdo
+   passe dessa altura ganha sua própria barra de rolagem interna (só
+   aparece quando realmente não cabe, não sempre).
+   Nos breakpoints onde essas colunas deixam de ficar ao lado do conteúdo
+   principal e passam a empilhar, o sticky é desligado explicitamente
+   (não faz sentido "grudar" uma coluna que já não está mais ao lado de
+   nada). */
+  .tabs{position:static!important;top:auto!important;box-shadow:0 2px 8px rgba(0,0,53,.04)}
+  .project-detail-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,310px) minmax(270px,330px);gap:18px;align-items:start}
+  .project-detail-main{grid-column:1;min-width:0}
+  .project-detail-sidebar{min-width:0;position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:14px}
+  .project-detail-sidebar-ops{grid-column:2;grid-row:1}.project-detail-sidebar-comunicacao{grid-column:3;grid-row:1}
+  .project-detail-sidebar>.card{margin:0;padding:16px}.project-detail-sidebar .card h2{font-size:14px;line-height:1.3}.project-detail-sidebar .card .sub{font-size:11.5px;line-height:1.45}
+  @media(max-width:1100px){.project-detail-layout{grid-template-columns:minmax(0,1fr) minmax(270px,320px);gap:18px}.project-detail-main{grid-column:1;grid-row:1}.project-detail-sidebar-ops{grid-column:2;grid-row:1}.project-detail-sidebar-comunicacao{grid-column:1 / -1;grid-row:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;position:static;max-height:none;overflow:visible}}
+  @media(max-width:860px){.project-detail-layout{grid-template-columns:1fr}.project-detail-main{grid-column:1;grid-row:2}.project-detail-sidebar-ops{grid-column:1;grid-row:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;position:static;max-height:none;overflow:visible}.project-detail-sidebar-comunicacao{grid-column:1;grid-row:3;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;position:static;max-height:none;overflow:visible}}
+  @media(max-width:560px){.project-detail-sidebar-ops,.project-detail-sidebar-comunicacao{display:flex;flex-direction:column;gap:12px}}
 </style>
 
 <div class="page">
@@ -1221,6 +1267,38 @@
     return (e && (e.error || e.message)) || "erro";
   }
 
+  // Ícone "i" que mostra `texto` num balão ao passar o mouse (hover/focus)
+  // ou ao clicar (toque, sem hover) — usado pra tirar texto explicativo
+  // longo de dentro das colunas da barra lateral do projeto.
+  function infoTip(texto){
+    return '<span class="info-tip" tabindex="0" role="button" aria-label="Mais informações">i<span class="info-tip-bubble">' + esc(texto) + '</span></span>';
+  }
+  document.addEventListener("click", function(e){
+    var tip = e.target.closest ? e.target.closest(".info-tip") : null;
+    document.querySelectorAll(".info-tip.show").forEach(function(el){
+      if (el !== tip) el.classList.remove("show");
+    });
+    if (tip) tip.classList.toggle("show");
+  });
+
+  // Acende o botão de salvar (fundo verde) assim que qualquer campo ligado a
+  // ele muda, e some de novo só quando o próprio botão é clicado com sucesso
+  // (ver os ".then" de persistirDadosCliente/persistirDadosTributarios/
+  // salvarFinalizacao). Sem isso, dava pra digitar um campo, clicar em OUTRO
+  // botão da tela (ex: Definir Gerente de Contas) achando que já tinha
+  // salvo, e só descobrir que não salvou quando aquele outro botão reclamar
+  // de um dado que na real já tinha sido preenchido, só que não gravado.
+  function wireDirty(idsCampos, idBotaoSalvar){
+    var botao = document.getElementById(idBotaoSalvar);
+    if (!botao) return;
+    idsCampos.forEach(function(id){
+      var campo = document.getElementById(id);
+      if (!campo) return;
+      campo.addEventListener("input", function(){ botao.classList.add("tem-pendencia"); });
+      campo.addEventListener("change", function(){ botao.classList.add("tem-pendencia"); });
+    });
+  }
+
   function showSimToast(msg){
     var t = document.getElementById("toastCopySim");
     if (!t){
@@ -1815,13 +1893,11 @@
           '<div class="stepper" id="stepper"></div>' +
           '<div id="stepContent"></div>' +
         '</main>' +
-        '<aside class="project-detail-sidebar" aria-label="Agenda e comentários do projeto">' +
-          '<div id="agendaProjetoWrap"></div>' +
-          '<div id="anexosProjetoWrap"></div>' +
-          '<div id="comentariosProjetoWrap"></div>' +
-          '<div id="conversaUmblerWrap"></div>' +
-          '<div id="emailProjetoWrap"></div>' +
-          '<div id="analiseReuniaoWrap"></div>' +
+        '<aside class="project-detail-sidebar project-detail-sidebar-ops" aria-label="Acompanhamento do projeto">' +
+          '<div id="agendaProjetoWrap"></div>' + '<div id="anexosProjetoWrap"></div>' + '<div id="comentariosProjetoWrap"></div>' +
+        '</aside>' +
+        '<aside class="project-detail-sidebar project-detail-sidebar-comunicacao" aria-label="Comunicação do projeto">' +
+          '<div id="analiseReuniaoWrap"></div>' + '<div id="conversaUmblerWrap"></div>' + '<div id="emailProjetoWrap"></div>' +
         '</aside>' +
       '</div>';
     document.getElementById("btnVoltarLista").addEventListener("click", function(){
@@ -2043,6 +2119,8 @@
     }).then(function(){
       Object.assign(dadosProjeto.projeto, dados);
       showSimToast("Dados do cliente salvos.");
+      var botao = document.getElementById("btnSalvarDadosCliente");
+      if (botao) botao.classList.remove("tem-pendencia");
     }).catch(function(){ showSimToast("Não deu para salvar os dados do cliente."); });
   }
 
@@ -2060,6 +2138,8 @@
     }).then(function(){
       dadosProjeto.projeto.dadosTributarios = novo;
       showSimToast("Dados tributários salvos.");
+      var botao = document.getElementById("btnSalvarDadosTributarios");
+      if (botao) botao.classList.remove("tem-pendencia");
     }).catch(function(){ showSimToast("Não deu para salvar os dados tributários."); });
   }
 
@@ -2180,16 +2260,25 @@
     });
   }
 
+  // Cabeçalho do card com o link pra abrir o app do Utalk direto (sem link
+  // profundo pra conversa especifica — a API do Umbler Talk nao devolve uma
+  // URL de conversa, so o app geral mesmo, igual ja e feito em
+  // csm_processos.html).
+  var TITULO_CONVERSA_UTALK = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+    '<h2 style="margin:0;">💬 Conversa no Utalk</h2>' +
+    '<a href="https://app-utalk.umbler.com" target="_blank" rel="noopener" title="Abrir no Utalk" style="font-size:15px;flex:0 0 auto;">↗</a>' +
+  '</div>';
+
   function renderConversaUmbler(projetoId, container){
     if (!container) return;
-    container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sidebar-loading">Carregando…</div></div>';
+    container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sidebar-loading">Carregando…</div></div>';
     apiGet("historico-conversa-umbler", { id: projetoId }).then(function(resp){
       if (resp.semTelefone){
-        container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Cadastre o telefone do cliente (Resumo do projeto) pra ver o histórico aqui.</div></div>';
+        container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sub">Cadastre o telefone do cliente (Resumo do projeto) pra ver o histórico aqui.</div></div>';
         return;
       }
       if (resp.semConversa){
-        container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Nenhuma conversa iniciada ainda com esse telefone.</div></div>';
+        container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sub">Nenhuma conversa iniciada ainda com esse telefone.</div></div>';
         return;
       }
       var statusTxt = resp.aberta ? "Aberta" : "Fechada";
@@ -2198,19 +2287,51 @@
       var msgsHtml = (resp.mensagens || []).slice(-5).map(function(m){
         return '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:' + (m.deCliente ? "var(--surface-2)" : "var(--tag-londrisoft-bg)") + ';">' +
           '<div style="font-size:11px;color:var(--muted);margin-bottom:2px;">' + (m.deCliente ? "Cliente" : "Equipe") + ' · ' + fmtDataHoraSim(m.dataMs) + '</div>' +
-          '<div style="white-space:pre-wrap;font-size:13px;">' + esc(m.texto) + '</div>' +
+          '<div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;">' + esc(m.texto) + '</div>' +
         '</div>';
       }).join("");
-      container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2>' +
+      container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK +
         '<div class="sp-v">Status: <strong>' + statusTxt + '</strong>' + setorTxt + '</div>' +
         '<div class="sp-v">Última mensagem: ' + esc(ultimaTxt) + '</div>' +
         (msgsHtml || '<div class="sub" style="margin-top:8px;">Sem mensagens recentes.</div>') +
+        '<div id="utalkRespPainel" style="display:none;margin-top:10px;">' +
+          '<textarea id="utalkRespTexto" class="form-input" rows="3" style="width:100%;" placeholder="Escreva sua resposta — vai na mesma conversa."></textarea>' +
+          '<div style="margin-top:6px;">' +
+            '<button type="button" class="btn-flow-secondary" id="btnEnviarRespUtalk">Enviar</button> ' +
+            '<button type="button" class="btn-flow-secondary" id="btnCancelarRespUtalk">Cancelar</button>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" class="btn-flow-secondary" id="btnResponderUtalk" style="margin-top:10px;">↩️ Responder</button> ' +
         '<button type="button" class="btn-flow-secondary" id="btnResumirConversaIa" style="margin-top:10px;">🤖 Resumir com IA</button>' +
       '</div>';
       var btnResumir = document.getElementById("btnResumirConversaIa");
       if (btnResumir) btnResumir.addEventListener("click", function(){ resumirConversaComIa(btnResumir, projetoId); });
+      var btnResponderUtalk = document.getElementById("btnResponderUtalk");
+      var utalkRespPainel = document.getElementById("utalkRespPainel");
+      if (btnResponderUtalk) btnResponderUtalk.addEventListener("click", function(){
+        btnResponderUtalk.style.display = "none";
+        utalkRespPainel.style.display = "block";
+        document.getElementById("utalkRespTexto").focus();
+      });
+      var btnCancelarRespUtalk = document.getElementById("btnCancelarRespUtalk");
+      if (btnCancelarRespUtalk) btnCancelarRespUtalk.addEventListener("click", function(){
+        utalkRespPainel.style.display = "none";
+        btnResponderUtalk.style.display = "inline-block";
+      });
+      var btnEnviarRespUtalk = document.getElementById("btnEnviarRespUtalk");
+      if (btnEnviarRespUtalk) btnEnviarRespUtalk.addEventListener("click", function(){
+        var texto = document.getElementById("utalkRespTexto").value.trim();
+        if (!texto) return;
+        btnEnviarRespUtalk.disabled = true;
+        apiPost("iniciar-conversa-umbler", { id: projetoId, mensagem: texto }).then(function(r){
+          showSimToast(r.mensagemEnviada ? "Resposta enviada." : (r.mensagemErro || "Mensagem não enviada."));
+          renderConversaUmbler(projetoId, container);
+        }).catch(function(e){
+          showSimToast(mensagemErro(e) || "Não deu para enviar a resposta.");
+        }).finally(function(){ btnEnviarRespUtalk.disabled = false; });
+      });
     }).catch(function(){
-      container.innerHTML = '<div class="card"><h2>💬 Conversa no Utalk</h2><div class="sub">Não deu para carregar.</div></div>';
+      container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sub">Não deu para carregar.</div></div>';
     });
   }
 
@@ -2218,11 +2339,29 @@
   // da agenda — ver conectar-email-google), ou usa a conta compartilhada da
   // Londrisoft (conectada uma vez pela Gestão). So mostra o formulario de
   // envio quando pelo menos uma das duas ja foi conectada.
+  // Só mostra o status da conexão (quem tá logado / link pra conectar) — o
+  // botão de escrever e-mail em si fica junto com "Iniciar conversa no
+  // Utalk", no Resumo do projeto (não aqui), pra não ficar perdido lá
+  // embaixo quando essa coluna cresce (ex: conversa de Utalk bem longa).
+  // Todo e-mail enviado (enviarEmailImplantacaoAcao, no servidor) já vira um
+  // comentário no projeto, no formato "📧 **E-mail enviado por X** (conta)\n
+  // **Para:** ...\n**Assunto:** ...\n\n<corpo>" — em vez de guardar o
+  // histórico de novo em outro lugar, só filtra os comentários que já
+  // existem e tira assunto + data pra mostrar uma lista curta aqui.
+  function extrairAssuntoEmailComentario(texto){
+    var m = /\*\*Assunto:\*\*\s*(.+)/.exec(texto || "");
+    return m ? m[1].trim() : null;
+  }
+
   function renderEmailProjeto(projetoId, container){
     if (!container) return;
     container.innerHTML = '<div class="card"><h2>📧 E-mail</h2><div class="sidebar-loading">Carregando…</div></div>';
-    apiGet("status-email-google").then(function(status){
-      var emailCliente = (dadosProjeto && dadosProjeto.projeto && dadosProjeto.projeto.email) || "";
+    Promise.all([
+      apiGet("status-email-google"),
+      apiGet("listar-comentarios", { taskId: projetoId }).catch(function(){ return { comentarios: [] }; }),
+    ]).then(function(resultados){
+      var status = resultados[0];
+      var comentarios = resultados[1].comentarios || [];
       var conexaoHtml = "";
       if (status.pessoal.conectado){
         conexaoHtml += '<div class="sp-v">Você: conectado como <strong>' + esc(status.pessoal.email) + '</strong></div>';
@@ -2234,75 +2373,98 @@
       } else if (status.podeConectarCompartilhada){
         conexaoHtml += '<div class="sp-v"><a href="/api/clickup?action=conectar-email-google&tipo=compartilhada">Conectar conta compartilhada</a></div>';
       }
-
       if (!status.pessoal.conectado && !status.compartilhada.conectado){
-        container.innerHTML = '<div class="card"><h2>📧 E-mail</h2>' + conexaoHtml +
-          '<div class="hint" style="margin-top:6px;">Conecte um Gmail pra poder mandar e-mail pro cliente direto daqui.</div></div>';
-        return;
+        conexaoHtml += '<div class="hint" style="margin-top:6px;">Conecte um Gmail pra poder mandar e-mail pro cliente — o botão "Escrever e-mail" fica no Resumo do projeto.</div>';
       }
+      var enviados = comentarios
+        .filter(function(c){ return /^📧 \*\*E-mail enviado/.test(c.texto || ""); })
+        .map(function(c){ return { assunto: extrairAssuntoEmailComentario(c.texto) || "(sem assunto)", data: c.data }; });
+      var enviadosHtml = enviados.length
+        ? '<div class="sp-k" style="margin-top:10px;">E-mails enviados</div>' +
+          enviados.map(function(e){
+            return '<div class="sp-v" style="font-size:11.5px;">' + esc(e.assunto) + ' <span style="color:var(--muted);">— ' + formatarData(e.data) + '</span></div>';
+          }).join("")
+        : "";
+      container.innerHTML = '<div class="card"><h2>📧 E-mail</h2>' + conexaoHtml + enviadosHtml + '</div>';
+    }).catch(function(){
+      container.innerHTML = '<div class="card"><h2>📧 E-mail</h2><div class="sub">Não deu para carregar.</div></div>';
+    });
+  }
 
-      var opcoesRemetente = [];
-      if (status.pessoal.conectado) opcoesRemetente.push({ valor: "pessoal", label: "Meu e-mail (" + status.pessoal.email + ")" });
-      if (status.compartilhada.conectado) opcoesRemetente.push({ valor: "compartilhada", label: "Conta compartilhada (" + status.compartilhada.email + ")" });
-      var remetenteHtml = opcoesRemetente.length > 1
-        ? '<select class="form-input" id="emailRemetente" style="width:auto;">' +
-            opcoesRemetente.map(function(o){ return '<option value="' + o.valor + '">' + esc(o.label) + '</option>'; }).join("") +
-          '</select>'
-        : '<input type="hidden" id="emailRemetente" value="' + opcoesRemetente[0].valor + '">';
-
-      container.innerHTML = '<div class="card"><h2>📧 E-mail</h2>' + conexaoHtml +
-        '<div class="sp-k" style="margin-top:10px;display:block;">Remetente</div>' + remetenteHtml +
-        '<div class="sp-k" style="margin-top:10px;display:block;">Para</div>' +
+  // Modal de composição, no mesmo padrão do abrirModalModelos: em vez de
+  // deixar Remetente/Para/Assunto/Mensagem sempre abertos dentro da coluna
+  // (o que deixava ela enorme e criava mais rolagem), só abre quando a
+  // pessoa clica em "Escrever e-mail" — como o botão "Resumir com IA" do
+  // Utalk, que também não fica com formulário solto na tela toda hora.
+  function abrirModalEscreverEmail(projetoId, opcoesRemetente, emailCliente){
+    var overlay = document.getElementById("modalEmailOverlay");
+    if (!overlay){
+      overlay = document.createElement("div");
+      overlay.id = "modalEmailOverlay";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(16,16,51,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;";
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", function(e){ if (e.target === overlay) overlay.style.display = "none"; });
+    }
+    var remetenteHtml = opcoesRemetente.length > 1
+      ? '<select class="form-input" id="emailRemetente" style="width:auto;">' +
+          opcoesRemetente.map(function(o){ return '<option value="' + o.valor + '">' + esc(o.label) + '</option>'; }).join("") +
+        '</select>'
+      : '<div class="sp-v" style="margin:0;">' + esc(opcoesRemetente[0].label) + '</div>' +
+        '<input type="hidden" id="emailRemetente" value="' + opcoesRemetente[0].valor + '">';
+    overlay.innerHTML =
+      '<div class="card" style="max-width:520px;width:100%;max-height:85vh;overflow:auto;">' +
+        '<h2 style="margin-bottom:10px;">✍️ Escrever e-mail</h2>' +
+        '<div class="sp-k" style="display:block;">De</div>' + remetenteHtml +
+        '<div class="sp-k" style="margin-top:8px;display:block;">Para</div>' +
         '<input type="text" class="form-input" id="emailDestinatarios" value="' + esc(emailCliente) + '" placeholder="E-mails separados por vírgula" style="width:100%;">' +
         '<div class="sp-k" style="margin-top:8px;display:block;">Assunto</div>' +
         '<input type="text" class="form-input" id="emailAssunto" style="width:100%;">' +
         '<div class="sp-k" style="margin-top:8px;display:block;">Mensagem</div>' +
-        '<textarea id="emailCorpo" class="form-input" rows="5" style="width:100%;"></textarea>' +
-        '<div style="margin-top:8px;">' +
-          '<button type="button" class="btn-flow-secondary" id="btnEnviarEmail">Enviar</button> ' +
-          '<button type="button" class="btn-flow-secondary" id="btnUsarModeloEmail">Usar modelo</button> ' +
+        '<textarea id="emailCorpo" class="form-input" rows="6" style="width:100%;"></textarea>' +
+        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+          '<button type="button" class="btn-flow-secondary" id="btnEnviarEmail">Enviar</button>' +
+          '<button type="button" class="btn-flow-secondary" id="btnUsarModeloEmail">Usar modelo</button>' +
           '<button type="button" class="btn-flow-secondary" id="btnSalvarModeloEmail">💾 Salvar como modelo</button>' +
+          '<button type="button" class="btn-reset" id="btnFecharModalEmail" style="margin-left:auto;">Fechar</button>' +
         '</div>' +
         '<div id="emailErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
       '</div>';
+    overlay.style.display = "flex";
+    document.getElementById("btnFecharModalEmail").onclick = function(){ overlay.style.display = "none"; };
 
-      var btnEnviarEmail = document.getElementById("btnEnviarEmail");
-      btnEnviarEmail.addEventListener("click", function(){
-        var erroEl = document.getElementById("emailErro");
-        erroEl.style.display = "none";
-        var destinatariosRaw = document.getElementById("emailDestinatarios").value.trim();
-        var destinatarios = destinatariosRaw ? destinatariosRaw.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
-        var assunto = document.getElementById("emailAssunto").value.trim();
-        var corpoTexto = document.getElementById("emailCorpo").value.trim();
-        if (!destinatarios.length || !assunto || !corpoTexto){
-          erroEl.textContent = "Preencha destinatário, assunto e mensagem.";
-          erroEl.style.display = "block";
-          return;
-        }
-        btnEnviarEmail.disabled = true;
-        apiPost("enviar-email-implantacao", {
-          id: projetoId, remetente: document.getElementById("emailRemetente").value,
-          destinatarios: destinatarios, assunto: assunto, corpo: corpoTexto,
-        }).then(function(resp){
-          showSimToast("E-mail enviado de " + resp.enviadoComo + "!");
-          document.getElementById("emailAssunto").value = "";
-          document.getElementById("emailCorpo").value = "";
-        }).catch(function(e){
-          erroEl.textContent = mensagemErro(e) || "Não deu para enviar o e-mail.";
-          erroEl.style.display = "block";
-        }).finally(function(){ btnEnviarEmail.disabled = false; });
+    var btnEnviarEmail = document.getElementById("btnEnviarEmail");
+    btnEnviarEmail.addEventListener("click", function(){
+      var erroEl = document.getElementById("emailErro");
+      erroEl.style.display = "none";
+      var destinatariosRaw = document.getElementById("emailDestinatarios").value.trim();
+      var destinatarios = destinatariosRaw ? destinatariosRaw.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
+      var assunto = document.getElementById("emailAssunto").value.trim();
+      var corpoTexto = document.getElementById("emailCorpo").value.trim();
+      if (!destinatarios.length || !assunto || !corpoTexto){
+        erroEl.textContent = "Preencha destinatário, assunto e mensagem.";
+        erroEl.style.display = "block";
+        return;
+      }
+      btnEnviarEmail.disabled = true;
+      apiPost("enviar-email-implantacao", {
+        id: projetoId, remetente: document.getElementById("emailRemetente").value,
+        destinatarios: destinatarios, assunto: assunto, corpo: corpoTexto,
+      }).then(function(resp){
+        showSimToast("E-mail enviado de " + resp.enviadoComo + "!");
+        overlay.style.display = "none";
+      }).catch(function(e){
+        erroEl.textContent = mensagemErro(e) || "Não deu para enviar o e-mail.";
+        erroEl.style.display = "block";
+      }).finally(function(){ btnEnviarEmail.disabled = false; });
+    });
+    document.getElementById("btnUsarModeloEmail").addEventListener("click", function(){
+      abrirModalModelos(function(texto, assunto){
+        document.getElementById("emailCorpo").value = texto;
+        if (assunto) document.getElementById("emailAssunto").value = assunto;
       });
-      document.getElementById("btnUsarModeloEmail").addEventListener("click", function(){
-        abrirModalModelos(function(texto, assunto){
-          document.getElementById("emailCorpo").value = texto;
-          if (assunto) document.getElementById("emailAssunto").value = assunto;
-        });
-      });
-      document.getElementById("btnSalvarModeloEmail").addEventListener("click", function(){
-        salvarModeloAtual("emailCorpo", "emailAssunto");
-      });
-    }).catch(function(){
-      container.innerHTML = '<div class="card"><h2>📧 E-mail</h2><div class="sub">Não deu para carregar.</div></div>';
+    });
+    document.getElementById("btnSalvarModeloEmail").addEventListener("click", function(){
+      salvarModeloAtual("emailCorpo", "emailAssunto");
     });
   }
 
@@ -2433,6 +2595,8 @@
     }).then(function(){
       dadosProjeto.projeto.finalizacao = finalizacao;
       showSimToast("Finalização salva.");
+      var botao = document.getElementById("btnSalvarFinalizacao");
+      if (botao) botao.classList.remove("tem-pendencia");
     }).catch(function(){ showSimToast("Não deu para salvar a finalização."); });
   }
 
@@ -2703,9 +2867,8 @@
   function formNovaReservaHtml(statusGoogle){
     var emailCliente = (dadosProjeto && dadosProjeto.projeto && dadosProjeto.projeto.email) || "";
     return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
-      '<div class="sp-k">Agendar novo horário</div>' +
+      '<div class="sp-k">Agendar novo horário' + infoTip("Se o ISM já tem a agenda do Google conectada, é só preencher e registrar — o horário é checado de verdade e o Meet é criado sozinho. Senão, agenda manualmente primeiro e registra aqui o que foi combinado.") + '</div>' +
       agendaGoogleLinksHtml(statusGoogle) +
-      '<div class="hint" style="margin-bottom:6px;">Se o ISM já tem a agenda do Google conectada, é só preencher e registrar — o horário é checado de verdade e o Meet é criado sozinho. Senão, agenda manualmente primeiro e registra aqui o que foi combinado.</div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
         '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
         '<select class="form-input" id="novaReservaIsm" style="width:auto;">' +
@@ -2721,11 +2884,11 @@
         '<button type="button" class="btn-flow-secondary" id="btnReservarHorario" style="width:auto;">Registrar reserva</button>' +
       '</div>' +
       '<div style="margin-top:8px;">' +
-        '<input type="text" class="form-input" id="novaReservaConvidados" value="' + esc(emailCliente) + '" placeholder="E-mails dos convidados, separados por vírgula" style="width:100%;">' +
-        '<div class="hint" style="margin-top:3px;">' +
+        '<div class="sp-k" style="display:flex; align-items:center;">Convidados' + infoTip(
           (emailCliente ? "Já veio com o e-mail cadastrado do cliente — edite ou adicione mais separando por vírgula." : "Adicione os e-mails de quem vai participar, separados por vírgula.") +
-          ' Convite por e-mail só sai automático se o ISM tiver a agenda do Google conectada.' +
-        '</div>' +
+          " Convite por e-mail só sai automático se o ISM tiver a agenda do Google conectada."
+        ) + '</div>' +
+        '<input type="text" class="form-input" id="novaReservaConvidados" value="' + esc(emailCliente) + '" placeholder="E-mails dos convidados, separados por vírgula" style="width:100%; margin-top:4px;">' +
       '</div>' +
       '<div id="reservaErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
     '</div>';
@@ -2995,6 +3158,7 @@
       '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosCliente" style="margin-top:6px;">Salvar dados do cliente</button>' +
       (!p.csm ? '<button type="button" class="btn-flow-secondary" id="btnDefinirGerente" style="margin-top:6px;margin-left:8px;">🎯 Definir Gerente de Contas</button>' : '') +
       '<button type="button" class="btn-flow-secondary" id="btnIniciarConversaUmbler" style="margin-top:6px;margin-left:8px;">💬 Iniciar conversa no Utalk</button>' +
+      '<button type="button" class="btn-flow-secondary" id="btnEscreverEmailPrincipal" style="margin-top:6px;margin-left:8px;">✍️ Escrever e-mail</button>' +
       '<div id="umblerMsgPainel" style="display:none;margin-top:10px;">' +
         '<label class="sp-k" style="display:block;">Mensagem de abertura (edite à vontade, ou apague pra só abrir a conversa sem mandar nada)</label>' +
         '<textarea id="umblerMsgTexto" class="form-input" rows="3" style="width:100%;margin-top:4px;">' + esc(textoAberturaPadrao(p)) + '</textarea>' +
@@ -3064,6 +3228,7 @@
         telefone: document.getElementById("cliTelefone").value.trim()
       });
     });
+    wireDirty(["cliIdNucleo", "cliCnpj", "cliEmail", "cliTelefone"], "btnSalvarDadosCliente");
     var btnDefinirGerente = document.getElementById("btnDefinirGerente");
     if (btnDefinirGerente) btnDefinirGerente.addEventListener("click", definirGerenteContas);
     var btnCopiarLinkTributario = document.getElementById("btnCopiarLinkTributario");
@@ -3088,6 +3253,23 @@
         temCertificadoDigital: document.getElementById("tribCertificado").value === "sim",
         senhaCertificado: document.getElementById("tribSenhaCertificado").value
       });
+    });
+    wireDirty(["tribRegime", "tribCst", "tribPisCofins", "tribCfop", "tribNf", "tribCertificado", "tribSenhaCertificado"], "btnSalvarDadosTributarios");
+    var btnEscreverEmailPrincipal = document.getElementById("btnEscreverEmailPrincipal");
+    if (btnEscreverEmailPrincipal) btnEscreverEmailPrincipal.addEventListener("click", function(){
+      btnEscreverEmailPrincipal.disabled = true;
+      apiGet("status-email-google").then(function(status){
+        var opcoesRemetente = [];
+        if (status.pessoal.conectado) opcoesRemetente.push({ valor: "pessoal", label: "Meu e-mail (" + status.pessoal.email + ")" });
+        if (status.compartilhada.conectado) opcoesRemetente.push({ valor: "compartilhada", label: "Conta compartilhada (" + status.compartilhada.email + ")" });
+        if (!opcoesRemetente.length){
+          showSimToast("Conecte um Gmail primeiro (no card de E-mail, na coluna de comunicação).");
+          return;
+        }
+        abrirModalEscreverEmail(p.id, opcoesRemetente, p.email || "");
+      }).catch(function(){
+        showSimToast("Não deu para checar a conexão de e-mail.");
+      }).finally(function(){ btnEscreverEmailPrincipal.disabled = false; });
     });
     var btnIniciarConversaUmbler = document.getElementById("btnIniciarConversaUmbler");
     var umblerMsgPainel = document.getElementById("umblerMsgPainel");
@@ -3118,6 +3300,7 @@
     });
     var btnSalvarFinalizacao = document.getElementById("btnSalvarFinalizacao");
     if (btnSalvarFinalizacao) btnSalvarFinalizacao.addEventListener("click", salvarFinalizacao);
+    wireDirty(["finResumoGeral", "finRisco", "finSatisfacao", "finCausaDemora"], "btnSalvarFinalizacao");
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");
