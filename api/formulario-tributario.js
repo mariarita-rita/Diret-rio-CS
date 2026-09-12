@@ -24,7 +24,7 @@ import {
   verificarTokenProjeto,
   LISTA_IMPLANTACOES_WAIPE,
 } from './_lib/clickup.js';
-import { sanearDadosTributarios, lerArquivoAnexo } from './clickup.js';
+import { sanearDadosTributarios, dadosTributariosParaGravar, lerArquivoAnexo } from './clickup.js';
 
 // Mesmo teto de api/clickup.js (base64 do anexo + JSON ao redor) — duplicado
 // de propósito, é só uma constante pequena, não vale acoplar os arquivos.
@@ -93,7 +93,9 @@ async function salvarFormularioAcao(req, res, projeto) {
   await atualizarTask(projeto.id, {
     markdown_description: stringifyWaipeState(contextoSemEstado(projeto.description), {
       ...estadoAtual,
-      dadosTributarios,
+      // dadosTributariosParaGravar cifra a senha do certificado antes de ir
+      // pro JSON gravado (sanearDadosTributarios acima devolve em claro).
+      dadosTributarios: dadosTributariosParaGravar(dadosTributarios),
     }),
   });
 

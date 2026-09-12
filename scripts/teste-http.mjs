@@ -114,6 +114,11 @@ const stubClickup = `
     var m = /^stub-token-(.+)$/.exec(String(token || ''));
     return m ? m[1] : null;
   }
+  export function criptografarSegredo(texto) { return texto ? 'stub-cifrado:' + texto : ''; }
+  export function descriptografarSegredo(valor) {
+    var m = /^stub-cifrado:(.*)$/.exec(String(valor || ''));
+    return m ? m[1] : '';
+  }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -4129,6 +4134,17 @@ console.log('\n[50] Dados Tributarios: trigger, atualizar-implantacao preserva, 
     escritas[0]?.markdown_description.includes('"regimeTributario":"Lucro Presumido"') && escritas[0]?.markdown_description.includes('"preenchidoEm":123456'),
     true
   );
+  // Regressao real: novoEstado era montado campo a campo, sem espalhar o
+  // estado atual primeiro — qualquer atualizar-implantacao do dia a dia
+  // (essa mesma acao, chamada o tempo todo) apagava origemMoskitDealId (e
+  // vendedor/cliente/rodizio), derrubando precisaDadosTributarios e a
+  // idempotencia do webhook do Moskit na primeira edicao manual depois da
+  // automacao criar o projeto.
+  checar(
+    '  origemMoskitDealId sobrevive a um atualizar-implantacao comum (nao e so dadosTributarios que precisa ser preservado)',
+    escritas[0]?.markdown_description.includes('"origemMoskitDealId":503'),
+    true
+  );
 
   // atualizar-implantacao COM dadosTributarios -> atualiza.
   escritas.length = 0;
@@ -4144,8 +4160,43 @@ console.log('\n[50] Dados Tributarios: trigger, atualizar-implantacao preserva, 
     true
   );
 
-  // ---- formulario-tributario (endpoint publico, sem sessao) ----
+  // Senha do certificado digital: NUNCA em texto puro na description
+  // (dadosTributariosParaGravar cifra antes de gravar — ver _lib/clickup.js
+  // criptografarSegredo/descriptografarSegredo).
+  escritas.length = 0;
+  await chamarAcao(GESTAO, 'POST', 'atualizar-implantacao', {
+    body: {
+      id: 'tProjTrib', etapaAtual: 'construcao', prioridade: [], concluidos: [],
+      dadosTributarios: { regimeTributario: 'Lucro Real', cstIcmsCsosn: '0101', preenchidoEm: 123456, senhaCertificado: 'MinhaSenha!123' },
+    },
+  });
+  checar('senha do certificado: nunca gravada em texto puro na description', escritas[0]?.markdown_description.includes('MinhaSenha!123'), false);
+  checar(
+    '  grava a forma cifrada (senhaCertificadoCifrada) em vez de senhaCertificado',
+    escritas[0]?.markdown_description.includes('"senhaCertificadoCifrada"') && !escritas[0]?.markdown_description.includes('"senhaCertificado"'),
+    true
+  );
+
+  // Simula a persistencia (o mock de GET nao reflete sozinho o que foi escrito)
+  // pra testar que a leitura de volta decifra certo pra quem tem sessao.
+  const estadoGravado = JSON.parse(escritas[0].markdown_description.split('\n\n').pop());
+  estadoProjeto = estadoGravado;
+  const obterAposSalvarSenha = await chamarAcao(GESTAO, 'GET', 'obter-implantacao', { query: { id: 'tProjTrib' } });
+  checar(
+    '  obter-implantacao decifra de volta pra sessao autenticada (nao fica preso cifrado)',
+    obterAposSalvarSenha.corpo.projeto.dadosTributarios.senhaCertificado,
+    'MinhaSenha!123'
+  );
+
+  // criptografarSegredo/descriptografarSegredo direto: ida-e-volta, e
+  // entrada malformada/de outra chave nunca lanca (devolve '', ver uso em
+  // sanearDadosTributarios com valor cifrado corrompido/de outra sessao).
   const clickupLibReal = await import(libUrl);
+  checar('criptografarSegredo/descriptografarSegredo: ida e volta preserva o texto', clickupLibReal.descriptografarSegredo(clickupLibReal.criptografarSegredo('Senha Acentuada çã!')), 'Senha Acentuada çã!');
+  checar('  string vazia nao cifra nada (evita ida-e-volta de "")', clickupLibReal.criptografarSegredo(''), '');
+  checar('  lixo/base64 invalido na decifragem devolve "" (nunca lanca)', clickupLibReal.descriptografarSegredo('nao-e-base64-cifrado-valido'), '');
+
+  // ---- formulario-tributario (endpoint publico, sem sessao) ----
   const tokenValido = clickupLibReal.assinarTokenProjeto('tProjTrib');
   const anexosCriados = [];
   globalThis.fetch = async (url, init) => {
@@ -4191,13 +4242,15 @@ console.log('\n[50] Dados Tributarios: trigger, atualizar-implantacao preserva, 
   escritas.length = 0;
   anexosCriados.length = 0;
   const postOk = await chamarFormulario('POST', { id: 'tProjTrib', token: tokenValido }, {
-    dadosTributarios: { regimeTributario: 'Simples Nacional', cstIcmsCsosn: 'CSOSN 103', temCertificadoDigital: true },
+    dadosTributarios: { regimeTributario: 'Simples Nacional', cstIcmsCsosn: 'CSOSN 103', temCertificadoDigital: true, senhaCertificado: 'SenhaDoCliente#1' },
     certificadoArquivo: { nomeArquivo: 'certificado.p12', mimeType: 'application/x-pkcs12', base64: Buffer.from('conteudo-fake').toString('base64') },
   });
   checar('formulario-tributario POST: valido -> 200', [postOk.code, postOk.corpo.ok], [200, true]);
   checar('  grava dadosTributarios + preenchidoEm', escritas[0]?.markdown_description.includes('"regimeTributario":"Simples Nacional"') && /"preenchidoEm":\d+/.test(escritas[0]?.markdown_description || ''), true);
   checar('  preserva o resto do estado (idNucleo)', escritas[0]?.markdown_description.includes('"idNucleo":"123"'), true);
   checar('  sobe o certificado como anexo de verdade (multipart)', anexosCriados[0]?.ehFormData, true);
+  checar('  senha do certificado enviada pelo cliente tambem NUNCA fica em texto puro', escritas[0]?.markdown_description.includes('SenhaDoCliente#1'), false);
+  checar('  grava a forma cifrada', escritas[0]?.markdown_description.includes('"senhaCertificadoCifrada"'), true);
 
   globalThis.fetch = fetchOriginal;
 }

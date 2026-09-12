@@ -19,8 +19,8 @@
   .campo{margin-bottom:16px}
   label{display:block;font-size:13px;font-weight:600;color:var(--noite);margin-bottom:5px}
   .hint{font-size:12px;color:var(--cinzamedio);margin-top:4px}
-  input[type=text],select{width:100%;padding:10px 12px;border:1px solid var(--cinzaclaro);border-radius:8px;font-size:14px;font-family:inherit;background:#fff}
-  input[type=text]:focus,select:focus{outline:2px solid var(--azul);outline-offset:1px;border-color:var(--azul)}
+  input[type=text],input[type=password],select{width:100%;padding:10px 12px;border:1px solid var(--cinzaclaro);border-radius:8px;font-size:14px;font-family:inherit;background:#fff}
+  input[type=text]:focus,input[type=password]:focus,select:focus{outline:2px solid var(--azul);outline-offset:1px;border-color:var(--azul)}
   .radios{display:flex;gap:16px;margin-top:4px}
   .radios label{display:flex;align-items:center;gap:6px;font-weight:400;font-size:14px;color:var(--cinzaescuro)}
   input[type=file]{width:100%;font-size:13px;margin-top:8px}
@@ -107,6 +107,11 @@
         '<div id="anexoWrap" style="display:none;">' +
           '<input type="file" id="fCertArquivo" accept=".p12,.pfx,.pdf,.png,.jpg,.jpeg">' +
           '<div class="hint">Certificado (.p12/.pfx) ou uma foto/PDF dele — até 4MB.</div>' +
+          '<div style="margin-top:10px;">' +
+            '<label>Senha do certificado</label>' +
+            '<input type="password" id="fCertSenha" autocomplete="new-password" placeholder="Senha do certificado digital">' +
+            '<div class="aviso" style="margin-top:8px;margin-bottom:0;">Usamos essa senha só pra vincular o certificado ao sistema e fazer a parametrização fiscal — ela não é compartilhada com terceiros.</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
       '<button type="button" class="btn" id="btnEnviar">Enviar</button>';
@@ -151,13 +156,15 @@
     btn.disabled = true;
     btn.textContent = "Enviando…";
 
+    var campoSenha = document.getElementById("fCertSenha");
     var dadosTributarios = {
       regimeTributario: document.getElementById("fRegime").value,
       cstIcmsCsosn: document.getElementById("fCst").value,
       pisCofins: document.getElementById("fPisCofins").value,
       cfopVendas: document.getElementById("fCfop").value,
       numeroUltimaNf: document.getElementById("fNf").value,
-      temCertificadoDigital: certMarcado
+      temCertificadoDigital: certMarcado,
+      senhaCertificado: certMarcado && campoSenha ? campoSenha.value : ""
     };
 
     var promessaArquivo = arquivo ? lerArquivoComoBase64(arquivo) : Promise.resolve(null);

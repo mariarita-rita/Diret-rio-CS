@@ -1341,7 +1341,19 @@
     // nativo do ClickUp já não agrega nada acima dela, então some do
     // card (continua disponível no detalhe do projeto). Mesmo valor
     // usado no filtro e nas colunas do Kanban.
-    function faseEfetiva(p){ return p.faseProjetoManual || p.faseProjetoDerivada; }
+    //
+    // listar-implantacoes NUNCA manda faseProjetoDerivada (custaria buscar
+    // as subtasks de cada projeto — só obter-implantacao, na tela de um
+    // projeto aberto, calcula isso) — então, sem override manual, cai aqui
+    // sempre undefined. Sem esse fallback, todo projeto sem fase manual
+    // cai num bucket vazio ("") que nenhuma coluna do Kanban mostra: o
+    // board inteiro parecia sem projeto nenhum. "nao_iniciado" é o mesmo
+    // default que o servidor já usa quando não há nenhum sinal de progresso
+    // (derivarFaseProjeto/FASE_ITEM_PADRAO) — não é garantia de exatidão
+    // pra um projeto avançado sem fase manual definida (a Kanban aqui é uma
+    // visão rápida, não substitui abrir o projeto), mas bate o comportamento
+    // padrão do resto do app e nunca deixa um projeto sumir da tela.
+    function faseEfetiva(p){ return p.faseProjetoManual || p.faseProjetoDerivada || "nao_iniciado"; }
     var lista = (projetosCache || []).filter(function(p){
       // Proposta ainda nao fechada nao e projeto de implantacao de verdade
       // ainda — so aparece/edita pelo simulador ("Carregar proposta salva"),
@@ -1552,6 +1564,27 @@
   // ClickUp na própria linha (ver comentar-implantacao, api/clickup.js) — aqui
   // é só reconhecer essa URL de volta e trocar por um preview inline.
   var RE_URL_IMAGEM = /(https?:\/\/\S+\.(?:png|jpe?g|gif|webp))(?:\?\S*)?/i;
+
+  // Clique pra ampliar abre num overlay dentro da própria página, em vez de
+  // navegar pra URL do anexo — a URL de anexo do ClickUp manda
+  // Content-Disposition:attachment (baixa em vez de abrir), então um
+  // <a target="_blank"> direto virava download. Um <img> sempre renderiza
+  // (o cabeçalho só afeta navegação de topo), então o preview inline já
+  // funcionava — só o "clique pra ampliar" precisava desse mesmo truque.
+  function abrirLightboxImagem(url){
+    var overlay = document.getElementById("lightboxImagemOverlay");
+    if (!overlay){
+      overlay = document.createElement("div");
+      overlay.id = "lightboxImagemOverlay";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(16,16,53,.8);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;";
+      overlay.innerHTML = '<img id="lightboxImagemImg" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.4);">';
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", function(){ overlay.style.display = "none"; });
+    }
+    document.getElementById("lightboxImagemImg").src = url;
+    overlay.style.display = "flex";
+  }
+
   function comentarioHtml(c){
     if (/^\[\[FLOW\]\]/.test(c.texto)){
       var jsonTexto = c.texto.replace(/^\[\[FLOW\]\]/, "");
@@ -1561,8 +1594,7 @@
     var m = RE_URL_IMAGEM.exec(c.texto || "");
     var textoSemImagem = m ? (c.texto.slice(0, m.index) + c.texto.slice(m.index + m[0].length)).trim() : (c.texto || "");
     var imagemHtml = m
-      ? '<div style="margin-top:6px;"><a href="' + esc(m[0]) + '" target="_blank" rel="noopener">' +
-          '<img src="' + esc(m[0]) + '" alt="print anexado" style="max-width:240px;max-height:240px;border-radius:8px;display:block;"></a></div>'
+      ? '<div style="margin-top:6px;"><img src="' + esc(m[0]) + '" data-lightbox-imagem="' + esc(m[0]) + '" alt="print anexado" style="max-width:240px;max-height:240px;border-radius:8px;display:block;cursor:zoom-in;"></div>'
       : "";
     return '<div class="build-check" style="align-items:flex-start"><span><b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
       imagemHtml +
@@ -1588,6 +1620,9 @@
           var jsonTexto = decodeURIComponent(btn.getAttribute("data-copiar-flow"));
           copyToClipboard(jsonTexto).then(function(){ showSimToast("JSON do Fluxo copiado."); }).catch(function(){ showSimToast("Não deu para copiar."); });
         });
+      });
+      container.querySelectorAll("[data-lightbox-imagem]").forEach(function(img){
+        img.addEventListener("click", function(){ abrirLightboxImagem(img.getAttribute("data-lightbox-imagem")); });
       });
       var previewEl = container.querySelector("#comentarioPreview");
       var btnComentar = container.querySelector("#btnComentar");
@@ -2482,6 +2517,14 @@
           '<option value="sim"' + (t.temCertificadoDigital ? " selected" : "") + '>Sim</option>' +
         '</select></div>' +
       '</div>' +
+      '<div class="form-field">' +
+        '<label>Senha do certificado</label>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+          '<input type="password" class="form-input" id="tribSenhaCertificado" value="' + esc(t.senhaCertificado || "") + '" style="flex:1;">' +
+          '<button type="button" class="btn-reset" id="btnMostrarSenhaCertificado" title="Mostrar/ocultar senha">👁</button>' +
+        '</div>' +
+        '<div class="hint">Usada só pra vincular o certificado ao sistema e fazer a parametrização fiscal — não é compartilhada com terceiros.</div>' +
+      '</div>' +
       '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosTributarios" style="margin-top:6px;">Salvar dados tributários</button>' +
     '</div>';
   }
@@ -2581,6 +2624,11 @@
         showSimToast("Link do formulário copiado.");
       }).catch(function(){ showSimToast("Não deu para copiar o link."); });
     });
+    var btnMostrarSenhaCertificado = document.getElementById("btnMostrarSenhaCertificado");
+    if (btnMostrarSenhaCertificado) btnMostrarSenhaCertificado.addEventListener("click", function(){
+      var campo = document.getElementById("tribSenhaCertificado");
+      campo.type = campo.type === "password" ? "text" : "password";
+    });
     var btnSalvarDadosTributarios = document.getElementById("btnSalvarDadosTributarios");
     if (btnSalvarDadosTributarios) btnSalvarDadosTributarios.addEventListener("click", function(){
       persistirDadosTributarios({
@@ -2589,7 +2637,8 @@
         pisCofins: document.getElementById("tribPisCofins").value.trim(),
         cfopVendas: document.getElementById("tribCfop").value.trim(),
         numeroUltimaNf: document.getElementById("tribNf").value.trim(),
-        temCertificadoDigital: document.getElementById("tribCertificado").value === "sim"
+        temCertificadoDigital: document.getElementById("tribCertificado").value === "sim",
+        senhaCertificado: document.getElementById("tribSenhaCertificado").value
       });
     });
     var btnIniciarConversaUmbler = document.getElementById("btnIniciarConversaUmbler");

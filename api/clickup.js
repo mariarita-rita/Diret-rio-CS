@@ -117,7 +117,9 @@ import {
   criarTaskImplantacao,
   criarTaskPropostaWaipe,
   convidadosDaDescricaoReserva,
+  criptografarSegredo,
   csmDaDescricaoImplantacao,
+  descriptografarSegredo,
   EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
@@ -1057,6 +1059,14 @@ const REGIMES_TRIBUTARIOS_VALIDOS = new Set(['Simples Nacional', 'Lucro Presumid
  * obterImplantacaoAcao). `preenchidoEm` só é gravado pelo formulário
  * público que o cliente preenche (api/formulario-tributario.js) — uma
  * edição manual do CSM não mexe nesse campo.
+ *
+ * `senhaCertificado` (em claro) é o valor que este saneamento sempre
+ * devolve pra quem lê/edita — vem tanto de um envio novo (campo
+ * `senhaCertificado`, texto puro, ex: formulário público ou edição manual)
+ * quanto de um valor já salvo (campo `senhaCertificadoCifrada`, decifrado
+ * aqui). Nunca é este saneamento que cifra pra gravar — isso é
+ * `dadosTributariosParaGravar`, chamado só nos pontos que de fato
+ * persistem no ClickUp, senão a senha ficaria em texto puro na description.
  */
 export function sanearDadosTributarios(d) {
   const origem = d && typeof d === 'object' ? d : {};
@@ -1069,8 +1079,23 @@ export function sanearDadosTributarios(d) {
     cfopVendas: texto(origem.cfopVendas, 100),
     numeroUltimaNf: texto(origem.numeroUltimaNf, 60),
     temCertificadoDigital: !!origem.temCertificadoDigital,
+    senhaCertificado: typeof origem.senhaCertificado === 'string'
+      ? texto(origem.senhaCertificado, 200)
+      : (origem.senhaCertificadoCifrada ? descriptografarSegredo(origem.senhaCertificadoCifrada) : ''),
     preenchidoEm: Number.isFinite(Number(origem.preenchidoEm)) && Number(origem.preenchidoEm) > 0 ? Number(origem.preenchidoEm) : null,
   };
+}
+
+/**
+ * Versão de `dadosTributarios` (já saneado) pronta pra ir no JSON gravado no
+ * ClickUp — troca a senha em claro pela forma cifrada (ver
+ * criptografarSegredo em _lib/clickup.js) antes de persistir. Chamar SEMPRE
+ * antes de qualquer `stringifyWaipeState`/`atualizarTask` que grave
+ * dadosTributarios; nunca gravar o objeto saneado direto.
+ */
+export function dadosTributariosParaGravar(dadosTributarios) {
+  const { senhaCertificado, ...resto } = dadosTributarios;
+  return { ...resto, senhaCertificadoCifrada: criptografarSegredo(senhaCertificado) };
 }
 
 /**
@@ -1615,6 +1640,17 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
 
   const estadoAtual = parseWaipeState(tarefa.description);
   const novoEstado = {
+    // Espalha o estado atual ANTES dos campos explícitos abaixo — garante
+    // que qualquer campo que não seja mexido aqui (origemMoskitDealId,
+    // vendedor, cliente, rodizioIndex/rodizioEm, e qualquer campo novo que
+    // vier a existir) sobrevive a um atualizar-implantacao comum. Antes essa
+    // lista era montada campo a campo sem essa base, e qualquer edição do
+    // dia a dia (salvar fase, dados do cliente, camada1Checks...) apagava
+    // silenciosamente tudo que não estivesse citado aqui — foi assim que
+    // origemMoskitDealId sumia e derrubava precisaDadosTributarios (e
+    // quebraria a idempotência do webhook do Moskit) na primeira edição
+    // manual depois da automação criar o projeto.
+    ...estadoAtual,
     etapaAtual: corpo.etapaAtual,
     prioridade: sanearListaIds(corpo.prioridade),
     agenteAtualId: typeof corpo.agenteAtualId === 'string' ? texto(corpo.agenteAtualId, 60) : null,
@@ -1652,9 +1688,13 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     // só muda quando vem no corpo (edição no "Resumo do projeto"), senão
     // preserva o que já estava salvo (inclusive o preenchidoEm gravado pelo
     // formulário público, que uma edição manual do CSM não deve apagar).
-    dadosTributarios: 'dadosTributarios' in corpo
-      ? sanearDadosTributarios(corpo.dadosTributarios)
-      : sanearDadosTributarios(estadoAtual.dadosTributarios),
+    // dadosTributariosParaGravar cifra a senha do certificado antes de ir
+    // pro JSON gravado (sanearDadosTributarios só devolve em claro).
+    dadosTributarios: dadosTributariosParaGravar(
+      'dadosTributarios' in corpo
+        ? sanearDadosTributarios(corpo.dadosTributarios)
+        : sanearDadosTributarios(estadoAtual.dadosTributarios)
+    ),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
@@ -2659,6 +2699,7 @@ async function enviarEmailImplantacaoAcao(req, res, sessao) {
     accessToken = await renovarAccessToken(tokenEmail.refreshToken);
   } catch (e) {
     if (!(e instanceof ErroGoogle)) throw e;
+    console.error('[enviar-email] renovarAccessToken falhou:', e.status, JSON.stringify(e.corpo));
     return erro(res, 409, 'email_conexao_invalida', 'A conexão do Gmail expirou ou foi revogada — reconecte.');
   }
 
@@ -2668,6 +2709,11 @@ async function enviarEmailImplantacaoAcao(req, res, sessao) {
     });
   } catch (e) {
     if (!(e instanceof ErroGoogle)) throw e;
+    // Diagnostico temporario: "recusado" cobre varias causas do lado do
+    // Google (Gmail API desativada no projeto, escopo faltando por ter
+    // conectado antes dessa API existir, conta fora da allowlist de teste
+    // etc.) — logar o corpo real da resposta evita ficar adivinhando.
+    console.error('[enviar-email] Gmail recusou o envio:', e.status, JSON.stringify(e.corpo));
     return erro(res, 502, 'erro_envio_email', 'O Gmail recusou o envio — tente de novo em instantes.');
   }
 

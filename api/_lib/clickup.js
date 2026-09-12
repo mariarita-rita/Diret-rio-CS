@@ -912,6 +912,51 @@ export function verificarTokenProjeto(token) {
   return p.taskId;
 }
 
+// ── Segredo cifrado em repouso (senha do certificado digital) ───────────
+// AES-256-GCM com chave derivada de SESSION_SECRET (mesmo segredo usado nos
+// tokens acima — nenhuma variável de ambiente nova). Existe porque a senha
+// do certificado digital do cliente, diferente dos outros campos
+// tributários, é uma credencial de verdade: gravar ela em texto puro no
+// bloco JSON da description deixaria visível pra qualquer pessoa com acesso
+// à lista no ClickUp (time inteiro, não só quem está de fato configurando
+// o certificado), fora de exports/auditoria do próprio ClickUp. Cifrado,
+// só quem chama a API com sessão autenticada (mesma trava de sempre) lê o
+// valor em claro de volta — ver sanearDadosTributarios/dadosTributariosParaGravar
+// em api/clickup.js.
+function chaveCripto() {
+  return crypto.createHash('sha256').update(segredoToken()).digest();
+}
+
+/** Cifra um texto (ex: senha do certificado). String vazia devolve string vazia — nada a cifrar. */
+export function criptografarSegredo(texto) {
+  if (!texto) return '';
+  const iv = crypto.randomBytes(12);
+  const cifra = crypto.createCipheriv('aes-256-gcm', chaveCripto(), iv);
+  const cifrado = Buffer.concat([cifra.update(String(texto), 'utf8'), cifra.final()]);
+  return Buffer.concat([iv, cifra.getAuthTag(), cifrado]).toString('base64');
+}
+
+/** Decifra o que criptografarSegredo produziu. Qualquer valor malformado/de outra chave devolve '' (nunca lança). */
+export function descriptografarSegredo(valorCifrado) {
+  if (!valorCifrado) return '';
+  try {
+    const buf = Buffer.from(valorCifrado, 'base64');
+    // iv (12) + authTag (16) + pelo menos 1 byte cifrado — abaixo disso nao
+    // e um valor que criptografarSegredo poderia ter produzido. Sem esse
+    // corte, um authTag curto (base64 truncado/lixo) cai num aviso de
+    // depreciacao do Node (GCM com tag < 128 bits) antes mesmo de falhar.
+    if (buf.length < 29) return '';
+    const iv = buf.subarray(0, 12);
+    const tag = buf.subarray(12, 28);
+    const cifrado = buf.subarray(28);
+    const decifra = crypto.createDecipheriv('aes-256-gcm', chaveCripto(), iv);
+    decifra.setAuthTag(tag);
+    return Buffer.concat([decifra.update(cifrado), decifra.final()]).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
 /** PUT generico em /task/{id} — nome, descricao, status, due_date. */
 export async function atualizarTask(taskId, payload) {
   return cu(`/task/${taskId}`, {
