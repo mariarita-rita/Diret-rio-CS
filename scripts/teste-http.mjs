@@ -91,6 +91,9 @@ const stubClickup = `
   export function linkDaDescricaoReserva() { return ''; }
   export function googleEventIdDaDescricaoReserva() { return ''; }
   export function convidadosDaDescricaoReserva() { return []; }
+  export function statusDaDescricaoReserva() { return 'agendado'; }
+  export function reagendadoPorDaDescricaoReserva() { return ''; }
+  export function proximaReservaIdDaDescricaoReserva() { return ''; }
   export function soDigitos(v) { return String(v || '').replace(/\\D/g, ''); }
   export function cnpjDoAgendamentoGoogle() { return null; }
   export async function obterTokenGoogle() { return null; }
@@ -2516,6 +2519,13 @@ console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link
     }
     if (u.includes('/task/tReservaBruno')) return ok(reservaBruno());
     if (u.includes('/task/tOutraLista')) return ok(reservaForaDaLista());
+    if (u.includes('/task/tReservaJaReagendada')) {
+      return ok({
+        id: 'tReservaJaReagendada', name: 'Ja reagendada', list: { id: LISTA_RESERVAS },
+        assignees: [{ id: BRUNO }], start_date: String(INICIO), due_date: String(INICIO + UMA_HORA),
+        description: '**Projeto:** tProjetoX\n\n**Status:** reagendado\n\n**ReagendadoPor:** cliente\n\n**ProximaReservaId:** tNovaReserva',
+      });
+    }
     return ok({});
   };
 
@@ -2606,6 +2616,54 @@ console.log('\n[37] Reservas de agenda — conflito de horario, ownership e link
 
   const cancelarForaDaLista = await chamarAcao(GESTAO, 'POST', 'cancelar-reserva', { id: 'tOutraLista' });
   checar('cancelar-reserva: task de outra lista -> 404', [cancelarForaDaLista.code, cancelarForaDaLista.corpo.code], [404, 'nao_encontrado']);
+
+  // marcar-comparecimento-reserva
+  const comparecimentoInvalido = await chamarAcao(GESTAO, 'POST', 'marcar-comparecimento-reserva', { id: 'tReservaBruno', status: 'lixo' });
+  checar('marcar-comparecimento-reserva: status invalido -> 400', [comparecimentoInvalido.code, comparecimentoInvalido.corpo.code], [400, 'status_invalido']);
+
+  escritas.length = 0;
+  const comparecimentoOk = await chamarAcao(GESTAO, 'POST', 'marcar-comparecimento-reserva', { id: 'tReservaBruno', status: 'nao_compareceu' });
+  checar('marcar-comparecimento-reserva: 200', [comparecimentoOk.code, comparecimentoOk.corpo.status], [200, 'nao_compareceu']);
+  const gravadoComparecimento = escritas.find((e) => e.alvo === 'atualizar')?.body;
+  checar('  grava o Status preservando Projeto/Convidados que ja tinha', [
+    gravadoComparecimento.markdown_description.includes('**Projeto:** tProjetoX'),
+    gravadoComparecimento.markdown_description.includes('**Convidados:** cliente@teste.com'),
+    gravadoComparecimento.markdown_description.includes('**Status:** nao_compareceu'),
+  ], [true, true, true]);
+
+  const comparecimentoForaDaLista = await chamarAcao(GESTAO, 'POST', 'marcar-comparecimento-reserva', { id: 'tOutraLista', status: 'compareceu' });
+  checar('marcar-comparecimento-reserva: task de outra lista -> 404', [comparecimentoForaDaLista.code, comparecimentoForaDaLista.corpo.code], [404, 'nao_encontrado']);
+
+  // reagendar-reserva
+  const reagendarSemQuemPediu = await chamarAcao(GESTAO, 'POST', 'reagendar-reserva', { id: 'tReservaBruno', novoInicio: INICIO + 5 * UMA_HORA, novoFim: INICIO + 6 * UMA_HORA });
+  checar('reagendar-reserva: sem reagendadoPor -> 400', [reagendarSemQuemPediu.code, reagendarSemQuemPediu.corpo.code], [400, 'reagendado_por_invalido']);
+
+  const reagendarHorarioInvalido = await chamarAcao(GESTAO, 'POST', 'reagendar-reserva', { id: 'tReservaBruno', novoInicio: INICIO, novoFim: INICIO - 1000, reagendadoPor: 'cliente' });
+  checar('reagendar-reserva: novo horario invalido -> 400', [reagendarHorarioInvalido.code, reagendarHorarioInvalido.corpo.code], [400, 'horario_invalido']);
+
+  escritas.length = 0;
+  const reagendarOk = await chamarAcao(GESTAO, 'POST', 'reagendar-reserva', {
+    id: 'tReservaBruno', novoInicio: INICIO + 5 * UMA_HORA, novoFim: INICIO + 6 * UMA_HORA, reagendadoPor: 'cliente',
+  });
+  checar('reagendar-reserva: 200, cria a nova reserva', [reagendarOk.code, reagendarOk.corpo.ok, reagendarOk.corpo.id], [200, true, 'tNovaReserva']);
+  const criarDoReagendamento = escritas.find((e) => e.alvo === 'criar')?.body;
+  checar('  a reserva nova reaproveita titulo/projeto/convidados da antiga', [
+    criarDoReagendamento.name,
+    criarDoReagendamento.markdown_description.includes('**Projeto:** tProjetoX'),
+    criarDoReagendamento.markdown_description.includes('**Convidados:** cliente@teste.com'),
+  ], ['Camada 1 — Cliente X', true, true]);
+  const atualizarDoReagendamento = escritas.find((e) => e.alvo === 'atualizar')?.body;
+  checar('  marca a reserva ANTIGA como reagendada, com quem pediu e o id da nova', [
+    atualizarDoReagendamento.markdown_description.includes('**Status:** reagendado'),
+    atualizarDoReagendamento.markdown_description.includes('**ReagendadoPor:** cliente'),
+    atualizarDoReagendamento.markdown_description.includes('**ProximaReservaId:** tNovaReserva'),
+  ], [true, true, true]);
+
+  // Reserva ja resolvida (reagendada) nao pode ser reagendada de novo
+  const reagendarDeNovo = await chamarAcao(GESTAO, 'POST', 'reagendar-reserva', {
+    id: 'tReservaJaReagendada', novoInicio: INICIO + 7 * UMA_HORA, novoFim: INICIO + 8 * UMA_HORA, reagendadoPor: 'londrisoft',
+  });
+  checar('reagendar-reserva: reserva ja resolvida -> 409', [reagendarDeNovo.code, reagendarDeNovo.corpo.code], [409, 'reserva_ja_resolvida']);
 
   globalThis.fetch = fetchOriginal;
 }
@@ -3395,6 +3453,7 @@ console.log('\n[44] api/ia.js — resumir-conversa-umbler, analisar-reuniao-impl
   let comentariosExistentes = [];
   let contatoAchado = { id: 'contato-ia' };
   let respostaClaudeTexto = 'Resumo padrão de teste.';
+  let reservasProjetoIA = [];
   const escritas = [];
 
   function ok(corpo) {
@@ -3423,6 +3482,9 @@ console.log('\n[44] api/ia.js — resumir-conversa-umbler, analisar-reuniao-impl
         assignees: assigneesProjetoIA, date_created: String(Date.now() - 5 * 86400000),
         description: 'CSM: Gian Luca\n\n' + JSON.stringify(estadoProjetoIA),
       });
+    }
+    if (u.includes('/list/901329017742/task?')) {
+      return ok({ tasks: reservasProjetoIA, last_page: true });
     }
     if (u.startsWith('https://app-utalk.umbler.com/api/v1/contacts/phone/')) {
       return contatoAchado ? respostaJson(200, contatoAchado) : respostaJson(404, { error: 'not found' });
@@ -3517,6 +3579,24 @@ console.log('\n[44] api/ia.js — resumir-conversa-umbler, analisar-reuniao-impl
   });
   const relatorioSaneado = await chamarIa(GESTAO, 'gerar-relatorio-finalizacao', { id: 'tProjIA' });
   checar('gerar-relatorio-finalizacao: valores invalidos caem no padrao seguro', [relatorioSaneado.corpo.riscoPercebido, relatorioSaneado.corpo.satisfacaoPercebida], ['', 'indeterminada']);
+
+  // Estatisticas objetivas de comparecimento/reagendamento — contadas a
+  // partir das reservas DESSE projeto (outro projeto nao entra na conta).
+  reservasProjetoIA = [
+    { id: 'r1', assignees: [{ id: BRUNO }], description: '**Projeto:** tProjIA\n\n**Status:** nao_compareceu' },
+    { id: 'r2', assignees: [{ id: BRUNO }], description: '**Projeto:** tProjIA\n\n**Status:** reagendado\n\n**ReagendadoPor:** cliente\n\n**ProximaReservaId:** r3' },
+    { id: 'r3', assignees: [{ id: BRUNO }], description: '**Projeto:** tProjIA' }, // status "agendado" (ausente) — nao conta
+    { id: 'r4', assignees: [{ id: BRUNO }], description: '**Projeto:** tProjIA\n\n**Status:** reagendado\n\n**ReagendadoPor:** londrisoft\n\n**ProximaReservaId:** r5' },
+    { id: 'r-outro', assignees: [{ id: BRUNO }], description: '**Projeto:** tOutroProjeto\n\n**Status:** nao_compareceu' },
+  ];
+  const relatorioComEstatisticas = await chamarIa(GESTAO, 'gerar-relatorio-finalizacao', { id: 'tProjIA' });
+  checar('gerar-relatorio-finalizacao: conta nao-comparecimento/reagendamento so desse projeto', [
+    relatorioComEstatisticas.corpo.naoComparecimentos,
+    relatorioComEstatisticas.corpo.reagendamentos,
+    relatorioComEstatisticas.corpo.reagendamentosLondrisoft,
+    relatorioComEstatisticas.corpo.reagendamentosCliente,
+  ], [1, 2, 1, 1]);
+  checar('  diasEmAberto tambem vem estruturado (nao so embutido no texto pra IA)', typeof relatorioComEstatisticas.corpo.diasEmAberto, 'number');
 
   // gerar-secoes-proposta — nao usa taskId/resolverImplantacao (proposta ainda
   // nao e projeto do ClickUp), so precisa do fetch do Claude configurado acima.
@@ -4140,6 +4220,24 @@ console.log('\n[50] Dados Tributarios: trigger, atualizar-implantacao preserva, 
   // vendedor/cliente/rodizio), derrubando precisaDadosTributarios e a
   // idempotencia do webhook do Moskit na primeira edicao manual depois da
   // automacao criar o projeto.
+
+  // Regressao real (pegada ANTES de subir): "urgencia" (bandeira manual do
+  // card) e "prioridade" (ordem dos agentes Waipe no pipeline, um array)
+  // sao campos DIFERENTES que quase acabaram com o mesmo nome — se
+  // colidissem, salvar a urgencia destruiria o array de prioridade dos
+  // agentes (ou vice-versa) na mesma chamada de atualizar-implantacao.
+  escritas.length = 0;
+  await chamarAcao(GESTAO, 'POST', 'atualizar-implantacao', {
+    body: { id: 'tProjTrib', etapaAtual: 'construcao', prioridade: ['tAgenteX', 'tSolGestor'], concluidos: [], urgencia: 'urgente' },
+  });
+  checar(
+    'atualizar-implantacao: urgencia e prioridade (array de agentes) NAO colidem',
+    [
+      escritas[0]?.markdown_description.includes('"prioridade":["tAgenteX","tSolGestor"]'),
+      escritas[0]?.markdown_description.includes('"urgencia":"urgente"'),
+    ],
+    [true, true]
+  );
   checar(
     '  origemMoskitDealId sobrevive a um atualizar-implantacao comum (nao e so dadosTributarios que precisa ser preservado)',
     escritas[0]?.markdown_description.includes('"origemMoskitDealId":503'),
@@ -4502,6 +4600,99 @@ console.log('\n[52] conectar-email-google / status-email-google / enviar-email-i
     id: 'tProjEmail', remetente: 'compartilhada', destinatarios: ['cliente@empresa.com'], assunto: 'Combinado', corpo: 'Segue o que combinamos.',
   });
   checar('enviar-email-implantacao: ISM tambem pode, remetente compartilhada -> 200', [envioComoIsm.code, envioComoIsm.corpo.enviadoComo], [200, 'contato@londrisoft.com.br']);
+
+  globalThis.fetch = fetchOriginal;
+}
+
+console.log('\n[53] disponibilidade-ism — calendario visual de agendamento (reservas internas + agenda real do Google)');
+{
+  const fetchOriginal = globalThis.fetch;
+  const LISTA_RESERVAS = '901329017742';
+  const LISTA_TOKENS_GOOGLE = '901329032234';
+  const BRUNO = 118125102;
+  const ERICA = 48933858;
+  const INICIO_MES = Date.UTC(2026, 8, 1);
+  const FIM_MES = Date.UTC(2026, 8, 30, 23, 59, 59);
+  const UMA_HORA = 60 * 60 * 1000;
+
+  function ok(corpo) {
+    return {
+      ok: true, status: 200,
+      headers: new Map([['x-ratelimit-limit', '100'], ['x-ratelimit-remaining', '90'], ['x-ratelimit-reset', '0']]),
+      json: async () => corpo, text: async () => '',
+    };
+  }
+  function falhaHttp(status, corpo) {
+    return { ok: false, status, headers: new Map(), json: async () => corpo, text: async () => '' };
+  }
+
+  let tokenExpirado = false;
+  globalThis.fetch = async (url, init) => {
+    const u = String(url);
+    if (u.includes(`/list/${LISTA_RESERVAS}/task?`)) {
+      return ok({
+        tasks: [
+          { id: 'tReservaBrunoMes', name: 'Camada 1 — Cliente X', assignees: [{ id: BRUNO }], start_date: String(Date.UTC(2026, 8, 10, 13, 0)), due_date: String(Date.UTC(2026, 8, 10, 14, 0)) },
+          { id: 'tReservaEricaMes', name: 'Treinamento — Cliente Y', assignees: [{ id: ERICA }], start_date: String(Date.UTC(2026, 8, 10, 13, 0)), due_date: String(Date.UTC(2026, 8, 10, 14, 0)) },
+          { id: 'tReservaBrunoOutroMes', name: 'Fora do intervalo', assignees: [{ id: BRUNO }], start_date: String(Date.UTC(2026, 9, 15, 13, 0)), due_date: String(Date.UTC(2026, 9, 15, 14, 0)) },
+        ],
+        last_page: true,
+      });
+    }
+    if (u.includes(`/list/${LISTA_TOKENS_GOOGLE}/task?`)) {
+      return ok({
+        tasks: [{ id: 'tTokenBruno', assignees: [], description: JSON.stringify({ ismId: BRUNO, refreshToken: 'rt-bruno', conectadoEm: Date.now() }) }],
+        last_page: true,
+      });
+    }
+    if (u === 'https://oauth2.googleapis.com/token') {
+      return tokenExpirado ? falhaHttp(400, { error: 'invalid_grant' }) : ok({ access_token: 'at-bruno', expires_in: 3600 });
+    }
+    if (u.includes('/calendar/v3/calendars/primary/events')) {
+      return ok({ items: [{ id: 'ev1', summary: 'Compromisso pessoal do Bruno', start: { dateTime: new Date(Date.UTC(2026, 8, 20, 15, 0)).toISOString() }, end: { dateTime: new Date(Date.UTC(2026, 8, 20, 16, 0)).toISOString() } }] });
+    }
+    return ok({});
+  };
+
+  const clickupLibUrl = libClickupUnica('disponibilidade');
+  const googleLibUrl = libGoogleUnica('disponibilidade');
+  const cu = await carregarCom('api/clickup.js', clickupLibUrl, googleLibUrl);
+  process.env.CLICKUP_API_KEY = 'pk_teste';
+  process.env.GOOGLE_CLIENT_ID = 'id-teste';
+  process.env.GOOGLE_CLIENT_SECRET = 'segredo-teste';
+  process.env.GOOGLE_REDIRECT_URI = 'https://exemplo.test/api/google-oauth-callback';
+
+  const GESTAO = { nivel: 'gestao', csm: null, nome: 'Gestao' };
+  const chamarAcao = async (query) => {
+    const r = res();
+    await cu({ method: 'GET', headers: cabecalhos({ cookie: `${auth.COOKIE_NOME}=${auth.assinarSessao(GESTAO)}` }), query: { action: 'disponibilidade-ism', ...query } }, r);
+    return r;
+  };
+
+  const ismInvalido = await chamarAcao({ ismId: 999, inicio: INICIO_MES, fim: FIM_MES });
+  checar('disponibilidade-ism: ism invalido -> 400', [ismInvalido.code, ismInvalido.corpo.code], [400, 'ism_invalido']);
+
+  const intervaloInvertido = await chamarAcao({ ismId: BRUNO, inicio: FIM_MES, fim: INICIO_MES });
+  checar('disponibilidade-ism: fim antes do inicio -> 400', [intervaloInvertido.code, intervaloInvertido.corpo.code], [400, 'intervalo_invalido']);
+
+  const intervaloDemais = await chamarAcao({ ismId: BRUNO, inicio: INICIO_MES, fim: INICIO_MES + 61 * 24 * 60 * 60 * 1000 });
+  checar('disponibilidade-ism: intervalo > 60 dias -> 400', [intervaloDemais.code, intervaloDemais.corpo.code], [400, 'intervalo_invalido']);
+
+  // Erica NAO tem Google conectado -> so as reservas internas DELA (nao a do Bruno, nem a fora do intervalo)
+  const ericaOk = await chamarAcao({ ismId: ERICA, inicio: INICIO_MES, fim: FIM_MES });
+  checar('disponibilidade-ism: ISM sem Google -> 200, so reservas internas', [ericaOk.code, ericaOk.corpo.ocupados.length], [200, 1]);
+  checar('  e so a do proprio ISM, dentro do intervalo', ericaOk.corpo.ocupados[0].titulo, 'Treinamento — Cliente Y');
+
+  // Bruno tem Google conectado -> reserva interna + evento real do Google, os dois juntos
+  const brunoOk = await chamarAcao({ ismId: BRUNO, inicio: INICIO_MES, fim: FIM_MES });
+  checar('disponibilidade-ism: ISM com Google -> 200, junta reserva interna + evento do Google', [brunoOk.code, brunoOk.corpo.ocupados.length], [200, 2]);
+  checar('  titulos batem (reserva interna e evento do Google)', brunoOk.corpo.ocupados.map((o) => o.titulo).sort(), ['Camada 1 — Cliente X', 'Compromisso pessoal do Bruno']);
+
+  // Token do Google expirado/revogado -> nao derruba a tela, so devolve as reservas internas
+  tokenExpirado = true;
+  const brunoTokenExpirado = await chamarAcao({ ismId: BRUNO, inicio: INICIO_MES, fim: FIM_MES });
+  checar('disponibilidade-ism: token do Google invalido -> 200 so com reservas internas (nao derruba)', [brunoTokenExpirado.code, brunoTokenExpirado.corpo.ocupados.length], [200, 1]);
+  tokenExpirado = false;
 
   globalThis.fetch = fetchOriginal;
 }

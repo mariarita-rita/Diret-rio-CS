@@ -1262,6 +1262,29 @@ export function convidadosDaDescricaoReserva(description) {
 }
 
 /**
+ * Comparecimento/reagendamento da reserva — mesmas linhas `**Campo:**`,
+ * ausencia de `Status` significa "agendado" (pendente, ainda nao aconteceu).
+ * Existe pra rastrear falta/reagendamento do cliente (auditoria de disputa
+ * — ver relatorio de finalizacao) sem precisar vasculhar historico manual.
+ */
+export function statusDaDescricaoReserva(description) {
+  const m = /\*{0,2}Status:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : 'agendado';
+}
+
+/** Quem pediu o reagendamento — so faz sentido quando Status=reagendado. */
+export function reagendadoPorDaDescricaoReserva(description) {
+  const m = /\*{0,2}ReagendadoPor:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Id da nova reserva criada pelo reagendamento — liga a reserva antiga (so leitura, historico) a nova. */
+export function proximaReservaIdDaDescricaoReserva(description) {
+  const m = /\*{0,2}ProximaReservaId:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/**
  * Modelo de mensagem com assunto opcional (pra reuso no e-mail, alem do
  * corpo livre ja usado pelo Utalk) — uma linha `**Assunto:**` na frente do
  * texto, mesmo estilo de extracao por linha das outras funcoes aqui.

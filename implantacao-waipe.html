@@ -229,17 +229,63 @@
   .proj-card-top{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
   .proj-card-top h3{font-size:15px; font-weight:700;}
   .proj-card-meta{font-size:12px; color:var(--muted); margin-top:6px;}
+  /* Bandeirinha de prioridade (cor por prioridade, setada inline via border-left-color) */
+  .urgencia-flag{display:inline-block; width:0; height:0; border-top:5px solid transparent; border-bottom:5px solid transparent; border-left:8px solid var(--muted); flex-shrink:0;}
 
-  /* ---- Kanban (mesma fase da lista, só reorganizada em colunas) ---- */
+  /* ---- Tela cheia só na aba de Projetos (as outras abas continuam em
+     .page{max-width:1080px}) — técnica "full-bleed": escapa do container
+     centralizado sem mexer nele, então nada mais no arquivo é afetado. ---- */
+  #projetosRoot, #projetosEntreguesRoot{
+    width:100vw; position:relative; left:50%; right:50%;
+    margin-left:-50vw; margin-right:-50vw;
+    max-width:1600px; /* teto pra nao esticar demais em monitor ultrawide */
+    padding-left:24px; padding-right:24px; box-sizing:border-box;
+  }
+
+  /* ---- Alternar Lista / Agrupado por fase (mesmos projetos e filtros —
+     só muda como sao organizados na tela) ---- */
   .modo-visualizacao{display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:12px;}
   .modo-visualizacao button{border:none; background:var(--surface); padding:6px 12px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer;}
   .modo-visualizacao button.ativo{background:var(--azul); color:#fff;}
-  .kanban-board{display:flex; gap:14px; overflow-x:auto; padding-bottom:8px;}
-  .kanban-col{flex:0 0 260px; width:260px; background:var(--surface-2); border-radius:12px; padding:10px;}
-  .kanban-col-header{font-size:12.5px; font-weight:700; color:var(--ink); display:flex; justify-content:space-between; align-items:center; padding:2px 4px 10px;}
-  .kanban-col-count{font-size:11px; font-weight:600; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px;}
-  .kanban-col .proj-card{margin-bottom:8px;}
-  .kanban-col-vazia{font-size:12px; color:var(--muted); padding:8px 4px;}
+
+  /* ---- Agrupado por fase: secoes empilhadas (sem scroll lateral),
+     recolhiveis, comecam fechadas — com muito projeto numa fase so, ninguem
+     precisa rolar a pagina inteira pra achar as outras. ---- */
+  .secao-fase{border:1px solid var(--border); border-radius:12px; margin-bottom:10px; overflow:hidden;}
+  .secao-fase-header{display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--surface-2); cursor:pointer; font-size:13px; font-weight:700; color:var(--ink);}
+  .secao-fase-seta{font-size:11px; color:var(--muted); transition:transform .15s;}
+  .secao-fase-header.aberta .secao-fase-seta{transform:rotate(90deg);}
+  .secao-fase-count{font-size:11px; font-weight:600; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 9px; margin-left:auto;}
+  .secao-fase-corpo{padding:12px 14px;}
+  .secao-fase-corpo .proj-card{margin-bottom:8px;}
+  .secao-fase-corpo .proj-card:last-child{margin-bottom:0;}
+  .secao-fase-vazia{font-size:12px; color:var(--muted); padding:2px 0;}
+
+  /* ---- Calendário de disponibilidade (mês -> dia) — mostra dia/horário já
+     ocupado antes de tentar registrar, no agendamento e no reagendamento.
+     A checagem de conflito de verdade continua no servidor; isso é só apoio
+     visual de escolha. ---- */
+  .calendario-disponibilidade{border:1px solid var(--border); border-radius:12px; padding:10px; margin-top:8px; background:var(--surface);}
+  .cal-mes-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .cal-mes-nav button{border:1px solid var(--border); background:var(--surface-2); border-radius:6px; width:26px; height:26px; cursor:pointer; color:var(--ink);}
+  .cal-mes-label{font-size:12.5px; font-weight:700; color:var(--ink); text-transform:capitalize;}
+  .cal-grade{display:grid; grid-template-columns:repeat(7, 1fr); gap:3px;}
+  .cal-dia-semana{font-size:10px; color:var(--muted); text-align:center; padding:2px 0; font-weight:600;}
+  .cal-dia{position:relative; text-align:center; font-size:12px; padding:6px 0; border-radius:6px; cursor:pointer; color:var(--ink);}
+  .cal-dia:hover{background:var(--surface-2);}
+  .cal-dia.cal-vazio{cursor:default;}
+  .cal-dia.cal-vazio:hover{background:none;}
+  .cal-dia.cal-passado{color:var(--muted); cursor:not-allowed; opacity:.45;}
+  .cal-dia.cal-passado:hover{background:none;}
+  .cal-dia.cal-ocupado::after{content:""; position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:4px; height:4px; border-radius:50%; background:var(--danger);}
+  .cal-dia.cal-selecionado{background:var(--azul); color:#fff; font-weight:700;}
+  .cal-dia-detalhe{margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
+  .cal-dia-detalhe-header{font-size:12.5px; font-weight:700; color:var(--ink); margin-bottom:6px;}
+  .cal-slots{display:flex; flex-wrap:wrap; gap:5px; max-height:180px; overflow-y:auto;}
+  .cal-slot{border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:6px; padding:4px 8px; font-size:11.5px; cursor:pointer;}
+  .cal-slot:hover{border-color:var(--azul);}
+  .cal-slot.cal-slot-selecionado{background:var(--azul); border-color:var(--azul); color:#fff;}
+  .cal-slot.cal-slot-ocupado{background:var(--surface-2); color:var(--muted); cursor:not-allowed; text-decoration:line-through;}
 
   .form-field{margin-bottom:14px;}
   .form-field label{display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px;}
@@ -928,6 +974,12 @@
   };
   var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
 
+  // "urgencia" — NUNCA chamar isso de "prioridade": esse nome já é usado
+  // pela ordem dos agentes Waipe no pipeline de build (sim.prioridade,
+  // um array de ids), um conceito totalmente diferente.
+  var URGENCIA_LABEL = { urgente: "Urgente", alta: "Alta", normal: "Normal", baixa: "Baixa" };
+  var URGENCIA_COR = { urgente: "var(--danger)", alta: "var(--warning)", normal: "var(--azul)", baixa: "var(--muted)" };
+
   // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
   // Esta página não tinha tela de login própria — dependia de já existir um
   // cookie de sessão criado ao logar no dashboard_carteiras.html antes. ISM não
@@ -1129,8 +1181,10 @@
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
-  var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM), vale pra lista e pro Kanban
-  var modoVisualizacaoProjetos = "lista"; // "lista" | "kanban" — mesmos projetos, só reorganizados em colunas por fase no Kanban
+  var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM), vale pra lista e pro agrupado
+  var modoVisualizacaoProjetos = "lista"; // "lista" | "agrupado" — mesmos projetos, só reorganizados em seções por fase no agrupado
+  var secoesAbertas = {}; // { [fase]: true } no modo agrupado — ausente/false = secao fechada (todas comecam fechadas)
+  var reservasCache = null; // lista de listar-reservas — buscada 1x junto com listar-implantacoes, pro sinal de agendamento no card
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
@@ -1316,8 +1370,15 @@
   }
 
   function carregarListaProjetos(){
-    apiGet("listar-implantacoes").then(function(resp){
-      projetosCache = resp.tasks || [];
+    Promise.all([
+      apiGet("listar-implantacoes"),
+      // Busca 1x, junto — listar-reservas já é a lista inteira (pequena), só
+      // pra calcular o sinal de agendamento/atraso de cada card, sem chamada
+      // extra por projeto.
+      apiGet("listar-reservas").catch(function(){ return { reservas: [] }; }),
+    ]).then(function(resultados){
+      projetosCache = resultados[0].tasks || [];
+      reservasCache = resultados[1].reservas || [];
       renderListaProjetosWrap();
     }).catch(function(e){
       var root = projetosRootAtivo();
@@ -1387,8 +1448,22 @@
       '</select></div>' +
       '<div class="modo-visualizacao" style="vertical-align:top;">' +
       '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
-      '<button type="button" id="btnModoKanban" class="' + (modoVisualizacaoProjetos === "kanban" ? "ativo" : "") + '">🗂️ Kanban</button>' +
+      '<button type="button" id="btnModoAgrupado" class="' + (modoVisualizacaoProjetos === "agrupado" ? "ativo" : "") + '">📂 Agrupado por fase</button>' +
       '</div>';
+
+    // Atrasado = tem reserva desse projeto que ja passou da hora e ninguem
+    // marcou comparecimento/reagendamento — o caso que mais se perde de
+    // vista. Em dia = tem reserva futura. Sem nenhuma reserva -> sem sinal
+    // (nao polui o card de todo projeto que ainda nem chegou nessa etapa).
+    function sinalAgendamento(projetoId){
+      var agora = Date.now();
+      var doProjeto = (reservasCache || []).filter(function(r){ return r.projetoId === projetoId; });
+      if (!doProjeto.length) return null;
+      var atrasada = doProjeto.some(function(r){ return r.fim && r.fim < agora && (!r.status || r.status === "agendado"); });
+      if (atrasada) return "atrasado";
+      var futura = doProjeto.some(function(r){ return r.inicio && r.inicio > agora; });
+      return futura ? "em_dia" : null;
+    }
 
     function cardHtml(p){
       var diasAberto = p.dataCriacao ? Math.max(0, Math.floor((Date.now() - p.dataCriacao) / 86400000)) : null;
@@ -1402,8 +1477,14 @@
       var novaMsgDot = p.temMensagemNova
         ? '<span title="Mensagem nova do cliente" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
         : '';
+      var urgencia = p.urgencia || "normal";
+      var urgenciaFlag = '<span class="urgencia-flag" title="Urgência: ' + esc(URGENCIA_LABEL[urgencia] || urgencia) + '" style="border-left-color:' + (URGENCIA_COR[urgencia] || URGENCIA_COR.normal) + ';"></span>';
+      var sinal = sinalAgendamento(p.id);
+      var sinalDot = sinal === "atrasado"
+        ? '<span title="Agendamento atrasado — passou da data sem marcar comparecimento" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
+        : (sinal === "em_dia" ? '<span title="Tem agendamento futuro marcado" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--tag-ambos); flex-shrink:0;"></span>' : '');
       return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
-        '<div class="proj-card-top">' + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + novaMsgDot + '</div>' +
+        '<div class="proj-card-top">' + urgenciaFlag + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + sinalDot + novaMsgDot + '</div>' +
         '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
         (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
         (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
@@ -1414,26 +1495,38 @@
       wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
         (filtroCsmAtivo || filtroIsmAtivo || filtroFaseAtiva ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
         '</div></div>';
-    } else if (modoVisualizacaoProjetos === "kanban"){
+    } else if (modoVisualizacaoProjetos === "agrupado"){
       var porFase = {};
       lista.forEach(function(p){
         var f = faseEfetiva(p) || "";
         (porFase[f] = porFase[f] || []).push(p);
       });
-      wrap.innerHTML = filtroHtml + '<div class="kanban-board">' +
+      wrap.innerHTML = filtroHtml +
         FASES_ORDEM.map(function(f){
           var doGrupo = porFase[f] || [];
-          return '<div class="kanban-col">' +
-            '<div class="kanban-col-header"><span>' + esc(FASE_LABEL[f] || f) + '</span><span class="kanban-col-count">' + doGrupo.length + '</span></div>' +
-            (doGrupo.length ? doGrupo.map(cardHtml).join("") : '<div class="kanban-col-vazia">Nenhum projeto</div>') +
-            '</div>';
-        }).join("") +
-        '</div>';
+          var aberta = !!secoesAbertas[f];
+          return '<div class="secao-fase">' +
+            '<div class="secao-fase-header' + (aberta ? " aberta" : "") + '" data-secao-fase="' + esc(f) + '">' +
+              '<span class="secao-fase-seta">▸</span><span>' + esc(FASE_LABEL[f] || f) + '</span>' +
+              '<span class="secao-fase-count">' + doGrupo.length + '</span>' +
+            '</div>' +
+            (aberta
+              ? '<div class="secao-fase-corpo">' + (doGrupo.length ? doGrupo.map(cardHtml).join("") : '<div class="secao-fase-vazia">Nenhum projeto</div>') + '</div>'
+              : '') +
+          '</div>';
+        }).join("");
     } else {
       wrap.innerHTML = filtroHtml + lista.map(cardHtml).join("");
     }
     wrap.querySelectorAll("[data-proj]").forEach(function(card){
       card.addEventListener("click", function(){ abrirProjeto(card.getAttribute("data-proj")); });
+    });
+    wrap.querySelectorAll("[data-secao-fase]").forEach(function(header){
+      header.addEventListener("click", function(){
+        var f = header.getAttribute("data-secao-fase");
+        secoesAbertas[f] = !secoesAbertas[f];
+        renderListaProjetosWrap();
+      });
     });
     var selCsm = document.getElementById("filtroCsmProjetos");
     if (selCsm) selCsm.addEventListener("change", function(){
@@ -1455,9 +1548,9 @@
       modoVisualizacaoProjetos = "lista";
       renderListaProjetosWrap();
     });
-    var btnModoKanban = document.getElementById("btnModoKanban");
-    if (btnModoKanban) btnModoKanban.addEventListener("click", function(){
-      modoVisualizacaoProjetos = "kanban";
+    var btnModoAgrupado = document.getElementById("btnModoAgrupado");
+    if (btnModoAgrupado) btnModoAgrupado.addEventListener("click", function(){
+      modoVisualizacaoProjetos = "agrupado";
       renderListaProjetosWrap();
     });
   }
@@ -1919,6 +2012,28 @@
     }).catch(function(){ showSimToast("Não deu para salvar a fase do projeto."); });
   }
 
+  // Chave do corpo é "urgencia", NUNCA "prioridade" — essa já é a ordem dos
+  // agentes Waipe no pipeline (sim.prioridade), enviada em toda chamada de
+  // atualizar-implantacao; reaproveitar o nome sobrescreveria esse array.
+  function seletorUrgenciaProjeto(p){
+    var urgencia = p.urgencia || "normal";
+    return '<select data-projeto-urgencia class="form-input" style="width:auto; display:inline-block; margin-left:8px; font-size:12px; padding:4px 8px;">' +
+      ["urgente", "alta", "normal", "baixa"].map(function(u){ return '<option value="' + u + '"' + (u === urgencia ? " selected" : "") + '>' + URGENCIA_LABEL[u] + '</option>'; }).join("") +
+      '</select>';
+  }
+
+  function persistirUrgenciaProjeto(urgencia){
+    if (!dadosProjeto) return;
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
+      urgencia: urgencia
+    }).then(function(){
+      dadosProjeto.projeto.urgencia = urgencia;
+      renderListaItens();
+    }).catch(function(){ showSimToast("Não deu para salvar a urgência do projeto."); });
+  }
+
   function persistirDadosCliente(dados){
     if (!dadosProjeto) return;
     apiPost("atualizar-implantacao", {
@@ -2255,6 +2370,22 @@
     });
   }
 
+  // Fatos objetivos calculados pelo servidor (dias de projeto, não
+  // comparecimento/reagendamento das reservas) — não editáveis, só
+  // exibidos e salvos junto com o rascunho da IA. Guardado à parte porque
+  // só existe depois de gerar o relatório pelo menos uma vez nesta sessão;
+  // antes disso, salvarFinalizacao reaproveita o que já estava salvo.
+  var finalizacaoStatsAtual = null;
+
+  function finEstatisticasHtml(f){
+    if (!f || f.diasEmAberto === null || f.diasEmAberto === undefined) return "";
+    return '<div class="apmeta" style="margin-top:8px; display:flex; gap:14px; flex-wrap:wrap;">' +
+      '<span>⏱️ ' + f.diasEmAberto + ' dia' + (f.diasEmAberto === 1 ? "" : "s") + ' de projeto</span>' +
+      '<span>🚫 ' + (f.naoComparecimentos || 0) + ' não comparecimento(s) do cliente</span>' +
+      '<span>🔁 ' + (f.reagendamentos || 0) + ' reagendamento(s) (' + (f.reagendamentosLondrisoft || 0) + ' por nós, ' + (f.reagendamentosCliente || 0) + ' pelo cliente)</span>' +
+    '</div>';
+  }
+
   function gerarFinalizacao(botao){
     if (!dadosProjeto) return;
     var textoOriginal = botao.textContent;
@@ -2265,6 +2396,13 @@
       document.getElementById("finRisco").value = r.riscoPercebido || "";
       document.getElementById("finSatisfacao").value = r.satisfacaoPercebida || "";
       document.getElementById("finCausaDemora").value = r.causaDaDemora || "";
+      finalizacaoStatsAtual = {
+        diasEmAberto: r.diasEmAberto, naoComparecimentos: r.naoComparecimentos,
+        reagendamentos: r.reagendamentos, reagendamentosLondrisoft: r.reagendamentosLondrisoft,
+        reagendamentosCliente: r.reagendamentosCliente
+      };
+      var statsEl = document.getElementById("finEstatisticas");
+      if (statsEl) statsEl.innerHTML = finEstatisticasHtml(finalizacaoStatsAtual);
       showSimToast("Rascunho gerado a partir de " + r.resumosConsiderados + " resumo(s) registrado(s) — revise antes de salvar.");
     }).catch(function(e){
       showSimToast(mensagemErro(e) || "Não deu para gerar o relatório.");
@@ -2275,12 +2413,18 @@
 
   function salvarFinalizacao(){
     if (!dadosProjeto) return;
+    var stats = finalizacaoStatsAtual || dadosProjeto.projeto.finalizacao || {};
     var finalizacao = {
       resumoGeral: document.getElementById("finResumoGeral").value.trim(),
       riscoPercebido: document.getElementById("finRisco").value,
       satisfacaoPercebida: document.getElementById("finSatisfacao").value,
       causaDaDemora: document.getElementById("finCausaDemora").value.trim(),
-      geradoEm: Date.now()
+      geradoEm: Date.now(),
+      diasEmAberto: stats.diasEmAberto != null ? stats.diasEmAberto : null,
+      naoComparecimentos: stats.naoComparecimentos || 0,
+      reagendamentos: stats.reagendamentos || 0,
+      reagendamentosLondrisoft: stats.reagendamentosLondrisoft || 0,
+      reagendamentosCliente: stats.reagendamentosCliente || 0
     };
     apiPost("atualizar-implantacao", {
       id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
@@ -2303,10 +2447,177 @@
 
   // Reservas de agenda dos ISMs (Camada 1/Treinamento/reunião) — cria uma
   // task em LISTA_RESERVAS_AGENDA com data/hora, que sincroniza sozinha pra
+  var MESES_PT_CAL = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  var DIAS_SEMANA_PT_CAL = ["D","S","T","Q","Q","S","S"];
+
+  function pad2Cal(n){ return String(n).length < 2 ? "0" + n : String(n); }
+  function dataISOCal(d){ return d.getFullYear() + "-" + pad2Cal(d.getMonth() + 1) + "-" + pad2Cal(d.getDate()); }
+  function mesmoDiaCal(a, b){ return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+  /**
+   * Calendário visual de disponibilidade (mês -> dia) — mostra dia/horário
+   * já ocupado (reservas internas + agenda REAL do Google, via
+   * disponibilidade-ism) antes de escolher, num apoio de escolha só; a
+   * checagem de conflito de verdade continua acontecendo no servidor ao
+   * registrar/reagendar (a agenda pode mudar nos segundos entre abrir o
+   * calendário e clicar em salvar). `alvo` são os 3 inputs (date/time/time)
+   * já existentes no formulário — clicar num horário livre só preenche eles,
+   * nada muda na submissão em si. Cada chamada tem seu próprio estado (mês
+   * visível, dia selecionado, cache) via closure — dá pra ter mais de uma
+   * instância na tela (o form de nova reserva + o painel de reagendar de
+   * cada reserva pendente) sem uma pisar na outra.
+   */
+  function renderCalendarioDisponibilidade(container, ismId, alvo){
+    var hoje = new Date();
+    var mesVisivel = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    var diaSelecionadoISO = null;
+    var duracaoMin = 60;
+    var cache = {}; // chave "ismId:YYYY-M" -> [{inicio,fim,titulo}]
+
+    function chaveCache(mes){ return ismId + ":" + mes.getFullYear() + "-" + (mes.getMonth() + 1); }
+
+    function buscarOcupadosDoMes(mes){
+      var chave = chaveCache(mes);
+      if (cache[chave]) return Promise.resolve(cache[chave]);
+      var inicioMes = new Date(mes.getFullYear(), mes.getMonth(), 1).getTime();
+      var fimMes = new Date(mes.getFullYear(), mes.getMonth() + 1, 0, 23, 59, 59).getTime();
+      return apiGet("disponibilidade-ism", { ismId: ismId, inicio: inicioMes, fim: fimMes }).then(function(resp){
+        var lista = resp.ocupados || [];
+        cache[chave] = lista;
+        return lista;
+      }).catch(function(){ return []; });
+    }
+
+    function ocupadosDoDia(ocupadosMes, diaISO){
+      return ocupadosMes.filter(function(o){
+        if (!o.inicio || !o.fim) return false;
+        return dataISOCal(new Date(o.inicio)) === diaISO || dataISOCal(new Date(o.fim - 1)) === diaISO || (o.inicio < new Date(diaISO + "T23:59:59").getTime() && o.fim > new Date(diaISO + "T00:00:00").getTime());
+      });
+    }
+
+    function montarGradeMes(ocupadosMes){
+      var primeiroDiaSemana = mesVisivel.getDay();
+      var totalDias = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth() + 1, 0).getDate();
+      var diasComOcupacao = {};
+      ocupadosMes.forEach(function(o){
+        if (!o.inicio) return;
+        diasComOcupacao[dataISOCal(new Date(o.inicio))] = true;
+      });
+      var celulas = [];
+      for (var i = 0; i < primeiroDiaSemana; i++) celulas.push('<div class="cal-dia cal-vazio"></div>');
+      for (var dia = 1; dia <= totalDias; dia++){
+        var d = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth(), dia);
+        var iso = dataISOCal(d);
+        var passado = d < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+        var classes = "cal-dia";
+        if (passado) classes += " cal-passado";
+        if (diasComOcupacao[iso]) classes += " cal-ocupado";
+        if (iso === diaSelecionadoISO) classes += " cal-selecionado";
+        celulas.push('<div class="' + classes + '"' + (passado ? "" : ' data-cal-dia="' + iso + '"') + '>' + dia + '</div>');
+      }
+      return '<div class="cal-grade">' +
+        DIAS_SEMANA_PT_CAL.map(function(d){ return '<div class="cal-dia-semana">' + d + '</div>'; }).join("") +
+        celulas.join("") +
+      '</div>';
+    }
+
+    function montarDetalheDia(ocupadosMes){
+      if (!diaSelecionadoISO) return "";
+      var ocupadosDia = ocupadosDoDia(ocupadosMes, diaSelecionadoISO);
+      var partes = diaSelecionadoISO.split("-").map(Number);
+      var slotsHtml = [];
+      for (var min = 8 * 60; min < 19 * 60; min += 30){
+        var slotIni = new Date(partes[0], partes[1] - 1, partes[2], Math.floor(min / 60), min % 60).getTime();
+        var slotFim = slotIni + 30 * 60 * 1000;
+        var ocupado = ocupadosDia.some(function(o){ return o.inicio < slotFim && o.fim > slotIni; });
+        var motivo = ocupado ? (ocupadosDia.filter(function(o){ return o.inicio < slotFim && o.fim > slotIni; })[0] || {}).titulo : "";
+        var horaLabel = pad2Cal(Math.floor(min / 60)) + ":" + pad2Cal(min % 60);
+        slotsHtml.push(
+          '<button type="button" class="cal-slot' + (ocupado ? " cal-slot-ocupado" : "") + '"' +
+          (ocupado ? ' disabled title="' + esc(motivo || "Ocupado") + '"' : ' data-cal-slot="' + slotIni + '"') +
+          '>' + horaLabel + '</button>'
+        );
+      }
+      return '<div class="cal-dia-detalhe">' +
+        '<div class="cal-dia-detalhe-header">Horários — ' + pad2Cal(partes[2]) + '/' + pad2Cal(partes[1]) + '/' + partes[0] + '</div>' +
+        '<div style="margin-bottom:8px;font-size:11.5px;color:var(--muted);">Duração ' +
+          '<select data-cal-duracao style="font-size:11.5px;padding:2px 6px;">' +
+            [30, 60, 90, 120].map(function(m){ return '<option value="' + m + '"' + (m === duracaoMin ? " selected" : "") + '>' + (m < 60 ? m + "min" : (m / 60) + "h" + (m % 60 ? "30" : "")) + '</option>'; }).join("") +
+          '</select>' +
+        '</div>' +
+        '<div class="cal-slots">' + slotsHtml.join("") + '</div>' +
+      '</div>';
+    }
+
+    function render(){
+      container.innerHTML = '<div class="calendario-disponibilidade"><div class="sub">Carregando disponibilidade…</div></div>';
+      buscarOcupadosDoMes(mesVisivel).then(function(ocupadosMes){
+        container.innerHTML = '<div class="calendario-disponibilidade">' +
+          '<div class="cal-mes-nav">' +
+            '<button type="button" data-cal-mes-anterior>‹</button>' +
+            '<span class="cal-mes-label">' + MESES_PT_CAL[mesVisivel.getMonth()] + ' de ' + mesVisivel.getFullYear() + '</span>' +
+            '<button type="button" data-cal-mes-proximo>›</button>' +
+          '</div>' +
+          montarGradeMes(ocupadosMes) +
+          montarDetalheDia(ocupadosMes) +
+        '</div>';
+        wire(ocupadosMes);
+      });
+    }
+
+    function wire(ocupadosMes){
+      var navAnterior = container.querySelector("[data-cal-mes-anterior]");
+      if (navAnterior) navAnterior.addEventListener("click", function(){
+        mesVisivel = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth() - 1, 1);
+        diaSelecionadoISO = null;
+        render();
+      });
+      var navProximo = container.querySelector("[data-cal-mes-proximo]");
+      if (navProximo) navProximo.addEventListener("click", function(){
+        mesVisivel = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth() + 1, 1);
+        diaSelecionadoISO = null;
+        render();
+      });
+      container.querySelectorAll("[data-cal-dia]").forEach(function(el){
+        el.addEventListener("click", function(){
+          diaSelecionadoISO = el.getAttribute("data-cal-dia");
+          if (alvo.inputData) alvo.inputData.value = diaSelecionadoISO;
+          render();
+        });
+      });
+      var selDuracao = container.querySelector("[data-cal-duracao]");
+      if (selDuracao) selDuracao.addEventListener("change", function(){
+        duracaoMin = parseInt(selDuracao.value, 10) || 60;
+        render();
+      });
+      container.querySelectorAll("[data-cal-slot]").forEach(function(el){
+        el.addEventListener("click", function(){
+          var slotIni = Number(el.getAttribute("data-cal-slot"));
+          var slotFim = slotIni + duracaoMin * 60 * 1000;
+          var d1 = new Date(slotIni), d2 = new Date(slotFim);
+          if (alvo.inputHoraIni) alvo.inputHoraIni.value = pad2Cal(d1.getHours()) + ":" + pad2Cal(d1.getMinutes());
+          if (alvo.inputHoraFim) alvo.inputHoraFim.value = pad2Cal(d2.getHours()) + ":" + pad2Cal(d2.getMinutes());
+          container.querySelectorAll(".cal-slot").forEach(function(s){ s.classList.remove("cal-slot-selecionado"); });
+          el.classList.add("cal-slot-selecionado");
+          var cruzaOcupado = ocupadosDoDia(ocupadosMes, diaSelecionadoISO).some(function(o){ return o.inicio < slotFim && o.fim > slotIni && o.inicio >= slotIni; });
+          showSimToast(cruzaOcupado ? "Horário escolhido, mas a duração esbarra em outro compromisso — confira antes de registrar." : "Horário escolhido: " + pad2Cal(d1.getHours()) + ":" + pad2Cal(d1.getMinutes()) + "–" + pad2Cal(d2.getHours()) + ":" + pad2Cal(d2.getMinutes()));
+        });
+      });
+    }
+
+    render();
+  }
+
   // Google Calendar de quem já tem a conta conectada no ClickUp. O link do
   // Google Meet continua manual: cria a reunião lá (ClickUp ou Google
   // Calendar), cola o link aqui depois.
-  function reservaHtml(r){
+  // Comparecimento/reagendamento — pendente ("agendado", o default de toda
+  // reserva nova) mostra os 3 botões rápidos; qualquer outro status mostra
+  // um selo fixo (a reserva virou histórico, só leitura — ver
+  // reagendar-reserva/marcar-comparecimento-reserva em api/clickup.js).
+  // `todasReservas` é a lista inteira do projeto — usada só pra achar a data
+  // da reserva NOVA quando esta foi reagendada (ProximaReservaId).
+  function reservaHtml(r, todasReservas){
     var linkHtml = r.linkReuniao
       ? '<div class="apmeta" style="margin-top:4px">Link: <a href="' + esc(r.linkReuniao) + '" target="_blank" rel="noopener">' + esc(r.linkReuniao) + '</a></div>'
       : '<div style="display:flex; gap:6px; margin-top:6px; align-items:center; flex-wrap:wrap;">' +
@@ -2316,13 +2627,57 @@
     var convidadosHtml = (r.convidados && r.convidados.length)
       ? '<div class="apmeta" style="margin-top:2px">Convidados: ' + esc(r.convidados.join(', ')) + '</div>'
       : '';
+    var status = r.status || "agendado";
+    var comparecimentoHtml;
+    if (status === "compareceu"){
+      comparecimentoHtml = '<div class="apmeta" style="margin-top:6px; color:var(--tag-ambos);">✅ Compareceu</div>';
+    } else if (status === "nao_compareceu"){
+      comparecimentoHtml = '<div class="apmeta" style="margin-top:6px; color:var(--danger);">❌ Não compareceu</div>';
+    } else if (status === "reagendado"){
+      var proxima = (todasReservas || []).filter(function(x){ return x.id === r.proximaReservaId; })[0];
+      var quemPediu = r.reagendadoPor === "cliente" ? "Cliente" : "Londrisoft";
+      comparecimentoHtml = '<div class="apmeta" style="margin-top:6px;">🔁 Reagendado (pedido por: ' + esc(quemPediu) + ')' +
+        (proxima ? ' → nova data: ' + esc(fmtDataHoraSim(proxima.inicio)) : '') + '</div>';
+    } else {
+      comparecimentoHtml =
+        '<div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">' +
+          '<button type="button" class="btn-flow-secondary" data-comparecimento="compareceu" data-reserva-id="' + esc(r.id) + '" style="padding:4px 10px; font-size:12px;">✅ Compareceu</button>' +
+          '<button type="button" class="btn-flow-secondary" data-comparecimento="nao_compareceu" data-reserva-id="' + esc(r.id) + '" style="padding:4px 10px; font-size:12px;">❌ Não compareceu</button>' +
+          '<button type="button" class="btn-flow-secondary" data-abrir-reagendar="' + esc(r.id) + '" data-ism-id="' + esc(r.ismId) + '" style="padding:4px 10px; font-size:12px;">🔁 Reagendar</button>' +
+        '</div>' +
+        '<div data-reagendar-painel="' + esc(r.id) + '" style="display:none; margin-top:8px; padding:8px; background:var(--surface-2); border-radius:8px;">' +
+          '<div data-cal-reagendar="' + esc(r.id) + '"></div>' +
+          '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">' +
+            '<input type="date" class="form-input" data-reagendar-data="' + esc(r.id) + '" style="width:auto;">' +
+            '<input type="time" class="form-input" data-reagendar-hora-ini="' + esc(r.id) + '" style="width:auto;">' +
+            '<span style="font-size:12px; color:var(--muted);">até</span>' +
+            '<input type="time" class="form-input" data-reagendar-hora-fim="' + esc(r.id) + '" style="width:auto;">' +
+          '</div>' +
+          '<div style="margin-top:6px; font-size:12px;">' +
+            '<label><input type="radio" name="reagendadoPor-' + esc(r.id) + '" value="cliente" checked> Cliente pediu</label>' +
+            '<label style="margin-left:12px;"><input type="radio" name="reagendadoPor-' + esc(r.id) + '" value="londrisoft"> Nós pedimos</label>' +
+          '</div>' +
+          '<div style="margin-top:6px;">' +
+            '<button type="button" class="btn-flow-secondary" data-confirmar-reagendar="' + esc(r.id) + '" style="padding:4px 10px; font-size:12px;">Confirmar</button> ' +
+            '<button type="button" class="btn-reset" data-cancelar-reagendar="' + esc(r.id) + '" style="font-size:12px;">Cancelar</button>' +
+          '</div>' +
+          '<div data-reagendar-erro="' + esc(r.id) + '" style="display:none; color:var(--danger); font-size:11px; margin-top:6px;"></div>' +
+        '</div>';
+    }
+    // "Cancelar" (libera o horário de vez, apaga a task) só faz sentido
+    // enquanto pendente — uma reserva já resolvida vira histórico, precisa
+    // sobreviver pras estatísticas do relatório de finalização.
+    var cancelarBtn = status === "agendado"
+      ? '<button type="button" class="btn-reset" data-cancelar-reserva="' + esc(r.id) + '" style="color:var(--danger); flex:0 0 auto;">Cancelar</button>'
+      : '';
     return '<div class="build-check" style="align-items:flex-start; flex-direction:column;">' +
       '<div style="display:flex; justify-content:space-between; width:100%; align-items:flex-start; gap:8px;">' +
         '<span><b>' + esc(r.titulo) + '</b> — ' + esc(r.ismNome || "—") + '<br><span style="font-size:11px; color:var(--muted)">' + fmtDataHoraSim(r.inicio) + ' até ' + fmtDataHoraSim(r.fim) + '</span></span>' +
-        '<button type="button" class="btn-reset" data-cancelar-reserva="' + esc(r.id) + '" style="color:var(--danger); flex:0 0 auto;">Cancelar</button>' +
+        cancelarBtn +
       '</div>' +
       linkHtml +
       convidadosHtml +
+      comparecimentoHtml +
     '</div>';
   }
 
@@ -2357,6 +2712,7 @@
           ISM_OPCOES.map(function(o){ return '<option value="' + o.id + '">' + esc(o.nome) + '</option>'; }).join("") +
         '</select>' +
       '</div>' +
+      '<div id="calendarioNovaReserva"></div>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center;">' +
         '<input type="date" class="form-input" id="novaReservaData" style="width:auto;">' +
         '<input type="time" class="form-input" id="novaReservaHoraIni" style="width:auto;">' +
@@ -2395,6 +2751,91 @@
           .catch(function(){ showSimToast("Não deu para salvar o link."); });
       });
     });
+    container.querySelectorAll("[data-comparecimento]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-reserva-id");
+        var status = btn.getAttribute("data-comparecimento");
+        btn.disabled = true;
+        apiPost("marcar-comparecimento-reserva", { id: id, status: status })
+          .then(function(){ renderAgenda(projetoId, container); })
+          .catch(function(e){
+            showSimToast(mensagemErro(e) || "Não deu para marcar comparecimento.");
+            btn.disabled = false;
+          });
+      });
+    });
+    container.querySelectorAll("[data-abrir-reagendar]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-abrir-reagendar");
+        var painel = container.querySelector('[data-reagendar-painel="' + id + '"]');
+        if (painel) painel.style.display = "block";
+        // Instancia o calendario so na primeira vez que o painel abre (o
+        // ismId da reserva e fixo, nao muda no reagendamento).
+        var calWrap = container.querySelector('[data-cal-reagendar="' + id + '"]');
+        if (calWrap && !calWrap.dataset.calInstanciado){
+          calWrap.dataset.calInstanciado = "1";
+          renderCalendarioDisponibilidade(calWrap, parseInt(btn.getAttribute("data-ism-id"), 10), {
+            inputData: container.querySelector('[data-reagendar-data="' + id + '"]'),
+            inputHoraIni: container.querySelector('[data-reagendar-hora-ini="' + id + '"]'),
+            inputHoraFim: container.querySelector('[data-reagendar-hora-fim="' + id + '"]'),
+          });
+        }
+      });
+    });
+    container.querySelectorAll("[data-cancelar-reagendar]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var painel = container.querySelector('[data-reagendar-painel="' + btn.getAttribute("data-cancelar-reagendar") + '"]');
+        if (painel) painel.style.display = "none";
+      });
+    });
+    container.querySelectorAll("[data-confirmar-reagendar]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-confirmar-reagendar");
+        var erroEl = container.querySelector('[data-reagendar-erro="' + id + '"]');
+        erroEl.style.display = "none";
+        var data = container.querySelector('[data-reagendar-data="' + id + '"]').value;
+        var horaIni = container.querySelector('[data-reagendar-hora-ini="' + id + '"]').value;
+        var horaFim = container.querySelector('[data-reagendar-hora-fim="' + id + '"]').value;
+        var radioMarcado = container.querySelector('input[name="reagendadoPor-' + id + '"]:checked');
+        if (!data || !horaIni || !horaFim){
+          erroEl.textContent = "Preencha a nova data e os dois horários.";
+          erroEl.style.display = "block";
+          return;
+        }
+        var novoInicio = new Date(data + "T" + horaIni + ":00").getTime();
+        var novoFim = new Date(data + "T" + horaFim + ":00").getTime();
+        btn.disabled = true;
+        apiPost("reagendar-reserva", { id: id, novoInicio: novoInicio, novoFim: novoFim, reagendadoPor: radioMarcado ? radioMarcado.value : "cliente" })
+          .then(function(resp){
+            showSimToast(resp && resp.linkReuniao ? "Reagendado! Meet criado automático: " + resp.linkReuniao : "Reagendado!");
+            renderAgenda(projetoId, container);
+          })
+          .catch(function(e){
+            if (e && e.code === "conflito_horario_google"){
+              erroEl.textContent = "Conflito na agenda REAL do Google desse ISM nesse novo horário — escolha outro.";
+            } else if (e && e.code === "conflito_horario"){
+              erroEl.textContent = "Este ISM já tem reserva nesse horário.";
+            } else {
+              erroEl.textContent = mensagemErro(e) || "Não deu para reagendar.";
+            }
+            erroEl.style.display = "block";
+            btn.disabled = false;
+          });
+      });
+    });
+    var calendarioNovaReservaWrap = container.querySelector("#calendarioNovaReserva");
+    var selIsmNovaReserva = container.querySelector("#novaReservaIsm");
+    if (calendarioNovaReservaWrap && selIsmNovaReserva){
+      var alvoNovaReserva = {
+        inputData: container.querySelector("#novaReservaData"),
+        inputHoraIni: container.querySelector("#novaReservaHoraIni"),
+        inputHoraFim: container.querySelector("#novaReservaHoraFim"),
+      };
+      renderCalendarioDisponibilidade(calendarioNovaReservaWrap, parseInt(selIsmNovaReserva.value, 10), alvoNovaReserva);
+      selIsmNovaReserva.addEventListener("change", function(){
+        renderCalendarioDisponibilidade(calendarioNovaReservaWrap, parseInt(selIsmNovaReserva.value, 10), alvoNovaReserva);
+      });
+    }
     var btnReservar = container.querySelector("#btnReservarHorario");
     if (btnReservar) btnReservar.addEventListener("click", function(){
       var erroEl = container.querySelector("#reservaErro");
@@ -2450,7 +2891,7 @@
       container.innerHTML = '<div class="card"><h2>📅 Agenda</h2>' +
         '<div class="sub">Registro dos horários combinados com o ISM para este projeto.</div>' +
         '<div class="sp-k" style="margin-top:12px">Próximos compromissos</div>' +
-        (reservas.length ? reservas.map(reservaHtml).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário registrado ainda.</div>') +
+        (reservas.length ? reservas.map(function(r){ return reservaHtml(r, reservas); }).join("") : '<div class="sub" style="margin-top:8px;">Nenhum horário registrado ainda.</div>') +
         formNovaReservaHtml(statusGoogle) +
       '</div>';
       wireAgenda(projetoId, container);
@@ -2537,6 +2978,8 @@
       '<h2>Resumo do projeto</h2>' +
       '<div class="sp-k">Fase do projeto</div>' +
       '<div>' + seletorFaseProjeto(p) + '</div>' +
+      '<div class="sp-k" style="margin-top:10px;">Urgência</div>' +
+      '<div>' + seletorUrgenciaProjeto(p) + '</div>' +
       '<div class="sp-k">Contexto</div>' +
       '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>' +
       '<div id="ismProjetoWrap"></div>' +
@@ -2570,6 +3013,7 @@
       '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;"' +
         (todosItensConcluidos() ? '' : ' disabled title="Só disponível quando todos os itens do projeto estiverem concluídos/cancelados."') +
         '>🤖 Gerar relatório de finalização</button>' +
+      '<div id="finEstatisticas">' + finEstatisticasHtml(p.finalizacao) + '</div>' +
       '<div id="finalizacaoCampos" style="margin-top:12px;' + (p.finalizacao && p.finalizacao.resumoGeral ? '' : 'display:none;') + '">' +
         '<div class="form-field"><label>Resumo geral</label><textarea class="form-input" id="finResumoGeral" rows="3" style="width:100%;">' + esc((p.finalizacao && p.finalizacao.resumoGeral) || "") + '</textarea></div>' +
         '<div class="form-grid-2">' +
@@ -2606,6 +3050,10 @@
     var selFaseProjeto = document.querySelector("[data-projeto-fase]");
     if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
       persistirFaseProjeto(selFaseProjeto.value || null);
+    });
+    var selUrgenciaProjeto = document.querySelector("[data-projeto-urgencia]");
+    if (selUrgenciaProjeto) selUrgenciaProjeto.addEventListener("change", function(){
+      persistirUrgenciaProjeto(selUrgenciaProjeto.value);
     });
     var btnSalvarDadosCliente = document.getElementById("btnSalvarDadosCliente");
     if (btnSalvarDadosCliente) btnSalvarDadosCliente.addEventListener("click", function(){

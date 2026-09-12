@@ -46,6 +46,18 @@
 //        link do Meet depois que a reuniao foi criada (a API do ClickUp nao gera isso);
 //        convidados so muda quando enviado, senao preserva o que ja tinha
 //   POST /api/clickup?action=cancelar-reserva      { id } -> libera o horario
+//   POST /api/clickup?action=marcar-comparecimento-reserva { id, status:
+//        "compareceu"|"nao_compareceu" } -> registra se o cliente veio ou
+//        nao, pra auditoria (disputa de reembolso/multa) e pro relatorio
+//        de finalizacao
+//   POST /api/clickup?action=reagendar-reserva { id, novoInicio, novoFim,
+//        reagendadoPor: "londrisoft"|"cliente" } -> marca a reserva atual
+//        como reagendada (quem pediu) e cria uma nova no novo horario
+//        (mesmo fluxo de criar-reserva: conflito + Google/Meet)
+//   GET  /api/clickup?action=disponibilidade-ism { ismId, inicio, fim } ->
+//        { ocupados: [{inicio, fim, titulo}] } — reservas internas + agenda
+//        REAL do Google (quando conectado) desse ISM no intervalo, pro
+//        calendário visual de agendamento (mostra dia/horário já tomado)
 //   GET  /api/clickup?action=conectar-agenda-google { ismId } -> 302 pro
 //        consentimento OAuth do Google (volta em api/google-oauth-callback.js)
 //   GET  /api/clickup?action=status-google-agenda  { [ismId]: conectado? }
@@ -147,8 +159,11 @@ import {
   obterTokenGoogle,
   parseWaipeState,
   projetoDaDescricaoReserva,
+  proximaReservaIdDaDescricaoReserva,
+  reagendadoPorDaDescricaoReserva,
   refletirEscrita,
   soDigitos,
+  statusDaDescricaoReserva,
   STATUS_MES_ATUAL,
   stringifyWaipeState,
 } from './_lib/clickup.js';
@@ -269,6 +284,11 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'criar-reserva') return await criarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'atualizar-reserva') return await atualizarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'cancelar-reserva') return await cancelarReservaAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'marcar-comparecimento-reserva') {
+      return await marcarComparecimentoReservaAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'reagendar-reserva') return await reagendarReservaAcao(req, res, sessao);
+    if (req.method === 'GET' && acao === 'disponibilidade-ism') return await disponibilidadeIsmAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'conectar-agenda-google') return await conectarAgendaGoogleAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'status-google-agenda') return await statusGoogleAgendaAcao(res);
     if (req.method === 'POST' && acao === 'iniciar-conversa-umbler') {
@@ -305,7 +325,8 @@ export default async function handler(req, res) {
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
       'listar-comentarios', 'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
-      'atualizar-reserva', 'cancelar-reserva', 'conectar-agenda-google',
+      'atualizar-reserva', 'cancelar-reserva', 'marcar-comparecimento-reserva',
+      'reagendar-reserva', 'disponibilidade-ism', 'conectar-agenda-google',
       'status-google-agenda', 'iniciar-conversa-umbler',
       'sincronizar-agendamentos-google', 'vincular-agendamento-google',
       'historico-conversa-umbler', 'listar-modelos-mensagem', 'salvar-modelo-mensagem',
@@ -908,6 +929,18 @@ const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
 const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'em_andamento', 'aguardando_cliente', 'aguardando_interno', 'cancelado', 'entregue']);
 const FASE_ITEM_PADRAO = 'nao_iniciado';
 
+// Urgencia do projeto — classificacao manual (CSM/ISM), sem derivacao
+// automatica nenhuma. "normal" e o default quando ainda ninguem classificou,
+// pra sempre ter uma bandeira valida pra mostrar no card. Campo chamado
+// "urgencia", NUNCA "prioridade" — esse nome ja e usado (corpo.prioridade/
+// sim.prioridade/estadoProjeto.prioridade) pra ordem dos agentes Waipe no
+// pipeline de build, um array, conceito totalmente diferente.
+const URGENCIAS_VALIDAS = new Set(['urgente', 'alta', 'normal', 'baixa']);
+const URGENCIA_PADRAO = 'normal';
+function sanearUrgencia(v) {
+  return URGENCIAS_VALIDAS.has(v) ? v : URGENCIA_PADRAO;
+}
+
 /**
  * Fase do PROJETO como um todo: automatica (derivada das fases dos itens +
  * do estagio do Waipe), mas com override manual (faseProjetoManual) sempre
@@ -1138,12 +1171,21 @@ const SATISFACAO_VALIDOS = new Set(['positiva', 'neutra', 'negativa', 'indetermi
  */
 function sanearFinalizacao(d) {
   const origem = d && typeof d === 'object' ? d : {};
+  const numeroOuZero = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : 0);
   return {
     resumoGeral: texto(origem.resumoGeral, 2000),
     riscoPercebido: RISCO_VALIDOS.has(origem.riscoPercebido) ? origem.riscoPercebido : '',
     causaDaDemora: texto(origem.causaDaDemora, 500),
     satisfacaoPercebida: SATISFACAO_VALIDOS.has(origem.satisfacaoPercebida) ? origem.satisfacaoPercebida : '',
     geradoEm: Number.isFinite(Number(origem.geradoEm)) ? Number(origem.geradoEm) : null,
+    // Fatos objetivos calculados no momento em que o relatório foi gerado
+    // (ver gerarRelatorioFinalizacaoAcao, api/ia.js) — não editáveis pelo
+    // CSM, só revisados/salvos junto com o resto do rascunho.
+    diasEmAberto: Number.isFinite(Number(origem.diasEmAberto)) ? Number(origem.diasEmAberto) : null,
+    naoComparecimentos: numeroOuZero(origem.naoComparecimentos),
+    reagendamentos: numeroOuZero(origem.reagendamentos),
+    reagendamentosLondrisoft: numeroOuZero(origem.reagendamentosLondrisoft),
+    reagendamentosCliente: numeroOuZero(origem.reagendamentosCliente),
   };
 }
 
@@ -1233,6 +1275,7 @@ async function listarImplantacoesAcao(res, sessao) {
       // override manual aqui; a fase derivada dos itens só existe na tela
       // do projeto aberto (obter-implantacao), que já busca as subtasks.
       faseProjetoManual: FASES_ITEM_VALIDAS.has(estado.faseProjetoManual) ? estado.faseProjetoManual : null,
+      urgencia: sanearUrgencia(estado.urgencia),
       dataCriacao: Number.isFinite(Number(t.date_created)) ? Number(t.date_created) : null,
       temMensagemNova: temMensagemNovaParaViewer(estado, sessao),
     };
@@ -1348,6 +1391,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
       faseWaipe,
       faseProjetoManual,
       faseProjetoDerivada: derivarFaseProjeto(fasesItens),
+      urgencia: sanearUrgencia(estadoProjeto.urgencia),
       // Só relevante enquanto etapaAtual === "proposta" (ou como histórico do
       // que foi proposto, depois de promovido) — arrays vazios/null nos
       // demais casos.
@@ -1672,6 +1716,12 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     faseProjetoManual: 'faseProjetoManual' in corpo
       ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
       : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null),
+    // Urgencia — mesmo padrao: so muda quando vem no corpo, senao o spread
+    // de estadoAtual (logo acima) ja preserva. So repete aqui pra sanear
+    // caso venha um valor invalido no corpo. NUNCA usar a chave
+    // "prioridade" aqui — ela já é a ordem dos agentes Waipe (linha acima),
+    // um array; sobrescrever com a urgência destruiria esse array.
+    ...('urgencia' in corpo ? { urgencia: sanearUrgencia(corpo.urgencia) } : {}),
     // Dados de identificação do cliente — só muda quando vem no corpo (edição
     // vinda do "Resumo do projeto"), senão preserva o que já estava gravado,
     // mesmo padrão de faseProjetoManual logo acima.
@@ -2205,6 +2255,23 @@ function sanearListaEmails(lista) {
   return validos;
 }
 
+/**
+ * Monta as linhas `**Campo:**` da description de uma reserva — TODO ponto
+ * que grava uma reserva passa por aqui, pra nunca mais esquecer de
+ * preservar um campo ao reescrever a description inteira (foi assim que
+ * convidados quase se perdeu num reescrita anterior de atualizar-reserva).
+ */
+function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId }) {
+  return [
+    projetoId ? `**Projeto:** ${projetoId}` : null,
+    linkReuniao ? `**Link:** ${linkReuniao}` : null,
+    convidados && convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
+    status && status !== 'agendado' ? `**Status:** ${status}` : null,
+    reagendadoPor ? `**ReagendadoPor:** ${reagendadoPor}` : null,
+    proximaReservaId ? `**ProximaReservaId:** ${proximaReservaId}` : null,
+  ].filter(Boolean).join('\n\n');
+}
+
 function reservaParaFora(t) {
   return {
     id: t.id,
@@ -2216,6 +2283,9 @@ function reservaParaFora(t) {
     projetoId: projetoDaDescricaoReserva(t.description) || null,
     linkReuniao: linkDaDescricaoReserva(t.description) || '',
     convidados: convidadosDaDescricaoReserva(t.description),
+    status: statusDaDescricaoReserva(t.description),
+    reagendadoPor: reagendadoPorDaDescricaoReserva(t.description) || null,
+    proximaReservaId: proximaReservaIdDaDescricaoReserva(t.description) || null,
   };
 }
 
@@ -2223,6 +2293,62 @@ async function listarReservasAcao(res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   const tasks = await listarReservas();
   return res.status(200).json({ reservas: tasks.map(reservaParaFora) });
+}
+
+/**
+ * Miolo comum de "criar uma reserva de verdade": checa conflito interno
+ * (contra as reservas já registradas) e, se o ISM tiver conectado o
+ * Google, consulta disponibilidade REAL e cria o Meet automático. Usada
+ * tanto por criar-reserva (HTTP) quanto por reagendar-reserva — o novo
+ * horário de um reagendamento passa pela MESMA checagem de disponibilidade
+ * que qualquer reserva nova, não um atalho.
+ *
+ * Devolve `{ erro: { status, corpo } }` em caso de conflito (interno ou do
+ * Google) — quem chama só precisa repassar pro `res` — ou `{ linkReuniao }`
+ * em caso de sucesso (`linkReuniao` fica `null` se o ISM não conectou).
+ */
+async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados }) {
+  const existentes = await listarReservas();
+  const conflito = existentes
+    .filter((t) => Number(t.assignees?.[0]?.id) === ismId)
+    .find((t) => Number(t.start_date) < fim && Number(t.due_date) > inicio);
+  if (conflito) {
+    return {
+      erro: {
+        status: 409,
+        corpo: { error: 'Este ISM já tem reserva nesse horário.', code: 'conflito_horario', conflito: reservaParaFora(conflito) },
+      },
+    };
+  }
+
+  // Se o ISM ja conectou a propria agenda do Google: checa disponibilidade
+  // REAL (nao so contra as reservas ja registradas aqui) e cria a reuniao
+  // com Meet automatico. Sem conexao, comportamento identico ao de sempre —
+  // ninguem fica bloqueado por nao ter conectado ainda.
+  let linkReuniao = null;
+  const tokenGoogle = await obterTokenGoogle(ismId);
+  if (tokenGoogle) {
+    let accessToken;
+    try {
+      accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
+    } catch (e) {
+      if (!(e instanceof ErroGoogle)) throw e;
+      accessToken = null;
+    }
+    if (accessToken) {
+      const ocupado = await consultarFreeBusy(accessToken, inicio, fim);
+      if (ocupado) {
+        return {
+          erro: {
+            status: 409,
+            corpo: { error: 'Este ISM tem outro compromisso na agenda do Google nesse horário.', code: 'conflito_horario_google', conflito: ocupado },
+          },
+        };
+      }
+      linkReuniao = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados });
+    }
+  }
+  return { linkReuniao };
 }
 
 async function criarReservaAcao(req, res, sessao) {
@@ -2269,54 +2395,12 @@ async function criarReservaAcao(req, res, sessao) {
 
   const convidados = sanearListaEmails(corpo.convidados);
 
-  // Conflito: mesma pessoa, intervalos que se cruzam. Checa contra a lista
-  // inteira de reservas (é pequena — só os horários já marcados).
-  const existentes = await listarReservas();
-  const conflito = existentes
-    .filter((t) => Number(t.assignees?.[0]?.id) === ismId)
-    .find((t) => Number(t.start_date) < fim && Number(t.due_date) > inicio);
-  if (conflito) {
+  const resultado = await criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados });
+  if (resultado.erro) {
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(409).json({
-      error: 'Este ISM já tem reserva nesse horário.',
-      code: 'conflito_horario',
-      conflito: reservaParaFora(conflito),
-    });
+    return res.status(resultado.erro.status).json(resultado.erro.corpo);
   }
-
-  // Se o ISM ja conectou a propria agenda do Google: checa disponibilidade
-  // REAL (nao so contra as reservas ja registradas aqui) e cria a reuniao
-  // com Meet automatico. Sem conexao, comportamento identico ao de sempre —
-  // ninguem fica bloqueado por nao ter conectado ainda.
-  let linkReuniao = null;
-  const tokenGoogle = await obterTokenGoogle(ismId);
-  if (tokenGoogle) {
-    let accessToken;
-    try {
-      accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
-    } catch (e) {
-      if (!(e instanceof ErroGoogle)) throw e;
-      accessToken = null;
-    }
-    if (accessToken) {
-      const ocupado = await consultarFreeBusy(accessToken, inicio, fim);
-      if (ocupado) {
-        res.setHeader('Cache-Control', 'no-store');
-        return res.status(409).json({
-          error: 'Este ISM tem outro compromisso na agenda do Google nesse horário.',
-          code: 'conflito_horario_google',
-          conflito: ocupado,
-        });
-      }
-      linkReuniao = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados });
-    }
-  }
-
-  const linhasDescricao = [
-    projetoId ? `**Projeto:** ${projetoId}` : null,
-    linkReuniao ? `**Link:** ${linkReuniao}` : null,
-    convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
-  ].filter(Boolean);
+  const linkReuniao = resultado.linkReuniao;
 
   const nova = await criarReserva({
     name: titulo,
@@ -2325,7 +2409,7 @@ async function criarReservaAcao(req, res, sessao) {
     due_date: fim,
     due_date_time: true,
     assignees: [ismId],
-    markdown_description: linhasDescricao.join('\n\n'),
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados }),
   });
   return res.status(200).json({ ok: true, id: nova.id, linkReuniao, convidados });
 }
@@ -2364,14 +2448,196 @@ async function atualizarReservaAcao(req, res, sessao) {
   const convidados = Array.isArray(corpo.convidados)
     ? sanearListaEmails(corpo.convidados)
     : convidadosDaDescricaoReserva(tarefa.description);
-  const linhas = [
-    projetoId ? `**Projeto:** ${projetoId}` : null,
-    linkReuniao ? `**Link:** ${linkReuniao}` : null,
-    convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
-  ].filter(Boolean);
+  // Comparecimento/reagendamento nunca muda por aqui — essa acao so cola o
+  // link manualmente. Preserva sempre o que ja tinha (senao colar um link
+  // apagaria um "compareceu"/"reagendado" ja marcado).
+  const status = statusDaDescricaoReserva(tarefa.description);
+  const reagendadoPor = reagendadoPorDaDescricaoReserva(tarefa.description);
+  const proximaReservaId = proximaReservaIdDaDescricaoReserva(tarefa.description);
 
-  await atualizarTask(corpo.id, { markdown_description: linhas.join('\n\n') });
+  await atualizarTask(corpo.id, {
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId }),
+  });
   return res.status(200).json({ ok: true });
+}
+
+async function marcarComparecimentoReservaAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+  const status = corpo.status === 'compareceu' || corpo.status === 'nao_compareceu' ? corpo.status : null;
+  if (!status) {
+    return erro(res, 400, 'status_invalido', 'status precisa ser "compareceu" ou "nao_compareceu".');
+  }
+
+  const tarefa = await obterTask(corpo.id);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
+    return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
+  }
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
+  }
+
+  await atualizarTask(corpo.id, {
+    markdown_description: linhasDescricaoReserva({
+      projetoId: projetoDaDescricaoReserva(tarefa.description),
+      linkReuniao: linkDaDescricaoReserva(tarefa.description),
+      convidados: convidadosDaDescricaoReserva(tarefa.description),
+      status,
+    }),
+  });
+  return res.status(200).json({ ok: true, status });
+}
+
+/**
+ * Marca a reserva atual como reagendada (com quem pediu) e cria uma reserva
+ * NOVA com o novo horário — mesmo caminho de criar-reserva (conflito +
+ * Google/Meet), reaproveitando título/projeto/ISM/convidados da antiga. A
+ * antiga não é apagada: vira histórico (Status=reagendado), ligada à nova
+ * por ProximaReservaId — é esse rastro que alimenta as estatísticas do
+ * relatório de finalização (quantos reagendamentos, por quem).
+ */
+async function reagendarReservaAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+  const reagendadoPor = corpo.reagendadoPor === 'cliente' || corpo.reagendadoPor === 'londrisoft' ? corpo.reagendadoPor : null;
+  if (!reagendadoPor) {
+    return erro(res, 400, 'reagendado_por_invalido', 'Informe quem pediu o reagendamento: "londrisoft" ou "cliente".');
+  }
+  const novoInicio = epocaOuNula(corpo.novoInicio);
+  const novoFim = epocaOuNula(corpo.novoFim);
+  if (novoInicio === null || novoFim === null || novoFim <= novoInicio) {
+    return erro(res, 400, 'horario_invalido', 'Novo início e fim precisam ser válidos, com fim depois do início.');
+  }
+  if (novoFim - novoInicio > RESERVA_DURACAO_MAX_MS) {
+    return erro(res, 400, 'horario_invalido', 'Reserva não pode passar de 24h.');
+  }
+
+  const tarefa = await obterTask(corpo.id);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
+    return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
+  }
+  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+    return erro(res, 403, 'fora_do_escopo', 'Você só pode reagendar reservas da própria agenda.');
+  }
+  const statusAtual = statusDaDescricaoReserva(tarefa.description);
+  if (statusAtual !== 'agendado') {
+    return erro(res, 409, 'reserva_ja_resolvida', 'Esta reserva já foi marcada como comparecida/não comparecida/reagendada.');
+  }
+
+  const ismId = Number(tarefa.assignees?.[0]?.id);
+  const titulo = texto(tarefa.name, 200);
+  const projetoId = projetoDaDescricaoReserva(tarefa.description);
+  const convidados = convidadosDaDescricaoReserva(tarefa.description);
+
+  const resultado = await criarReservaComGoogle({ titulo, ismId, inicio: novoInicio, fim: novoFim, convidados });
+  if (resultado.erro) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(resultado.erro.status).json(resultado.erro.corpo);
+  }
+
+  const nova = await criarReserva({
+    name: titulo,
+    start_date: novoInicio,
+    start_date_time: true,
+    due_date: novoFim,
+    due_date_time: true,
+    assignees: [ismId],
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao: resultado.linkReuniao, convidados }),
+  });
+
+  await atualizarTask(corpo.id, {
+    markdown_description: linhasDescricaoReserva({
+      projetoId,
+      linkReuniao: linkDaDescricaoReserva(tarefa.description),
+      convidados,
+      status: 'reagendado',
+      reagendadoPor,
+      proximaReservaId: nova.id,
+    }),
+  });
+
+  return res.status(200).json({ ok: true, id: nova.id, linkReuniao: resultado.linkReuniao });
+}
+
+const DISPONIBILIDADE_JANELA_MAX_MS = 60 * 24 * 60 * 60 * 1000; // 60 dias — teto pra nao virar varredura enorme
+
+/**
+ * Blocos ocupados de um ISM num intervalo — pro calendário visual de
+ * agendamento (mostra dia/horário já tomado antes de tentar registrar).
+ * Junta reservas internas + agenda REAL do Google (quando conectado, via
+ * listarEventos — o mesmo usado pelo sincronismo reverso). Não deduplica
+ * uma reserva nossa contra o espelho dela no Google: o mesmo intervalo
+ * pintado duas vezes não muda a informação mostrada. Só leitura — sem
+ * exigir podeEscrever, qualquer sessão pode consultar pra agendar.
+ */
+async function disponibilidadeIsmAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const ismId = Number(req.query?.ismId);
+  if (!ISM_IDS_VALIDOS.has(ismId)) {
+    return erro(res, 400, 'ism_invalido', 'Selecione um ISM válido.');
+  }
+  const inicio = epocaOuNula(req.query?.inicio);
+  const fim = epocaOuNula(req.query?.fim);
+  if (inicio === null || fim === null || fim <= inicio) {
+    return erro(res, 400, 'intervalo_invalido', 'Início e fim precisam ser válidos, com fim depois do início.');
+  }
+  if (fim - inicio > DISPONIBILIDADE_JANELA_MAX_MS) {
+    return erro(res, 400, 'intervalo_invalido', 'Intervalo não pode passar de 60 dias.');
+  }
+
+  const reservas = await listarReservas();
+  const ocupados = reservas
+    .filter((t) => Number(t.assignees?.[0]?.id) === ismId)
+    .filter((t) => Number(t.start_date) < fim && Number(t.due_date) > inicio)
+    .map((t) => ({ inicio: Number(t.start_date) || null, fim: Number(t.due_date) || null, titulo: texto(t.name, 200) }));
+
+  const tokenGoogle = await obterTokenGoogle(ismId);
+  if (tokenGoogle) {
+    try {
+      const accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
+      const eventos = await listarEventos(accessToken, inicio, fim);
+      for (const ev of eventos) {
+        const inicioEvento = Date.parse(ev.start?.dateTime || ev.start?.date || '');
+        const fimEvento = Date.parse(ev.end?.dateTime || ev.end?.date || '');
+        if (!Number.isFinite(inicioEvento) || !Number.isFinite(fimEvento)) continue;
+        ocupados.push({ inicio: inicioEvento, fim: fimEvento, titulo: texto(ev.summary, 200) || 'Compromisso' });
+      }
+    } catch (e) {
+      // Token expirado/revogado — mostra so as reservas internas em vez de
+      // derrubar a tela (mesma tolerancia de sincronizar-agendamentos-google).
+      if (!(e instanceof ErroGoogle)) throw e;
+    }
+  }
+
+  return res.status(200).json({ ocupados });
 }
 
 async function cancelarReservaAcao(req, res, sessao) {

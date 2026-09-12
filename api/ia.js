@@ -55,9 +55,13 @@ import {
   csmDaDescricaoImplantacao,
   ISM_OPCOES,
   listarComentarios,
+  listarReservas,
   LISTA_IMPLANTACOES_WAIPE,
   obterTask,
   parseWaipeState,
+  projetoDaDescricaoReserva,
+  reagendadoPorDaDescricaoReserva,
+  statusDaDescricaoReserva,
 } from './_lib/clickup.js';
 import { telefoneParaE164, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
@@ -467,7 +471,7 @@ const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código), neste formato exato:
 {"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia se os resumos não derem sinal de causa específica de atraso, senão uma frase curta","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada"}
 
-Regras: "satisfacaoPercebida" deve ser "indeterminada" quando os resumos não tiverem sinal suficiente pra inferir isso — é esperado e aceitável, não force uma resposta só porque o campo existe. "riscoPercebido" reflete o risco de o cliente terminar insatisfeito ou com algo mal resolvido, não risco comercial. "causaDaDemora" só quando houver sinal claro (ex: vários reagendamentos, demora do cliente em responder, problema técnico recorrente).`;
+Regras: "satisfacaoPercebida" deve ser "indeterminada" quando os resumos não tiverem sinal suficiente pra inferir isso — é esperado e aceitável, não force uma resposta só porque o campo existe. "riscoPercebido" reflete o risco de o cliente terminar insatisfeito ou com algo mal resolvido, não risco comercial. "causaDaDemora" só quando houver sinal claro (ex: vários reagendamentos, demora do cliente em responder, problema técnico recorrente) — se os dados objetivos mostrarem vários reagendamentos ou não comparecimentos do cliente, isso já é sinal suficiente pra preencher esse campo.`;
 
 async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
   let corpo;
@@ -500,10 +504,24 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
   const diasEmAberto = Number.isFinite(Number(projeto.date_created))
     ? Math.max(0, Math.round((Date.now() - Number(projeto.date_created)) / 86400000))
     : null;
+
+  // Comparecimento/reagendamento das reservas desse projeto — fato objetivo
+  // pro relatorio (nao rascunho da IA), usado tambem pra disputa de
+  // reembolso/multa: mostra se a demora foi falta do cliente ou nossa.
+  const reservasDoProjeto = (await listarReservas()).filter((t) => projetoDaDescricaoReserva(t.description) === projeto.id);
+  const naoComparecimentos = reservasDoProjeto.filter((t) => statusDaDescricaoReserva(t.description) === 'nao_compareceu').length;
+  const reservasReagendadas = reservasDoProjeto.filter((t) => statusDaDescricaoReserva(t.description) === 'reagendado');
+  const reagendamentos = reservasReagendadas.length;
+  const reagendamentosLondrisoft = reservasReagendadas.filter((t) => reagendadoPorDaDescricaoReserva(t.description) === 'londrisoft').length;
+  const reagendamentosCliente = reservasReagendadas.filter((t) => reagendadoPorDaDescricaoReserva(t.description) === 'cliente').length;
+
   const dadosObjetivos = [
     diasEmAberto !== null ? `Dias em aberto: ${diasEmAberto}.` : null,
     `CSM: ${csm || '—'}.`,
     `ISM responsável: ${ismNomes.length ? ismNomes.join(', ') : '—'}.`,
+    naoComparecimentos || reagendamentos
+      ? `Não comparecimentos do cliente: ${naoComparecimentos}. Reagendamentos: ${reagendamentos} (${reagendamentosLondrisoft} por nós, ${reagendamentosCliente} pelo cliente).`
+      : null,
   ].filter(Boolean).join(' ');
 
   const mensagem = `${dadosObjetivos}\n\nResumos registrados ao longo do projeto:\n\n${resumosRegistrados.join('\n\n---\n\n')}`;
@@ -529,6 +547,13 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
     causaDaDemora: texto(parsed.causaDaDemora, 500),
     satisfacaoPercebida: SATISFACAO_PERCEBIDA_VALIDOS.has(parsed.satisfacaoPercebida) ? parsed.satisfacaoPercebida : 'indeterminada',
     resumosConsiderados: resumosRegistrados.length,
+    // Fatos objetivos (nao rascunho da IA pra revisar) — calculados aqui,
+    // nao inventados pelo modelo.
+    diasEmAberto,
+    naoComparecimentos,
+    reagendamentos,
+    reagendamentosLondrisoft,
+    reagendamentosCliente,
   });
 }
 
