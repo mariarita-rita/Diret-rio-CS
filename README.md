@@ -28,6 +28,13 @@ Nunca escreva nenhum destes valores em arquivo do repositório.
 | `UMBLER_ORGANIZATION_ID` | Id da organização no Umbler Talk (`GET /v1/members/me/` devolve a lista)                      | `AB_12-xyzEXAMPLE` |
 | `UMBLER_CHANNEL_ID`      | Id do canal (número de WhatsApp) usado para iniciar a conversa — hoje o canal "CSQ/ISM"       | `AB_12-xyzEXAMPLE` |
 | `UMBLER_WEBHOOK_TOKEN`   | Token compartilhado que protege `/api/umbler-webhook` (o Umbler não assina o payload, então isso evita chamada forjada) | `<24 bytes aleatórios em base64url>` |
+| `SUPABASE_URL`           | URL do projeto Supabase usado pela Central de Treinamento (trilhas, clientes, e-mails, progresso) | `https://xxxxxxxxxxxx.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave `service_role` do mesmo projeto — só o servidor a usa, nunca chega ao navegador | `eyJhbGciOi...` |
+
+**Setup do Supabase (uma vez):** crie um projeto em supabase.com, cole o
+conteúdo de `sql/trilhas-schema.sql` no SQL Editor do projeto e rode. Esse
+arquivo é só referência — o app nunca o executa sozinho, ele apenas fala com
+as tabelas via REST depois de criadas.
 
 Setup no Google Cloud Console: criar um projeto, ativar a **Google Calendar
 API**, configurar a tela de consentimento OAuth com **Audience = Internal**
@@ -62,6 +69,19 @@ vez, manualmente, dentro do próprio painel do Umbler Talk:
    (`marcar-conversa-vista`, por identidade — `sessao.nome` — então CSM,
    gestão e o(s) ISM(s) têm cada um o próprio estado de "já vi").
 
+**Central de Treinamento (trilhas de vídeo para clientes):** duas páginas
+novas. `trilhas-admin.html` é interna (mesma sessão `cs_sessao` de
+`implantacao-waipe.html`/`dashboard_carteiras.html`) — cria trilhas por
+produto, adiciona vídeos do YouTube, sincroniza a lista de clientes a partir
+da Carteira do ClickUp (botão manual, não automático — produto recém-ativado
+só libera a trilha depois do próximo clique em "Sincronizar") e cadastra os
+e-mails autorizados de cada cliente (o ClickUp não tem e-mail estruturado na
+Carteira). `central-cliente-trilhas.html` é a página do cliente: login por
+e-mail + a senha única de `AUTH_CLIENTE_TRILHAS`, mostra só as trilhas dos
+produtos que aquele cliente tem ativos, e marca um vídeo como concluído ao
+passar de 90% da duração (não precisa chegar ao fim). O progresso alimenta a
+aba Indicadores de `implantacao-waipe.html`.
+
 ### Sessão
 
 | Variável         | Para que serve                                              | Placeholder |
@@ -93,6 +113,7 @@ Uma variável por perfil. O valor é sempre o **hash**, no formato
 | `AUTH_ISM_BRUNO`      | Bruno Vaz         | `ism`      | implantação (igual gestão), agenda só a própria |
 | `AUTH_ISM_ERICA`      | Erica Fernanda    | `ism`      | implantação (igual gestão), agenda só a própria |
 | `AUTH_ISM_AUXILIAR`   | Daiane / Aline (senha compartilhada) | `ism` | implantação (igual gestão), agenda de qualquer ISM |
+| `AUTH_CLIENTE_TRILHAS` | Senha única e global de todos os clientes na Central de Treinamento (`central-cliente-trilhas.html`) — o e-mail (cadastrado em `trilhas-admin.html`) é quem identifica o cliente, não a senha | — |
 
 Nível `ism`: sem acesso nenhum a carteira/metas/cliente (dados financeiros) nem
 ao pipeline de proposta (criar/salvar-proposta/confirmar-fechamento — isso é

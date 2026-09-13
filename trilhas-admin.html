@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Trilhas de Treinamento</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap');
+
+  :root{
+    --azul:#3A86FF; --profundo:#0A41B4;
+    --quasebranco:#F0F4FF;
+    --bg:#F7F8FC; --surface:#FFFFFF; --surface-2:#EEF2FC;
+    --border:#E2E7F5; --border-strong:#C9D3EC;
+    --ink:#101033; --ink-2:#3A3F5C; --muted:#5C6180; --muted-2:#8A8FB0;
+    --success:#16A34A; --success-bg:#ECFDF5;
+    --warning:#B45309; --warning-bg:#FFFBEB;
+    --danger:#B91C1C; --danger-bg:#FEF2F2;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1024; --surface:#171933; --surface-2:#1F2242;
+      --border:#2B2E56; --border-strong:#3A3D6B;
+      --ink:#EDEEFA; --ink-2:#C7C9E8; --muted:#9498C2; --muted-2:#6A6E9C;
+      --success:#4ADE80; --success-bg:#0F2A1B;
+      --warning:#FBBF24; --warning-bg:#2A2112;
+      --danger:#F87171; --danger-bg:#2A1515;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1024; --surface:#171933; --surface-2:#1F2242;
+    --border:#2B2E56; --border-strong:#3A3D6B;
+    --ink:#EDEEFA; --ink-2:#C7C9E8; --muted:#9498C2; --muted-2:#6A6E9C;
+    --success:#4ADE80; --success-bg:#0F2A1B;
+    --warning:#FBBF24; --warning-bg:#2A2112;
+    --danger:#F87171; --danger-bg:#2A1515;
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; line-height:1.55;}
+  h1,h2,h3{font-family:Poppins,Inter,sans-serif; margin:0; color:var(--ink);}
+  .page{max-width:960px; margin:0 auto; padding:28px 20px 90px;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:18px; margin-bottom:22px; border-bottom:1px solid var(--border);}
+  .topbar h1{font-size:19px; font-weight:800;}
+  .topbar p{margin:2px 0 0; font-size:12.5px; color:var(--muted);}
+
+  .tabs{display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:4px; margin-bottom:22px; width:fit-content;}
+  .tab-btn{appearance:none; border:none; background:transparent; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; color:var(--muted); padding:9px 15px; border-radius:9px;}
+  .tab-btn.active{background:var(--surface); color:var(--profundo);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px;}
+  .card h2{font-size:15px; font-weight:700; margin-bottom:10px;}
+  .form-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
+  .form-input, select.form-input{padding:9px 11px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px; flex:1; min-width:160px;}
+  .btn{background:var(--azul); color:#fff; border:none; font-family:inherit; font-size:13px; font-weight:700; padding:9px 16px; border-radius:9px; cursor:pointer; white-space:nowrap;}
+  .btn:hover{background:var(--profundo);}
+  .btn:disabled{background:var(--border-strong); color:var(--muted-2); cursor:not-allowed;}
+  .btn-danger{background:transparent; color:var(--danger); border:1px solid var(--danger); font-family:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;}
+  .btn-ghost{background:transparent; color:var(--muted); border:1px solid var(--border-strong); font-family:inherit; font-size:12px; font-weight:600; padding:5px 10px; border-radius:7px; cursor:pointer;}
+
+  .trilha-bloco{border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px;}
+  .trilha-bloco.arquivada{opacity:.55;}
+  .trilha-bloco-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;}
+  .produto-tag{display:inline-block; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:20px; background:var(--surface-2); color:var(--profundo); margin-bottom:4px;}
+  .video-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--border); font-size:13px;}
+  .video-row:first-child{border-top:none;}
+  .msg{font-size:12.5px; margin-top:8px; min-height:16px;}
+  .msg.erro{color:var(--danger);}
+  .msg.ok{color:var(--success);}
+  table.simples{width:100%; font-size:13px; border-collapse:collapse;}
+  table.simples th, table.simples td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--border);}
+  table.simples th{font-size:11px; text-transform:uppercase; color:var(--muted); letter-spacing:.04em;}
+  .vazio{font-size:13px; color:var(--muted); padding:6px 0;}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div>
+      <h1>Admin — Trilhas de Treinamento</h1>
+      <p>Uso interno · gestão/CSM/ISM</p>
+    </div>
+  </header>
+  <div id="raiz"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var raiz = document.getElementById("raiz");
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[c];
+    });
+  }
+  function tratarResposta(r){
+    return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+  }
+  function apiGet(path){ return fetch(path, { credentials: "same-origin" }).then(tratarResposta); }
+  function apiPost(path, body){
+    return fetch(path, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(tratarResposta);
+  }
+
+  // ---------- Login (mesma sessão interna de implantacao-waipe.html / dashboard_carteiras.html) ----------
+  function renderLogin(){
+    raiz.innerHTML =
+      '<div class="card" style="max-width:380px;margin:60px auto;">' +
+        '<h2 style="margin-bottom:6px;">Entrar</h2>' +
+        '<p style="font-size:12.5px;color:var(--muted);margin:0 0 14px;">Sessão interna — mesma senha do painel de implantação.</p>' +
+        '<input type="password" id="loginSenha" class="form-input" style="width:100%;margin-bottom:10px;" placeholder="Senha de acesso">' +
+        '<button type="button" class="btn" style="width:100%;" id="btnEntrar">Entrar</button>' +
+        '<div class="msg erro" id="loginErro"></div>' +
+      '</div>';
+    var senha = document.getElementById("loginSenha");
+    var btn = document.getElementById("btnEntrar");
+    var erroEl = document.getElementById("loginErro");
+    function tentar(){
+      if (!senha.value){ erroEl.textContent = "Digite a senha."; return; }
+      btn.disabled = true; btn.textContent = "Entrando...";
+      apiPost("/api/login", { senha: senha.value })
+        .then(function(){ iniciar(); })
+        .catch(function(e){
+          erroEl.textContent = (e && e.error) || "Senha incorreta.";
+          btn.disabled = false; btn.textContent = "Entrar";
+        });
+    }
+    btn.addEventListener("click", tentar);
+    senha.addEventListener("keydown", function(e){ if (e.key === "Enter") tentar(); });
+    senha.focus();
+  }
+
+  function tratar401(e){
+    if (e && e.code === "sessao_invalida"){ renderLogin(); return true; }
+    return false;
+  }
+
+  // ---------- Layout principal ----------
+  var PRODUTOS_SUGERIDOS = ["Waipe","Analytics Pro","IA Bime","Datalab","Simplaz Bronze","Simplaz Prata","Simplaz Ouro","Gestor","Unique"];
+
+  function iniciar(){
+    raiz.innerHTML =
+      '<div class="tabs">' +
+        '<button class="tab-btn active" data-tab="trilhas">Trilhas</button>' +
+        '<button class="tab-btn" data-tab="clientes">Clientes &amp; E-mails</button>' +
+      '</div>' +
+      '<section class="panel active" id="panel-trilhas"></section>' +
+      '<section class="panel" id="panel-clientes"></section>';
+
+    var panels = { trilhas: document.getElementById("panel-trilhas"), clientes: document.getElementById("panel-clientes") };
+    raiz.querySelectorAll(".tab-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        raiz.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
+        btn.classList.add("active");
+        Object.keys(panels).forEach(function(k){ panels[k].classList.remove("active"); });
+        panels[btn.getAttribute("data-tab")].classList.add("active");
+      });
+    });
+
+    carregarTrilhas();
+    carregarClientes();
+  }
+
+  // ---------- Aba Trilhas ----------
+  function carregarTrilhas(){
+    var root = document.getElementById("panel-trilhas");
+    root.innerHTML = '<div class="vazio">Carregando...</div>';
+    apiGet("/api/trilhas-admin").then(function(j){ renderTrilhas(root, j.trilhas || []); })
+      .catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
+  }
+
+  function renderTrilhas(root, trilhas){
+    var porProduto = {};
+    trilhas.forEach(function(t){ (porProduto[t.produto] = porProduto[t.produto] || []).push(t); });
+
+    var html =
+      '<div class="card">' +
+        '<h2>Nova trilha</h2>' +
+        '<div class="form-row">' +
+          '<input type="text" id="novaTitulo" class="form-input" placeholder="Título da trilha">' +
+          '<input type="text" id="novoProduto" class="form-input" list="produtosSugeridos" placeholder="Produto (ex: Simplaz Ouro)">' +
+          '<datalist id="produtosSugeridos">' + PRODUTOS_SUGERIDOS.map(function(p){ return '<option value="' + escapeHtml(p) + '">'; }).join("") + '</datalist>' +
+          '<button type="button" class="btn" id="btnCriarTrilha">Criar</button>' +
+        '</div>' +
+        '<div class="msg" id="msgNovaTrilha"></div>' +
+      '</div>';
+
+    Object.keys(porProduto).sort().forEach(function(produto){
+      html += '<h3 style="margin:18px 0 8px;font-size:14px;">' + escapeHtml(produto) + '</h3>';
+      porProduto[produto].forEach(function(t){
+        var videos = (t.trilha_videos || []).slice().sort(function(a,b){ return a.ordem - b.ordem; });
+        html +=
+          '<div class="trilha-bloco' + (t.ativa ? '' : ' arquivada') + '" data-trilha-id="' + t.id + '">' +
+            '<div class="trilha-bloco-head">' +
+              '<div><b>' + escapeHtml(t.titulo) + '</b>' + (t.ativa ? '' : ' <span class="produto-tag">arquivada</span>') + '</div>' +
+              '<button type="button" class="btn-ghost" data-arquivar-trilha="' + t.id + '" data-ativa="' + (!t.ativa) + '">' + (t.ativa ? 'Arquivar' : 'Reativar') + '</button>' +
+            '</div>' +
+            '<div class="videos-lista">' +
+              (videos.length
+                ? videos.map(function(v){
+                    return '<div class="video-row' + (v.ativo === false ? ' arquivada' : '') + '">' +
+                      '<span>' + escapeHtml(v.titulo) + ' <span style="color:var(--muted-2);">(' + escapeHtml(v.youtube_id) + ')</span></span>' +
+                      '<button type="button" class="btn-danger" data-arquivar-video="' + v.id + '" data-ativo="' + (v.ativo === false) + '">' + (v.ativo === false ? 'Reativar' : 'Arquivar') + '</button>' +
+                    '</div>';
+                  }).join("")
+                : '<div class="vazio">Nenhum vídeo ainda.</div>') +
+            '</div>' +
+            '<div class="form-row" style="margin-top:10px;">' +
+              '<input type="text" class="form-input" placeholder="Título do vídeo" data-novo-video-titulo="' + t.id + '">' +
+              '<input type="text" class="form-input" placeholder="Link ou ID do YouTube" data-novo-video-url="' + t.id + '">' +
+              '<button type="button" class="btn" data-add-video="' + t.id + '">Adicionar vídeo</button>' +
+            '</div>' +
+            '<div class="msg" data-msg-trilha="' + t.id + '"></div>' +
+          '</div>';
+      });
+    });
+
+    root.innerHTML = html;
+
+    document.getElementById("btnCriarTrilha").addEventListener("click", function(){
+      var titulo = document.getElementById("novaTitulo").value.trim();
+      var produto = document.getElementById("novoProduto").value.trim();
+      var msg = document.getElementById("msgNovaTrilha");
+      if (!titulo || !produto){ msg.className = "msg erro"; msg.textContent = "Preencha título e produto."; return; }
+      apiPost("/api/trilhas-admin", { acao: "criar_trilha", titulo: titulo, produto: produto })
+        .then(function(){ carregarTrilhas(); })
+        .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao criar trilha."; } });
+    });
+
+    root.querySelectorAll("[data-arquivar-trilha]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        apiPost("/api/trilhas-admin", { acao: "arquivar_trilha", id: btn.getAttribute("data-arquivar-trilha"), ativa: btn.getAttribute("data-ativa") === "true" })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ tratar401(e); });
+      });
+    });
+    root.querySelectorAll("[data-arquivar-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        apiPost("/api/trilhas-admin", { acao: "arquivar_video", id: btn.getAttribute("data-arquivar-video"), ativo: btn.getAttribute("data-ativo") === "true" })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ tratar401(e); });
+      });
+    });
+    root.querySelectorAll("[data-add-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var trilhaId = btn.getAttribute("data-add-video");
+        var tituloEl = root.querySelector('[data-novo-video-titulo="' + trilhaId + '"]');
+        var urlEl = root.querySelector('[data-novo-video-url="' + trilhaId + '"]');
+        var msg = root.querySelector('[data-msg-trilha="' + trilhaId + '"]');
+        if (!tituloEl.value.trim() || !urlEl.value.trim()){ msg.className = "msg erro"; msg.textContent = "Preencha título e link/ID."; return; }
+        apiPost("/api/trilhas-admin", { acao: "criar_video", trilhaId: trilhaId, titulo: tituloEl.value.trim(), youtube: urlEl.value.trim() })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao adicionar vídeo."; } });
+      });
+    });
+  }
+
+  // ---------- Aba Clientes & E-mails ----------
+  function carregarClientes(){
+    var root = document.getElementById("panel-clientes");
+    root.innerHTML = '<div class="vazio">Carregando...</div>';
+    apiGet("/api/trilhas-sync-clientes").then(function(j){ renderClientes(root, j.clientes || [], j.emails || []); })
+      .catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
+  }
+
+  function renderClientes(root, clientes, emails){
+    var emailsPorCliente = {};
+    emails.forEach(function(e){ (emailsPorCliente[e.cliente_id] = emailsPorCliente[e.cliente_id] || []).push(e); });
+
+    var html =
+      '<div class="card">' +
+        '<h2>Sincronizar com o ClickUp (Carteira)</h2>' +
+        '<p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Atualiza nome, CNPJ e produtos ativados de todos os clientes. Não roda sozinho — produto recém-ativado só libera a trilha depois de sincronizar de novo.</p>' +
+        '<button type="button" class="btn" id="btnSincronizar">Sincronizar agora</button>' +
+        '<div class="msg" id="msgSync"></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<h2>Clientes (' + clientes.length + ')</h2>' +
+        (clientes.length
+          ? '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Produtos</th><th>E-mails autorizados</th></tr></thead><tbody>' +
+              clientes.map(function(c){
+                var els = emailsPorCliente[c.id] || [];
+                return '<tr>' +
+                  '<td><b>' + escapeHtml(c.nome) + '</b><br><span style="color:var(--muted-2);font-size:11px;">' + escapeHtml(c.id_nucleo) + '</span></td>' +
+                  '<td>' + (c.produtos_ativos || []).map(function(p){ return '<span class="produto-tag">' + escapeHtml(p) + '</span>'; }).join(" ") + '</td>' +
+                  '<td>' +
+                    els.map(function(e){
+                      return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' + escapeHtml(e.email) +
+                        ' <button type="button" class="btn-danger" data-remover-email="' + e.id + '">remover</button></div>';
+                    }).join("") +
+                    '<div class="form-row" style="margin-top:6px;">' +
+                      '<input type="email" class="form-input" placeholder="novo e-mail" data-novo-email="' + c.id + '" style="min-width:140px;">' +
+                      '<button type="button" class="btn-ghost" data-add-email="' + c.id + '">Adicionar</button>' +
+                    '</div>' +
+                    '<div class="msg" data-msg-cliente="' + c.id + '"></div>' +
+                  '</td>' +
+                '</tr>';
+              }).join("") +
+            '</tbody></table></div>'
+          : '<div class="vazio">Nenhum cliente sincronizado ainda. Clique em "Sincronizar agora".</div>') +
+      '</div>';
+
+    root.innerHTML = html;
+
+    document.getElementById("btnSincronizar").addEventListener("click", function(){
+      var msg = document.getElementById("msgSync");
+      var btn = document.getElementById("btnSincronizar");
+      btn.disabled = true; btn.textContent = "Sincronizando...";
+      apiPost("/api/trilhas-sync-clientes", { acao: "sincronizar" })
+        .then(function(j){
+          msg.className = "msg ok";
+          msg.textContent = "OK — " + j.processados + " processados, " + (j.desativados || 0) + " desativados.";
+          carregarClientes();
+        })
+        .catch(function(e){
+          if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao sincronizar."; }
+        })
+        .then(function(){ btn.disabled = false; btn.textContent = "Sincronizar agora"; });
+    });
+
+    root.querySelectorAll("[data-remover-email]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        apiPost("/api/trilhas-sync-clientes", { acao: "remover_email", emailId: btn.getAttribute("data-remover-email") })
+          .then(function(){ carregarClientes(); })
+          .catch(function(e){ tratar401(e); });
+      });
+    });
+    root.querySelectorAll("[data-add-email]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var clienteId = btn.getAttribute("data-add-email");
+        var input = root.querySelector('[data-novo-email="' + clienteId + '"]');
+        var msg = root.querySelector('[data-msg-cliente="' + clienteId + '"]');
+        if (!input.value.trim()){ msg.className = "msg erro"; msg.textContent = "Informe um e-mail."; return; }
+        apiPost("/api/trilhas-sync-clientes", { acao: "adicionar_email", clienteId: clienteId, email: input.value.trim() })
+          .then(function(){ carregarClientes(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao adicionar e-mail."; } });
+      });
+    });
+  }
+
+  // ---------- Início ----------
+  apiGet("/api/login").then(function(){ iniciar(); }).catch(function(){ renderLogin(); });
+})();
+</script>
+</body>
+</html>

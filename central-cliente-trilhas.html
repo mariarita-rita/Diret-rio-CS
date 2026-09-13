@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Central de Treinamento — Londrisoft</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap');
+
+  :root{
+    --azul:#3A86FF; --profundo:#0A41B4; --claro:#A8C5FF;
+    --quasebranco:#F0F4FF;
+    --bg:#F7F8FC; --surface:#FFFFFF; --surface-2:#EEF2FC;
+    --border:#E2E7F5; --border-strong:#C9D3EC;
+    --ink:#101033; --ink-2:#3A3F5C; --muted:#5C6180; --muted-2:#8A8FB0;
+    --success:#16A34A; --success-bg:#ECFDF5;
+    --danger:#B91C1C; --danger-bg:#FEF2F2;
+    --shadow:0 1px 2px rgba(16,16,51,.05), 0 8px 24px rgba(16,16,51,.06);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0E1024; --surface:#171933; --surface-2:#1F2242;
+      --border:#2B2E56; --border-strong:#3A3D6B;
+      --ink:#EDEEFA; --ink-2:#C7C9E8; --muted:#9498C2; --muted-2:#6A6E9C;
+      --success:#4ADE80; --success-bg:#0F2A1B;
+      --danger:#F87171; --danger-bg:#2A1515;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1024; --surface:#171933; --surface-2:#1F2242;
+    --border:#2B2E56; --border-strong:#3A3D6B;
+    --ink:#EDEEFA; --ink-2:#C7C9E8; --muted:#9498C2; --muted-2:#6A6E9C;
+    --success:#4ADE80; --success-bg:#0F2A1B;
+    --danger:#F87171; --danger-bg:#2A1515;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; line-height:1.55;}
+  h1,h2,h3{font-family:Poppins,Inter,sans-serif; margin:0; color:var(--ink);}
+  .page{max-width:880px; margin:0 auto; padding:28px 20px 90px;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:16px; padding-bottom:18px; margin-bottom:22px; border-bottom:1px solid var(--border);}
+  .topbar h1{font-size:19px; font-weight:800;}
+  .topbar p{margin:2px 0 0; font-size:12.5px; color:var(--muted);}
+  .btn-sair{background:transparent; border:1px solid var(--border-strong); color:var(--muted); font-family:inherit; font-size:12.5px; font-weight:600; padding:7px 12px; border-radius:9px; cursor:pointer;}
+  .btn-sair:hover{color:var(--ink); border-color:var(--ink-2);}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; margin-bottom:16px;}
+  .form-input{width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:14px; margin-bottom:10px;}
+  .btn-flow{background:var(--azul); color:#fff; border:none; font-family:inherit; font-size:14px; font-weight:700; padding:11px 20px; border-radius:10px; cursor:pointer; width:100%;}
+  .btn-flow:hover{background:var(--profundo);}
+  .btn-flow:disabled{background:var(--border-strong); color:var(--muted-2); cursor:not-allowed;}
+  .erro-msg{color:var(--danger); font-size:12.5px; margin-top:8px; min-height:16px;}
+
+  .trilha{margin-bottom:14px;}
+  .trilha-head{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px;}
+  .trilha-head h2{font-size:15px; font-weight:700;}
+  .trilha-sub{font-size:12px; color:var(--muted);}
+  .barra{height:6px; border-radius:6px; background:var(--surface-2); overflow:hidden; margin-bottom:14px;}
+  .barra > div{height:100%; background:var(--success); border-radius:6px;}
+
+  .video-item{border:1px solid var(--border); border-radius:12px; margin-bottom:8px; overflow:hidden;}
+  .video-row{display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; background:var(--surface); font-size:13.5px;}
+  .video-row:hover{background:var(--surface-2);}
+  .video-check{flex-shrink:0; width:20px; height:20px; border-radius:50%; border:2px solid var(--border-strong); display:flex; align-items:center; justify-content:center; font-size:12px; color:transparent;}
+  .video-check.ok{border-color:var(--success); background:var(--success-bg); color:var(--success);}
+  .video-titulo{flex:1;}
+  .video-pct{font-size:11.5px; color:var(--muted-2);}
+  .video-player{display:none; background:#000;}
+  .video-player.aberto{display:block;}
+  .video-player iframe{width:100%; aspect-ratio:16/9; display:block; border:none;}
+
+  .vazio{font-size:13px; color:var(--muted); padding:8px 2px;}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div>
+      <h1>Central de Treinamento</h1>
+      <p>Londrisoft — trilhas de vídeo por produto contratado</p>
+    </div>
+    <button type="button" class="btn-sair" id="btnSair" style="display:none;">Sair</button>
+  </header>
+
+  <div id="raiz"></div>
+</div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+(function(){
+  "use strict";
+
+  var raiz = document.getElementById("raiz");
+  var btnSair = document.getElementById("btnSair");
+  var ytApiPronta = false;
+  var playerAtual = null;
+  var progressoTimer = null;
+
+  window.onYouTubeIframeAPIReady = function(){ ytApiPronta = true; };
+
+  function tratarResposta(r){
+    return r.json().then(function(j){ if (!r.ok) throw j; return j; });
+  }
+
+  function apiGet(path){
+    return fetch(path, { credentials: "same-origin" }).then(tratarResposta);
+  }
+  function apiPost(path, body){
+    return fetch(path, {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(tratarResposta);
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return { "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;" }[c];
+    });
+  }
+
+  // ---------- Login ----------
+  function renderLogin(mensagemErro){
+    btnSair.style.display = "none";
+    raiz.innerHTML =
+      '<div class="card" style="max-width:380px;margin:40px auto;">' +
+        '<h2 style="margin-bottom:4px;">Entrar</h2>' +
+        '<p style="font-size:12.5px;color:var(--muted);margin:0 0 16px;">Use o e-mail cadastrado pela Londrisoft.</p>' +
+        '<input type="email" id="loginEmail" class="form-input" placeholder="E-mail" autocomplete="username">' +
+        '<input type="password" id="loginSenha" class="form-input" placeholder="Senha" autocomplete="current-password">' +
+        '<button type="button" class="btn-flow" id="btnEntrar">Entrar</button>' +
+        '<div class="erro-msg" id="loginErro">' + escapeHtml(mensagemErro || "") + '</div>' +
+      '</div>';
+    var email = document.getElementById("loginEmail");
+    var senha = document.getElementById("loginSenha");
+    var btn = document.getElementById("btnEntrar");
+    var erroEl = document.getElementById("loginErro");
+    function tentar(){
+      if (!email.value || !senha.value){ erroEl.textContent = "Preencha e-mail e senha."; return; }
+      btn.disabled = true; btn.textContent = "Entrando...";
+      apiPost("/api/cliente-login", { email: email.value, senha: senha.value })
+        .then(function(){ carregarTrilhas(); })
+        .catch(function(e){
+          erroEl.textContent = (e && e.error) || "Não foi possível entrar.";
+          btn.disabled = false; btn.textContent = "Entrar";
+        });
+    }
+    btn.addEventListener("click", tentar);
+    senha.addEventListener("keydown", function(e){ if (e.key === "Enter") tentar(); });
+    email.focus();
+  }
+
+  btnSair.addEventListener("click", function(){
+    apiPost("/api/cliente-login?action=logout", {}).catch(function(){}).then(function(){ renderLogin(); });
+  });
+
+  // ---------- Trilhas ----------
+  function carregarTrilhas(){
+    raiz.innerHTML = '<div class="vazio">Carregando...</div>';
+    apiGet("/api/trilhas-cliente")
+      .then(function(j){
+        btnSair.style.display = "inline-block";
+        renderTrilhas(j.trilhas || []);
+      })
+      .catch(function(e){
+        if (e && e.code === "sessao_invalida"){ renderLogin(); return; }
+        raiz.innerHTML = '<div class="card"><div class="erro-msg">' + escapeHtml((e && e.error) || "Erro ao carregar trilhas.") + '</div></div>';
+      });
+  }
+
+  function renderTrilhas(trilhas){
+    if (!trilhas.length){
+      raiz.innerHTML = '<div class="card"><div class="vazio">Nenhuma trilha disponível para os produtos contratados ainda. Fale com seu CSM se isso não parecer certo.</div></div>';
+      return;
+    }
+    raiz.innerHTML = trilhas.map(function(t, i){
+      var pct = t.totalVideos ? Math.round((t.videosAssistidos / t.totalVideos) * 100) : 0;
+      return (
+        '<div class="card trilha" data-trilha="' + i + '">' +
+          '<div class="trilha-head">' +
+            '<h2>' + escapeHtml(t.titulo) + '</h2>' +
+            '<span class="trilha-sub">' + t.videosAssistidos + '/' + t.totalVideos + ' concluídos</span>' +
+          '</div>' +
+          (t.descricao ? '<p class="trilha-sub" style="margin:0 0 10px;">' + escapeHtml(t.descricao) + '</p>' : '') +
+          '<div class="barra"><div style="width:' + pct + '%"></div></div>' +
+          '<div class="videos" data-trilha-videos="' + i + '"></div>' +
+        '</div>'
+      );
+    }).join("");
+
+    trilhas.forEach(function(t, i){
+      var alvo = raiz.querySelector('[data-trilha-videos="' + i + '"]');
+      alvo.innerHTML = t.videos.map(function(v){
+        return (
+          '<div class="video-item" data-video-id="' + v.id + '">' +
+            '<div class="video-row" data-toggle="' + v.id + '" data-youtube="' + escapeHtml(v.youtubeId) + '">' +
+              '<span class="video-check' + (v.concluido ? ' ok' : '') + '">' + (v.concluido ? '✓' : '') + '</span>' +
+              '<span class="video-titulo">' + escapeHtml(v.titulo) + '</span>' +
+              '<span class="video-pct">' + (v.concluido ? 'Concluído' : (v.percentual ? v.percentual + '%' : '')) + '</span>' +
+            '</div>' +
+            '<div class="video-player" data-player="' + v.id + '"></div>' +
+          '</div>'
+        );
+      }).join("") || '<div class="vazio">Nenhum vídeo nesta trilha ainda.</div>';
+    });
+
+    raiz.querySelectorAll("[data-toggle]").forEach(function(row){
+      row.addEventListener("click", function(){
+        abrirVideo(row.getAttribute("data-toggle"), row.getAttribute("data-youtube"));
+      });
+    });
+  }
+
+  function pararProgresso(){
+    if (progressoTimer){ clearInterval(progressoTimer); progressoTimer = null; }
+  }
+
+  function enviarProgresso(videoId, percentual, segundos){
+    apiPost("/api/trilhas-marcar-assistido", {
+      trilhaVideoId: videoId, percentual: percentual, progressoSegundos: segundos
+    }).then(function(j){
+      var item = raiz.querySelector('.video-item[data-video-id="' + videoId + '"]');
+      if (!item) return;
+      var check = item.querySelector(".video-check");
+      var pctEl = item.querySelector(".video-pct");
+      if (j.concluido){
+        check.classList.add("ok"); check.textContent = "✓";
+        pctEl.textContent = "Concluído";
+      } else {
+        pctEl.textContent = (j.percentual || 0) + "%";
+      }
+    }).catch(function(){ /* progresso é best-effort — não interrompe a reprodução por causa disso */ });
+  }
+
+  function abrirVideo(videoId, youtubeId){
+    // Fecha o player aberto anteriormente (só um por vez).
+    raiz.querySelectorAll(".video-player.aberto").forEach(function(p){
+      if (p.getAttribute("data-player") !== videoId) { p.classList.remove("aberto"); p.innerHTML = ""; }
+    });
+    pararProgresso();
+    if (playerAtual && typeof playerAtual.destroy === "function"){
+      try { playerAtual.destroy(); } catch(e){}
+      playerAtual = null;
+    }
+
+    var container = raiz.querySelector('.video-player[data-player="' + videoId + '"]');
+    if (!container) return;
+    if (container.classList.contains("aberto")){
+      container.classList.remove("aberto");
+      container.innerHTML = "";
+      return;
+    }
+    container.classList.add("aberto");
+
+    function criarPlayer(){
+      if (!ytApiPronta || !window.YT || !window.YT.Player){
+        setTimeout(criarPlayer, 200);
+        return;
+      }
+      var div = document.createElement("div");
+      container.innerHTML = "";
+      container.appendChild(div);
+      playerAtual = new YT.Player(div, {
+        videoId: youtubeId,
+        playerVars: { rel: 0 },
+        events: {
+          onStateChange: function(ev){
+            if (ev.data === YT.PlayerState.PLAYING){
+              progressoTimer = setInterval(function(){
+                var atual = playerAtual.getCurrentTime();
+                var total = playerAtual.getDuration();
+                if (total > 0) enviarProgresso(videoId, (atual / total) * 100, atual);
+              }, 7000);
+            } else {
+              pararProgresso();
+            }
+            if (ev.data === YT.PlayerState.ENDED){
+              enviarProgresso(videoId, 100, playerAtual.getDuration());
+            }
+          }
+        }
+      });
+    }
+    criarPlayer();
+  }
+
+  // ---------- Início ----------
+  apiGet("/api/cliente-login").then(function(){ carregarTrilhas(); }).catch(function(){ renderLogin(); });
+})();
+</script>
+</body>
+</html>
