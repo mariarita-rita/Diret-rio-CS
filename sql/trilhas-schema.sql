@@ -31,18 +31,20 @@ create table clientes_emails (
 );
 create index idx_clientes_emails_cliente on clientes_emails (cliente_id);
 
--- Trilhas de treinamento, cada uma amarrada a um produto.
+-- Trilhas de treinamento. produtos é um array — uma trilha pode valer para
+-- vários produtos, e um array VAZIO significa "geral" (aparece pra todo
+-- cliente, independente do que ele ativou). Cada valor precisa bater com um
+-- valor de OUTROS_SRV (ex: "Simplaz Ouro") ou do plano base (Gestor/Unique).
 create table trilhas (
   id uuid primary key default gen_random_uuid(),
   titulo text not null,
   descricao text,
-  produto text not null,                -- precisa bater com um valor de OUTROS_SRV (ex: "Simplaz Ouro")
+  produtos text[] not null default '{}',
   ativa boolean not null default true,   -- arquivar preserva vídeos e histórico, só some da lista do cliente
   ordem integer not null default 0,
   criado_em timestamptz not null default now(),
   atualizado_em timestamptz not null default now()
 );
-create index idx_trilhas_produto on trilhas (produto) where ativa;
 
 -- Vídeos de cada trilha, na ordem de exibição.
 create table trilha_videos (
@@ -85,3 +87,11 @@ alter table clientes_emails enable row level security;
 alter table trilhas enable row level security;
 alter table trilha_videos enable row level security;
 alter table video_visualizacoes enable row level security;
+
+-- MIGRAÇÃO (rodar só se a tabela `trilhas` já existir com a coluna `produto`
+-- antiga, de um texto só — troca por `produtos`, um array, sem perder trilha
+-- nenhuma: cada uma migra pro array de 1 item com o produto que já tinha).
+alter table trilhas add column if not exists produtos text[] not null default '{}';
+update trilhas set produtos = array[produto] where produto is not null and produto <> '' and produtos = '{}';
+alter table trilhas drop column if exists produto;
+drop index if exists idx_trilhas_produto;

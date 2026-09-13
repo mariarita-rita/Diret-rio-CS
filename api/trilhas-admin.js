@@ -117,16 +117,31 @@ export default async function handler(req, res) {
   }
 }
 
+/**
+ * Aceita qualquer array e devolve uma lista de strings não-vazias, sem
+ * duplicatas, ou null se `v` nem é array. Array vazio é válido — significa
+ * trilha "geral" (aparece pra todo cliente, sem filtro de produto).
+ */
+function sanearProdutos(v) {
+  if (!Array.isArray(v)) return null;
+  const vistos = new Set();
+  for (const item of v) {
+    const s = texto(item, 100);
+    if (s) vistos.add(s);
+  }
+  return [...vistos];
+}
+
 async function executarAcao(acao, corpo, sessao, res) {
   // ── Trilhas e vídeos ──────────────────────────────────────────────────
   if (acao === 'criar_trilha') {
     const titulo = texto(corpo.titulo, 200);
-    const produto = texto(corpo.produto, 100);
-    if (!titulo || !produto) return erro(res, 400, 'campos_invalidos', 'Título e produto são obrigatórios.');
+    const produtos = sanearProdutos(corpo.produtos) ?? [];
+    if (!titulo) return erro(res, 400, 'campos_invalidos', 'Título é obrigatório.');
     const trilha = await criarTrilha({
       titulo,
       descricao: texto(corpo.descricao, 2000) || null,
-      produto,
+      produtos,
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
     });
     return res.status(200).json({ trilha });
@@ -138,7 +153,11 @@ async function executarAcao(acao, corpo, sessao, res) {
     const campos = {};
     if (corpo.titulo !== undefined) campos.titulo = texto(corpo.titulo, 200);
     if (corpo.descricao !== undefined) campos.descricao = texto(corpo.descricao, 2000) || null;
-    if (corpo.produto !== undefined) campos.produto = texto(corpo.produto, 100);
+    if (corpo.produtos !== undefined) {
+      const produtos = sanearProdutos(corpo.produtos);
+      if (produtos === null) return erro(res, 400, 'campos_invalidos', 'produtos deve ser uma lista.');
+      campos.produtos = produtos;
+    }
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
     const trilha = await editarTrilha(id, campos);
     return res.status(200).json({ trilha });

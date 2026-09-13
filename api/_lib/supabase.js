@@ -120,24 +120,29 @@ export async function removerEmailCliente(emailId) {
 /** Todas as trilhas com seus vídeos — visão do admin (inclui arquivadas). */
 export async function listarTrilhasAdmin() {
   return sb(
-    `/trilhas?select=*,trilha_videos(*)&order=produto.asc,ordem.asc`
+    `/trilhas?select=*,trilha_videos(*)&order=titulo.asc,ordem.asc`
   );
 }
 
-/** Trilhas ativas cujo produto está entre os informados — visão do cliente. */
-export async function listarTrilhasPorProdutos(produtos) {
-  if (!produtos.length) return [];
-  const lista = produtos.map((p) => enc(p)).join(',');
+/**
+ * Todas as trilhas ativas + vídeos, sem filtro de produto — quem chama (o
+ * endpoint do cliente) decide quais valem pra aquele cliente: `produtos`
+ * vazio na trilha significa "geral" (todo mundo vê), senão precisa dar
+ * overlap com os produtos ativados do cliente. Filtrar em memória em vez de
+ * na query evita a sintaxe (e a fragilidade) de filtro de overlap de array
+ * via PostgREST — o volume de trilhas não justifica a complexidade.
+ */
+export async function listarTrilhasAtivas() {
   return sb(
-    `/trilhas?ativa=eq.true&produto=in.(${lista})&select=id,titulo,descricao,produto,ordem,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos)&trilha_videos.ativo=eq.true&order=ordem.asc`
+    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos)&trilha_videos.ativo=eq.true&order=ordem.asc`
   );
 }
 
-export async function criarTrilha({ titulo, descricao, produto, ordem }) {
+export async function criarTrilha({ titulo, descricao, produtos, ordem }) {
   const linhas = await sb(`/trilhas`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
-    body: JSON.stringify([{ titulo, descricao: descricao || null, produto, ordem: ordem || 0 }]),
+    body: JSON.stringify([{ titulo, descricao: descricao || null, produtos: produtos || [], ordem: ordem || 0 }]),
   });
   return linhas?.[0] || null;
 }
@@ -175,10 +180,10 @@ export async function editarVideo(id, campos) {
   return linhas?.[0] || null;
 }
 
-/** Busca um vídeo + o produto da trilha dona dele (para checar posse no marcar-assistido). */
+/** Busca um vídeo + os produtos da trilha dona dele (para checar posse no marcar-assistido). */
 export async function buscarVideoComProduto(videoId) {
   const linhas = await sb(
-    `/trilha_videos?id=eq.${enc(videoId)}&select=id,trilha_id,ativo,trilhas(produto,ativa)`
+    `/trilha_videos?id=eq.${enc(videoId)}&select=id,trilha_id,ativo,trilhas(produtos,ativa)`
   );
   return linhas?.[0] || null;
 }
@@ -241,15 +246,22 @@ export async function upsertVisualizacao({ clienteId, email, trilhaVideoId, perc
 export async function indicadoresPorCliente() {
   const [clientes, trilhas, visualizacoes] = await Promise.all([
     sb(`/clientes?ativo=eq.true&select=id,id_nucleo,cnpj,nome,produtos_ativos`),
-    sb(`/trilhas?ativa=eq.true&select=id,produto,trilha_videos(id,ativo)`),
+    sb(`/trilhas?ativa=eq.true&select=id,produtos,trilha_videos(id,ativo)`),
     sb(`/video_visualizacoes?concluido=eq.true&select=cliente_id,trilha_video_id,concluido_em`),
   ]);
 
+  const videosGerais = new Set(); // trilhas sem produto (produtos = []) — contam pra todo cliente
   const videosPorProduto = new Map(); // produto -> Set(videoId)
   for (const t of trilhas || []) {
     const ativos = (t.trilha_videos || []).filter((v) => v.ativo !== false).map((v) => v.id);
-    if (!videosPorProduto.has(t.produto)) videosPorProduto.set(t.produto, new Set());
-    for (const id of ativos) videosPorProduto.get(t.produto).add(id);
+    if (!t.produtos || !t.produtos.length) {
+      for (const id of ativos) videosGerais.add(id);
+      continue;
+    }
+    for (const produto of t.produtos) {
+      if (!videosPorProduto.has(produto)) videosPorProduto.set(produto, new Set());
+      for (const id of ativos) videosPorProduto.get(produto).add(id);
+    }
   }
 
   const concluidosPorCliente = new Map(); // clienteId -> { videos: Set, ultimaAtividade }
@@ -266,7 +278,7 @@ export async function indicadoresPorCliente() {
   }
 
   return (clientes || []).map((c) => {
-    const disponiveisSet = new Set();
+    const disponiveisSet = new Set(videosGerais);
     for (const produto of c.produtos_ativos || []) {
       const set = videosPorProduto.get(produto);
       if (set) for (const id of set) disponiveisSet.add(id);

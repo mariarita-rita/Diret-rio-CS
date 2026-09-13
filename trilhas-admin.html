@@ -64,6 +64,11 @@
   .trilha-bloco.arquivada{opacity:.55;}
   .trilha-bloco-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px;}
   .produto-tag{display:inline-block; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:20px; background:var(--surface-2); color:var(--profundo); margin-bottom:4px;}
+  .produto-tag.geral{background:var(--success-bg); color:var(--success);}
+  .produtos-checklist{display:flex; flex-wrap:wrap; gap:6px 10px; margin-bottom:8px;}
+  .produtos-checklist label{display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-2);}
+  .produtos-checklist.disabled{opacity:.45; pointer-events:none;}
+  .geral-toggle{display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:10px;}
   .video-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--border); font-size:13px;}
   .video-row:first-child{border-top:none;}
   .msg{font-size:12.5px; margin-top:8px; min-height:16px;}
@@ -175,31 +180,70 @@
       .catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
   }
 
+  /** Checkboxes de produto — reaproveitado no form de criar e no de editar.
+   * `checados` inclui qualquer produto customizado que a trilha já tenha (não
+   * só os sugeridos), pra editar não "esquecer" um produto avulso cadastrado antes. */
+  function produtosChecklistHtml(classe, checados){
+    var opcoes = PRODUTOS_SUGERIDOS.slice();
+    (checados || []).forEach(function(p){ if (opcoes.indexOf(p) === -1) opcoes.push(p); });
+    return opcoes.map(function(p){
+      var marcado = checados && checados.indexOf(p) !== -1;
+      return '<label><input type="checkbox" class="' + classe + '" value="' + escapeHtml(p) + '"' + (marcado ? ' checked' : '') + '> ' + escapeHtml(p) + '</label>';
+    }).join("");
+  }
+
   function renderTrilhas(root, trilhas){
-    var porProduto = {};
-    trilhas.forEach(function(t){ (porProduto[t.produto] = porProduto[t.produto] || []).push(t); });
+    var lista = trilhas.slice().sort(function(a, b){ return a.titulo.localeCompare(b.titulo, "pt-BR"); });
 
     var html =
       '<div class="card">' +
         '<h2>Nova trilha</h2>' +
         '<div class="form-row">' +
           '<input type="text" id="novaTitulo" class="form-input" placeholder="Título da trilha">' +
-          '<input type="text" id="novoProduto" class="form-input" list="produtosSugeridos" placeholder="Produto (ex: Simplaz Ouro)">' +
-          '<datalist id="produtosSugeridos">' + PRODUTOS_SUGERIDOS.map(function(p){ return '<option value="' + escapeHtml(p) + '">'; }).join("") + '</datalist>' +
+        '</div>' +
+        '<label class="geral-toggle"><input type="checkbox" id="novoGeral"> Trilha geral — aparece pra todo cliente, de qualquer produto</label>' +
+        '<div class="produtos-checklist" id="novoProdutosBox">' +
+          produtosChecklistHtml("novo-produto-check", []) +
+        '</div>' +
+        '<div class="form-row">' +
+          '<input type="text" id="novoProdutoExtra" class="form-input" placeholder="Outro produto (opcional, separado por vírgula)">' +
           '<button type="button" class="btn" id="btnCriarTrilha">Criar</button>' +
         '</div>' +
         '<div class="msg" id="msgNovaTrilha"></div>' +
       '</div>';
 
-    Object.keys(porProduto).sort().forEach(function(produto){
-      html += '<h3 style="margin:18px 0 8px;font-size:14px;">' + escapeHtml(produto) + '</h3>';
-      porProduto[produto].forEach(function(t){
+    lista.forEach(function(t){
         var videos = (t.trilha_videos || []).slice().sort(function(a,b){ return a.ordem - b.ordem; });
+        var produtosAtuais = t.produtos || [];
+        var chips = produtosAtuais.length
+          ? produtosAtuais.map(function(p){ return '<span class="produto-tag">' + escapeHtml(p) + '</span>'; }).join(" ")
+          : '<span class="produto-tag geral">Geral</span>';
         html +=
           '<div class="trilha-bloco' + (t.ativa ? '' : ' arquivada') + '" data-trilha-id="' + t.id + '">' +
             '<div class="trilha-bloco-head">' +
-              '<div><b>' + escapeHtml(t.titulo) + '</b>' + (t.ativa ? '' : ' <span class="produto-tag">arquivada</span>') + '</div>' +
-              '<button type="button" class="btn-ghost" data-arquivar-trilha="' + t.id + '" data-ativa="' + (!t.ativa) + '">' + (t.ativa ? 'Arquivar' : 'Reativar') + '</button>' +
+              '<div class="trilha-visao" data-trilha-visao="' + t.id + '">' +
+                '<b>' + escapeHtml(t.titulo) + '</b>' + (t.ativa ? '' : ' <span class="produto-tag">arquivada</span>') +
+                '<div style="margin-top:5px;">' + chips + '</div>' +
+              '</div>' +
+              '<div style="display:flex;gap:6px;flex-shrink:0;">' +
+                '<button type="button" class="btn-ghost" data-editar-trilha="' + t.id + '">Editar</button>' +
+                '<button type="button" class="btn-ghost" data-arquivar-trilha="' + t.id + '" data-ativa="' + (!t.ativa) + '">' + (t.ativa ? 'Arquivar' : 'Reativar') + '</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="edit-trilha-form" data-edit-form="' + t.id + '" style="display:none;margin-bottom:10px;">' +
+              '<div class="form-row">' +
+                '<input type="text" class="form-input" data-edit-titulo="' + t.id + '" value="' + escapeHtml(t.titulo) + '">' +
+              '</div>' +
+              '<label class="geral-toggle"><input type="checkbox" data-edit-geral="' + t.id + '"' + (produtosAtuais.length ? '' : ' checked') + '> Trilha geral — aparece pra todo cliente, de qualquer produto</label>' +
+              '<div class="produtos-checklist' + (produtosAtuais.length ? '' : ' disabled') + '" data-edit-produtos-box="' + t.id + '">' +
+                produtosChecklistHtml("edit-produto-check-" + t.id, produtosAtuais) +
+              '</div>' +
+              '<div class="form-row">' +
+                '<input type="text" class="form-input" placeholder="Outro produto (opcional, separado por vírgula)" data-edit-produto-extra="' + t.id + '"' + (produtosAtuais.length ? '' : ' disabled') + '>' +
+                '<button type="button" class="btn" data-salvar-trilha="' + t.id + '">Salvar</button>' +
+                '<button type="button" class="btn-ghost" data-cancelar-edicao="' + t.id + '">Cancelar</button>' +
+              '</div>' +
+              '<div class="msg" data-msg-edit="' + t.id + '"></div>' +
             '</div>' +
             '<div class="videos-lista">' +
               (videos.length
@@ -218,17 +262,72 @@
             '</div>' +
             '<div class="msg" data-msg-trilha="' + t.id + '"></div>' +
           '</div>';
-      });
     });
 
     root.innerHTML = html;
 
+    var novoGeral = document.getElementById("novoGeral");
+    var novoProdutosBox = document.getElementById("novoProdutosBox");
+    novoGeral.addEventListener("change", function(){
+      novoProdutosBox.classList.toggle("disabled", novoGeral.checked);
+      document.getElementById("novoProdutoExtra").disabled = novoGeral.checked;
+    });
+
+    root.querySelectorAll("[data-editar-trilha]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-editar-trilha");
+        var form = root.querySelector('[data-edit-form="' + id + '"]');
+        form.style.display = form.style.display === "none" ? "block" : "none";
+      });
+    });
+    root.querySelectorAll("[data-cancelar-edicao]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        root.querySelector('[data-edit-form="' + btn.getAttribute("data-cancelar-edicao") + '"]').style.display = "none";
+      });
+    });
+    root.querySelectorAll("[data-edit-geral]").forEach(function(chk){
+      chk.addEventListener("change", function(){
+        var id = chk.getAttribute("data-edit-geral");
+        root.querySelector('[data-edit-produtos-box="' + id + '"]').classList.toggle("disabled", chk.checked);
+        root.querySelector('[data-edit-produto-extra="' + id + '"]').disabled = chk.checked;
+      });
+    });
+    root.querySelectorAll("[data-salvar-trilha]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-salvar-trilha");
+        var titulo = root.querySelector('[data-edit-titulo="' + id + '"]').value.trim();
+        var geral = root.querySelector('[data-edit-geral="' + id + '"]').checked;
+        var msg = root.querySelector('[data-msg-edit="' + id + '"]');
+        if (!titulo){ msg.className = "msg erro"; msg.textContent = "Preencha o título."; return; }
+
+        var produtos = [];
+        if (!geral){
+          root.querySelectorAll('[data-edit-produtos-box="' + id + '"] input:checked').forEach(function(el){ produtos.push(el.value); });
+          var extra = root.querySelector('[data-edit-produto-extra="' + id + '"]').value.trim();
+          if (extra) extra.split(",").forEach(function(p){ p = p.trim(); if (p) produtos.push(p); });
+          if (!produtos.length){ msg.className = "msg erro"; msg.textContent = "Selecione ao menos um produto ou marque \"Trilha geral\"."; return; }
+        }
+
+        apiPost("/api/trilhas-admin", { acao: "editar_trilha", id: id, titulo: titulo, produtos: produtos })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao salvar."; } });
+      });
+    });
+
     document.getElementById("btnCriarTrilha").addEventListener("click", function(){
       var titulo = document.getElementById("novaTitulo").value.trim();
-      var produto = document.getElementById("novoProduto").value.trim();
       var msg = document.getElementById("msgNovaTrilha");
-      if (!titulo || !produto){ msg.className = "msg erro"; msg.textContent = "Preencha título e produto."; return; }
-      apiPost("/api/trilhas-admin", { acao: "criar_trilha", titulo: titulo, produto: produto })
+      if (!titulo){ msg.className = "msg erro"; msg.textContent = "Preencha o título."; return; }
+
+      var produtos = [];
+      if (!novoGeral.checked){
+        root.querySelectorAll(".novo-produto-check:checked").forEach(function(el){ produtos.push(el.value); });
+        var extra = document.getElementById("novoProdutoExtra").value.trim();
+        if (extra) extra.split(",").forEach(function(p){ p = p.trim(); if (p) produtos.push(p); });
+        if (!produtos.length){ msg.className = "msg erro"; msg.textContent = "Selecione ao menos um produto ou marque \"Trilha geral\"."; return; }
+      }
+
+      apiPost("/api/trilhas-admin", { acao: "criar_trilha", titulo: titulo, produtos: produtos })
         .then(function(){ carregarTrilhas(); })
         .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao criar trilha."; } });
     });

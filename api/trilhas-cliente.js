@@ -17,13 +17,19 @@ import { aplicarCors, erro, lerCorpo, ErroCorpo, uuidValido } from './_lib/http.
 import { ErroConfig } from './_lib/auth.js';
 import { exigirSessaoCliente } from './_lib/sessao-cliente.js';
 import {
-  listarTrilhasPorProdutos,
+  listarTrilhasAtivas,
   listarVisualizacoesPorEmail,
   buscarVideoComProduto,
   upsertVisualizacao,
   ErroConfigSupabase,
   ErroSupabase,
 } from './_lib/supabase.js';
+
+/** Trilha "geral" (produtos vazio) vale pra todo mundo; senão precisa dar overlap. */
+function trilhaLiberadaPara(produtosTrilha, produtosCliente) {
+  if (!produtosTrilha || !produtosTrilha.length) return true;
+  return produtosTrilha.some((p) => produtosCliente.includes(p));
+}
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -54,14 +60,15 @@ export default async function handler(req, res) {
 }
 
 async function listarTrilhas(sessao, res) {
-  const [trilhas, visualizacoes] = await Promise.all([
-    listarTrilhasPorProdutos(sessao.produtos),
+  const [todasTrilhas, visualizacoes] = await Promise.all([
+    listarTrilhasAtivas(),
     listarVisualizacoesPorEmail(sessao.email),
   ]);
 
   const progressoPorVideo = new Map(visualizacoes.map((v) => [v.trilha_video_id, v]));
 
-  const resultado = trilhas
+  const resultado = todasTrilhas
+    .filter((t) => trilhaLiberadaPara(t.produtos, sessao.produtos))
     .map((t) => {
       const videos = (t.trilha_videos || [])
         .slice()
@@ -81,7 +88,7 @@ async function listarTrilhas(sessao, res) {
         id: t.id,
         titulo: t.titulo,
         descricao: t.descricao,
-        produto: t.produto,
+        produtos: t.produtos,
         videos,
         totalVideos: videos.length,
         videosAssistidos: videos.filter((v) => v.concluido).length,
@@ -115,9 +122,9 @@ async function marcarAssistido(req, sessao, res) {
   if (!video || video.ativo === false || !video.trilhas || video.trilhas.ativa === false) {
     return erro(res, 404, 'video_nao_encontrado', 'Vídeo não encontrado.');
   }
-  if (!sessao.produtos.includes(video.trilhas.produto)) {
-    // Cliente não tem mais (ou nunca teve) o produto dessa trilha — nada vaza,
-    // só um 403 genérico, sem detalhar qual produto seria necessário.
+  if (!trilhaLiberadaPara(video.trilhas.produtos, sessao.produtos)) {
+    // Cliente não tem mais (ou nunca teve) nenhum dos produtos dessa trilha —
+    // nada vaza, só um 403 genérico, sem detalhar qual produto seria necessário.
     return erro(res, 403, 'sem_acesso', 'Você não tem acesso a este vídeo.');
   }
 
