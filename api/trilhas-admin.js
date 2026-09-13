@@ -1,24 +1,42 @@
-// GET  /api/trilhas-admin                 -> lista todas as trilhas + vídeos (inclui arquivadas)
+// GET  /api/trilhas-admin                              -> lista todas as trilhas + vídeos (inclui arquivadas)
+// GET  /api/trilhas-admin?recurso=clientes             -> lista clientes (Supabase) + e-mails cadastrados
+// GET  /api/trilhas-admin?recurso=indicadores          -> engajamento de treinamento por cliente
 // POST /api/trilhas-admin  { acao, ... }   -> criar_trilha | editar_trilha | arquivar_trilha
 //                                             criar_video | editar_video | arquivar_video
+//                                             sincronizar | adicionar_email | remover_email
 //
 // Uso interno (sessão cs_sessao, mesma da Carteira/Implantação). Leitura para
 // qualquer nível autenticado; escrita exige podeEscrever (gestão/csm/ism —
 // consulta é só-leitura em todo o resto do app, e aqui não é diferente).
+//
+// Os três recursos (trilhas, clientes/e-mails, indicadores) viviam em três
+// arquivos separados — juntados aqui num só porque cada arquivo em /api vira
+// uma Serverless Function, e o plano Hobby da Vercel limita a 12 por deploy.
+// Mesmo padrão de "ação num corpo só" que api/clickup.js já usa pra tudo que
+// é dado de carteira/implantação.
 
 import { aplicarCors, erro, lerCorpo, ErroCorpo, texto } from './_lib/http.js';
 import { ErroConfig, exigirSessao, podeEscrever } from './_lib/auth.js';
+import { getCarteira, ErroUpstream } from './_lib/clickup.js';
 import {
   listarTrilhasAdmin,
   criarTrilha,
   editarTrilha,
   criarVideo,
   editarVideo,
+  upsertClientes,
+  desativarClientesForaDe,
+  listarClientes,
+  listarTodosEmails,
+  adicionarEmailCliente,
+  removerEmailCliente,
+  indicadoresPorCliente,
   ErroConfigSupabase,
   ErroSupabase,
 } from './_lib/supabase.js';
 
 const RE_YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Aceita um id puro ou uma URL do YouTube e devolve só o id de 11 caracteres, ou null. */
 function extrairYoutubeId(v) {
@@ -54,14 +72,26 @@ export default async function handler(req, res) {
     if (!sessao) return undefined;
 
     if (req.method === 'GET') {
-      const trilhas = await listarTrilhasAdmin();
-      return res.status(200).json({ trilhas });
+      const recurso = String(req.query?.recurso || 'trilhas');
+      if (recurso === 'trilhas') {
+        const trilhas = await listarTrilhasAdmin();
+        return res.status(200).json({ trilhas });
+      }
+      if (recurso === 'clientes') {
+        const [clientes, emails] = await Promise.all([listarClientes(), listarTodosEmails()]);
+        return res.status(200).json({ clientes, emails });
+      }
+      if (recurso === 'indicadores') {
+        const indicadores = await indicadoresPorCliente();
+        return res.status(200).json({ indicadores });
+      }
+      return erro(res, 400, 'recurso_desconhecido', `Recurso desconhecido: ${recurso}`);
     }
     if (req.method !== 'POST') {
       return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido.');
     }
     if (!podeEscrever(sessao)) {
-      return erro(res, 403, 'sem_permissao', 'Este nível de acesso não pode editar trilhas.');
+      return erro(res, 403, 'sem_permissao', 'Este nível de acesso não pode editar trilhas nem clientes.');
     }
 
     let corpo;
@@ -72,7 +102,7 @@ export default async function handler(req, res) {
       throw e;
     }
 
-    return await executarAcao(String(corpo.acao || ''), corpo, res);
+    return await executarAcao(String(corpo.acao || ''), corpo, sessao, res);
   } catch (e) {
     if (e instanceof ErroConfig || e instanceof ErroConfigSupabase) {
       console.error('[trilhas-admin] configuracao:', e.message);
@@ -87,7 +117,8 @@ export default async function handler(req, res) {
   }
 }
 
-async function executarAcao(acao, corpo, res) {
+async function executarAcao(acao, corpo, sessao, res) {
+  // ── Trilhas e vídeos ──────────────────────────────────────────────────
   if (acao === 'criar_trilha') {
     const titulo = texto(corpo.titulo, 200);
     const produto = texto(corpo.produto, 100);
@@ -159,5 +190,85 @@ async function executarAcao(acao, corpo, res) {
     return res.status(200).json({ video });
   }
 
+  // ── Clientes e e-mails ────────────────────────────────────────────────
+  if (acao === 'sincronizar') return await sincronizar(res);
+  if (acao === 'adicionar_email') return await adicionarEmail(corpo, sessao, res);
+  if (acao === 'remover_email') return await removerEmail(corpo, res);
+
   return erro(res, 400, 'acao_desconhecida', `Ação desconhecida: ${acao}`);
+}
+
+async function sincronizar(res) {
+  let carteira;
+  try {
+    carteira = await getCarteira();
+  } catch (e) {
+    if (e instanceof ErroUpstream && e.status === 429) {
+      res.setHeader('Cache-Control', 'no-store');
+      if (e.esperaSegundos) res.setHeader('Retry-After', String(e.esperaSegundos));
+      return res.status(429).json({
+        error: 'Limite de requisições do ClickUp atingido. Tente novamente em instantes.',
+        code: 'limite_clickup',
+        esperaSegundos: e.esperaSegundos || 60,
+      });
+    }
+    throw e;
+  }
+
+  const linhasComIdNucleo = carteira.linhas.filter((l) => l.idNucleo);
+  const paraUpsert = linhasComIdNucleo.map((l) => {
+    // Produtos = os add-ons de OUTROS_SRV (Simplaz, Waipe, etc.) + o(s) plano(s)
+    // base (Gestor/Unique), quando preenchidos — trilha tagueada "Gestor" (por
+    // exemplo) precisa achar esse valor aqui para liberar para quem só tem o
+    // plano base, sem nenhum add-on.
+    const produtos = new Set(Array.isArray(l.outrosSrv) ? l.outrosSrv : []);
+    if (l.planoGestor) produtos.add(l.planoGestor);
+    if (l.planoUnique) produtos.add(l.planoUnique);
+    return {
+      id_nucleo: l.idNucleo,
+      cnpj: l.cnpj || null,
+      nome: l.nome || l.idNucleo,
+      produtos_ativos: [...produtos],
+      clickup_task_id: l.id,
+      ativo: true,
+      sincronizado_em: new Date().toISOString(),
+    };
+  });
+
+  const salvos = await upsertClientes(paraUpsert);
+  const idsPresentes = linhasComIdNucleo.map((l) => l.idNucleo);
+  const desativados = await desativarClientesForaDe(idsPresentes);
+
+  return res.status(200).json({
+    ok: true,
+    processados: paraUpsert.length,
+    salvos: salvos?.length ?? null,
+    desativados: desativados?.length ?? 0,
+    ignoradosSemIdNucleo: carteira.linhas.length - linhasComIdNucleo.length,
+  });
+}
+
+async function adicionarEmail(corpo, sessao, res) {
+  const clienteId = texto(corpo.clienteId, 64);
+  const email = texto(corpo.email, 200).toLowerCase();
+  if (!clienteId || !email || !RE_EMAIL.test(email)) {
+    return erro(res, 400, 'campos_invalidos', 'clienteId e um e-mail válido são obrigatórios.');
+  }
+  try {
+    const linhas = await adicionarEmailCliente(clienteId, email, sessao.nome || null);
+    return res.status(200).json({ email: linhas?.[0] || null });
+  } catch (e) {
+    // Violação de unicidade do Postgres: e-mail já cadastrado (para este ou outro cliente).
+    if (e instanceof ErroSupabase && e.status === 409) {
+      return erro(res, 409, 'email_ja_cadastrado', 'Este e-mail já está cadastrado.');
+    }
+    throw e;
+  }
+}
+
+async function removerEmail(corpo, res) {
+  const emailId = texto(corpo.emailId, 64);
+  if (!emailId) return erro(res, 400, 'campos_invalidos', 'emailId é obrigatório.');
+  await removerEmailCliente(emailId);
+  return res.status(200).json({ ok: true });
 }

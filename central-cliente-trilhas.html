@@ -218,7 +218,7 @@
   }
 
   function enviarProgresso(videoId, percentual, segundos){
-    apiPost("/api/trilhas-marcar-assistido", {
+    apiPost("/api/trilhas-cliente", {
       trilhaVideoId: videoId, percentual: percentual, progressoSegundos: segundos
     }).then(function(j){
       var item = raiz.querySelector('.video-item[data-video-id="' + videoId + '"]');

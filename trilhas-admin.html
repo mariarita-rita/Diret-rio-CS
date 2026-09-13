@@ -265,7 +265,7 @@
   function carregarClientes(){
     var root = document.getElementById("panel-clientes");
     root.innerHTML = '<div class="vazio">Carregando...</div>';
-    apiGet("/api/trilhas-sync-clientes").then(function(j){ renderClientes(root, j.clientes || [], j.emails || []); })
+    apiGet("/api/trilhas-admin?recurso=clientes").then(function(j){ renderClientes(root, j.clientes || [], j.emails || []); })
       .catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
   }
 
@@ -312,7 +312,7 @@
       var msg = document.getElementById("msgSync");
       var btn = document.getElementById("btnSincronizar");
       btn.disabled = true; btn.textContent = "Sincronizando...";
-      apiPost("/api/trilhas-sync-clientes", { acao: "sincronizar" })
+      apiPost("/api/trilhas-admin", { acao: "sincronizar" })
         .then(function(j){
           msg.className = "msg ok";
           msg.textContent = "OK — " + j.processados + " processados, " + (j.desativados || 0) + " desativados.";
@@ -326,7 +326,7 @@
 
     root.querySelectorAll("[data-remover-email]").forEach(function(btn){
       btn.addEventListener("click", function(){
-        apiPost("/api/trilhas-sync-clientes", { acao: "remover_email", emailId: btn.getAttribute("data-remover-email") })
+        apiPost("/api/trilhas-admin", { acao: "remover_email", emailId: btn.getAttribute("data-remover-email") })
           .then(function(){ carregarClientes(); })
           .catch(function(e){ tratar401(e); });
       });
@@ -337,7 +337,7 @@
         var input = root.querySelector('[data-novo-email="' + clienteId + '"]');
         var msg = root.querySelector('[data-msg-cliente="' + clienteId + '"]');
         if (!input.value.trim()){ msg.className = "msg erro"; msg.textContent = "Informe um e-mail."; return; }
-        apiPost("/api/trilhas-sync-clientes", { acao: "adicionar_email", clienteId: clienteId, email: input.value.trim() })
+        apiPost("/api/trilhas-admin", { acao: "adicionar_email", clienteId: clienteId, email: input.value.trim() })
           .then(function(){ carregarClientes(); })
           .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao adicionar e-mail."; } });
       });

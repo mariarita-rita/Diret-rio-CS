@@ -1183,7 +1183,7 @@
     var root = document.getElementById("indicadoresRoot");
     if (!root) return;
     root.innerHTML = '<div class="sub">Carregando...</div>';
-    fetch("/api/trilhas-indicadores", { credentials: "same-origin" }).then(tratarRespostaApi)
+    fetch("/api/trilhas-admin?recurso=indicadores", { credentials: "same-origin" }).then(tratarRespostaApi)
       .then(function(j){ renderIndicadores(root, j.indicadores || []); })
       .catch(function(e){
         // Sessão inválida nunca cai aqui: tratarRespostaApi devolve uma promise
