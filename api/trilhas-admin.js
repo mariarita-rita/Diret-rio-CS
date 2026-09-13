@@ -253,6 +253,11 @@ async function sincronizar(res) {
     throw e;
   }
 
+  // Um timestamp só pra este sync inteiro — é o que permite desativar "quem
+  // não apareceu desta vez" comparando sincronizado_em, sem montar uma lista
+  // gigante de ids (ver desativarClientesForaDe).
+  const momentoDoSync = new Date().toISOString();
+
   const linhasComIdNucleo = carteira.linhas.filter((l) => l.idNucleo);
   const paraUpsert = linhasComIdNucleo.map((l) => {
     // Produtos = os add-ons de OUTROS_SRV (Simplaz, Waipe, etc.) + o(s) plano(s)
@@ -269,13 +274,12 @@ async function sincronizar(res) {
       produtos_ativos: [...produtos],
       clickup_task_id: l.id,
       ativo: true,
-      sincronizado_em: new Date().toISOString(),
+      sincronizado_em: momentoDoSync,
     };
   });
 
   const salvos = await upsertClientes(paraUpsert);
-  const idsPresentes = linhasComIdNucleo.map((l) => l.idNucleo);
-  const desativados = await desativarClientesForaDe(idsPresentes);
+  const desativados = await desativarClientesForaDe(momentoDoSync);
 
   return res.status(200).json({
     ok: true,

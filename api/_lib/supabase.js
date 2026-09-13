@@ -55,6 +55,29 @@ async function sb(path, init = {}) {
 
 const enc = encodeURIComponent;
 
+/**
+ * Igual a `sb()`, mas pagina até trazer TODAS as linhas — o Supabase limita
+ * qualquer select a um máximo de linhas por chamada (1000 por padrão,
+ * configurável no painel, mas sempre um teto), então uma tabela como
+ * `clientes` (carteira inteira sincronizada, potencialmente milhares de
+ * linhas) vinha cortada silenciosamente na linha 1000, sem erro nenhum — só
+ * um pedaço dos clientes, dependendo até da ordem (sem `order=` explícito, a
+ * ordem nem é estável entre chamadas). Usa o header `Range` do PostgREST pra
+ * buscar em páginas e concatenar.
+ */
+const TAMANHO_PAGINA = 1000;
+async function sbTodos(path) {
+  const todos = [];
+  let inicio = 0;
+  for (;;) {
+    const pagina = (await sb(path, { headers: { Range: `${inicio}-${inicio + TAMANHO_PAGINA - 1}` } })) || [];
+    todos.push(...pagina);
+    if (pagina.length < TAMANHO_PAGINA) break;
+    inicio += TAMANHO_PAGINA;
+  }
+  return todos;
+}
+
 // ── Clientes ──────────────────────────────────────────────────────────────
 
 /** Busca o cliente (ativo) dono deste e-mail autorizado. null se não achar. */
@@ -68,20 +91,39 @@ export async function buscarClientePorEmail(email) {
 }
 
 /** Upsert em massa por id_nucleo — usado pelo sync manual a partir do ClickUp. */
+const TAMANHO_LOTE_UPSERT = 500;
+
+/**
+ * Upsert em lotes de TAMANHO_LOTE_UPSERT — mandar a carteira inteira (pode
+ * passar de mil linhas) num POST só arrisca estourar o teto de linhas do
+ * Supabase na resposta (`return=representation`) e o tempo da função
+ * serverless. Lotes sequenciais mantêm cada chamada pequena e previsível.
+ */
 export async function upsertClientes(clientes) {
   if (!clientes.length) return [];
-  return sb(`/clientes?on_conflict=id_nucleo`, {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-    body: JSON.stringify(clientes),
-  });
+  const salvos = [];
+  for (let i = 0; i < clientes.length; i += TAMANHO_LOTE_UPSERT) {
+    const lote = clientes.slice(i, i + TAMANHO_LOTE_UPSERT);
+    const resultado = await sb(`/clientes?on_conflict=id_nucleo`, {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(lote),
+    });
+    if (resultado) salvos.push(...resultado);
+  }
+  return salvos;
 }
 
-/** Marca ativo=false para todo cliente cujo id_nucleo não está mais na Carteira. */
-export async function desativarClientesForaDe(idsNucleoPresentes) {
-  if (!idsNucleoPresentes.length) return [];
-  const lista = idsNucleoPresentes.map((v) => enc(v)).join(',');
-  return sb(`/clientes?ativo=eq.true&id_nucleo=not.in.(${lista})`, {
+/**
+ * Marca ativo=false para todo cliente que não apareceu NESTE sync — em vez de
+ * `id_nucleo=not.in.(...)` com a lista inteira de ids presentes (que com a
+ * carteira toda vira uma URL de dezenas de milhares de caracteres, arriscando
+ * estourar limite de tamanho de requisição), compara pela marca de tempo:
+ * todo cliente ativo cujo `sincronizado_em` for ANTERIOR a este sync (ou seja,
+ * não foi tocado por ele) é quem sumiu da Carteira.
+ */
+export async function desativarClientesForaDe(momentoDoSync) {
+  return sb(`/clientes?ativo=eq.true&sincronizado_em=lt.${enc(momentoDoSync)}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify({ ativo: false }),
@@ -89,7 +131,7 @@ export async function desativarClientesForaDe(idsNucleoPresentes) {
 }
 
 export async function listarClientes() {
-  return sb(`/clientes?select=*&order=nome.asc`);
+  return sbTodos(`/clientes?select=*&order=nome.asc`);
 }
 
 // ── E-mails autorizados ───────────────────────────────────────────────────
@@ -100,7 +142,7 @@ export async function listarEmailsDoCliente(clienteId) {
 
 /** Todos os e-mails cadastrados, de todos os clientes — para a tela admin montar a lista de uma vez. */
 export async function listarTodosEmails() {
-  return sb(`/clientes_emails?select=*&order=criado_em.asc`);
+  return sbTodos(`/clientes_emails?select=*&order=criado_em.asc`);
 }
 
 export async function adicionarEmailCliente(clienteId, email, criadoPor) {
@@ -269,9 +311,9 @@ export async function upsertVisualizacao({ clienteId, email, trilhaVideoId, perc
  */
 export async function indicadoresPorCliente() {
   const [clientes, trilhas, visualizacoes] = await Promise.all([
-    sb(`/clientes?ativo=eq.true&select=id,id_nucleo,cnpj,nome,produtos_ativos`),
+    sbTodos(`/clientes?ativo=eq.true&select=id,id_nucleo,cnpj,nome,produtos_ativos`),
     sb(`/trilhas?ativa=eq.true&select=id,produtos,trilha_videos(id,ativo)`),
-    sb(`/video_visualizacoes?concluido=eq.true&select=cliente_id,trilha_video_id,concluido_em`),
+    sbTodos(`/video_visualizacoes?concluido=eq.true&select=cliente_id,trilha_video_id,concluido_em`),
   ]);
 
   const videosGerais = new Set(); // trilhas sem produto (produtos = []) — contam pra todo cliente
