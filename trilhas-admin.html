@@ -53,7 +53,8 @@
   .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px;}
   .card h2{font-size:15px; font-weight:700; margin-bottom:10px;}
   .form-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;}
-  .form-input, select.form-input{padding:9px 11px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px; flex:1; min-width:160px;}
+  .form-input, select.form-input, textarea.form-input{padding:9px 11px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); font-family:inherit; font-size:13px; flex:1; min-width:160px;}
+  textarea.form-input{resize:vertical;}
   .btn{background:var(--azul); color:#fff; border:none; font-family:inherit; font-size:13px; font-weight:700; padding:9px 16px; border-radius:9px; cursor:pointer; white-space:nowrap;}
   .btn:hover{background:var(--profundo);}
   .btn:disabled{background:var(--border-strong); color:var(--muted-2); cursor:not-allowed;}
@@ -71,6 +72,14 @@
   .geral-toggle{display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:10px;}
   .video-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--border); font-size:13px;}
   .video-row:first-child{border-top:none;}
+  .video-row-info{display:flex; align-items:center; gap:8px; min-width:0;}
+  .video-row-titulo{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .video-row-acoes{display:flex; gap:4px; flex-shrink:0;}
+  .btn-ordem{background:transparent; border:1px solid var(--border-strong); color:var(--muted); font-size:11px; line-height:1; padding:4px 7px; border-radius:6px; cursor:pointer;}
+  .btn-ordem:hover{color:var(--ink); border-color:var(--ink-2);}
+  .btn-ordem:disabled{opacity:.3; cursor:not-allowed;}
+  .edit-video-form{border-top:1px solid var(--border); padding-top:8px; margin-top:6px;}
+  .busca-input{margin-bottom:14px;}
   .msg{font-size:12.5px; margin-top:8px; min-height:16px;}
   .msg.erro{color:var(--danger);}
   .msg.ok{color:var(--success);}
@@ -147,29 +156,52 @@
   }
 
   // ---------- Layout principal ----------
-  var PRODUTOS_SUGERIDOS = ["Waipe","Analytics Pro","IA Bime","Datalab","Simplaz Bronze","Simplaz Prata","Simplaz Ouro","Gestor","Unique"];
+  // Lista de produtos sugerida nos checkboxes de trilha. Começa com um
+  // fallback pequeno (produtos que não vêm de um plano com "camadas", tipo
+  // Waipe) e, assim que os clientes forem carregados, passa a refletir os
+  // valores REAIS vindos do ClickUp — Unique e Gestor não existem como valor
+  // isolado lá, o que existe é "Unique Light/Plus/Premium" etc. Usar uma lista
+  // fixa e chutada foi o que causou trilha marcada "Unique" não aparecer pra
+  // quem tinha "Unique Light".
+  var produtosConhecidos = ["Waipe", "Analytics Pro", "IA Bime", "Datalab"];
+  function atualizarProdutosConhecidos(clientes){
+    var vistos = {};
+    clientes.forEach(function(c){ (c.produtos_ativos || []).forEach(function(p){ vistos[p] = true; }); });
+    var lista = Object.keys(vistos);
+    if (lista.length) produtosConhecidos = lista.sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+  }
 
   function iniciar(){
     raiz.innerHTML =
       '<div class="tabs">' +
         '<button class="tab-btn active" data-tab="trilhas">Trilhas</button>' +
         '<button class="tab-btn" data-tab="clientes">Clientes &amp; E-mails</button>' +
+        '<button class="tab-btn" data-tab="indicadores">Indicadores</button>' +
       '</div>' +
       '<section class="panel active" id="panel-trilhas"></section>' +
-      '<section class="panel" id="panel-clientes"></section>';
+      '<section class="panel" id="panel-clientes"></section>' +
+      '<section class="panel" id="panel-indicadores"></section>';
 
-    var panels = { trilhas: document.getElementById("panel-trilhas"), clientes: document.getElementById("panel-clientes") };
+    var panels = {
+      trilhas: document.getElementById("panel-trilhas"),
+      clientes: document.getElementById("panel-clientes"),
+      indicadores: document.getElementById("panel-indicadores")
+    };
+    var indicadoresCarregados = false;
     raiz.querySelectorAll(".tab-btn").forEach(function(btn){
       btn.addEventListener("click", function(){
         raiz.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
         btn.classList.add("active");
         Object.keys(panels).forEach(function(k){ panels[k].classList.remove("active"); });
-        panels[btn.getAttribute("data-tab")].classList.add("active");
+        var tab = btn.getAttribute("data-tab");
+        panels[tab].classList.add("active");
+        if (tab === "indicadores" && !indicadoresCarregados){ indicadoresCarregados = true; carregarIndicadoresAdmin(); }
       });
     });
 
-    carregarTrilhas();
-    carregarClientes();
+    // Clientes primeiro: além de preencher a própria aba, alimenta
+    // produtosConhecidos, usado pelos checkboxes de produto da aba Trilhas.
+    carregarClientes().then(function(){ carregarTrilhas(); });
   }
 
   // ---------- Aba Trilhas ----------
@@ -184,12 +216,46 @@
    * `checados` inclui qualquer produto customizado que a trilha já tenha (não
    * só os sugeridos), pra editar não "esquecer" um produto avulso cadastrado antes. */
   function produtosChecklistHtml(classe, checados){
-    var opcoes = PRODUTOS_SUGERIDOS.slice();
+    var opcoes = produtosConhecidos.slice();
     (checados || []).forEach(function(p){ if (opcoes.indexOf(p) === -1) opcoes.push(p); });
     return opcoes.map(function(p){
       var marcado = checados && checados.indexOf(p) !== -1;
       return '<label><input type="checkbox" class="' + classe + '" value="' + escapeHtml(p) + '"' + (marcado ? ' checked' : '') + '> ' + escapeHtml(p) + '</label>';
     }).join("");
+  }
+
+  /** Uma linha de vídeo + o form de edição escondido embaixo dela. */
+  function videoRowHtml(t, v, i, total){
+    return (
+      '<div class="video-row' + (v.ativo === false ? ' arquivada' : '') + '" data-video-row="' + v.id + '">' +
+        '<div class="video-row-info">' +
+          '<div class="video-row-acoes">' +
+            '<button type="button" class="btn-ordem" data-mover-video="' + v.id + '" data-trilha="' + t.id + '" data-direcao="up"' + (i === 0 ? ' disabled' : '') + '>▲</button>' +
+            '<button type="button" class="btn-ordem" data-mover-video="' + v.id + '" data-trilha="' + t.id + '" data-direcao="down"' + (i === total - 1 ? ' disabled' : '') + '>▼</button>' +
+          '</div>' +
+          '<span class="video-row-titulo">' + escapeHtml(v.titulo) + ' <span style="color:var(--muted-2);">(' + escapeHtml(v.youtube_id) + ')</span></span>' +
+        '</div>' +
+        '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+          '<button type="button" class="btn-ghost" data-editar-video="' + v.id + '">Editar</button>' +
+          '<button type="button" class="btn-ghost" data-arquivar-video="' + v.id + '" data-ativo="' + (v.ativo === false) + '">' + (v.ativo === false ? 'Reativar' : 'Arquivar') + '</button>' +
+          '<button type="button" class="btn-danger" data-excluir-video="' + v.id + '">Excluir</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="edit-video-form" data-edit-video-form="' + v.id + '" style="display:none;">' +
+        '<div class="form-row">' +
+          '<input type="text" class="form-input" data-edit-video-titulo="' + v.id + '" value="' + escapeHtml(v.titulo) + '" placeholder="Título">' +
+          '<input type="text" class="form-input" data-edit-video-youtube="' + v.id + '" value="' + escapeHtml(v.youtube_id) + '" placeholder="Link ou ID do YouTube">' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<textarea class="form-input" data-edit-video-nota="' + v.id + '" placeholder="Nota (opcional) — ex: link pra base de conhecimento" rows="2">' + escapeHtml(v.nota || "") + '</textarea>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<button type="button" class="btn" data-salvar-video="' + v.id + '">Salvar</button>' +
+          '<button type="button" class="btn-ghost" data-cancelar-video="' + v.id + '">Cancelar</button>' +
+        '</div>' +
+        '<div class="msg" data-msg-edit-video="' + v.id + '"></div>' +
+      '</div>'
+    );
   }
 
   function renderTrilhas(root, trilhas){
@@ -210,7 +276,8 @@
           '<button type="button" class="btn" id="btnCriarTrilha">Criar</button>' +
         '</div>' +
         '<div class="msg" id="msgNovaTrilha"></div>' +
-      '</div>';
+      '</div>' +
+      '<input type="text" id="buscaTrilhas" class="form-input busca-input" placeholder="Buscar trilha ou vídeo pelo título...">';
 
     lista.forEach(function(t){
         var videos = (t.trilha_videos || []).slice().sort(function(a,b){ return a.ordem - b.ordem; });
@@ -218,8 +285,9 @@
         var chips = produtosAtuais.length
           ? produtosAtuais.map(function(p){ return '<span class="produto-tag">' + escapeHtml(p) + '</span>'; }).join(" ")
           : '<span class="produto-tag geral">Geral</span>';
+        var textoBusca = (t.titulo + " " + videos.map(function(v){ return v.titulo; }).join(" ")).toLowerCase();
         html +=
-          '<div class="trilha-bloco' + (t.ativa ? '' : ' arquivada') + '" data-trilha-id="' + t.id + '">' +
+          '<div class="trilha-bloco' + (t.ativa ? '' : ' arquivada') + '" data-trilha-id="' + t.id + '" data-busca="' + escapeHtml(textoBusca) + '">' +
             '<div class="trilha-bloco-head">' +
               '<div class="trilha-visao" data-trilha-visao="' + t.id + '">' +
                 '<b>' + escapeHtml(t.titulo) + '</b>' + (t.ativa ? '' : ' <span class="produto-tag">arquivada</span>') +
@@ -247,17 +315,15 @@
             '</div>' +
             '<div class="videos-lista">' +
               (videos.length
-                ? videos.map(function(v){
-                    return '<div class="video-row' + (v.ativo === false ? ' arquivada' : '') + '">' +
-                      '<span>' + escapeHtml(v.titulo) + ' <span style="color:var(--muted-2);">(' + escapeHtml(v.youtube_id) + ')</span></span>' +
-                      '<button type="button" class="btn-danger" data-arquivar-video="' + v.id + '" data-ativo="' + (v.ativo === false) + '">' + (v.ativo === false ? 'Reativar' : 'Arquivar') + '</button>' +
-                    '</div>';
-                  }).join("")
+                ? videos.map(function(v, i){ return videoRowHtml(t, v, i, videos.length); }).join("")
                 : '<div class="vazio">Nenhum vídeo ainda.</div>') +
             '</div>' +
             '<div class="form-row" style="margin-top:10px;">' +
               '<input type="text" class="form-input" placeholder="Título do vídeo" data-novo-video-titulo="' + t.id + '">' +
               '<input type="text" class="form-input" placeholder="Link ou ID do YouTube" data-novo-video-url="' + t.id + '">' +
+            '</div>' +
+            '<div class="form-row">' +
+              '<textarea class="form-input" placeholder="Nota (opcional)" rows="1" data-novo-video-nota="' + t.id + '"></textarea>' +
               '<button type="button" class="btn" data-add-video="' + t.id + '">Adicionar vídeo</button>' +
             '</div>' +
             '<div class="msg" data-msg-trilha="' + t.id + '"></div>' +
@@ -265,6 +331,13 @@
     });
 
     root.innerHTML = html;
+
+    document.getElementById("buscaTrilhas").addEventListener("input", function(e){
+      var q = e.target.value.trim().toLowerCase();
+      root.querySelectorAll(".trilha-bloco").forEach(function(bloco){
+        bloco.style.display = (!q || bloco.getAttribute("data-busca").indexOf(q) !== -1) ? "" : "none";
+      });
+    });
 
     var novoGeral = document.getElementById("novoGeral");
     var novoProdutosBox = document.getElementById("novoProdutosBox");
@@ -351,11 +424,61 @@
         var trilhaId = btn.getAttribute("data-add-video");
         var tituloEl = root.querySelector('[data-novo-video-titulo="' + trilhaId + '"]');
         var urlEl = root.querySelector('[data-novo-video-url="' + trilhaId + '"]');
+        var notaEl = root.querySelector('[data-novo-video-nota="' + trilhaId + '"]');
         var msg = root.querySelector('[data-msg-trilha="' + trilhaId + '"]');
         if (!tituloEl.value.trim() || !urlEl.value.trim()){ msg.className = "msg erro"; msg.textContent = "Preencha título e link/ID."; return; }
-        apiPost("/api/trilhas-admin", { acao: "criar_video", trilhaId: trilhaId, titulo: tituloEl.value.trim(), youtube: urlEl.value.trim() })
+        apiPost("/api/trilhas-admin", { acao: "criar_video", trilhaId: trilhaId, titulo: tituloEl.value.trim(), youtube: urlEl.value.trim(), nota: notaEl.value.trim() })
           .then(function(){ carregarTrilhas(); })
           .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao adicionar vídeo."; } });
+      });
+    });
+
+    root.querySelectorAll("[data-editar-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var form = root.querySelector('[data-edit-video-form="' + btn.getAttribute("data-editar-video") + '"]');
+        form.style.display = form.style.display === "none" ? "block" : "none";
+      });
+    });
+    root.querySelectorAll("[data-cancelar-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        root.querySelector('[data-edit-video-form="' + btn.getAttribute("data-cancelar-video") + '"]').style.display = "none";
+      });
+    });
+    root.querySelectorAll("[data-salvar-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-salvar-video");
+        var titulo = root.querySelector('[data-edit-video-titulo="' + id + '"]').value.trim();
+        var youtube = root.querySelector('[data-edit-video-youtube="' + id + '"]').value.trim();
+        var nota = root.querySelector('[data-edit-video-nota="' + id + '"]').value.trim();
+        var msg = root.querySelector('[data-msg-edit-video="' + id + '"]');
+        if (!titulo || !youtube){ msg.className = "msg erro"; msg.textContent = "Preencha título e link/ID."; return; }
+        apiPost("/api/trilhas-admin", { acao: "editar_video", id: id, titulo: titulo, youtube: youtube, nota: nota })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao salvar."; } });
+      });
+    });
+    root.querySelectorAll("[data-excluir-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        if (!window.confirm("Excluir este vídeo? Isso também apaga o histórico de quem já assistiu — não dá pra desfazer. Se é só pra deixar de aparecer pro cliente, prefira \"Arquivar\".")) return;
+        apiPost("/api/trilhas-admin", { acao: "excluir_video", id: btn.getAttribute("data-excluir-video") })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ tratar401(e); });
+      });
+    });
+    root.querySelectorAll("[data-mover-video]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var trilhaId = btn.getAttribute("data-trilha");
+        var videoId = btn.getAttribute("data-mover-video");
+        var direcao = btn.getAttribute("data-direcao");
+        var linhas = Array.prototype.slice.call(root.querySelectorAll('.trilha-bloco[data-trilha-id="' + trilhaId + '"] [data-video-row]'));
+        var ids = linhas.map(function(l){ return l.getAttribute("data-video-row"); });
+        var i = ids.indexOf(videoId);
+        var j = direcao === "up" ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= ids.length) return;
+        var tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+        apiPost("/api/trilhas-admin", { acao: "reordenar_videos", ids: ids })
+          .then(function(){ carregarTrilhas(); })
+          .catch(function(e){ tratar401(e); });
       });
     });
   }
@@ -364,8 +487,10 @@
   function carregarClientes(){
     var root = document.getElementById("panel-clientes");
     root.innerHTML = '<div class="vazio">Carregando...</div>';
-    apiGet("/api/trilhas-admin?recurso=clientes").then(function(j){ renderClientes(root, j.clientes || [], j.emails || []); })
-      .catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
+    return apiGet("/api/trilhas-admin?recurso=clientes").then(function(j){
+      atualizarProdutosConhecidos(j.clientes || []);
+      renderClientes(root, j.clientes || [], j.emails || []);
+    }).catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
   }
 
   function renderClientes(root, clientes, emails){
@@ -381,12 +506,14 @@
       '</div>' +
       '<div class="card">' +
         '<h2>Clientes (' + clientes.length + ')</h2>' +
+        (clientes.length ? '<input type="text" id="buscaClientes" class="form-input busca-input" placeholder="Buscar por nome, CNPJ ou e-mail...">' : '') +
         (clientes.length
           ? '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Produtos</th><th>E-mails autorizados</th></tr></thead><tbody>' +
               clientes.map(function(c){
                 var els = emailsPorCliente[c.id] || [];
-                return '<tr>' +
-                  '<td><b>' + escapeHtml(c.nome) + '</b><br><span style="color:var(--muted-2);font-size:11px;">' + escapeHtml(c.id_nucleo) + '</span></td>' +
+                var textoBusca = [c.nome, c.cnpj, c.id_nucleo].concat(els.map(function(e){ return e.email; })).join(" ").toLowerCase();
+                return '<tr data-busca="' + escapeHtml(textoBusca) + '">' +
+                  '<td><b>' + escapeHtml(c.nome) + '</b><br><span style="color:var(--muted-2);font-size:11px;">' + escapeHtml(c.id_nucleo) + (c.cnpj ? " · " + escapeHtml(c.cnpj) : "") + '</span></td>' +
                   '<td>' + (c.produtos_ativos || []).map(function(p){ return '<span class="produto-tag">' + escapeHtml(p) + '</span>'; }).join(" ") + '</td>' +
                   '<td>' +
                     els.map(function(e){
@@ -406,6 +533,16 @@
       '</div>';
 
     root.innerHTML = html;
+
+    var buscaClientes = document.getElementById("buscaClientes");
+    if (buscaClientes){
+      buscaClientes.addEventListener("input", function(e){
+        var q = e.target.value.trim().toLowerCase();
+        root.querySelectorAll("tr[data-busca]").forEach(function(tr){
+          tr.style.display = (!q || tr.getAttribute("data-busca").indexOf(q) !== -1) ? "" : "none";
+        });
+      });
+    }
 
     document.getElementById("btnSincronizar").addEventListener("click", function(){
       var msg = document.getElementById("msgSync");
@@ -441,6 +578,53 @@
           .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao adicionar e-mail."; } });
       });
     });
+  }
+
+  // ---------- Aba Indicadores ----------
+  // Lista completa por cliente — a aba Indicadores de implantacao-waipe.html
+  // mostra só um resumo agora; o detalhe por cliente vive aqui, que é a
+  // ferramenta de treinamento propriamente dita.
+  function carregarIndicadoresAdmin(){
+    var root = document.getElementById("panel-indicadores");
+    root.innerHTML = '<div class="vazio">Carregando...</div>';
+    apiGet("/api/trilhas-admin?recurso=indicadores").then(function(j){ renderIndicadoresAdmin(root, j.indicadores || []); })
+      .catch(function(e){ if (!tratar401(e)) root.innerHTML = '<div class="msg erro">' + escapeHtml((e && e.error) || "Erro ao carregar.") + '</div>'; });
+  }
+
+  function renderIndicadoresAdmin(root, linhas){
+    var comTrilha = linhas.filter(function(l){ return l.videosDisponiveis > 0; })
+      .sort(function(a, b){ return (b.percentual || 0) - (a.percentual || 0); });
+
+    var html =
+      '<div class="card">' +
+        '<h2>Engajamento por cliente (' + comTrilha.length + ')</h2>' +
+        (comTrilha.length ? '<input type="text" id="buscaIndicadores" class="form-input busca-input" placeholder="Buscar por cliente...">' : '') +
+        (comTrilha.length
+          ? '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Vídeos assistidos</th><th>Última atividade</th></tr></thead><tbody>' +
+              comTrilha.map(function(l){
+                var ultima = l.ultimaAtividade ? new Date(l.ultimaAtividade).toLocaleDateString("pt-BR") : "—";
+                var textoBusca = [l.nome, l.cnpj, l.idNucleo].join(" ").toLowerCase();
+                return '<tr data-busca="' + escapeHtml(textoBusca) + '">' +
+                  '<td><b>' + escapeHtml(l.nome || l.idNucleo || "") + '</b></td>' +
+                  '<td>' + l.videosAssistidos + '/' + l.videosDisponiveis + ' (' + (l.percentual == null ? "—" : l.percentual + '%') + ')</td>' +
+                  '<td>' + ultima + '</td>' +
+                '</tr>';
+              }).join("") +
+            '</tbody></table></div>'
+          : '<div class="vazio">Nenhum cliente com trilha disponível ainda.</div>') +
+      '</div>';
+
+    root.innerHTML = html;
+
+    var busca = document.getElementById("buscaIndicadores");
+    if (busca){
+      busca.addEventListener("input", function(e){
+        var q = e.target.value.trim().toLowerCase();
+        root.querySelectorAll("tr[data-busca]").forEach(function(tr){
+          tr.style.display = (!q || tr.getAttribute("data-busca").indexOf(q) !== -1) ? "" : "none";
+        });
+      });
+    }
   }
 
   // ---------- Início ----------

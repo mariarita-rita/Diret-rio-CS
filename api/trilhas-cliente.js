@@ -80,6 +80,7 @@ async function listarTrilhas(sessao, res) {
             titulo: v.titulo,
             youtubeId: v.youtube_id,
             duracaoSegundos: v.duracao_segundos,
+            nota: v.nota || null,
             concluido: Boolean(p?.concluido),
             percentual: p?.percentual_maximo || 0,
           };

@@ -95,7 +95,7 @@ export default async function handler(req, res) {
 function sessaoAtual(req, res) {
   const sessao = exigirSessaoCliente(req, res, { detalharExpiracao: true });
   if (!sessao) return undefined;
-  return res.status(200).json({ autenticado: true, email: sessao.email, produtos: sessao.produtos });
+  return res.status(200).json({ autenticado: true, email: sessao.email, nome: sessao.nome, produtos: sessao.produtos });
 }
 
 async function autenticar(req, res) {
@@ -166,6 +166,7 @@ async function autenticar(req, res) {
     token = assinarSessaoCliente({
       clienteId: cliente.id,
       email,
+      nome: cliente.nome,
       produtos: cliente.produtos_ativos || [],
     });
   } catch (e) {

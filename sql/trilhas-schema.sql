@@ -54,6 +54,7 @@ create table trilha_videos (
   youtube_id text not null,             -- só o id de 11 caracteres, nunca a URL inteira
   ordem integer not null default 0,
   duracao_segundos integer,
+  nota text,                            -- texto livre exibido junto do vídeo (ex: link pra base de conhecimento)
   ativo boolean not null default true,   -- arquivar preserva o histórico de quem assistiu
   criado_em timestamptz not null default now()
 );
@@ -95,3 +96,6 @@ alter table trilhas add column if not exists produtos text[] not null default '{
 update trilhas set produtos = array[produto] where produto is not null and produto <> '' and produtos = '{}';
 alter table trilhas drop column if exists produto;
 drop index if exists idx_trilhas_produto;
+
+-- MIGRAÇÃO: nota por vídeo (texto livre, ex.: link pra base de conhecimento).
+alter table trilha_videos add column if not exists nota text;

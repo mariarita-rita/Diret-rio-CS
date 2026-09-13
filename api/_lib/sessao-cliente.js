@@ -34,10 +34,11 @@ function hmac(dados) {
 const b64 = (buf) => Buffer.from(buf).toString('base64url');
 
 /** Gera o token de sessão do cliente: base64url(payload).base64url(hmac). */
-export function assinarSessaoCliente({ clienteId, email, produtos }) {
+export function assinarSessaoCliente({ clienteId, email, nome, produtos }) {
   const corpo = b64(JSON.stringify({
     clienteId,
     email: String(email || '').toLowerCase(),
+    nome: String(nome || ''),
     produtos: Array.isArray(produtos) ? produtos : [],
     iat: Date.now(),
   }));
@@ -73,6 +74,7 @@ export function verificarSessaoCliente(token) {
   return {
     clienteId: p.clienteId,
     email: p.email,
+    nome: String(p.nome || ''),
     produtos: Array.isArray(p.produtos) ? p.produtos : [],
     iat: p.iat,
   };

@@ -134,7 +134,7 @@ export async function listarTrilhasAdmin() {
  */
 export async function listarTrilhasAtivas() {
   return sb(
-    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos)&trilha_videos.ativo=eq.true&order=ordem.asc`
+    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos,nota)&trilha_videos.ativo=eq.true&order=ordem.asc`
   );
 }
 
@@ -156,7 +156,7 @@ export async function editarTrilha(id, campos) {
   return linhas?.[0] || null;
 }
 
-export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos }) {
+export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota }) {
   const linhas = await sb(`/trilha_videos`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -166,6 +166,7 @@ export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSe
       youtube_id: youtubeId,
       ordem: ordem || 0,
       duracao_segundos: duracaoSegundos || null,
+      nota: nota || null,
     }]),
   });
   return linhas?.[0] || null;
@@ -178,6 +179,29 @@ export async function editarVideo(id, campos) {
     body: JSON.stringify(campos),
   });
   return linhas?.[0] || null;
+}
+
+export async function excluirVideo(id) {
+  await sb(`/trilha_videos?id=eq.${enc(id)}`, { method: 'DELETE' });
+}
+
+/**
+ * Reordena: `idsNaOrdem` é a lista de ids de vídeo já na ordem final desejada
+ * — cada um recebe `ordem` = sua posição no array. Um PATCH por vídeo (não dá
+ * pra fazer upsert em lote aqui: `trilha_videos` tem colunas NOT NULL sem
+ * default como `titulo`/`youtube_id`/`trilha_id`, e o Postgres valida essas
+ * colunas na construção da linha do INSERT mesmo quando o resultado real vai
+ * ser um UPDATE via ON CONFLICT — falharia por enviar só {id, ordem}).
+ */
+export async function reordenarVideos(idsNaOrdem) {
+  if (!idsNaOrdem.length) return;
+  await Promise.all(idsNaOrdem.map((id, i) =>
+    sb(`/trilha_videos?id=eq.${enc(id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ ordem: i }),
+    })
+  ));
 }
 
 /** Busca um vídeo + os produtos da trilha dona dele (para checar posse no marcar-assistido). */

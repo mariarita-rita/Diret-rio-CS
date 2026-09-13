@@ -1193,24 +1193,37 @@
           ((e && e.error) || "Erro ao carregar indicadores.") + '</div></div>';
       });
   }
+  // Só o resumo aqui — a lista detalhada por cliente foi pra trilhas-admin.html
+  // (aba Indicadores), que é a ferramenta de treinamento propriamente dita.
+  // Esta tela é de indicadores de implantação em geral, não só treinamento —
+  // a lista cliente a cliente ocupava a tela inteira e não fazia sentido aqui.
   function renderIndicadores(root, linhas){
-    var comAtividade = linhas.filter(function(l){ return l.videosDisponiveis > 0; })
-      .sort(function(a, b){ return (b.percentual || 0) - (a.percentual || 0); });
-    if (!comAtividade.length){
+    var comTrilha = linhas.filter(function(l){ return l.videosDisponiveis > 0; });
+    if (!comTrilha.length){
       root.innerHTML = '<div class="sub">Nenhum cliente com trilha disponível ainda.</div>';
       return;
     }
-    var linhasHtml = comAtividade.map(function(l){
-      var ultima = l.ultimaAtividade ? new Date(l.ultimaAtividade).toLocaleDateString("pt-BR") : "—";
-      return '<tr>' +
-        '<td>' + (l.nome || l.idNucleo || "") + '</td>' +
-        '<td class="tabular">' + l.videosAssistidos + '/' + l.videosDisponiveis + ' (' + (l.percentual == null ? "—" : l.percentual + '%') + ')</td>' +
-        '<td>' + ultima + '</td>' +
-      '</tr>';
-    }).join("");
+    var comProgresso = comTrilha.filter(function(l){ return l.videosAssistidos > 0; }).length;
+    var completos = comTrilha.filter(function(l){ return l.percentual === 100; }).length;
+    var somaPct = comTrilha.reduce(function(s, l){ return s + (l.percentual || 0); }, 0);
+    var media = Math.round(somaPct / comTrilha.length);
+    var ultima = comTrilha.reduce(function(max, l){ return (l.ultimaAtividade && (!max || l.ultimaAtividade > max)) ? l.ultimaAtividade : max; }, null);
+
+    function stat(valor, rotulo){
+      return '<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
+        '<div style="font-size:22px;font-weight:800;color:var(--profundo);">' + valor + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + rotulo + '</div>' +
+      '</div>';
+    }
     root.innerHTML =
-      '<div class="table-wrap"><table class="cmp"><thead><tr><th>Cliente</th><th>Vídeos assistidos</th><th>Última atividade</th></tr></thead>' +
-      '<tbody>' + linhasHtml + '</tbody></table></div>';
+      '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">' +
+        stat(comTrilha.length, "clientes com trilha disponível") +
+        stat(comProgresso, "já assistiram pelo menos 1 vídeo") +
+        stat(completos, "concluíram 100% da trilha") +
+        stat(media + "%", "conclusão média") +
+      '</div>' +
+      '<div class="sub">Última atividade: ' + (ultima ? new Date(ultima).toLocaleDateString("pt-BR") : "—") +
+      ' · Lista cliente a cliente: aba <b>Indicadores</b> em <a href="trilhas-admin.html" target="_blank">trilhas-admin.html</a>.</div>';
   }
 
   // ---- Capability `sample` (extração de agentes por IA) ----

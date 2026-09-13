@@ -2,7 +2,8 @@
 // GET  /api/trilhas-admin?recurso=clientes             -> lista clientes (Supabase) + e-mails cadastrados
 // GET  /api/trilhas-admin?recurso=indicadores          -> engajamento de treinamento por cliente
 // POST /api/trilhas-admin  { acao, ... }   -> criar_trilha | editar_trilha | arquivar_trilha
-//                                             criar_video | editar_video | arquivar_video
+//                                             criar_video | editar_video | arquivar_video | excluir_video
+//                                             reordenar_videos
 //                                             sincronizar | adicionar_email | remover_email
 //
 // Uso interno (sessão cs_sessao, mesma da Carteira/Implantação). Leitura para
@@ -24,6 +25,8 @@ import {
   editarTrilha,
   criarVideo,
   editarVideo,
+  excluirVideo,
+  reordenarVideos,
   upsertClientes,
   desativarClientesForaDe,
   listarClientes,
@@ -183,6 +186,7 @@ async function executarAcao(acao, corpo, sessao, res) {
       youtubeId,
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
       duracaoSegundos: Number.isInteger(corpo.duracaoSegundos) ? corpo.duracaoSegundos : null,
+      nota: texto(corpo.nota, 2000) || null,
     });
     return res.status(200).json({ video });
   }
@@ -197,6 +201,7 @@ async function executarAcao(acao, corpo, sessao, res) {
       if (!youtubeId) return erro(res, 400, 'campos_invalidos', 'Vídeo do YouTube inválido.');
       campos.youtube_id = youtubeId;
     }
+    if (corpo.nota !== undefined) campos.nota = texto(corpo.nota, 2000) || null;
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
     const video = await editarVideo(id, campos);
     return res.status(200).json({ video });
@@ -207,6 +212,20 @@ async function executarAcao(acao, corpo, sessao, res) {
     if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
     const video = await editarVideo(id, { ativo: Boolean(corpo.ativo) });
     return res.status(200).json({ video });
+  }
+
+  if (acao === 'excluir_video') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    await excluirVideo(id);
+    return res.status(200).json({ ok: true });
+  }
+
+  if (acao === 'reordenar_videos') {
+    const ids = Array.isArray(corpo.ids) ? corpo.ids.map((v) => texto(v, 64)).filter(Boolean) : null;
+    if (!ids || !ids.length) return erro(res, 400, 'campos_invalidos', 'ids deve ser uma lista não vazia.');
+    await reordenarVideos(ids);
+    return res.status(200).json({ ok: true });
   }
 
   // ── Clientes e e-mails ────────────────────────────────────────────────

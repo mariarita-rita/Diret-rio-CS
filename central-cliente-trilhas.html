@@ -73,6 +73,9 @@
   .video-player.aberto{display:block;}
   .video-player iframe{width:100%; aspect-ratio:16/9; display:block; border:none;}
   .video-carregando{aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; color:#fff; font-size:13px; opacity:.75;}
+  .video-nota{padding:9px 14px; font-size:12px; line-height:1.5; color:var(--ink-2); background:var(--quasebranco); border-top:1px solid var(--border);}
+  .instrucoes{font-size:12.5px; line-height:1.6; color:var(--ink-2); background:var(--quasebranco);}
+  .instrucoes b{color:var(--ink);}
 
   .vazio{font-size:13px; color:var(--muted); padding:8px 2px;}
 </style>
@@ -83,6 +86,7 @@
     <div>
       <h1>Central de Treinamento</h1>
       <p>Londrisoft — trilhas de vídeo por produto contratado</p>
+      <p id="identCliente" style="display:none;margin-top:6px;font-size:12.5px;font-weight:600;color:var(--profundo);"></p>
     </div>
     <button type="button" class="btn-sair" id="btnSair" style="display:none;">Sair</button>
   </header>
@@ -127,6 +131,7 @@
   // ---------- Login ----------
   function renderLogin(mensagemErro){
     btnSair.style.display = "none";
+    mostrarIdentificacao(null);
     raiz.innerHTML =
       '<div class="card" style="max-width:380px;margin:40px auto;">' +
         '<h2 style="margin-bottom:4px;">Entrar</h2>' +
@@ -144,7 +149,7 @@
       if (!email.value || !senha.value){ erroEl.textContent = "Preencha e-mail e senha."; return; }
       btn.disabled = true; btn.textContent = "Entrando...";
       apiPost("/api/cliente-login", { email: email.value, senha: senha.value })
-        .then(function(){ carregarTrilhas(); })
+        .then(function(j){ mostrarIdentificacao(j); carregarTrilhas(); })
         .catch(function(e){
           erroEl.textContent = (e && e.error) || "Não foi possível entrar.";
           btn.disabled = false; btn.textContent = "Entrar";
@@ -158,6 +163,13 @@
   btnSair.addEventListener("click", function(){
     apiPost("/api/cliente-login?action=logout", {}).catch(function(){}).then(function(){ renderLogin(); });
   });
+
+  function mostrarIdentificacao(j){
+    var el = document.getElementById("identCliente");
+    if (!j || !j.email){ el.style.display = "none"; return; }
+    el.textContent = (j.nome ? j.nome + " — " : "") + j.email;
+    el.style.display = "block";
+  }
 
   // ---------- Trilhas ----------
   function carregarTrilhas(){
@@ -173,12 +185,18 @@
       });
   }
 
+  var INSTRUCOES_HTML =
+    '<div class="card instrucoes">' +
+      '<b>Como funciona:</b> um vídeo é marcado como <b>concluído</b> automaticamente ao passar de 90% da duração — não precisa assistir até o segundo final. ' +
+      'Você pode <b>pausar, fechar e voltar depois</b>, e <b>assistir de novo quantas vezes quiser</b>, mesmo depois de concluído.' +
+    '</div>';
+
   function renderTrilhas(trilhas){
     if (!trilhas.length){
       raiz.innerHTML = '<div class="card"><div class="vazio">Nenhuma trilha disponível para os produtos contratados ainda. Fale com seu CSM se isso não parecer certo.</div></div>';
       return;
     }
-    raiz.innerHTML = trilhas.map(function(t, i){
+    raiz.innerHTML = INSTRUCOES_HTML + trilhas.map(function(t, i){
       var pct = t.totalVideos ? Math.round((t.videosAssistidos / t.totalVideos) * 100) : 0;
       return (
         '<div class="card trilha" data-trilha="' + i + '">' +
@@ -205,6 +223,7 @@
               '<span class="video-play-icone">▶</span>' +
             '</div>' +
             '<div class="video-player" data-player="' + v.id + '"></div>' +
+            (v.nota ? '<div class="video-nota">' + escapeHtml(v.nota) + '</div>' : '') +
           '</div>'
         );
       }).join("") || '<div class="vazio">Nenhum vídeo nesta trilha ainda.</div>';
@@ -302,7 +321,7 @@
   }
 
   // ---------- Início ----------
-  apiGet("/api/cliente-login").then(function(){ carregarTrilhas(); }).catch(function(){ renderLogin(); });
+  apiGet("/api/cliente-login").then(function(j){ mostrarIdentificacao(j); carregarTrilhas(); }).catch(function(){ renderLogin(); });
 })();
 </script>
 </body>
