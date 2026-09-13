@@ -283,7 +283,7 @@
         var videos = (t.trilha_videos || []).slice().sort(function(a,b){ return a.ordem - b.ordem; });
         var produtosAtuais = t.produtos || [];
         var chips = produtosAtuais.length
-          ? produtosAtuais.map(function(p){ return '<span class="produto-tag">' + escapeHtml(p) + '</span>'; }).join(" ")
+          ? produtosAtuais.map(function(p){ return '<span class="produto-tag" title="[' + escapeHtml(p) + ']">' + escapeHtml(p) + '</span>'; }).join(" ")
           : '<span class="produto-tag geral">Geral</span>';
         var textoBusca = (t.titulo + " " + videos.map(function(v){ return v.titulo; }).join(" ")).toLowerCase();
         html +=
@@ -508,13 +508,14 @@
         '<h2>Clientes (' + clientes.length + ')</h2>' +
         (clientes.length ? '<input type="text" id="buscaClientes" class="form-input busca-input" placeholder="Buscar por nome, CNPJ ou e-mail...">' : '') +
         (clientes.length
-          ? '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Produtos</th><th>E-mails autorizados</th></tr></thead><tbody>' +
+          ? '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Status</th><th>Produtos</th><th>E-mails autorizados</th></tr></thead><tbody>' +
               clientes.map(function(c){
                 var els = emailsPorCliente[c.id] || [];
                 var textoBusca = [c.nome, c.cnpj, c.id_nucleo].concat(els.map(function(e){ return e.email; })).join(" ").toLowerCase();
-                return '<tr data-busca="' + escapeHtml(textoBusca) + '">' +
+                return '<tr data-busca="' + escapeHtml(textoBusca) + '"' + (c.ativo === false ? ' style="opacity:.55;"' : '') + '>' +
                   '<td><b>' + escapeHtml(c.nome) + '</b><br><span style="color:var(--muted-2);font-size:11px;">' + escapeHtml(c.id_nucleo) + (c.cnpj ? " · " + escapeHtml(c.cnpj) : "") + '</span></td>' +
-                  '<td>' + (c.produtos_ativos || []).map(function(p){ return '<span class="produto-tag">' + escapeHtml(p) + '</span>'; }).join(" ") + '</td>' +
+                  '<td>' + (c.ativo === false ? '<span class="produto-tag" style="background:var(--danger-bg);color:var(--danger);">Inativo</span>' : '<span class="produto-tag geral">Ativo</span>') + '</td>' +
+                  '<td>' + (c.produtos_ativos || []).map(function(p){ return '<span class="produto-tag" title="[' + escapeHtml(p) + ']">' + escapeHtml(p) + '</span>'; }).join(" ") + '</td>' +
                   '<td>' +
                     els.map(function(e){
                       return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">' + escapeHtml(e.email) +
