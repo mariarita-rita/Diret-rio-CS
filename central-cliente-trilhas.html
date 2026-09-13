@@ -66,10 +66,13 @@
   .video-check{flex-shrink:0; width:20px; height:20px; border-radius:50%; border:2px solid var(--border-strong); display:flex; align-items:center; justify-content:center; font-size:12px; color:transparent;}
   .video-check.ok{border-color:var(--success); background:var(--success-bg); color:var(--success);}
   .video-titulo{flex:1;}
-  .video-pct{font-size:11.5px; color:var(--muted-2);}
+  .video-pct{font-size:11.5px; color:var(--muted-2); white-space:nowrap;}
+  .video-play-icone{flex-shrink:0; width:26px; height:26px; border-radius:50%; background:var(--azul); color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; transition:transform .15s;}
+  .video-item.aberto .video-play-icone{transform:rotate(90deg); background:var(--profundo);}
   .video-player{display:none; background:#000;}
   .video-player.aberto{display:block;}
   .video-player iframe{width:100%; aspect-ratio:16/9; display:block; border:none;}
+  .video-carregando{aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; color:#fff; font-size:13px; opacity:.75;}
 
   .vazio{font-size:13px; color:var(--muted); padding:8px 2px;}
 </style>
@@ -198,7 +201,8 @@
             '<div class="video-row" data-toggle="' + v.id + '" data-youtube="' + escapeHtml(v.youtubeId) + '">' +
               '<span class="video-check' + (v.concluido ? ' ok' : '') + '">' + (v.concluido ? '✓' : '') + '</span>' +
               '<span class="video-titulo">' + escapeHtml(v.titulo) + '</span>' +
-              '<span class="video-pct">' + (v.concluido ? 'Concluído' : (v.percentual ? v.percentual + '%' : '')) + '</span>' +
+              '<span class="video-pct">' + (v.concluido ? 'Concluído' : (v.percentual ? v.percentual + '% assistido' : 'Assistir')) + '</span>' +
+              '<span class="video-play-icone">▶</span>' +
             '</div>' +
             '<div class="video-player" data-player="' + v.id + '"></div>' +
           '</div>'
@@ -229,7 +233,7 @@
         check.classList.add("ok"); check.textContent = "✓";
         pctEl.textContent = "Concluído";
       } else {
-        pctEl.textContent = (j.percentual || 0) + "%";
+        pctEl.textContent = (j.percentual || 0) + "% assistido";
       }
     }).catch(function(){ /* progresso é best-effort — não interrompe a reprodução por causa disso */ });
   }
@@ -237,7 +241,11 @@
   function abrirVideo(videoId, youtubeId){
     // Fecha o player aberto anteriormente (só um por vez).
     raiz.querySelectorAll(".video-player.aberto").forEach(function(p){
-      if (p.getAttribute("data-player") !== videoId) { p.classList.remove("aberto"); p.innerHTML = ""; }
+      if (p.getAttribute("data-player") !== videoId) {
+        p.classList.remove("aberto"); p.innerHTML = "";
+        var outroItem = raiz.querySelector('.video-item[data-video-id="' + p.getAttribute("data-player") + '"]');
+        if (outroItem) outroItem.classList.remove("aberto");
+      }
     });
     pararProgresso();
     if (playerAtual && typeof playerAtual.destroy === "function"){
@@ -245,14 +253,21 @@
       playerAtual = null;
     }
 
+    var item = raiz.querySelector('.video-item[data-video-id="' + videoId + '"]');
     var container = raiz.querySelector('.video-player[data-player="' + videoId + '"]');
     if (!container) return;
     if (container.classList.contains("aberto")){
       container.classList.remove("aberto");
       container.innerHTML = "";
+      if (item) item.classList.remove("aberto");
       return;
     }
     container.classList.add("aberto");
+    if (item) item.classList.add("aberto");
+    // Feedback imediato: sem isso, o intervalo até o iframe_api do YouTube
+    // carregar (às vezes alguns segundos, na primeira vez na página) parecia
+    // clique sem nenhuma reação.
+    container.innerHTML = '<div class="video-carregando">Carregando vídeo…</div>';
 
     function criarPlayer(){
       if (!ytApiPronta || !window.YT || !window.YT.Player){
