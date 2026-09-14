@@ -473,11 +473,12 @@ async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
 const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório de finalização de um projeto de implantação do Waipe, com base no HISTÓRICO COMPLETO de comentários do projeto (notas do ISM, atividades registradas, resumos de conversa/reunião, e-mails, sinalizações de risco de relatórios anteriores etc. — tudo que ficou registrado ao longo do projeto, não só os resumos gerados por IA) e nos dados objetivos informados. Não invente além do que o histórico e os dados objetivos dizem — mas TAMBÉM não exija uma frase explícita quando o comportamento registrado já é um sinal claro (ex: cliente que some, recusa repetida de agendamento, ou pede cancelamento, é sinal de insatisfação mesmo que ele nunca tenha dito literalmente "estou insatisfeito").
 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código), neste formato exato:
-{"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres — inclua qualquer risco ou ponto de atenção identificado no histórico (ex: pendência técnica/cadastral não resolvida, cliente pouco responsivo, sinal de possível cancelamento), não só uma narrativa neutra dos fatos","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia só se o histórico realmente não der nenhum sinal de causa de atraso, senão uma frase curta com a causa","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada"}
+{"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres — inclua qualquer risco ou ponto de atenção identificado no histórico (ex: pendência técnica/cadastral não resolvida, cliente pouco responsivo, sinal de possível cancelamento), não só uma narrativa neutra dos fatos","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia só se o histórico realmente não der nenhum sinal de causa de atraso, senão uma frase curta com a causa","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada","riscoChurn":true|false}
 
 Regras:
 - "satisfacaoPercebida": só use "indeterminada" quando o histórico realmente não tiver NENHUM sinal, nem direto nem indireto. Comportamento conta como sinal: cliente que pede cancelamento, para de responder, recusa treinamento repetidas vezes, ou reclama de algo tecnicamente não resolvido — isso é ao menos "neutra" (ou "negativa", se o sinal for mais forte), não "indeterminada". Só é "positiva" quando há elogio, confirmação de uso satisfatório, ou fechamento tranquilo.
 - "riscoPercebido" reflete o risco de o cliente ter terminado insatisfeito ou com algo mal resolvido, não risco comercial.
+- "riscoChurn": true SOMENTE se houver sinal de que o cliente mencionou ou deu a entender que pode CANCELAR/ENCERRAR o contrato ou está repensando a continuidade (ex: "vamos avaliar se ainda precisamos do sistema", "não sei se vamos seguir", pedido de cancelamento, rompimento de um contrato relacionado que deixa o uso em dúvida). Não marque true só por insatisfação geral ou demora — isso é "riscoPercebido", um conceito diferente. Na dúvida, false.
 - "causaDaDemora": procure ativamente no histórico qualitativo (não só nos números de reagendamento) — ex: "cliente sobrecarregado com outra obrigação", "pendência cadastral/técnica externa", "cliente trocou de fornecedor/sistema", "demora em responder contato". Se os dados objetivos mostrarem vários reagendamentos ou não comparecimentos, isso sozinho já é sinal suficiente mesmo sem uma causa qualitativa explícita.
 - O objetivo é minimizar o quanto a pessoa que revisa precisa complementar à mão — prefira uma inferência razoável e sinalizada como tal a deixar o campo genérico ou vazio.`;
 
@@ -574,6 +575,11 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
     riscoPercebido: RISCO_PERCEBIDO_VALIDOS.has(parsed.riscoPercebido) ? parsed.riscoPercebido : '',
     causaDaDemora: texto(parsed.causaDaDemora, 500),
     satisfacaoPercebida: SATISFACAO_PERCEBIDA_VALIDOS.has(parsed.satisfacaoPercebida) ? parsed.satisfacaoPercebida : 'indeterminada',
+    // Sugestão pro alerta 🚨 Risco de Churn (campo do ClickUp, não do
+    // relatório) — quem revisa decide se marca de verdade; a IA nunca grava
+    // o campo sozinha (ver atualizar-implantacao/espelharAlertas em
+    // api/clickup.js, que só mexem no campo quando o corpo pede).
+    riscoChurn: parsed.riscoChurn === true,
     resumosConsiderados: historicoCompleto.length,
     // Fatos objetivos (nao rascunho da IA pra revisar) — calculados aqui,
     // nao inventados pelo modelo.

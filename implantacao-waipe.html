@@ -1035,6 +1035,19 @@
   var URGENCIA_LABEL = { urgente: "Urgente", alta: "Alta", normal: "Normal", baixa: "Baixa" };
   var URGENCIA_COR = { urgente: "var(--danger)", alta: "var(--warning)", normal: "var(--azul)", baixa: "var(--muted)" };
 
+  // 🚨 Alertas — MESMO campo do ClickUp usado na Carteira CSM (mesmo id de
+  // opção, anexado às duas listas). Marcar aqui espelha lá (por ID Núcleo) e
+  // vice-versa — ver espelharAlertas em api/_lib/clickup.js. Ids fixos de
+  // propósito (allowlist do servidor é por ID, nunca por rótulo).
+  var ALERTAS_OPCOES = [
+    { id: "ddaddf7d-9ffa-49de-9b53-6e63acbbceb3", nome: "Risco de Churn" },
+    { id: "06759f74-83bb-427a-8ddd-77aa2f9f94c5", nome: "Insatisfação" },
+    { id: "dca403db-9fe3-43ce-9877-674fd45c181a", nome: "Baixa utilização" },
+    { id: "2f6c9a19-8788-45be-b0b4-1e8bf2090d1e", nome: "Inadimplência" },
+    { id: "f12e9041-767e-41b3-9f6e-9fdd277496c5", nome: "Não responde aos contatos" }
+  ];
+  var ALERTA_CHURN_ID = "ddaddf7d-9ffa-49de-9b53-6e63acbbceb3";
+
   // ---- API (proxy /api/clickup — só funciona publicado no Dashboard, com sessão ativa) ----
   // Esta página não tinha tela de login própria — dependia de já existir um
   // cookie de sessão criado ao logar no dashboard_carteiras.html antes. ISM não
@@ -2305,6 +2318,36 @@
     }).catch(function(){ showSimToast("Não deu para salvar a urgência do projeto."); });
   }
 
+  // Chips de clique único: cada clique já salva (mesmo espírito de
+  // persistirUrgenciaProjeto) — o ISM sinaliza risco real a qualquer momento
+  // da implantação, sem precisar abrir a finalização. gravarCampo do
+  // servidor espelha isso na Carteira CSM sozinho (mesmo ID Núcleo).
+  function seletorAlertasProjeto(p){
+    var marcados = {};
+    (p.alertasIds || []).forEach(function(id){ marcados[id] = true; });
+    return '<div id="alertasProjetoTags" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">' +
+      ALERTAS_OPCOES.map(function(o){
+        var sel = !!marcados[o.id];
+        return '<span class="tag ' + (sel ? "perigo" : "neutro") + ' alerta-tag" data-alerta-id="' + o.id +
+          '" style="cursor:pointer;" title="Clique para ' + (sel ? "remover" : "marcar") + '">' +
+          (sel ? "🚨 " : "") + esc(o.nome) + '</span>';
+      }).join("") +
+    '</div>';
+  }
+
+  function persistirAlertasProjeto(alertasIds){
+    if (!dadosProjeto) return;
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
+      alertas: alertasIds
+    }).then(function(){
+      dadosProjeto.projeto.alertasIds = alertasIds;
+      dadosProjeto.projeto.alertas = ALERTAS_OPCOES.filter(function(o){ return alertasIds.indexOf(o.id) !== -1; }).map(function(o){ return o.nome; });
+      renderListaItens();
+    }).catch(function(){ showSimToast("Não deu para salvar os alertas do projeto."); });
+  }
+
   function persistirDadosCliente(dados){
     if (!dadosProjeto) return;
     apiPost("atualizar-implantacao", {
@@ -2760,6 +2803,12 @@
       };
       var statsEl = document.getElementById("finEstatisticas");
       if (statsEl) statsEl.innerHTML = finEstatisticasHtml(finalizacaoStatsAtual);
+      // Sugestão de alerta 🚨, não gravação automática — a IA nunca marca o
+      // campo sozinha (ver riscoChurn em api/ia.js); some se o cliente já
+      // marcou "Risco de Churn" antes de gerar o relatório.
+      var jaMarcado = (dadosProjeto.projeto.alertasIds || []).indexOf(ALERTA_CHURN_ID) !== -1;
+      var sugestaoEl = document.getElementById("finRiscoChurnSugestao");
+      if (sugestaoEl) sugestaoEl.style.display = (r.riscoChurn && !jaMarcado) ? "flex" : "none";
       showSimToast("Rascunho gerado a partir de " + r.resumosConsiderados + " comentário(s) do histórico do projeto — revise antes de salvar.");
     }).catch(function(e){
       showSimToast(mensagemErro(e) || "Não deu para gerar o relatório.");
@@ -3338,6 +3387,8 @@
       '<div>' + seletorFaseProjeto(p) + '</div>' +
       '<div class="sp-k" style="margin-top:10px;">Urgência</div>' +
       '<div>' + seletorUrgenciaProjeto(p) + '</div>' +
+      '<div class="sp-k" style="margin-top:10px;">🚨 Alertas <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesmo campo da Carteira CSM)</span></div>' +
+      '<div>' + seletorAlertasProjeto(p) + '</div>' +
       '<div class="sp-k">Contexto</div>' +
       '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>' +
       '<div id="ismProjetoWrap"></div>' +
@@ -3373,6 +3424,10 @@
         (todosItensConcluidos() ? '' : ' disabled title="Só disponível quando todos os itens do projeto estiverem concluídos/cancelados."') +
         '>🤖 Gerar relatório de finalização</button>' +
       '<div id="finEstatisticas">' + finEstatisticasHtml(p.finalizacao) + '</div>' +
+      '<div id="finRiscoChurnSugestao" class="tag perigo" style="display:none;margin-top:10px;gap:8px;padding:6px 12px;">' +
+        '🚨 A IA identificou sinal de risco de churn neste histórico. ' +
+        '<button type="button" class="btn-flow-secondary" id="btnAplicarAlertaChurn" style="margin-left:6px;">Marcar nos Alertas</button>' +
+      '</div>' +
       '<div id="finalizacaoCampos" style="margin-top:12px;' + (p.finalizacao && p.finalizacao.resumoGeral ? '' : 'display:none;') + '">' +
         '<div class="form-field"><label>Resumo geral</label><textarea class="form-input" id="finResumoGeral" rows="3" style="width:100%;">' + esc((p.finalizacao && p.finalizacao.resumoGeral) || "") + '</textarea></div>' +
         '<div class="form-grid-2">' +
@@ -3413,6 +3468,15 @@
     var selUrgenciaProjeto = document.querySelector("[data-projeto-urgencia]");
     if (selUrgenciaProjeto) selUrgenciaProjeto.addEventListener("change", function(){
       persistirUrgenciaProjeto(selUrgenciaProjeto.value);
+    });
+    document.querySelectorAll(".alerta-tag").forEach(function(el){
+      el.addEventListener("click", function(){
+        var id = el.getAttribute("data-alerta-id");
+        var atuais = (p.alertasIds || []).slice();
+        var pos = atuais.indexOf(id);
+        if (pos === -1) atuais.push(id); else atuais.splice(pos, 1);
+        persistirAlertasProjeto(atuais);
+      });
     });
     var btnSalvarDadosCliente = document.getElementById("btnSalvarDadosCliente");
     if (btnSalvarDadosCliente) btnSalvarDadosCliente.addEventListener("click", function(){
@@ -3496,6 +3560,12 @@
     var btnSalvarFinalizacao = document.getElementById("btnSalvarFinalizacao");
     if (btnSalvarFinalizacao) btnSalvarFinalizacao.addEventListener("click", salvarFinalizacao);
     wireDirty(["finResumoGeral", "finRisco", "finSatisfacao", "finCausaDemora"], "btnSalvarFinalizacao");
+    var btnAplicarAlertaChurn = document.getElementById("btnAplicarAlertaChurn");
+    if (btnAplicarAlertaChurn) btnAplicarAlertaChurn.addEventListener("click", function(){
+      var atuais = (p.alertasIds || []).slice();
+      if (atuais.indexOf(ALERTA_CHURN_ID) === -1) atuais.push(ALERTA_CHURN_ID);
+      persistirAlertasProjeto(atuais);
+    });
     document.querySelectorAll("[data-item]").forEach(function(el){
       el.addEventListener("click", function(){
         itemAtual = el.getAttribute("data-item");

@@ -53,7 +53,9 @@ export const LISTA_MODELOS_MENSAGEM = '901329038100';
  */
 export const LISTA_GOOGLE_TOKENS = '901329032234';
 
-// Campos da lista Carteira
+// Campos da lista Carteira. ALERTAS é EXCEÇÃO: o mesmo campo (mesmo id,
+// confirmado ao vivo via GET /list/{id}/field) também foi anexado à lista
+// Implantação — ver CAMPO_ALERTAS/espelharAlertas mais abaixo.
 const CF = {
   ID_NUCLEO: '6126a50b-7afb-40fd-8654-26a687f34258',
   MRR: '59888807-a3f3-42f0-aebd-f63032011ed1',
@@ -80,6 +82,13 @@ const CF = {
   CAMP_2025: '0ca6b980-8de1-47e6-bb87-1157e54d2525',
   OBS_EVENTO: '1089289b-c7e8-4ffa-97fc-02448d9ab909',
 };
+
+/**
+ * Id do campo 🚨 Alertas — exportado à parte porque api/clickup.js precisa
+ * dele fora da allowlist de escrita da Carteira, pra ler/gravar o MESMO
+ * campo na task de Implantação (ver alertasDaTask/espelharAlertas).
+ */
+export const CAMPO_ALERTAS = CF.ALERTAS;
 
 /**
  * Opcoes do campo Camp 2025 🔁, historico do evento do ano passado — importado uma
@@ -483,6 +492,19 @@ function cfLabelIds(task, id) {
   return f.value
     .map((v) => (v && typeof v === 'object' ? v.id : v))
     .filter((v) => typeof v === 'string' && v);
+}
+
+/**
+ * Alertas (🚨) de uma task de Implantação, lida direto do custom_fields do
+ * ClickUp (GET /task/{id} já traz isso, sem precisar de include_custom_fields
+ * — esse parâmetro só existe pra endpoint de LISTAGEM). Mesmo par
+ * rotulo+id de mapTask, pro front pré-marcar por ID e mostrar o rotulo.
+ */
+export function alertasDaTask(task) {
+  return {
+    alertas: cfVal(task, CF.ALERTAS) || [],
+    alertasIds: cfLabelIds(task, CF.ALERTAS),
+  };
 }
 
 /** Linha da carteira enviada ao navegador — bem menor que a task crua. */
@@ -1451,4 +1473,80 @@ export function refletirEscrita(taskId, fieldId, valor) {
 
   // Etapa e Tipo de solicitacao nao aparecem na linha que mapTask devolve — nao ha
   // nada a refletir, e o cache continua valido.
+}
+
+// ── Alertas (🚨) compartilhado entre Carteira e Implantação ────────────────
+//
+// É o MESMO campo do ClickUp (mesmo id, anexado às duas listas — ver
+// CAMPO_ALERTAS acima), mas o VALOR é armazenado por task: marcar risco de
+// churn na Carteira não aparece sozinho na Implantação do mesmo cliente, e
+// vice-versa. As três funções abaixo resolvem isso no nível da aplicação
+// (não existe webhook do ClickUp aqui) — toda escrita feita pelos NOSSOS
+// dois painéis passa por aqui antes de responder; uma edição feita direto na
+// UI do ClickUp, por fora dos dois painéis, não dispara o espelhamento.
+//
+// A chave de ligação é o ID NÚCLEO, não o CNPJ: é o campo que já amarra as
+// conexões entre ferramentas em todo o resto do app (ver o comentário em
+// obterImplantacaoAcao, api/clickup.js) — inclusive projetos migrados do
+// Moskit que não têm CNPJ preenchido de forma confiável.
+
+/** Task da Carteira com este ID Núcleo, ou null se não existir (ainda). */
+export async function localizarCarteiraPorIdNucleo(idNucleo) {
+  const chave = String(idNucleo || '').trim();
+  if (!chave || chave === '0') return null;
+  const { linhas } = await getCarteira();
+  const achada = linhas.find((l) => String(l.idNucleo || '').trim() === chave);
+  return achada ? achada.id : null;
+}
+
+/**
+ * Task de Implantação com este ID Núcleo, ou null.
+ * CUSTO: listarImplantacoes() não tem cache (lista pequena, sempre lida
+ * fresca — ver o próprio listarImplantacoes) — cada chamada pagina a lista
+ * inteira. Aceitável aqui porque só roda numa escrita de Alertas, não numa
+ * leitura de tela.
+ */
+export async function localizarImplantacaoPorIdNucleo(idNucleo) {
+  const chave = String(idNucleo || '').trim();
+  if (!chave || chave === '0') return null;
+  const tasks = await listarImplantacoes();
+  for (const t of tasks) {
+    const estado = parseWaipeState(t.description);
+    if (String(estado.idNucleo || '').trim() === chave) return t.id;
+  }
+  return null;
+}
+
+/**
+ * Espelha um valor de Alertas já gravado numa task (Carteira OU Implantação)
+ * na task irmã do mesmo cliente, se existir.
+ *
+ * `origemListaId` diz de qual lista veio a escrita, pra procurar o par na
+ * lista OPOSTA. `valor` é sempre o array completo de ids selecionados (a
+ * própria semântica do campo — POST com [] é a forma legítima de limpar,
+ * nunca DELETE, mesma regra de escreverCampo/validarValor em api/clickup.js).
+ *
+ * Sem task irmã encontrada (cliente ainda não tem Carteira, ou é um projeto
+ * de Implantação que nunca definiu gerente de contas), não faz nada — nunca
+ * cria task nova só pra isto. Quem chama decide se avisa o usuário ou só
+ * loga (best-effort: a escrita principal já foi aplicada e não deve falhar
+ * por causa do espelhamento).
+ */
+export async function espelharAlertas(origemListaId, idNucleo, valor) {
+  const destino = origemListaId === LISTA_CARTEIRA
+    ? await localizarImplantacaoPorIdNucleo(idNucleo)
+    : await localizarCarteiraPorIdNucleo(idNucleo);
+  if (!destino) return false;
+
+  const valorSaneado = Array.isArray(valor) ? valor : [];
+  await gravarCampo(destino, CF.ALERTAS, valorSaneado);
+
+  // Só a Carteira tem cache de leitura (getCarteira) — reflete nele pelo
+  // mesmo motivo de refletirEscrita: sem isso, a tela mostraria o alerta
+  // desatualizado até o TTL de 5 min expirar. listarImplantacoes() nunca é
+  // cacheada, então o lado Implantação não precisa desse passo.
+  if (origemListaId !== LISTA_CARTEIRA) {
+    refletirEscrita(destino, CF.ALERTAS, valorSaneado);
+  }
+  return true;
 }

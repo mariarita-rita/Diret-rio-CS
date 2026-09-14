@@ -112,10 +112,12 @@ import {
 } from './_lib/http.js';
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
+  alertasDaTask,
   anexarArquivoTask,
   assinarTokenProjeto,
   assuntoDoModelo,
   atualizarTask,
+  CAMPO_ALERTAS,
   CAMPOS_ESCRITA,
   cnpjDoAgendamentoGoogle,
   CONTA_EMAIL_COMPARTILHADA,
@@ -135,6 +137,7 @@ import {
   EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
+  espelharAlertas,
   excluirTask,
   GERENTE_OPCOES,
   getCarteira,
@@ -145,6 +148,7 @@ import {
   lerClienteFresco,
   limparCampo,
   linkDaDescricaoReserva,
+  LISTA_CARTEIRA,
   LISTA_IMPLANTACOES_WAIPE,
   LISTA_RESERVAS_AGENDA,
   listarComentarios,
@@ -152,6 +156,7 @@ import {
   listarModelosMensagem,
   listarReservas,
   listarTokensGoogle,
+  localizarCliente,
   localizarTask,
   obterTask,
   obterTaskComSubtasks,
@@ -666,6 +671,20 @@ async function escreverCampo(req, res, sessao) {
   // Reflete no cache em vez de derruba-lo: derrubar custaria ~28 chamadas na leitura
   // seguinte, de uma cota de 100/min compartilhada por todo o time.
   refletirEscrita(taskId, fieldId, valor);
+
+  // Alertas (🚨) é o mesmo campo na lista Implantação — espelha lá se o
+  // cliente já tiver um projeto de implantação (achado por ID Núcleo, não
+  // por CNPJ — ver espelharAlertas). Best-effort: a escrita principal na
+  // Carteira já foi aplicada, não deve falhar por causa do espelhamento.
+  if (fieldId === CAMPO_ALERTAS) {
+    try {
+      const linha = await localizarCliente(taskId);
+      if (linha?.idNucleo) await espelharAlertas(LISTA_CARTEIRA, linha.idNucleo, valor);
+    } catch (e) {
+      console.error('[clickup] falha ao espelhar alertas na implantação:', e);
+    }
+  }
+
   return res.status(200).json({ ok: true, campo: campo.nome, limpo: valor === null });
 }
 
@@ -1443,6 +1462,10 @@ async function obterImplantacaoAcao(req, res, sessao) {
       finalizacao: sanearFinalizacao(estadoProjeto.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estadoProjeto, sessao),
       anexos: mapearAnexos(pai.attachments),
+      // Alertas (🚨) — campo NATIVO do ClickUp (não é WaipeState), lido
+      // direto de pai.custom_fields; ver alertasDaTask/CAMPO_ALERTAS. É o
+      // MESMO campo da Carteira: gravar aqui espelha lá, e vice-versa.
+      ...alertasDaTask(pai),
       ...dadosTributariosCampos(estadoProjeto, agentes, pai.id),
     },
     agentes,
@@ -1859,6 +1882,29 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   }
 
   await atualizarTask(corpo.id, payload);
+
+  // Alertas (🚨) é campo NATIVO do ClickUp (mesmo campo anexado também à
+  // Carteira — ver CAMPO_ALERTAS/espelharAlertas), não faz parte do
+  // WaipeState: só mexe quando vem explicitamente no corpo, numa chamada
+  // separada da task normal acima. Reaproveita a MESMA allowlist da
+  // Carteira (CAMPOS_ESCRITA[CAMPO_ALERTAS].opcoes) — um id novo só passa a
+  // ser aceito aqui no dia em que também for aceito lá.
+  if ('alertas' in corpo) {
+    const valor = validarValor(CAMPOS_ESCRITA[CAMPO_ALERTAS], corpo.alertas);
+    if (valor === undefined) {
+      return erro(res, 403, 'valor_nao_permitido', 'Valor não permitido para o campo Alertas.');
+    }
+    await gravarCampo(corpo.id, CAMPO_ALERTAS, valor);
+    const idNucleoAtual = texto(novoEstado.idNucleo, 60);
+    if (idNucleoAtual) {
+      try {
+        await espelharAlertas(LISTA_IMPLANTACOES_WAIPE, idNucleoAtual, valor);
+      } catch (e) {
+        console.error('[clickup] falha ao espelhar alertas na carteira:', e);
+      }
+    }
+  }
+
   return res.status(200).json({ ok: true });
 }
 
