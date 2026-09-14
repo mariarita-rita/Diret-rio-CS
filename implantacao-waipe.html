@@ -1020,6 +1020,15 @@
   };
   var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
 
+  // Tags de risco/satisfação no card do projeto (ver cardHtml) — só
+  // aparecem quando já existe finalizacao (relatório de finalização já
+  // gerado e salvo), pra dar pra localizar visualmente na lista quem foi
+  // risco alto ou ficou insatisfeito, sem abrir projeto por projeto.
+  var RISCO_LABEL_CURTO = { baixo: "Risco baixo", medio: "Risco médio", alto: "Risco alto" };
+  var RISCO_TAG_CLASS = { baixo: "neutro", medio: "cliente", alto: "perigo" };
+  var SATISFACAO_LABEL_CURTO = { positiva: "Satisfação positiva", neutra: "Satisfação neutra", negativa: "Satisfação negativa", indeterminada: "Satisfação indeterminada" };
+  var SATISFACAO_TAG_CLASS = { positiva: "ambos", neutra: "neutro", negativa: "perigo", indeterminada: "neutro" };
+
   // "urgencia" — NUNCA chamar isso de "prioridade": esse nome já é usado
   // pela ordem dos agentes Waipe no pipeline de build (sim.prioridade,
   // um array de ids), um conceito totalmente diferente.
@@ -1203,10 +1212,20 @@
     });
   }
 
-  function statIndicador(valor, rotulo){
-    return '<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
+  // `idDetalhe`+`nomes` (opcionais): quando dados, o card vira clicável —
+  // clique mostra a lista de clientes daquele grupo (ex: quem é "Risco
+  // alto"), sem precisar abrir projeto por projeto pra descobrir quem é.
+  function statIndicador(valor, rotulo, idDetalhe, nomes){
+    var temDetalhe = idDetalhe && nomes && nomes.length;
+    return '<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;' + (temDetalhe ? "cursor:pointer;" : "") + '"' +
+        (temDetalhe ? ' data-toggle-detalhe="' + idDetalhe + '" title="Clique para ver quais clientes"' : "") + '>' +
       '<div style="font-size:22px;font-weight:800;color:var(--profundo);">' + valor + '</div>' +
-      '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + rotulo + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + rotulo + (temDetalhe ? " ▾" : "") + '</div>' +
+      (temDetalhe
+        ? '<div data-detalhe="' + idDetalhe + '" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;color:var(--ink-2);line-height:1.6;">' +
+            nomes.map(function(n){ return esc(n); }).join("<br>") +
+          '</div>'
+        : "") +
     '</div>';
   }
   function secaoIndicador(titulo, corpoHtml){
@@ -1216,8 +1235,17 @@
   // Só projeto que já passou pelo relatório de finalização (satisfação
   // preenchida) entra nas 3 seções de implantação — projeto ainda em
   // andamento não tem opinião formada sobre satisfação/risco/duração final.
+  // O filtro por ISM (indicadoresFiltroIsm) se aplica só a essas 3 seções —
+  // treinamento é por cliente, não por ISM responsável.
+  var indicadoresFiltroIsm = ""; // "" = todos
   function projetosFinalizadosParaIndicadores(projetos){
-    return (projetos || []).filter(function(p){ return p.finalizacao && p.finalizacao.satisfacaoPercebida; });
+    var base = (projetos || []).filter(function(p){ return p.finalizacao && p.finalizacao.satisfacaoPercebida; });
+    return indicadoresFiltroIsm ? base.filter(function(p){ return (p.ism || []).includes(indicadoresFiltroIsm); }) : base;
+  }
+  function todosIsmDeProjetos(projetos){
+    var presentes = {};
+    (projetos || []).forEach(function(p){ (p.ism || []).forEach(function(nome){ presentes[nome] = true; }); });
+    return Object.keys(presentes).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
   }
 
   function secaoSatisfacao(finalizados){
@@ -1225,8 +1253,8 @@
     var rotulos = { positiva: "Positiva", neutra: "Neutra", negativa: "Negativa", indeterminada: "Indeterminada" };
     var corpo = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
     ["positiva", "neutra", "negativa", "indeterminada"].forEach(function(k){
-      var qtd = finalizados.filter(function(p){ return p.finalizacao.satisfacaoPercebida === k; }).length;
-      corpo += statIndicador(qtd, rotulos[k]);
+      var doGrupo = finalizados.filter(function(p){ return p.finalizacao.satisfacaoPercebida === k; });
+      corpo += statIndicador(doGrupo.length, rotulos[k], "satisfacao-" + k, doGrupo.map(function(p){ return p.cliente; }));
     });
     corpo += '</div><div class="sub" style="margin-top:8px;">De ' + finalizados.length + ' projeto(s) finalizado(s).</div>';
     return secaoIndicador("Satisfação do cliente", corpo);
@@ -1238,8 +1266,8 @@
     var rotulos = { baixo: "Baixo", medio: "Médio", alto: "Alto" };
     var corpo = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
     ["baixo", "medio", "alto"].forEach(function(k){
-      var qtd = comRisco.filter(function(p){ return p.finalizacao.riscoPercebido === k; }).length;
-      corpo += statIndicador(qtd, rotulos[k]);
+      var doGrupo = comRisco.filter(function(p){ return p.finalizacao.riscoPercebido === k; });
+      corpo += statIndicador(doGrupo.length, rotulos[k], "risco-" + k, doGrupo.map(function(p){ return p.cliente; }));
     });
     corpo += '</div><div class="sub" style="margin-top:8px;">De ' + comRisco.length + ' projeto(s) finalizado(s).</div>';
     return secaoIndicador("Risco percebido", corpo);
@@ -1285,12 +1313,38 @@
   }
 
   function renderIndicadores(root, linhasTreinamento, projetos){
+    var todasIsmIndicadores = todosIsmDeProjetos(projetos);
+    var filtroIsmHtml = todasIsmIndicadores.length > 1
+      ? '<div style="margin-bottom:14px;"><label style="font-size:12px;color:var(--muted);margin-right:6px;">Filtrar satisfação/risco/duração por ISM</label>' +
+        '<select id="indicadoresFiltroIsmSel" class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:4px 8px;">' +
+        '<option value=""' + (indicadoresFiltroIsm ? "" : " selected") + '>Todos</option>' +
+        todasIsmIndicadores.map(function(nome){ return '<option value="' + esc(nome) + '"' + (nome === indicadoresFiltroIsm ? " selected" : "") + '>' + esc(nome) + '</option>'; }).join("") +
+        '</select></div>'
+      : "";
+
     var finalizados = projetosFinalizadosParaIndicadores(projetos);
     root.innerHTML =
+      filtroIsmHtml +
       secaoSatisfacao(finalizados) +
       secaoRisco(finalizados) +
       secaoDuracao(finalizados) +
       secaoTreinamento(linhasTreinamento);
+
+    var selIsm = document.getElementById("indicadoresFiltroIsmSel");
+    if (selIsm) selIsm.addEventListener("change", function(){
+      indicadoresFiltroIsm = selIsm.value;
+      renderIndicadores(root, linhasTreinamento, projetos);
+    });
+    // Clique num card com detalhe (ver statIndicador) mostra/esconde a
+    // lista de clientes daquele grupo, logo abaixo do número.
+    root.querySelectorAll("[data-toggle-detalhe]").forEach(function(card){
+      card.addEventListener("click", function(){
+        var id = card.getAttribute("data-toggle-detalhe");
+        var detalhe = root.querySelector('[data-detalhe="' + id + '"]');
+        if (!detalhe) return;
+        detalhe.style.display = detalhe.style.display === "none" ? "block" : "none";
+      });
+    });
   }
 
   // ---- Capability `sample` (extração de agentes por IA) ----
@@ -1624,7 +1678,27 @@
     }
 
     function cardHtml(p){
-      var diasAberto = p.dataCriacao ? Math.max(0, Math.floor((Date.now() - p.dataCriacao) / 86400000)) : null;
+      // Prefere as datas reais (dataInicioReal/dataFimReal) quando existem
+      // — pra um projeto entregue, mostra a DURAÇÃO de verdade (início real
+      // até entrega real), não "dias em aberto" contado da data de criação
+      // do ClickUp (que pra projeto migrado é sempre "hoje").
+      var inicioParaDias = p.dataInicioReal || p.dataCriacao;
+      var diasTexto = null;
+      if (inicioParaDias){
+        if (p.dataFimReal){
+          var diasImplantacao = Math.max(0, Math.round((p.dataFimReal - inicioParaDias) / 86400000));
+          diasTexto = diasImplantacao + " dia" + (diasImplantacao === 1 ? "" : "s") + " de implantação";
+        } else {
+          var diasAberto = Math.max(0, Math.floor((Date.now() - inicioParaDias) / 86400000));
+          diasTexto = diasAberto + " dia" + (diasAberto === 1 ? "" : "s") + " em aberto";
+        }
+      }
+      var riscoTag = (p.finalizacao && p.finalizacao.riscoPercebido)
+        ? ' <span class="tag ' + (RISCO_TAG_CLASS[p.finalizacao.riscoPercebido] || "neutro") + '" title="Risco percebido (relatório de finalização)">' + esc(RISCO_LABEL_CURTO[p.finalizacao.riscoPercebido] || p.finalizacao.riscoPercebido) + '</span>'
+        : "";
+      var satisfacaoTag = (p.finalizacao && p.finalizacao.satisfacaoPercebida)
+        ? ' <span class="tag ' + (SATISFACAO_TAG_CLASS[p.finalizacao.satisfacaoPercebida] || "neutro") + '" title="Satisfação percebida (relatório de finalização)">' + esc(SATISFACAO_LABEL_CURTO[p.finalizacao.satisfacaoPercebida] || p.finalizacao.satisfacaoPercebida) + '</span>'
+        : "";
       var fase = faseEfetiva(p);
       var faseTag = fase
         ? ' <span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span>'
@@ -1644,7 +1718,8 @@
       return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
         '<div class="proj-card-top">' + urgenciaFlag + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + sinalDot + novaMsgDot + '</div>' +
         '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
-        (diasAberto !== null ? ' · ' + diasAberto + ' dia' + (diasAberto === 1 ? "" : "s") + ' em aberto' : "") + '</div>' +
+        (diasTexto ? ' · ' + diasTexto : "") + '</div>' +
+        (riscoTag || satisfacaoTag ? '<div style="margin-top:6px;">' + riscoTag + satisfacaoTag + '</div>' : "") +
         (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
       '</div>';
     }
