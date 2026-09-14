@@ -414,7 +414,7 @@ export async function editarRegra(id, campos) {
 export async function listarEventos(status) {
   const filtro = status ? `&status=eq.${enc(status)}` : '';
   return sbTodos(
-    `/pontos_eventos?select=*,pontos_regras(titulo,pontos,tipo),clientes(nome,id_nucleo,cnpj)${filtro}&order=criado_em.desc`
+    `/pontos_eventos?select=*,pontos_regras(titulo,tipo),clientes(nome,id_nucleo,cnpj)${filtro}&order=criado_em.desc`
   );
 }
 

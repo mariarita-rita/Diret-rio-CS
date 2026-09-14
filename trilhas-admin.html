@@ -745,7 +745,7 @@
     function ajustarCamposRegra(){
       var automatica = novaRegraTipo.value === "automatica";
       novaRegraProdutosBox.style.display = automatica ? "flex" : "none";
-      novaRegraIdentLabel.style.display = automatica ? "none" : "flex";
+      novaRegraIdentLabel.style.display = (novaRegraTipo.value === "pendente_aprovacao") ? "flex" : "none";
     }
     novaRegraTipo.addEventListener("change", ajustarCamposRegra);
     ajustarCamposRegra();
@@ -817,7 +817,7 @@
       alvo.innerHTML = '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Regra</th><th>Identificação / obs.</th><th>Data</th>' + (status === "pendente" ? '<th>Ações</th>' : '') + '</tr></thead><tbody>' +
         eventos.map(function(e){
           var cliente = e.clientes ? e.clientes.nome : "";
-          var regra = e.pontos_regras ? (e.pontos_regras.titulo + " (" + e.pontos_regras.pontos + " pts)") : "";
+          var regra = e.pontos_regras ? e.pontos_regras.titulo : "";
           var extra = [e.identificacao, e.observacao].filter(Boolean).join(" — ");
           var data = e.criado_em ? new Date(e.criado_em).toLocaleDateString("pt-BR") : "";
           return '<tr>' +
