@@ -1212,18 +1212,32 @@
     });
   }
 
-  // `idDetalhe`+`nomes` (opcionais): quando dados, o card vira clicável —
+  // `opts` (tudo opcional): `idDetalhe`+`nomes` deixam o card clicável —
   // clique mostra a lista de clientes daquele grupo (ex: quem é "Risco
-  // alto"), sem precisar abrir projeto por projeto pra descobrir quem é.
-  function statIndicador(valor, rotulo, idDetalhe, nomes){
-    var temDetalhe = idDetalhe && nomes && nomes.length;
-    return '<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;' + (temDetalhe ? "cursor:pointer;" : "") + '"' +
-        (temDetalhe ? ' data-toggle-detalhe="' + idDetalhe + '" title="Clique para ver quais clientes"' : "") + '>' +
-      '<div style="font-size:22px;font-weight:800;color:var(--profundo);">' + valor + '</div>' +
+  // alto"). `cor` ("verde"/"amarelo"/"vermelho") pinta o cartão levemente
+  // (mesmos tokens de --success/--warning/--danger já usados em callouts) e
+  // `emoji` entra antes do número — pensado pra satisfação (😊/😐/😠), mas
+  // dá pra usar em qualquer indicador.
+  var COR_INDICADOR = {
+    verde: { bg: "var(--success-bg)", borda: "var(--success)", texto: "var(--success)" },
+    amarelo: { bg: "var(--warning-bg)", borda: "var(--warning)", texto: "var(--warning)" },
+    vermelho: { bg: "var(--danger-bg)", borda: "var(--danger)", texto: "var(--danger)" },
+  };
+  function statIndicador(valor, rotulo, opts){
+    opts = opts || {};
+    var temDetalhe = opts.idDetalhe && opts.nomes && opts.nomes.length;
+    var corDef = opts.cor && COR_INDICADOR[opts.cor];
+    var bg = corDef ? corDef.bg : "var(--surface)";
+    var borda = corDef ? corDef.borda : "var(--border)";
+    var corTexto = corDef ? corDef.texto : "var(--profundo)";
+    var emojiHtml = opts.emoji ? '<span style="margin-right:4px;">' + opts.emoji + '</span>' : "";
+    return '<div style="flex:1;min-width:130px;background:' + bg + ';border:1px solid ' + borda + ';border-radius:12px;padding:14px 16px;' + (temDetalhe ? "cursor:pointer;" : "") + '"' +
+        (temDetalhe ? ' data-toggle-detalhe="' + opts.idDetalhe + '" title="Clique para ver quais clientes"' : "") + '>' +
+      '<div style="font-size:22px;font-weight:800;color:' + corTexto + ';">' + emojiHtml + valor + '</div>' +
       '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + rotulo + (temDetalhe ? " ▾" : "") + '</div>' +
       (temDetalhe
-        ? '<div data-detalhe="' + idDetalhe + '" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;color:var(--ink-2);line-height:1.6;">' +
-            nomes.map(function(n){ return esc(n); }).join("<br>") +
+        ? '<div data-detalhe="' + opts.idDetalhe + '" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid ' + borda + ';font-size:12px;color:var(--ink-2);line-height:1.6;">' +
+            opts.nomes.map(function(n){ return esc(n); }).join("<br>") +
           '</div>'
         : "") +
     '</div>';
@@ -1248,43 +1262,69 @@
     return Object.keys(presentes).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
   }
 
+  var CONFIG_SATISFACAO = {
+    positiva: { rotulo: "Positiva", cor: "verde", emoji: "😊" },
+    neutra: { rotulo: "Neutra", cor: "amarelo", emoji: "😐" },
+    negativa: { rotulo: "Negativa", cor: "vermelho", emoji: "😠" },
+    indeterminada: { rotulo: "Indeterminada", cor: null, emoji: "" },
+  };
   function secaoSatisfacao(finalizados){
     if (!finalizados.length) return secaoIndicador("Satisfação do cliente", '<div class="sub">Nenhum projeto finalizado ainda.</div>');
-    var rotulos = { positiva: "Positiva", neutra: "Neutra", negativa: "Negativa", indeterminada: "Indeterminada" };
     var corpo = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
     ["positiva", "neutra", "negativa", "indeterminada"].forEach(function(k){
       var doGrupo = finalizados.filter(function(p){ return p.finalizacao.satisfacaoPercebida === k; });
-      corpo += statIndicador(doGrupo.length, rotulos[k], "satisfacao-" + k, doGrupo.map(function(p){ return p.cliente; }));
+      var cfg = CONFIG_SATISFACAO[k];
+      corpo += statIndicador(doGrupo.length, cfg.rotulo, {
+        idDetalhe: "satisfacao-" + k,
+        nomes: doGrupo.map(function(p){ return p.cliente; }),
+        cor: cfg.cor, emoji: cfg.emoji,
+      });
     });
     corpo += '</div><div class="sub" style="margin-top:8px;">De ' + finalizados.length + ' projeto(s) finalizado(s).</div>';
     return secaoIndicador("Satisfação do cliente", corpo);
   }
 
+  var CONFIG_RISCO = {
+    baixo: { rotulo: "Baixo", cor: "verde" },
+    medio: { rotulo: "Médio", cor: "amarelo" },
+    alto: { rotulo: "Alto", cor: "vermelho" },
+  };
   function secaoRisco(finalizados){
     var comRisco = finalizados.filter(function(p){ return p.finalizacao.riscoPercebido; });
     if (!comRisco.length) return secaoIndicador("Risco percebido", '<div class="sub">Nenhum projeto finalizado com risco avaliado ainda.</div>');
-    var rotulos = { baixo: "Baixo", medio: "Médio", alto: "Alto" };
     var corpo = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
     ["baixo", "medio", "alto"].forEach(function(k){
       var doGrupo = comRisco.filter(function(p){ return p.finalizacao.riscoPercebido === k; });
-      corpo += statIndicador(doGrupo.length, rotulos[k], "risco-" + k, doGrupo.map(function(p){ return p.cliente; }));
+      var cfg = CONFIG_RISCO[k];
+      corpo += statIndicador(doGrupo.length, cfg.rotulo, {
+        idDetalhe: "risco-" + k,
+        nomes: doGrupo.map(function(p){ return p.cliente; }),
+        cor: cfg.cor,
+      });
     });
     corpo += '</div><div class="sub" style="margin-top:8px;">De ' + comRisco.length + ' projeto(s) finalizado(s).</div>';
     return secaoIndicador("Risco percebido", corpo);
   }
 
   function secaoDuracao(finalizados){
-    var dias = finalizados.map(function(p){ return p.finalizacao.diasEmAberto; }).filter(function(d){ return Number.isFinite(d); });
-    if (!dias.length) return secaoIndicador("Duração da implantação", '<div class="sub">Nenhum projeto finalizado com duração calculada ainda.</div>');
+    var comDias = finalizados
+      .map(function(p){ return { cliente: p.cliente, dias: p.finalizacao.diasEmAberto }; })
+      .filter(function(x){ return Number.isFinite(x.dias); });
+    if (!comDias.length) return secaoIndicador("Duração da implantação", '<div class="sub">Nenhum projeto finalizado com duração calculada ainda.</div>');
+    var dias = comDias.map(function(x){ return x.dias; });
     var media = Math.round(dias.reduce(function(s, d){ return s + d; }, 0) / dias.length);
     var ordenado = dias.slice().sort(function(a, b){ return a - b; });
     var meio = Math.floor(ordenado.length / 2);
     var mediana = ordenado.length % 2 ? ordenado[meio] : Math.round((ordenado[meio - 1] + ordenado[meio]) / 2);
+    var maior = comDias.reduce(function(m, x){ return (!m || x.dias > m.dias) ? x : m; }, null);
+    var menor = comDias.reduce(function(m, x){ return (!m || x.dias < m.dias) ? x : m; }, null);
     return secaoIndicador("Duração da implantação",
       '<div style="display:flex;flex-wrap:wrap;gap:12px;">' +
         statIndicador(media, "dias em média") +
         statIndicador(mediana, "dias (mediana)") +
         statIndicador(dias.length, "projeto(s) considerado(s)") +
+        statIndicador(maior.dias, "maior duração — " + esc(maior.cliente)) +
+        statIndicador(menor.dias, "menor duração — " + esc(menor.cliente)) +
       '</div>');
   }
 
