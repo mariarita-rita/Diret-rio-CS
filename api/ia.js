@@ -516,8 +516,21 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
   const ismNomes = (projeto.assignees || [])
     .map((a) => ISM_OPCOES.find((i) => i.id === Number(a.id))?.nome)
     .filter(Boolean);
-  const diasEmAberto = Number.isFinite(Number(projeto.date_created))
-    ? Math.max(0, Math.round((Date.now() - Number(projeto.date_created)) / 86400000))
+  // Prefere as datas reais (dataInicioReal/dataFimReal — ver
+  // criarProjetoImplantacao/atualizarImplantacaoAcao) quando existirem: um
+  // projeto migrado do Moskit só passou a existir no ClickUp muito depois
+  // do início de verdade, então `date_created` sozinho dava "0 dias" pra
+  // qualquer migração. Cai pro `date_created` de sempre quando o projeto
+  // não tem essas datas (nasceu antes desse campo existir).
+  const estadoProjeto = parseWaipeState(projeto.description);
+  const inicioParaCalculo = Number.isFinite(Number(estadoProjeto.dataInicioReal))
+    ? Number(estadoProjeto.dataInicioReal)
+    : Number(projeto.date_created);
+  const fimParaCalculo = Number.isFinite(Number(estadoProjeto.dataFimReal))
+    ? Number(estadoProjeto.dataFimReal)
+    : Date.now();
+  const diasEmAberto = Number.isFinite(inicioParaCalculo)
+    ? Math.max(0, Math.round((fimParaCalculo - inicioParaCalculo) / 86400000))
     : null;
 
   // Comparecimento/reagendamento das reservas desse projeto — fato objetivo

@@ -1290,6 +1290,13 @@ async function listarImplantacoesAcao(res, sessao) {
       faseProjetoManual: FASES_ITEM_VALIDAS.has(estado.faseProjetoManual) ? estado.faseProjetoManual : null,
       urgencia: sanearUrgencia(estado.urgencia),
       dataCriacao: Number.isFinite(Number(t.date_created)) ? Number(t.date_created) : null,
+      // Datas reais (ver criarProjetoImplantacao/atualizarImplantacaoAcao) e
+      // o relatório de finalização — precisam vir na listagem em massa (não
+      // só na tela de 1 projeto aberto) pra dar pra agregar num dashboard de
+      // indicadores sem 1 chamada por projeto.
+      dataInicioReal: Number.isFinite(Number(estado.dataInicioReal)) ? Number(estado.dataInicioReal) : null,
+      dataFimReal: Number.isFinite(Number(estado.dataFimReal)) ? Number(estado.dataFimReal) : null,
+      finalizacao: sanearFinalizacao(estado.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estado, sessao),
     };
   });
@@ -1482,7 +1489,7 @@ function dadosTributariosCampos(estadoProjeto, agentes, projetoId) {
  */
 export async function criarProjetoImplantacao({
   nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor,
-  origemMoskitDealId, origemMoskitProjetoId, faseProjetoManual,
+  origemMoskitDealId, origemMoskitProjetoId, faseProjetoManual, dataInicioReal, dataFimReal,
 }) {
   // Projeto que já nasce "Entregue" (ex: migração de um projeto do Moskit
   // que já estava finalizado de verdade) precisa refletir isso em MAIS que
@@ -1494,6 +1501,12 @@ export async function criarProjetoImplantacao({
   // subtasks existem) o projeto-pai é atualizado com `concluidos` cheio e
   // status ClickUp "concluído".
   const jaEntregue = faseProjetoManual === 'entregue';
+  // Calculadas uma vez só e reaproveitadas nos dois stringifyWaipeState
+  // abaixo (criação + o follow-up de "já entregue") — senão dois
+  // `Date.now()` em momentos diferentes da mesma criação divergiam por
+  // alguns milissegundos à toa.
+  const dataInicioRealFinal = Number.isFinite(Number(dataInicioReal)) ? Number(dataInicioReal) : Date.now();
+  const dataFimRealFinal = Number.isFinite(Number(dataFimReal)) ? Number(dataFimReal) : (jaEntregue ? Date.now() : null);
   const descricaoProjeto = stringifyWaipeState(
     // Sem csmNome (projeto ainda sem gerente de contas, ver
     // definir-gerente-contas), a linha "**CSM:**" nem entra — deixá-la vazia
@@ -1518,6 +1531,16 @@ export async function criarProjetoImplantacao({
       // etc. (ver FASES_ITEM_VALIDAS); null preserva o comportamento
       // automático de sempre (faseEfetiva cai pra faseProjetoDerivada).
       faseProjetoManual: FASES_ITEM_VALIDAS.has(faseProjetoManual) ? faseProjetoManual : null,
+      // Data real de início/entrega — diferente de `dataCriacao` (nativo do
+      // ClickUp, imutável): existe só pra dar duração certa a projeto
+      // migrado, cuja task só passou a existir no ClickUp muito depois do
+      // início de verdade no Moskit. `dataInicioReal` sempre grava algo (o
+      // valor dado, ou agora — mesmo comportamento de sempre pra projeto
+      // novo); `dataFimReal` só grava se vier explícito (projeto migrado já
+      // entregue) — em projeto novo fica null até finalizar de verdade
+      // (ver atualizarImplantacaoAcao, que carimba isso sozinho na hora).
+      dataInicioReal: dataInicioRealFinal,
+      dataFimReal: dataFimRealFinal,
       ...dadosCliente,
     }
   );
@@ -1565,6 +1588,8 @@ export async function criarProjetoImplantacao({
           origemMoskitDealId: origemMoskitDealId ?? null,
           origemMoskitProjetoId: origemMoskitProjetoId ?? null,
           faseProjetoManual: 'entregue',
+          dataInicioReal: dataInicioRealFinal,
+          dataFimReal: dataFimRealFinal,
           ...dadosCliente,
         }
       ),
@@ -1742,6 +1767,11 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   }
 
   const estadoAtual = parseWaipeState(tarefa.description);
+  // Calculada antes do objeto pra poder decidir o carimbo de dataFimReal
+  // logo abaixo — mesma regra usada dentro do objeto (ver faseProjetoManual).
+  const novaFaseProjetoManual = 'faseProjetoManual' in corpo
+    ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
+    : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null);
   const novoEstado = {
     // Espalha o estado atual ANTES dos campos explícitos abaixo — garante
     // que qualquer campo que não seja mexido aqui (origemMoskitDealId,
@@ -1772,9 +1802,15 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     // corpo (mesmo se vier null/inválido, o que significa "voltar a
     // automático"); se nem vier, preserva o que já estava gravado, senão
     // qualquer atualizar-implantacao do dia a dia (camada1Checks etc.) apaga.
-    faseProjetoManual: 'faseProjetoManual' in corpo
-      ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
-      : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null),
+    faseProjetoManual: novaFaseProjetoManual,
+    // Carimbo automático do momento real da entrega — só na PRIMEIRA vez
+    // que a fase vira "entregue" (não sobrescreve se já tinha uma data,
+    // ex: migração que já veio com dataFimReal setado na criação). Sem
+    // isso, a usuária precisaria lembrar de preencher isso à mão toda vez
+    // que finaliza um projeto pra "dias de projeto" sair certo depois.
+    dataFimReal: novaFaseProjetoManual === 'entregue' && !estadoAtual.dataFimReal
+      ? Date.now()
+      : (estadoAtual.dataFimReal ?? null),
     // Urgencia — mesmo padrao: so muda quando vem no corpo, senao o spread
     // de estadoAtual (logo acima) ja preserva. So repete aqui pra sanear
     // caso venha um valor invalido no corpo. NUNCA usar a chave

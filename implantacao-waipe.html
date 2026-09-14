@@ -814,7 +814,7 @@
   <section class="panel" id="panel-indicadores">
     <div class="callout">
       <div class="dot"></div>
-      <div><b>Engajamento de treinamento.</b> Vídeos assistidos pelos clientes na Central de Treinamento, por produto ativado. Trilhas por etapa/tempo de implantação continuam em aberto.</div>
+      <div><b>Indicadores de implantação.</b> Satisfação, risco e duração vêm do relatório de finalização de cada projeto (só entram projetos já finalizados); treinamento é o engajamento dos clientes na Central de Treinamento — uma métrica entre as outras, não o resumo da tela toda.</div>
     </div>
     <div id="indicadoresRoot"><div class="sub">Carregando...</div></div>
   </section>
@@ -1178,52 +1178,119 @@
     desenhar();
   }
 
-  // ---- Indicadores (engajamento de treinamento — Central de Treinamento) ----
+  // ---- Indicadores (satisfação, risco e duração de implantação, mais
+  // engajamento de treinamento — treinamento é UMA métrica aqui, não o
+  // resumo da tela toda) ----
   function carregarIndicadores(){
     var root = document.getElementById("indicadoresRoot");
     if (!root) return;
     root.innerHTML = '<div class="sub">Carregando...</div>';
-    fetch("/api/trilhas-admin?recurso=indicadores", { credentials: "same-origin" }).then(tratarRespostaApi)
-      .then(function(j){ renderIndicadores(root, j.indicadores || []); })
-      .catch(function(e){
-        // Sessão inválida nunca cai aqui: tratarRespostaApi devolve uma promise
-        // que fica pendente pra sempre nesse caso, e mostrarLoginNoPainel já
-        // assumiu a tela (ver definição de tratarRespostaApi acima).
-        root.innerHTML = '<div class="callout danger"><div class="dot"></div><div>' +
-          ((e && e.error) || "Erro ao carregar indicadores.") + '</div></div>';
-      });
+    Promise.all([
+      fetch("/api/trilhas-admin?recurso=indicadores", { credentials: "same-origin" }).then(tratarRespostaApi),
+      // Reaproveita projetosCache se a aba Projetos/Entregues já tiver
+      // carregado nesta sessão — senão busca 1x aqui mesmo, mesma chamada
+      // que carregarListaProjetos já usa.
+      projetosCache ? Promise.resolve({ tasks: projetosCache }) : apiGet("listar-implantacoes"),
+    ]).then(function(resultados){
+      if (!projetosCache) projetosCache = resultados[1].tasks || [];
+      renderIndicadores(root, resultados[0].indicadores || [], projetosCache);
+    }).catch(function(e){
+      // Sessão inválida nunca cai aqui: tratarRespostaApi devolve uma promise
+      // que fica pendente pra sempre nesse caso, e mostrarLoginNoPainel já
+      // assumiu a tela (ver definição de tratarRespostaApi acima).
+      root.innerHTML = '<div class="callout danger"><div class="dot"></div><div>' +
+        ((e && e.error) || "Erro ao carregar indicadores.") + '</div></div>';
+    });
   }
-  // Só o resumo aqui — a lista detalhada por cliente foi pra trilhas-admin.html
-  // (aba Indicadores), que é a ferramenta de treinamento propriamente dita.
-  // Esta tela é de indicadores de implantação em geral, não só treinamento —
-  // a lista cliente a cliente ocupava a tela inteira e não fazia sentido aqui.
-  function renderIndicadores(root, linhas){
-    var comTrilha = linhas.filter(function(l){ return l.videosDisponiveis > 0; });
+
+  function statIndicador(valor, rotulo){
+    return '<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
+      '<div style="font-size:22px;font-weight:800;color:var(--profundo);">' + valor + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + rotulo + '</div>' +
+    '</div>';
+  }
+  function secaoIndicador(titulo, corpoHtml){
+    return '<div class="card" style="margin-bottom:14px;"><h2 style="margin-bottom:10px;">' + titulo + '</h2>' + corpoHtml + '</div>';
+  }
+
+  // Só projeto que já passou pelo relatório de finalização (satisfação
+  // preenchida) entra nas 3 seções de implantação — projeto ainda em
+  // andamento não tem opinião formada sobre satisfação/risco/duração final.
+  function projetosFinalizadosParaIndicadores(projetos){
+    return (projetos || []).filter(function(p){ return p.finalizacao && p.finalizacao.satisfacaoPercebida; });
+  }
+
+  function secaoSatisfacao(finalizados){
+    if (!finalizados.length) return secaoIndicador("Satisfação do cliente", '<div class="sub">Nenhum projeto finalizado ainda.</div>');
+    var rotulos = { positiva: "Positiva", neutra: "Neutra", negativa: "Negativa", indeterminada: "Indeterminada" };
+    var corpo = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+    ["positiva", "neutra", "negativa", "indeterminada"].forEach(function(k){
+      var qtd = finalizados.filter(function(p){ return p.finalizacao.satisfacaoPercebida === k; }).length;
+      corpo += statIndicador(qtd, rotulos[k]);
+    });
+    corpo += '</div><div class="sub" style="margin-top:8px;">De ' + finalizados.length + ' projeto(s) finalizado(s).</div>';
+    return secaoIndicador("Satisfação do cliente", corpo);
+  }
+
+  function secaoRisco(finalizados){
+    var comRisco = finalizados.filter(function(p){ return p.finalizacao.riscoPercebido; });
+    if (!comRisco.length) return secaoIndicador("Risco percebido", '<div class="sub">Nenhum projeto finalizado com risco avaliado ainda.</div>');
+    var rotulos = { baixo: "Baixo", medio: "Médio", alto: "Alto" };
+    var corpo = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+    ["baixo", "medio", "alto"].forEach(function(k){
+      var qtd = comRisco.filter(function(p){ return p.finalizacao.riscoPercebido === k; }).length;
+      corpo += statIndicador(qtd, rotulos[k]);
+    });
+    corpo += '</div><div class="sub" style="margin-top:8px;">De ' + comRisco.length + ' projeto(s) finalizado(s).</div>';
+    return secaoIndicador("Risco percebido", corpo);
+  }
+
+  function secaoDuracao(finalizados){
+    var dias = finalizados.map(function(p){ return p.finalizacao.diasEmAberto; }).filter(function(d){ return Number.isFinite(d); });
+    if (!dias.length) return secaoIndicador("Duração da implantação", '<div class="sub">Nenhum projeto finalizado com duração calculada ainda.</div>');
+    var media = Math.round(dias.reduce(function(s, d){ return s + d; }, 0) / dias.length);
+    var ordenado = dias.slice().sort(function(a, b){ return a - b; });
+    var meio = Math.floor(ordenado.length / 2);
+    var mediana = ordenado.length % 2 ? ordenado[meio] : Math.round((ordenado[meio - 1] + ordenado[meio]) / 2);
+    return secaoIndicador("Duração da implantação",
+      '<div style="display:flex;flex-wrap:wrap;gap:12px;">' +
+        statIndicador(media, "dias em média") +
+        statIndicador(mediana, "dias (mediana)") +
+        statIndicador(dias.length, "projeto(s) considerado(s)") +
+      '</div>');
+  }
+
+  // Único trecho que sobrevive quase intacto da versão anterior (só virou
+  // "uma seção" via secaoIndicador, em vez de ser a tela inteira) — a lista
+  // detalhada por cliente continua só em trilhas-admin.html.
+  function secaoTreinamento(linhas){
+    var comTrilha = (linhas || []).filter(function(l){ return l.videosDisponiveis > 0; });
     if (!comTrilha.length){
-      root.innerHTML = '<div class="sub">Nenhum cliente com trilha disponível ainda.</div>';
-      return;
+      return secaoIndicador("Treinamento", '<div class="sub">Nenhum cliente com trilha disponível ainda.</div>');
     }
     var comProgresso = comTrilha.filter(function(l){ return l.videosAssistidos > 0; }).length;
     var completos = comTrilha.filter(function(l){ return l.percentual === 100; }).length;
     var somaPct = comTrilha.reduce(function(s, l){ return s + (l.percentual || 0); }, 0);
     var media = Math.round(somaPct / comTrilha.length);
     var ultima = comTrilha.reduce(function(max, l){ return (l.ultimaAtividade && (!max || l.ultimaAtividade > max)) ? l.ultimaAtividade : max; }, null);
-
-    function stat(valor, rotulo){
-      return '<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">' +
-        '<div style="font-size:22px;font-weight:800;color:var(--profundo);">' + valor + '</div>' +
-        '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + rotulo + '</div>' +
-      '</div>';
-    }
-    root.innerHTML =
+    return secaoIndicador("Treinamento",
       '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">' +
-        stat(comTrilha.length, "clientes com trilha disponível") +
-        stat(comProgresso, "já assistiram pelo menos 1 vídeo") +
-        stat(completos, "concluíram 100% da trilha") +
-        stat(media + "%", "conclusão média") +
+        statIndicador(comTrilha.length, "clientes com trilha disponível") +
+        statIndicador(comProgresso, "já assistiram pelo menos 1 vídeo") +
+        statIndicador(completos, "concluíram 100% da trilha") +
+        statIndicador(media + "%", "conclusão média") +
       '</div>' +
       '<div class="sub">Última atividade: ' + (ultima ? new Date(ultima).toLocaleDateString("pt-BR") : "—") +
-      ' · Lista cliente a cliente: aba <b>Indicadores</b> em <a href="trilhas-admin.html" target="_blank">trilhas-admin.html</a>.</div>';
+      ' · Lista cliente a cliente: aba <b>Indicadores</b> em <a href="trilhas-admin.html" target="_blank">trilhas-admin.html</a>.</div>');
+  }
+
+  function renderIndicadores(root, linhasTreinamento, projetos){
+    var finalizados = projetosFinalizadosParaIndicadores(projetos);
+    root.innerHTML =
+      secaoSatisfacao(finalizados) +
+      secaoRisco(finalizados) +
+      secaoDuracao(finalizados) +
+      secaoTreinamento(linhasTreinamento);
   }
 
   // ---- Capability `sample` (extração de agentes por IA) ----
