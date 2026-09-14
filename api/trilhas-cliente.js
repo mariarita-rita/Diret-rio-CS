@@ -15,6 +15,8 @@
 import { aplicarCors, erro, lerCorpo, ErroCorpo, uuidValido, texto } from './_lib/http.js';
 import { ErroConfig } from './_lib/auth.js';
 import { exigirSessaoCliente } from './_lib/sessao-cliente.js';
+import { VERIFICACAO_CLICKUP, colunaClienteParaVerificacao } from './_lib/clickup.js';
+import { limparRespostas, validarRespostas } from './_lib/campos-formulario.js';
 import {
   listarTrilhasAtivas,
   listarVisualizacoesPorEmail,
@@ -25,6 +27,7 @@ import {
   listarRegras,
   buscarEvento,
   declararEvento,
+  buscarClientePorId,
   construirContextoPontos,
   calcularPontosPremio,
   listarPremiosParaCliente,
@@ -113,6 +116,7 @@ async function listarTrilhas(sessao, res) {
             youtubeId: v.youtube_id,
             duracaoSegundos: v.duracao_segundos,
             nota: v.nota || null,
+            subtitulo: v.subtitulo || null,
             concluido: Boolean(p?.concluido),
             percentual: p?.percentual_maximo || 0,
             atividadeTitulo: v.atividade_titulo || null,
@@ -241,10 +245,9 @@ async function declararEventoAcao(corpo, sessao, res) {
   if (!regra || regra.tipo === 'automatica') {
     return erro(res, 404, 'regra_nao_encontrada', 'Regra não encontrada.');
   }
-  const identificacao = texto(corpo.identificacao, 200) || null;
-  if (regra.pede_identificacao && !identificacao) {
-    return erro(res, 400, 'campos_invalidos', 'Informe o e-mail ou CPF/CNPJ usado na inscrição.');
-  }
+  const respostas = limparRespostas(regra.campos_formulario, corpo.respostas);
+  const erroValidacao = validarRespostas(regra.campos_formulario, respostas);
+  if (erroValidacao) return erro(res, 400, 'campos_invalidos', erroValidacao);
 
   // Nunca deixa uma redeclaração derrubar um evento já aprovado de volta pra pendente.
   const existente = await buscarEvento(sessao.email, regraId);
@@ -252,14 +255,24 @@ async function declararEventoAcao(corpo, sessao, res) {
     return res.status(200).json({ evento: existente });
   }
 
-  const status = regra.tipo === 'autodeclarada' ? 'aprovado' : 'pendente';
+  let status = regra.tipo === 'autodeclarada' ? 'aprovado' : 'pendente';
+  // pendente_aprovacao com verificação configurada: se o que já está
+  // sincronizado do ClickUp confirma, aprova na hora — sem isso, cai na fila
+  // de aprovação manual de sempre (ver VERIFICACAO_CLICKUP em clickup.js).
+  if (status === 'pendente' && regra.verificacao_clickup) {
+    const idsQueConfirmam = VERIFICACAO_CLICKUP[regra.verificacao_clickup];
+    const cliente = idsQueConfirmam ? await buscarClientePorId(sessao.clienteId) : null;
+    if (cliente && idsQueConfirmam.includes(cliente[colunaClienteParaVerificacao(regra.verificacao_clickup)])) {
+      status = 'aprovado';
+    }
+  }
+
   const evento = await declararEvento({
     clienteId: sessao.clienteId,
     email: sessao.email,
     regraId,
     status,
-    identificacao,
-    observacao: texto(corpo.observacao, 2000) || null,
+    respostas,
   });
   return res.status(200).json({ evento });
 }

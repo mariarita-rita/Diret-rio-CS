@@ -14,7 +14,7 @@
 //                                             aprovar_evento | rejeitar_evento
 //                                             criar_premio | editar_premio
 //                                             criar_faixa | editar_faixa | excluir_faixa
-//                                             criar_criterio | excluir_criterio
+//                                             criar_criterio | editar_criterio | excluir_criterio
 //                                             definir_elegiveis
 //                                             atualizar_resgate
 //
@@ -29,7 +29,8 @@
 
 import { aplicarCors, erro, lerCorpo, ErroCorpo, texto, uuidValido } from './_lib/http.js';
 import { ErroConfig, exigirSessao, podeEscrever } from './_lib/auth.js';
-import { getCarteira, ErroUpstream } from './_lib/clickup.js';
+import { getCarteira, ErroUpstream, VERIFICACAO_CLICKUP } from './_lib/clickup.js';
+import { sanearCamposFormulario } from './_lib/campos-formulario.js';
 import {
   listarTrilhasAdmin,
   criarTrilha,
@@ -61,6 +62,7 @@ import {
   listarResgates,
   atualizarResgate,
   criarCriterio,
+  editarCriterio,
   excluirCriterio,
   ErroConfigSupabase,
   ErroSupabase,
@@ -192,6 +194,12 @@ function sanearProdutos(v) {
   return [...vistos];
 }
 
+/** null/'' vira "sem verificação"; qualquer outra coisa precisa ser uma chave conhecida de VERIFICACAO_CLICKUP, ou false = inválido. */
+function validarVerificacaoClickup(v) {
+  if (v === null || v === undefined || v === '') return null;
+  return Object.prototype.hasOwnProperty.call(VERIFICACAO_CLICKUP, v) ? v : false;
+}
+
 async function executarAcao(acao, corpo, sessao, res) {
   // ── Trilhas e vídeos ──────────────────────────────────────────────────
   if (acao === 'criar_trilha') {
@@ -245,6 +253,7 @@ async function executarAcao(acao, corpo, sessao, res) {
       duracaoSegundos: Number.isInteger(corpo.duracaoSegundos) ? corpo.duracaoSegundos : null,
       nota: texto(corpo.nota, 2000) || null,
       atividadeTitulo: texto(corpo.atividadeTitulo, 300) || null,
+      subtitulo: texto(corpo.subtitulo, 200) || null,
     });
     return res.status(200).json({ video });
   }
@@ -262,6 +271,7 @@ async function executarAcao(acao, corpo, sessao, res) {
     if (corpo.nota !== undefined) campos.nota = texto(corpo.nota, 2000) || null;
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
     if (corpo.atividadeTitulo !== undefined) campos.atividade_titulo = texto(corpo.atividadeTitulo, 300) || null;
+    if (corpo.subtitulo !== undefined) campos.subtitulo = texto(corpo.subtitulo, 200) || null;
     const video = await editarVideo(id, campos);
     return res.status(200).json({ video });
   }
@@ -305,9 +315,11 @@ async function executarAcao(acao, corpo, sessao, res) {
     if (tipo === 'automatica' && !criterioProdutos.length) {
       return erro(res, 400, 'campos_invalidos', 'Regra automática precisa de ao menos um produto-critério.');
     }
+    const camposFormulario = sanearCamposFormulario(corpo.camposFormulario) ?? [];
+    const verificacaoClickup = validarVerificacaoClickup(corpo.verificacaoClickup);
+    if (verificacaoClickup === false) return erro(res, 400, 'campos_invalidos', 'verificacaoClickup inválida.');
     const regra = await criarRegra({
-      titulo, tipo, criterioProdutos,
-      pedeIdentificacao: Boolean(corpo.pedeIdentificacao),
+      titulo, tipo, criterioProdutos, camposFormulario, verificacaoClickup,
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
     });
     return res.status(200).json({ regra });
@@ -323,7 +335,16 @@ async function executarAcao(acao, corpo, sessao, res) {
       if (criterioProdutos === null) return erro(res, 400, 'campos_invalidos', 'criterioProdutos deve ser uma lista.');
       campos.criterio_produtos = criterioProdutos;
     }
-    if (corpo.pedeIdentificacao !== undefined) campos.pede_identificacao = Boolean(corpo.pedeIdentificacao);
+    if (corpo.camposFormulario !== undefined) {
+      const camposFormulario = sanearCamposFormulario(corpo.camposFormulario);
+      if (camposFormulario === null) return erro(res, 400, 'campos_invalidos', 'camposFormulario deve ser uma lista.');
+      campos.campos_formulario = camposFormulario;
+    }
+    if (corpo.verificacaoClickup !== undefined) {
+      const verificacaoClickup = validarVerificacaoClickup(corpo.verificacaoClickup);
+      if (verificacaoClickup === false) return erro(res, 400, 'campos_invalidos', 'verificacaoClickup inválida.');
+      campos.verificacao_clickup = verificacaoClickup;
+    }
     if (corpo.ativa !== undefined) campos.ativa = Boolean(corpo.ativa);
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
     const regra = await editarRegra(id, campos);
@@ -418,6 +439,19 @@ async function executarAcao(acao, corpo, sessao, res) {
     return res.status(200).json({ criterio });
   }
 
+  if (acao === 'editar_criterio') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    const campos = {};
+    if (corpo.pontos !== undefined) {
+      if (!Number.isInteger(corpo.pontos) || corpo.pontos <= 0) return erro(res, 400, 'campos_invalidos', 'pontos inválido.');
+      campos.pontos = corpo.pontos;
+    }
+    if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
+    const criterio = await editarCriterio(id, campos);
+    return res.status(200).json({ criterio });
+  }
+
   if (acao === 'excluir_criterio') {
     const id = texto(corpo.id, 64);
     if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
@@ -483,6 +517,11 @@ async function sincronizar(res) {
       produtos_ativos: [...produtos],
       clickup_task_id: l.id,
       ativo: true,
+      // Ids das opções (nunca o rótulo) de Camp 2025 / Evento: Camp 2026, já
+      // vindos prontos por linha de getCarteira() — alimenta a verificação
+      // automática de regras pendente_aprovacao (ver VERIFICACAO_CLICKUP).
+      camp_2025_opcao_id: l.camp2025Id || null,
+      evento_camp_2026_opcao_id: l.eventoCampId || null,
       sincronizado_em: momentoDoSync,
     };
   });

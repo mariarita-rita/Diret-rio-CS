@@ -105,6 +105,24 @@ export const EVENTO_CAMP_OPCOES = [
 ];
 
 /**
+ * Condicoes de verificacao automatica que uma regra de pontos pendente de
+ * aprovacao pode usar pra se auto-aprovar contra o que ja esta sincronizado
+ * do ClickUp (clientes.camp_2025_opcao_id / evento_camp_2026_opcao_id — ver
+ * sincronizar() em api/trilhas-admin.js). Comparacao sempre por ID da opcao,
+ * nunca por rotulo — mesmo cuidado de motivoPerdaId/EQUIPE_OPCAO: renomear a
+ * opcao no ClickUp nao pode quebrar a regra em silencio.
+ */
+export const VERIFICACAO_CLICKUP = {
+  camp_2025_participou: CAMP_2025_OPCOES.filter((o) => o.rotulo.startsWith('Participou')).map((o) => o.id),
+  evento_camp_2026_confirmado: EVENTO_CAMP_OPCOES.filter((o) => o.rotulo.startsWith('Inscrito') || o.rotulo.startsWith('Participou')).map((o) => o.id),
+};
+
+/** Coluna de clientes (sincronizada em api/trilhas-admin.js `sincronizar()`) que cada verificação compara. */
+export function colunaClienteParaVerificacao(verificacao) {
+  return verificacao === 'camp_2025_participou' ? 'camp_2025_opcao_id' : 'evento_camp_2026_opcao_id';
+}
+
+/**
  * Opcao "Contratou em outro CNPJ" do campo Motivo da perda.
  *
  * Contratar em outro CNPJ e troca de titularidade: administrativamente gera um

@@ -60,6 +60,8 @@
   .barra{height:6px; border-radius:6px; background:var(--surface-2); overflow:hidden; margin-bottom:14px;}
   .barra > div{height:100%; background:var(--success); border-radius:6px;}
 
+  .video-subtitulo{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:14px 0 6px;}
+  .video-subtitulo:first-child{margin-top:0;}
   .video-item{border:1px solid var(--border); border-radius:12px; margin-bottom:8px; overflow:hidden;}
   .video-row{display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer; background:var(--surface); font-size:13.5px;}
   .video-row:hover{background:var(--surface-2);}
@@ -97,7 +99,8 @@
   .pontos-badge.pendente{background:var(--surface-2); color:var(--muted);}
   .pontos-badge.aguardando{background:#FFF7E8; color:#B45309;}
   .declarar-form{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; width:100%;}
-  .declarar-form input{flex:1; min-width:160px; padding:7px 10px; border-radius:8px; border:1px solid var(--border-strong); font-size:12.5px; font-family:inherit;}
+  .declarar-form input, .declarar-form textarea{flex:1; min-width:160px; padding:7px 10px; border-radius:8px; border:1px solid var(--border-strong); font-size:12.5px; font-family:inherit;}
+  .declarar-form textarea{flex-basis:100%; min-height:50px; resize:vertical;}
 
   .premio-card{border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:10px;}
   .premio-card h3{font-size:14.5px; font-weight:700; margin-bottom:4px;}
@@ -263,8 +266,16 @@
 
     trilhas.forEach(function(t, i){
       var alvo = raiz.querySelector('[data-trilha-videos="' + i + '"]');
+      var ultimoSubtitulo;
       alvo.innerHTML = t.videos.map(function(v){
+        var cabecalho = "";
+        var sub = v.subtitulo || null;
+        if (sub !== ultimoSubtitulo){
+          if (sub) cabecalho = '<div class="video-subtitulo">' + escapeHtml(sub) + '</div>';
+          ultimoSubtitulo = sub;
+        }
         return (
+          cabecalho +
           '<div class="video-item" data-video-id="' + v.id + '">' +
             '<div class="video-row" data-toggle="' + v.id + '" data-youtube="' + escapeHtml(v.youtubeId) + '">' +
               '<span class="video-check' + (v.concluido ? ' ok' : '') + '">' + (v.concluido ? '✓' : '') + '</span>' +
@@ -420,9 +431,17 @@
         var acao = "", formDeclarar = "";
         if (!d.obtido && d.tipo === "regra" && (!d.status || d.status === "rejeitado")){
           acao = ' <button type="button" class="atividade-btn" data-declarar="' + chave + '">Declarar</button>';
+          var camposHtml = (d.campos || []).map(function(campo){
+            var rotulo = campo.rotulo + (campo.obrigatorio ? " *" : "");
+            if (campo.tipo === "textarea"){
+              return '<textarea placeholder="' + escapeHtml(rotulo) + '" data-declarar-campo="' + campo.chave + '"></textarea>';
+            }
+            var tipoInput = campo.tipo === "email" ? "email" : campo.tipo === "date" ? "date" : "text";
+            return '<input type="' + tipoInput + '" placeholder="' + escapeHtml(rotulo) + '" data-declarar-campo="' + campo.chave + '">';
+          }).join("");
           formDeclarar =
             '<div class="declarar-form" style="display:none;" data-declarar-form="' + chave + '">' +
-              (d.pedeIdentificacao ? '<input type="text" placeholder="E-mail ou CPF/CNPJ usado na inscrição" data-declarar-id="' + chave + '">' : '') +
+              camposHtml +
               '<button type="button" class="atividade-btn" data-confirmar-declarar="' + chave + '" data-regra-id="' + d.regraId + '">Confirmar</button>' +
             '</div>';
         }
@@ -467,11 +486,16 @@
       btn.addEventListener("click", function(){
         var chave = btn.getAttribute("data-confirmar-declarar");
         var regraId = btn.getAttribute("data-regra-id");
-        var idEl = raiz.querySelector('[data-declarar-id="' + chave + '"]');
+        var form = raiz.querySelector('[data-declarar-form="' + chave + '"]');
+        var respostas = {};
+        form.querySelectorAll("[data-declarar-campo]").forEach(function(el){
+          var valor = el.value.trim();
+          if (valor) respostas[el.getAttribute("data-declarar-campo")] = valor;
+        });
         btn.disabled = true;
-        apiPost("/api/trilhas-cliente", { acao: "declarar_evento", regraId: regraId, identificacao: idEl ? idEl.value.trim() : "" })
+        apiPost("/api/trilhas-cliente", { acao: "declarar_evento", regraId: regraId, respostas: respostas })
           .then(function(){ carregarPontos(); })
-          .catch(function(){ btn.disabled = false; btn.textContent = "Erro, tente de novo"; });
+          .catch(function(e){ btn.disabled = false; btn.textContent = (e && e.error) || "Erro, tente de novo"; });
       });
     });
     raiz.querySelectorAll("[data-resgatar]").forEach(function(btn){

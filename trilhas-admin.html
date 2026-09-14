@@ -69,6 +69,9 @@
   .produtos-checklist{display:flex; flex-wrap:wrap; gap:6px 10px; margin-bottom:8px;}
   .produtos-checklist label{display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-2);}
   .produtos-checklist.disabled{opacity:.45; pointer-events:none;}
+  .campos-formulario-lista{display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:10px;}
+  .campo-formulario-item{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; color:var(--ink-2); margin-right:4px;}
+  .campo-formulario-obrigatorio{display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--muted); margin-right:14px;}
   .geral-toggle{display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; margin-bottom:10px;}
   .video-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--border); font-size:13px;}
   .video-row:first-child{border-top:none;}
@@ -78,6 +81,8 @@
   .btn-ordem{background:transparent; border:1px solid var(--border-strong); color:var(--muted); font-size:11px; line-height:1; padding:4px 7px; border-radius:6px; cursor:pointer;}
   .btn-ordem:hover{color:var(--ink); border-color:var(--ink-2);}
   .btn-ordem:disabled{opacity:.3; cursor:not-allowed;}
+  .video-subtitulo{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); padding-top:10px; margin-top:6px; border-top:1px solid var(--border);}
+  .video-subtitulo:first-child{border-top:none; padding-top:0; margin-top:0;}
   .edit-video-form{border-top:1px solid var(--border); padding-top:8px; margin-top:6px;}
   .busca-input{margin-bottom:14px;}
   .msg{font-size:12.5px; margin-top:8px; min-height:16px;}
@@ -251,6 +256,9 @@
       '</div>' +
       '<div class="edit-video-form" data-edit-video-form="' + v.id + '" style="display:none;">' +
         '<div class="form-row">' +
+          '<input type="text" class="form-input" data-edit-video-subtitulo="' + v.id + '" value="' + escapeHtml(v.subtitulo || "") + '" placeholder="Subtítulo da seção (opcional) — ex: Folha de pagamento">' +
+        '</div>' +
+        '<div class="form-row">' +
           '<input type="text" class="form-input" data-edit-video-titulo="' + v.id + '" value="' + escapeHtml(v.titulo) + '" placeholder="Título">' +
           '<input type="text" class="form-input" data-edit-video-youtube="' + v.id + '" value="' + escapeHtml(v.youtube_id) + '" placeholder="Link ou ID do YouTube">' +
         '</div>' +
@@ -267,6 +275,21 @@
         '<div class="msg" data-msg-edit-video="' + v.id + '"></div>' +
       '</div>'
     );
+  }
+
+  /** Vídeos, na ordem, com um cabeçalho antes de cada trecho contíguo que muda de subtítulo. */
+  function videoListaAgrupadaHtml(t, videos){
+    var html = "";
+    var ultimoSubtitulo;
+    videos.forEach(function(v, i){
+      var sub = v.subtitulo || null;
+      if (sub !== ultimoSubtitulo){
+        if (sub) html += '<div class="video-subtitulo">' + escapeHtml(sub) + '</div>';
+        ultimoSubtitulo = sub;
+      }
+      html += videoRowHtml(t, v, i, videos.length);
+    });
+    return html;
   }
 
   function renderTrilhas(root, trilhas){
@@ -328,10 +351,13 @@
             '</div>' +
             '<div class="videos-lista">' +
               (videos.length
-                ? videos.map(function(v, i){ return videoRowHtml(t, v, i, videos.length); }).join("")
+                ? videoListaAgrupadaHtml(t, videos)
                 : '<div class="vazio">Nenhum vídeo ainda.</div>') +
             '</div>' +
             '<div class="form-row" style="margin-top:10px;">' +
+              '<input type="text" class="form-input" placeholder="Subtítulo da seção (opcional) — ex: Folha de pagamento" data-novo-video-subtitulo="' + t.id + '">' +
+            '</div>' +
+            '<div class="form-row">' +
               '<input type="text" class="form-input" placeholder="Título do vídeo" data-novo-video-titulo="' + t.id + '">' +
               '<input type="text" class="form-input" placeholder="Link ou ID do YouTube" data-novo-video-url="' + t.id + '">' +
             '</div>' +
@@ -441,11 +467,12 @@
         var urlEl = root.querySelector('[data-novo-video-url="' + trilhaId + '"]');
         var notaEl = root.querySelector('[data-novo-video-nota="' + trilhaId + '"]');
         var atividadeEl = root.querySelector('[data-novo-video-atividade="' + trilhaId + '"]');
+        var subtituloEl = root.querySelector('[data-novo-video-subtitulo="' + trilhaId + '"]');
         var msg = root.querySelector('[data-msg-trilha="' + trilhaId + '"]');
         if (!tituloEl.value.trim() || !urlEl.value.trim()){ msg.className = "msg erro"; msg.textContent = "Preencha título e link/ID."; return; }
         apiPost("/api/trilhas-admin", {
           acao: "criar_video", trilhaId: trilhaId, titulo: tituloEl.value.trim(), youtube: urlEl.value.trim(), nota: notaEl.value.trim(),
-          atividadeTitulo: atividadeEl.value.trim()
+          atividadeTitulo: atividadeEl.value.trim(), subtitulo: subtituloEl.value.trim()
         })
           .then(function(){ carregarTrilhas(); })
           .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao adicionar vídeo."; } });
@@ -470,11 +497,12 @@
         var youtube = root.querySelector('[data-edit-video-youtube="' + id + '"]').value.trim();
         var nota = root.querySelector('[data-edit-video-nota="' + id + '"]').value.trim();
         var atividadeTitulo = root.querySelector('[data-edit-video-atividade="' + id + '"]').value.trim();
+        var subtitulo = root.querySelector('[data-edit-video-subtitulo="' + id + '"]').value.trim();
         var msg = root.querySelector('[data-msg-edit-video="' + id + '"]');
         if (!titulo || !youtube){ msg.className = "msg erro"; msg.textContent = "Preencha título e link/ID."; return; }
         apiPost("/api/trilhas-admin", {
           acao: "editar_video", id: id, titulo: titulo, youtube: youtube, nota: nota,
-          atividadeTitulo: atividadeTitulo
+          atividadeTitulo: atividadeTitulo, subtitulo: subtitulo
         })
           .then(function(){ carregarTrilhas(); })
           .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao salvar."; } });
@@ -656,7 +684,53 @@
   var TIPO_REGRA_LABEL = { automatica: "Automática", autodeclarada: "Autodeclarada", pendente_aprovacao: "Pendente de aprovação" };
   var STATUS_EVENTO_LABEL = { pendente: "Pendente", aprovado: "Aprovado", rejeitado: "Rejeitado" };
   var STATUS_RESGATE_LABEL = { solicitado: "Solicitado", contatado: "Contatado", entregue: "Entregue", cancelado: "Cancelado" };
+  // Espelha api/_lib/campos-formulario.js — catálogo fixo de campos que uma
+  // regra autodeclarada/pendente_aprovacao pode pedir ao cliente ao declarar.
+  var CATALOGO_CAMPOS = {
+    nome: "Nome", email: "E-mail", cnpj: "CNPJ", whatsapp: "WhatsApp",
+    data_inscricao: "Data de inscrição", horario_contato: "Melhor horário para contato", observacao: "Observação"
+  };
+  // Espelha api/_lib/clickup.js VERIFICACAO_CLICKUP.
+  var VERIFICACAO_CLICKUP_LABEL = {
+    camp_2025_participou: "Participou do Londrisoft Camp 2025",
+    evento_camp_2026_confirmado: "Confirmado no Evento Camp 2026"
+  };
   var elegiveisSelecionados = {}; // premioId -> Set(clienteId), carregado sob demanda
+
+  /** Checklist de campos do formulário de declaração — reaproveitado no form de criar e no de editar regra. */
+  function camposFormularioChecklistHtml(prefixo, selecionados){
+    var porChave = {};
+    (selecionados || []).forEach(function(c){ porChave[c.chave] = c.obrigatorio; });
+    return Object.keys(CATALOGO_CAMPOS).map(function(chave){
+      var marcado = porChave.hasOwnProperty(chave);
+      var obrigatorio = !!porChave[chave];
+      return '<label class="campo-formulario-item">' +
+          '<input type="checkbox" class="' + prefixo + '-campo" value="' + chave + '"' + (marcado ? ' checked' : '') + '> ' + CATALOGO_CAMPOS[chave] +
+        '</label>' +
+        '<label class="campo-formulario-obrigatorio">' +
+          '<input type="checkbox" class="' + prefixo + '-obrigatorio" data-chave="' + chave + '"' + (obrigatorio ? ' checked' : '') + '> obrigatório' +
+        '</label>';
+    }).join("");
+  }
+
+  /** Lê a checklist de volta como [{chave, obrigatorio}] — só os marcados. */
+  function lerCamposFormulario(root, prefixo){
+    var campos = [];
+    root.querySelectorAll('.' + prefixo + '-campo:checked').forEach(function(chk){
+      var chave = chk.value;
+      var obrigEl = root.querySelector('.' + prefixo + '-obrigatorio[data-chave="' + chave + '"]');
+      campos.push({ chave: chave, obrigatorio: obrigEl ? obrigEl.checked : false });
+    });
+    return campos;
+  }
+
+  function verificacaoClickupOpcoesHtml(selecionada){
+    var opcoes = '<option value="">Sem verificação automática</option>';
+    Object.keys(VERIFICACAO_CLICKUP_LABEL).forEach(function(chave){
+      opcoes += '<option value="' + chave + '"' + (selecionada === chave ? ' selected' : '') + '>' + VERIFICACAO_CLICKUP_LABEL[chave] + '</option>';
+    });
+    return opcoes;
+  }
 
   var trilhasParaCriteriosCache = []; // preenchido a cada carregamento da Gamificação — usado pro seletor "Trilha específica"
 
@@ -689,7 +763,13 @@
           '</select>' +
         '</div>' +
         '<div class="produtos-checklist" id="novaRegraProdutosBox">' + produtosChecklistHtml("nova-regra-produto-check", []) + '</div>' +
-        '<label class="geral-toggle" id="novaRegraIdentLabel" style="display:none;"><input type="checkbox" id="novaRegraIdent"> Pede e-mail/CPF-CNPJ da inscrição ao declarar</label>' +
+        '<div id="novaRegraCamposBox" style="display:none;">' +
+          '<p style="font-size:12.5px;color:var(--muted);margin:0 0 6px;">Quais informações pedir ao cliente ao declarar? (opcional)</p>' +
+          '<div class="campos-formulario-lista">' + camposFormularioChecklistHtml("nova-regra", []) + '</div>' +
+        '</div>' +
+        '<div class="form-row" id="novaRegraVerificacaoBox" style="display:none;">' +
+          '<select id="novaRegraVerificacao" class="form-input">' + verificacaoClickupOpcoesHtml("") + '</select>' +
+        '</div>' +
         '<div class="form-row"><button type="button" class="btn" id="btnCriarRegra">Criar regra</button></div>' +
         '<div class="msg" id="msgNovaRegra"></div>' +
         '<div id="listaRegras" style="margin-top:12px;"></div>' +
@@ -741,11 +821,13 @@
 
     var novaRegraTipo = document.getElementById("novaRegraTipo");
     var novaRegraProdutosBox = document.getElementById("novaRegraProdutosBox");
-    var novaRegraIdentLabel = document.getElementById("novaRegraIdentLabel");
+    var novaRegraCamposBox = document.getElementById("novaRegraCamposBox");
+    var novaRegraVerificacaoBox = document.getElementById("novaRegraVerificacaoBox");
     function ajustarCamposRegra(){
-      var automatica = novaRegraTipo.value === "automatica";
-      novaRegraProdutosBox.style.display = automatica ? "flex" : "none";
-      novaRegraIdentLabel.style.display = (novaRegraTipo.value === "pendente_aprovacao") ? "flex" : "none";
+      var tipo = novaRegraTipo.value;
+      novaRegraProdutosBox.style.display = tipo === "automatica" ? "flex" : "none";
+      novaRegraCamposBox.style.display = tipo === "automatica" ? "none" : "block";
+      novaRegraVerificacaoBox.style.display = tipo === "pendente_aprovacao" ? "flex" : "none";
     }
     novaRegraTipo.addEventListener("change", ajustarCamposRegra);
     ajustarCamposRegra();
@@ -760,8 +842,12 @@
         root.querySelectorAll(".nova-regra-produto-check:checked").forEach(function(el){ criterioProdutos.push(el.value); });
         if (!criterioProdutos.length){ msg.className = "msg erro"; msg.textContent = "Selecione ao menos um produto/plano pra regra automática."; return; }
       }
-      var pedeIdentificacao = document.getElementById("novaRegraIdent").checked;
-      apiPost("/api/trilhas-admin", { acao: "criar_regra", titulo: titulo, tipo: tipo, criterioProdutos: criterioProdutos, pedeIdentificacao: pedeIdentificacao })
+      var camposFormulario = tipo === "automatica" ? [] : lerCamposFormulario(root, "nova-regra");
+      var verificacaoClickup = tipo === "pendente_aprovacao" ? document.getElementById("novaRegraVerificacao").value : "";
+      apiPost("/api/trilhas-admin", {
+        acao: "criar_regra", titulo: titulo, tipo: tipo, criterioProdutos: criterioProdutos,
+        camposFormulario: camposFormulario, verificacaoClickup: verificacaoClickup
+      })
         .then(function(){ carregarGamificacao(); })
         .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao criar regra."; } });
     });
@@ -789,13 +875,36 @@
     var alvo = document.getElementById("listaRegras");
     if (!regras.length){ alvo.innerHTML = '<div class="vazio">Nenhuma regra cadastrada ainda.</div>'; return; }
     alvo.innerHTML = regras.map(function(r){
+      var produtosAtuais = r.criterio_produtos || [];
       return '<div class="video-row">' +
         '<div class="video-row-info">' +
           '<span class="video-row-titulo">' + escapeHtml(r.titulo) + '</span>' +
           '<span class="produto-tag' + (r.tipo === "automatica" ? " geral" : "") + '">' + (TIPO_REGRA_LABEL[r.tipo] || r.tipo) + '</span>' +
           (r.ativa ? '' : '<span class="produto-tag" style="background:var(--danger-bg);color:var(--danger);">inativa</span>') +
         '</div>' +
-        '<button type="button" class="btn-ghost" data-toggle-regra="' + r.id + '" data-ativa="' + (!r.ativa) + '">' + (r.ativa ? 'Desativar' : 'Reativar') + '</button>' +
+        '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+          '<button type="button" class="btn-ghost" data-editar-regra="' + r.id + '">Editar</button>' +
+          '<button type="button" class="btn-ghost" data-toggle-regra="' + r.id + '" data-ativa="' + (!r.ativa) + '">' + (r.ativa ? 'Desativar' : 'Reativar') + '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="edit-trilha-form" data-edit-regra-form="' + r.id + '" style="display:none;">' +
+        '<div class="form-row">' +
+          '<input type="text" class="form-input" data-edit-regra-titulo="' + r.id + '" value="' + escapeHtml(r.titulo) + '" placeholder="Título">' +
+        '</div>' +
+        (r.tipo === "automatica"
+          ? '<div class="produtos-checklist" data-edit-regra-produtos-box="' + r.id + '">' + produtosChecklistHtml("edit-regra-produto-check-" + r.id, produtosAtuais) + '</div>'
+          : '<div data-edit-regra-campos-box="' + r.id + '">' +
+              '<p style="font-size:12.5px;color:var(--muted);margin:0 0 6px;">Quais informações pedir ao cliente ao declarar? (opcional)</p>' +
+              '<div class="campos-formulario-lista">' + camposFormularioChecklistHtml("edit-regra-" + r.id, r.campos_formulario) + '</div>' +
+            '</div>') +
+        (r.tipo === "pendente_aprovacao"
+          ? '<div class="form-row"><select class="form-input" data-edit-regra-verificacao="' + r.id + '">' + verificacaoClickupOpcoesHtml(r.verificacao_clickup || "") + '</select></div>'
+          : '') +
+        '<div class="form-row">' +
+          '<button type="button" class="btn" data-salvar-regra="' + r.id + '">Salvar</button>' +
+          '<button type="button" class="btn-ghost" data-cancelar-regra="' + r.id + '">Cancelar</button>' +
+        '</div>' +
+        '<div class="msg" data-msg-edit-regra="' + r.id + '"></div>' +
       '</div>';
     }).join("");
     alvo.querySelectorAll("[data-toggle-regra]").forEach(function(btn){
@@ -803,6 +912,40 @@
         apiPost("/api/trilhas-admin", { acao: "editar_regra", id: btn.getAttribute("data-toggle-regra"), ativa: btn.getAttribute("data-ativa") === "true" })
           .then(function(){ carregarGamificacao(); })
           .catch(function(e){ tratar401(e); });
+      });
+    });
+    alvo.querySelectorAll("[data-editar-regra]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var form = alvo.querySelector('[data-edit-regra-form="' + btn.getAttribute("data-editar-regra") + '"]');
+        form.style.display = form.style.display === "none" ? "block" : "none";
+      });
+    });
+    alvo.querySelectorAll("[data-cancelar-regra]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        alvo.querySelector('[data-edit-regra-form="' + btn.getAttribute("data-cancelar-regra") + '"]').style.display = "none";
+      });
+    });
+    alvo.querySelectorAll("[data-salvar-regra]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-salvar-regra");
+        var titulo = alvo.querySelector('[data-edit-regra-titulo="' + id + '"]').value.trim();
+        var msg = alvo.querySelector('[data-msg-edit-regra="' + id + '"]');
+        if (!titulo){ msg.className = "msg erro"; msg.textContent = "Preencha o título."; return; }
+        var corpo = { acao: "editar_regra", id: id, titulo: titulo };
+        var produtosBox = alvo.querySelector('[data-edit-regra-produtos-box="' + id + '"]');
+        if (produtosBox){
+          var produtos = [];
+          produtosBox.querySelectorAll("input:checked").forEach(function(el){ produtos.push(el.value); });
+          if (!produtos.length){ msg.className = "msg erro"; msg.textContent = "Selecione ao menos um produto/plano."; return; }
+          corpo.criterioProdutos = produtos;
+        }
+        var camposBox = alvo.querySelector('[data-edit-regra-campos-box="' + id + '"]');
+        if (camposBox) corpo.camposFormulario = lerCamposFormulario(alvo, "edit-regra-" + id);
+        var verificacaoEl = alvo.querySelector('[data-edit-regra-verificacao="' + id + '"]');
+        if (verificacaoEl) corpo.verificacaoClickup = verificacaoEl.value;
+        apiPost("/api/trilhas-admin", corpo)
+          .then(function(){ carregarGamificacao(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao salvar."; } });
       });
     });
   }
@@ -814,15 +957,19 @@
     apiGet("/api/trilhas-admin?recurso=pontos-eventos&status=" + encodeURIComponent(status)).then(function(j){
       var eventos = j.eventos || [];
       if (!eventos.length){ alvo.innerHTML = '<div class="vazio">Nenhum evento ' + STATUS_EVENTO_LABEL[status].toLowerCase() + '.</div>'; return; }
-      alvo.innerHTML = '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Regra</th><th>Identificação / obs.</th><th>Data</th>' + (status === "pendente" ? '<th>Ações</th>' : '') + '</tr></thead><tbody>' +
+      alvo.innerHTML = '<div style="overflow-x:auto;"><table class="simples"><thead><tr><th>Cliente</th><th>Regra</th><th>Respostas</th><th>Data</th>' + (status === "pendente" ? '<th>Ações</th>' : '') + '</tr></thead><tbody>' +
         eventos.map(function(e){
           var cliente = e.clientes ? e.clientes.nome : "";
           var regra = e.pontos_regras ? e.pontos_regras.titulo : "";
-          var extra = [e.identificacao, e.observacao].filter(Boolean).join(" — ");
+          var badge = "";
+          if (e.clickupConfirmado === true) badge = ' <span class="produto-tag geral">✓ confirmado no ClickUp</span>';
+          else if (e.clickupConfirmado === false) badge = ' <span class="produto-tag">ainda não confirmado no ClickUp</span>';
+          var respostas = e.respostas || {};
+          var extra = Object.keys(respostas).map(function(chave){ return (CATALOGO_CAMPOS[chave] || chave) + ": " + respostas[chave]; }).join(" — ");
           var data = e.criado_em ? new Date(e.criado_em).toLocaleDateString("pt-BR") : "";
           return '<tr>' +
             '<td>' + escapeHtml(cliente) + '</td>' +
-            '<td>' + escapeHtml(regra) + '</td>' +
+            '<td>' + escapeHtml(regra) + badge + '</td>' +
             '<td>' + escapeHtml(extra) + '</td>' +
             '<td>' + data + '</td>' +
             (status === "pendente"
@@ -877,15 +1024,47 @@
           '</div>' +
           '<div style="display:flex;gap:6px;flex-shrink:0;">' +
             (p.restrito ? '<button type="button" class="btn-ghost" data-gerenciar-elegiveis="' + p.id + '">Elegíveis</button>' : '') +
+            '<button type="button" class="btn-ghost" data-editar-premio="' + p.id + '">Editar</button>' +
             '<button type="button" class="btn-ghost" data-toggle-premio="' + p.id + '" data-ativo="' + (!p.ativo) + '">' + (p.ativo ? 'Desativar' : 'Reativar') + '</button>' +
           '</div>' +
         '</div>' +
         (p.descricao ? '<p class="trilha-sub" style="margin:0 0 8px;font-size:12.5px;color:var(--muted);">' + escapeHtml(p.descricao) + '</p>' : '') +
+        '<div class="edit-trilha-form" data-edit-premio-form="' + p.id + '" style="display:none;margin-bottom:10px;">' +
+          '<div class="form-row">' +
+            '<input type="text" class="form-input" data-edit-premio-titulo="' + p.id + '" value="' + escapeHtml(p.titulo) + '" placeholder="Título do prêmio">' +
+          '</div>' +
+          '<div class="form-row">' +
+            '<textarea class="form-input" data-edit-premio-descricao="' + p.id + '" placeholder="Descrição (opcional)" rows="1">' + escapeHtml(p.descricao || "") + '</textarea>' +
+          '</div>' +
+          '<div class="form-row">' +
+            '<input type="date" class="form-input" data-edit-premio-prazo="' + p.id + '" value="' + escapeHtml(p.prazo_final || "") + '" style="max-width:180px;" title="Prazo final (opcional)">' +
+            '<input type="number" class="form-input" data-edit-premio-estoque="' + p.id + '" value="' + (p.estoque_total != null ? p.estoque_total : "") + '" placeholder="Estoque (vazio = ilimitado)" min="0" style="max-width:220px;">' +
+            '<label class="geral-toggle" style="margin:0;"><input type="checkbox" data-edit-premio-restrito="' + p.id + '"' + (p.restrito ? ' checked' : '') + '> Restrito a lista de clientes elegíveis</label>' +
+          '</div>' +
+          '<div class="form-row">' +
+            '<button type="button" class="btn" data-salvar-premio="' + p.id + '">Salvar</button>' +
+            '<button type="button" class="btn-ghost" data-cancelar-premio="' + p.id + '">Cancelar</button>' +
+          '</div>' +
+          '<div class="msg" data-msg-edit-premio="' + p.id + '"></div>' +
+        '</div>' +
         '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px;">Critérios (o que soma ponto pra este prêmio)</div>' +
         '<div class="videos-lista">' +
           (criterios.length
             ? criterios.map(function(c){
-                return '<div class="video-row"><span>' + escapeHtml(tituloCriterioAdmin(c, regras)) + (c.tipo === "atividade" ? " — " + c.pontos + " pts cada" : " — " + c.pontos + " pts") + '</span><button type="button" class="btn-danger" data-excluir-criterio="' + c.id + '">Excluir</button></div>';
+                return '<div class="video-row"><span>' + escapeHtml(tituloCriterioAdmin(c, regras)) + (c.tipo === "atividade" ? " — " + c.pontos + " pts cada" : " — " + c.pontos + " pts") + '</span>' +
+                  '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+                    '<button type="button" class="btn-ghost" data-editar-criterio="' + c.id + '">Editar</button>' +
+                    '<button type="button" class="btn-danger" data-excluir-criterio="' + c.id + '">Excluir</button>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="edit-video-form" data-edit-criterio-form="' + c.id + '" style="display:none;">' +
+                  '<div class="form-row">' +
+                    '<input type="number" class="form-input" data-edit-criterio-pontos="' + c.id + '" value="' + c.pontos + '" min="1" style="max-width:140px;" placeholder="Pontos">' +
+                    '<button type="button" class="btn" data-salvar-criterio="' + c.id + '">Salvar</button>' +
+                    '<button type="button" class="btn-ghost" data-cancelar-criterio="' + c.id + '">Cancelar</button>' +
+                  '</div>' +
+                  '<div class="msg" data-msg-edit-criterio="' + c.id + '"></div>' +
+                '</div>';
               }).join("")
             : '<div class="vazio">Nenhum critério ainda — este prêmio nunca vai pontuar sem pelo menos um.</div>') +
         '</div>' +
@@ -929,6 +1108,34 @@
       btn.addEventListener("click", function(){
         apiPost("/api/trilhas-admin", { acao: "editar_premio", id: btn.getAttribute("data-toggle-premio"), ativo: btn.getAttribute("data-ativo") === "true" })
           .then(function(){ carregarGamificacao(); }).catch(function(e){ tratar401(e); });
+      });
+    });
+    alvo.querySelectorAll("[data-editar-premio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var form = alvo.querySelector('[data-edit-premio-form="' + btn.getAttribute("data-editar-premio") + '"]');
+        form.style.display = form.style.display === "none" ? "block" : "none";
+      });
+    });
+    alvo.querySelectorAll("[data-cancelar-premio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        alvo.querySelector('[data-edit-premio-form="' + btn.getAttribute("data-cancelar-premio") + '"]').style.display = "none";
+      });
+    });
+    alvo.querySelectorAll("[data-salvar-premio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-salvar-premio");
+        var titulo = alvo.querySelector('[data-edit-premio-titulo="' + id + '"]').value.trim();
+        var msg = alvo.querySelector('[data-msg-edit-premio="' + id + '"]');
+        if (!titulo){ msg.className = "msg erro"; msg.textContent = "Preencha o título."; return; }
+        var estoqueVal = alvo.querySelector('[data-edit-premio-estoque="' + id + '"]').value;
+        apiPost("/api/trilhas-admin", {
+          acao: "editar_premio", id: id, titulo: titulo,
+          descricao: alvo.querySelector('[data-edit-premio-descricao="' + id + '"]').value.trim(),
+          prazoFinal: alvo.querySelector('[data-edit-premio-prazo="' + id + '"]').value || null,
+          estoqueTotal: estoqueVal ? parseInt(estoqueVal, 10) : null,
+          restrito: alvo.querySelector('[data-edit-premio-restrito="' + id + '"]').checked
+        }).then(function(){ carregarGamificacao(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao salvar."; } });
       });
     });
     alvo.querySelectorAll("[data-add-faixa]").forEach(function(btn){
@@ -987,6 +1194,29 @@
         if (!window.confirm("Excluir este critério?")) return;
         apiPost("/api/trilhas-admin", { acao: "excluir_criterio", id: btn.getAttribute("data-excluir-criterio") })
           .then(function(){ carregarGamificacao(); }).catch(function(e){ tratar401(e); });
+      });
+    });
+    alvo.querySelectorAll("[data-editar-criterio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var form = alvo.querySelector('[data-edit-criterio-form="' + btn.getAttribute("data-editar-criterio") + '"]');
+        form.style.display = form.style.display === "none" ? "block" : "none";
+      });
+    });
+    alvo.querySelectorAll("[data-cancelar-criterio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        alvo.querySelector('[data-edit-criterio-form="' + btn.getAttribute("data-cancelar-criterio") + '"]').style.display = "none";
+      });
+    });
+    alvo.querySelectorAll("[data-salvar-criterio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-salvar-criterio");
+        var msg = alvo.querySelector('[data-msg-edit-criterio="' + id + '"]');
+        var pontosEl = alvo.querySelector('[data-edit-criterio-pontos="' + id + '"]');
+        var pontos = pontosEl.value ? parseInt(pontosEl.value, 10) : null;
+        if (!pontos || pontos <= 0){ msg.className = "msg erro"; msg.textContent = "Informe os pontos (maior que zero)."; return; }
+        apiPost("/api/trilhas-admin", { acao: "editar_criterio", id: id, pontos: pontos })
+          .then(function(){ carregarGamificacao(); })
+          .catch(function(e){ if (!tratar401(e)){ msg.className = "msg erro"; msg.textContent = (e && e.error) || "Erro ao salvar."; } });
       });
     });
 

@@ -336,3 +336,34 @@ create table if not exists premio_criterios (
 );
 create index if not exists idx_premio_criterios_premio on premio_criterios (premio_id);
 alter table premio_criterios enable row level security;
+
+-- MIGRAÇÃO: subtítulos de seção dentro de uma trilha (ex: trilha "Unique" com
+-- seções "Folha de pagamento", "Contábil", "Fiscal"). Puramente de exibição —
+-- vídeos com o mesmo subtitulo, adjacentes na ordem, aparecem agrupados sob
+-- um cabeçalho de seção.
+alter table trilha_videos add column if not exists subtitulo text;
+
+-- MIGRAÇÃO: formulário de declaração configurável por regra. Antes só existia
+-- um boolean pede_identificacao (um único input livre); agora cada regra
+-- carrega a lista de campos que quer coletar (do catálogo fixo em
+-- api/_lib/campos-formulario.js), e cada evento guarda as respostas dadas.
+-- pede_identificacao/identificacao/observacao ficam OBSOLETOS aqui, mas só
+-- serão removidos numa migração futura, depois de confirmar que o fluxo novo
+-- está ok em produção (mesmo cuidado tomado na migração de trilhas.produto).
+alter table pontos_regras add column if not exists campos_formulario jsonb not null default '[]';
+-- formato: [{ "chave": "email", "obrigatorio": true }, ...] — chave sempre
+-- uma das chaves de CATALOGO_CAMPOS.
+
+alter table pontos_eventos add column if not exists respostas jsonb not null default '{}';
+-- formato: { "email": "...", "whatsapp": "...", ... } — chaves = campos_formulario da regra.
+update pontos_eventos set respostas = jsonb_build_object('identificacao', identificacao)
+  where identificacao is not null and respostas = '{}';
+
+-- MIGRAÇÃO: verificação automática contra campos já sincronizados do ClickUp
+-- (Camp 2025 / Evento: Camp 2026), pra aprovar na hora quando o cliente se
+-- autodeclara e o ClickUp já confirma — sem isso, cai na aprovação manual de
+-- sempre. Ver VERIFICACAO_CLICKUP em api/_lib/clickup.js.
+alter table clientes add column if not exists camp_2025_opcao_id text;
+alter table clientes add column if not exists evento_camp_2026_opcao_id text;
+alter table pontos_regras add column if not exists verificacao_clickup text;
+-- null | 'camp_2025_participou' | 'evento_camp_2026_confirmado'

@@ -6,6 +6,9 @@
 // Tabelas: ver sql/trilhas-schema.sql (referência — o app não executa esse
 // arquivo, ele só documenta o schema já criado manualmente no Supabase).
 
+import { VERIFICACAO_CLICKUP, colunaClienteParaVerificacao } from './clickup.js';
+import { CATALOGO_CAMPOS } from './campos-formulario.js';
+
 export class ErroConfigSupabase extends Error {
   constructor() {
     super('SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY não configuradas.');
@@ -134,6 +137,17 @@ export async function listarClientes() {
   return sbTodos(`/clientes?select=*&order=nome.asc`);
 }
 
+/**
+ * Busca só os campos sincronizados do ClickUp usados na verificação
+ * automática (ver VERIFICACAO_CLICKUP) — usado no momento da declaração, já
+ * que a sessão do cliente é um snapshot assinado no login e não carrega o que
+ * foi sincronizado depois.
+ */
+export async function buscarClientePorId(id) {
+  const linhas = await sb(`/clientes?id=eq.${enc(id)}&select=camp_2025_opcao_id,evento_camp_2026_opcao_id`);
+  return linhas?.[0] || null;
+}
+
 // ── E-mails autorizados ───────────────────────────────────────────────────
 
 export async function listarEmailsDoCliente(clienteId) {
@@ -198,7 +212,7 @@ export async function editarTrilha(id, campos) {
   return linhas?.[0] || null;
 }
 
-export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota, atividadeTitulo }) {
+export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota, atividadeTitulo, subtitulo }) {
   const linhas = await sb(`/trilha_videos`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -210,6 +224,7 @@ export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSe
       duracao_segundos: duracaoSegundos || null,
       nota: nota || null,
       atividade_titulo: atividadeTitulo || null,
+      subtitulo: subtitulo || null,
     }]),
   });
   return linhas?.[0] || null;
@@ -385,14 +400,15 @@ export async function listarRegras() {
   return sb(`/pontos_regras?select=*&order=ordem.asc,titulo.asc`);
 }
 
-export async function criarRegra({ titulo, tipo, criterioProdutos, pedeIdentificacao, ordem }) {
+export async function criarRegra({ titulo, tipo, criterioProdutos, camposFormulario, verificacaoClickup, ordem }) {
   const linhas = await sb(`/pontos_regras`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify([{
       titulo, tipo,
       criterio_produtos: criterioProdutos || [],
-      pede_identificacao: Boolean(pedeIdentificacao),
+      campos_formulario: camposFormulario || [],
+      verificacao_clickup: verificacaoClickup || null,
       ordem: ordem || 0,
     }]),
   });
@@ -410,16 +426,31 @@ export async function editarRegra(id, campos) {
 
 // ── Gamificação: eventos de pontos (autodeclarada / pendente_aprovacao) ────
 
-/** Todos os eventos, com dados da regra e do cliente — visão admin (opcionalmente filtrado por status). */
+/**
+ * Todos os eventos, com dados da regra e do cliente — visão admin
+ * (opcionalmente filtrado por status). Cada linha ganha `clickupConfirmado`:
+ * true/false quando a regra tem verificacao_clickup configurada (aí o admin
+ * vê de cara, na fila de aprovação, se o ClickUp já confirma aquele evento),
+ * ou null quando a regra não usa essa verificação.
+ */
 export async function listarEventos(status) {
   const filtro = status ? `&status=eq.${enc(status)}` : '';
-  return sbTodos(
-    `/pontos_eventos?select=*,pontos_regras(titulo,tipo),clientes(nome,id_nucleo,cnpj)${filtro}&order=criado_em.desc`
+  const eventos = await sbTodos(
+    `/pontos_eventos?select=*,pontos_regras(titulo,tipo,verificacao_clickup),clientes(nome,id_nucleo,cnpj,camp_2025_opcao_id,evento_camp_2026_opcao_id)${filtro}&order=criado_em.desc`
   );
+  return eventos.map((e) => ({ ...e, clickupConfirmado: calcularClickupConfirmado(e) }));
+}
+
+function calcularClickupConfirmado(evento) {
+  const verificacao = evento.pontos_regras?.verificacao_clickup;
+  if (!verificacao) return null;
+  const idsQueConfirmam = VERIFICACAO_CLICKUP[verificacao];
+  if (!idsQueConfirmam) return null;
+  return idsQueConfirmam.includes(evento.clientes?.[colunaClienteParaVerificacao(verificacao)]);
 }
 
 export async function listarEventosPorEmail(email) {
-  return sb(`/pontos_eventos?email=eq.${enc(email)}&select=regra_id,status,identificacao,observacao,criado_em`);
+  return sb(`/pontos_eventos?email=eq.${enc(email)}&select=regra_id,status,criado_em`);
 }
 
 export async function buscarEvento(email, regraId) {
@@ -433,13 +464,13 @@ export async function buscarEvento(email, regraId) {
  * guarda em api/trilhas-cliente.js pra não deixar resubmeter por cima de um
  * evento já aprovado.
  */
-export async function declararEvento({ clienteId, email, regraId, status, identificacao, observacao }) {
+export async function declararEvento({ clienteId, email, regraId, status, respostas }) {
   const linhas = await sb(`/pontos_eventos?on_conflict=email,regra_id`, {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify([{
       cliente_id: clienteId, email, regra_id: regraId, status,
-      identificacao: identificacao || null, observacao: observacao || null,
+      respostas: respostas || {},
     }]),
   });
   return linhas?.[0] || null;
@@ -516,6 +547,15 @@ export async function criarCriterio({ premioId, tipo, regraId, trilhaId, pontos,
       regra_id: regraId || null, trilha_id: trilhaId || null,
       pontos, ordem: ordem || 0,
     }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function editarCriterio(id, campos) {
+  const linhas = await sb(`/premio_criterios?id=eq.${enc(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(campos),
   });
   return linhas?.[0] || null;
 }
@@ -664,9 +704,16 @@ function avaliarCriterio(c, ctx) {
     }
     const evento = ctx.eventoPorRegra.get(c.regra_id);
     const obtido = evento?.status === 'aprovado';
-    return { obtido, pontos: c.pontos, status: evento?.status || null, pedeIdentificacao: regra.pede_identificacao };
+    return { obtido, pontos: c.pontos, status: evento?.status || null, campos: hidratarCampos(regra.campos_formulario) };
   }
   return { obtido: false, pontos: 0 };
+}
+
+/** Enriquece a config de campos da regra (chave + obrigatorio) com rótulo/tipo do catálogo, pro cliente montar o form. */
+function hidratarCampos(camposFormulario) {
+  return (camposFormulario || [])
+    .filter((campo) => CATALOGO_CAMPOS[campo.chave])
+    .map((campo) => ({ chave: campo.chave, obrigatorio: Boolean(campo.obrigatorio), ...CATALOGO_CAMPOS[campo.chave] }));
 }
 
 /** Pontuação + detalhamento de UM prêmio (a partir dos critérios já embutidos nele). */
@@ -683,7 +730,7 @@ export function calcularPontosPremio(criterios, ctx) {
       obtido: r.obtido,
       status: r.status || null,
       regraId: c.regra_id || null,
-      pedeIdentificacao: r.pedeIdentificacao || false,
+      campos: r.campos || [],
     };
   });
   return { total, detalhamento };
