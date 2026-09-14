@@ -275,7 +275,7 @@
             '<div class="video-player" data-player="' + v.id + '"></div>' +
             (v.nota ? '<div class="video-nota">' + escapeHtml(v.nota) + '</div>' : '') +
             (v.atividadeTitulo
-              ? '<div class="atividade-row"><span>🏆 ' + escapeHtml(v.atividadeTitulo) + ' <b>(' + v.atividadePontos + ' pts)</b></span>' +
+              ? '<div class="atividade-row"><span>🏆 ' + escapeHtml(v.atividadeTitulo) + '</span>' +
                 '<button type="button" class="atividade-btn' + (v.atividadeFeita ? ' feita' : '') + '" data-marcar-atividade="' + v.id + '"' + (v.atividadeFeita ? ' disabled' : '') + '>' +
                 (v.atividadeFeita ? '✓ Já fiz' : 'Consegui fazer sozinho') + '</button></div>'
               : '') +
@@ -400,49 +400,50 @@
   }
 
   function renderPontos(j){
-    var total = j.total || 0;
-    var detalhamento = j.detalhamento || [];
     var premios = j.premios || [];
-
-    var itensHtml = detalhamento.map(function(d){
-      var badge;
-      if (d.obtido) badge = '<span class="pontos-badge obtido">+' + d.pontos + ' pts</span>';
-      else if (d.status === "pendente") badge = '<span class="pontos-badge aguardando">Aguardando aprovação</span>';
-      else badge = '<span class="pontos-badge pendente">' + d.pontos + ' pts</span>';
-
-      var acao = "";
-      if (!d.obtido && d.tipo === "atividade"){
-        acao = ' <button type="button" class="atividade-btn" data-pontos-marcar-atividade="' + d.trilhaVideoId + '">Marcar feito</button>';
-      }
-      var formDeclarar = "";
-      if (!d.obtido && d.tipo === "regra" && (!d.status || d.status === "rejeitado")){
-        acao = ' <button type="button" class="atividade-btn" data-declarar="' + d.regraId + '">Declarar</button>';
-        formDeclarar =
-          '<div class="declarar-form" style="display:none;" data-declarar-form="' + d.regraId + '">' +
-            (d.pedeIdentificacao ? '<input type="text" placeholder="E-mail ou CPF/CNPJ usado na inscrição" data-declarar-id="' + d.regraId + '">' : '') +
-            '<button type="button" class="atividade-btn" data-confirmar-declarar="' + d.regraId + '">Confirmar</button>' +
-          '</div>';
-      }
-
-      return '<div class="pontos-item">' +
-        '<span class="pontos-item-titulo">' + escapeHtml(d.titulo) + '</span>' +
-        badge + acao +
-        formDeclarar +
-      '</div>';
-    }).join("");
 
     var premiosHtml = premios.map(function(p){
       var faixasHtml = (p.faixas || []).map(function(f){
-        var atingida = total >= f.pontosMinimos;
+        var atingida = p.total >= f.pontosMinimos;
         return '<div class="' + (atingida ? "atingida" : "") + '">' + f.pontosMinimos + ' pts — ' + escapeHtml(f.descricao) + (atingida ? " ✓" : "") + '</div>';
       }).join("");
+
+      var itensHtml = (p.detalhamento || []).map(function(d){
+        var badge;
+        if (d.obtido) badge = '<span class="pontos-badge obtido">+' + d.pontos + ' pts</span>';
+        else if (d.status === "pendente") badge = '<span class="pontos-badge aguardando">Aguardando aprovação</span>';
+        else badge = '<span class="pontos-badge pendente">' + d.pontos + ' pts</span>';
+
+        // Uma mesma regra pode aparecer em mais de um prêmio — a chave inclui o
+        // prêmio pra não confundir o form de declarar de um card com o de outro.
+        var chave = p.id + "_" + d.regraId;
+        var acao = "", formDeclarar = "";
+        if (!d.obtido && d.tipo === "regra" && (!d.status || d.status === "rejeitado")){
+          acao = ' <button type="button" class="atividade-btn" data-declarar="' + chave + '">Declarar</button>';
+          formDeclarar =
+            '<div class="declarar-form" style="display:none;" data-declarar-form="' + chave + '">' +
+              (d.pedeIdentificacao ? '<input type="text" placeholder="E-mail ou CPF/CNPJ usado na inscrição" data-declarar-id="' + chave + '">' : '') +
+              '<button type="button" class="atividade-btn" data-confirmar-declarar="' + chave + '" data-regra-id="' + d.regraId + '">Confirmar</button>' +
+            '</div>';
+        }
+
+        return '<div class="pontos-item">' +
+          '<span class="pontos-item-titulo">' + escapeHtml(d.titulo) + '</span>' +
+          badge + acao +
+          formDeclarar +
+        '</div>';
+      }).join("");
+
       var podeResgatar = p.faixaAtingida && !p.resgateStatus && (p.estoqueRestante == null || p.estoqueRestante > 0);
       var statusMsg = "";
       if (p.resgateStatus) statusMsg = '<p class="trilha-sub" style="color:var(--success);margin-top:8px;">Pedido registrado — vamos entrar em contato (status: ' + escapeHtml(p.resgateStatus) + ').</p>';
       else if (p.estoqueRestante === 0) statusMsg = '<p class="trilha-sub" style="color:var(--danger);margin-top:8px;">Sem estoque no momento.</p>';
+
       return '<div class="premio-card">' +
         '<h3>' + escapeHtml(p.titulo) + '</h3>' +
         (p.descricao ? '<p class="trilha-sub">' + escapeHtml(p.descricao) + '</p>' : '') +
+        '<div class="pontos-total" style="margin:8px 0 4px;"><b style="font-size:26px;">' + p.total + '</b><span class="trilha-sub">pontos</span></div>' +
+        '<div>' + (itensHtml || '<div class="vazio">Nenhuma forma de pontuar cadastrada ainda.</div>') + '</div>' +
         '<div class="premio-faixas">' + faixasHtml + '</div>' +
         (podeResgatar
           ? '<div class="declarar-form"><input type="text" placeholder="Seu WhatsApp com DDD" data-resgate-whatsapp="' + p.id + '">' +
@@ -453,12 +454,7 @@
       '</div>';
     }).join("") || '<div class="vazio">Nenhum prêmio disponível no momento.</div>';
 
-    raiz.innerHTML = tabsHtml() +
-      '<div class="card">' +
-        '<div class="pontos-total"><b>' + total + '</b><span class="trilha-sub">pontos</span></div>' +
-        '<div>' + (itensHtml || '<div class="vazio">Nenhuma forma de pontuar disponível ainda.</div>') + '</div>' +
-      '</div>' +
-      '<div class="card"><h2 style="margin-bottom:10px;">Prêmios</h2>' + premiosHtml + '</div>';
+    raiz.innerHTML = tabsHtml() + '<div class="card"><h2 style="margin-bottom:10px;">Prêmios</h2>' + premiosHtml + '</div>';
 
     wireTabs();
     raiz.querySelectorAll("[data-declarar]").forEach(function(btn){
@@ -469,20 +465,13 @@
     });
     raiz.querySelectorAll("[data-confirmar-declarar]").forEach(function(btn){
       btn.addEventListener("click", function(){
-        var id = btn.getAttribute("data-confirmar-declarar");
-        var idEl = raiz.querySelector('[data-declarar-id="' + id + '"]');
+        var chave = btn.getAttribute("data-confirmar-declarar");
+        var regraId = btn.getAttribute("data-regra-id");
+        var idEl = raiz.querySelector('[data-declarar-id="' + chave + '"]');
         btn.disabled = true;
-        apiPost("/api/trilhas-cliente", { acao: "declarar_evento", regraId: id, identificacao: idEl ? idEl.value.trim() : "" })
+        apiPost("/api/trilhas-cliente", { acao: "declarar_evento", regraId: regraId, identificacao: idEl ? idEl.value.trim() : "" })
           .then(function(){ carregarPontos(); })
           .catch(function(){ btn.disabled = false; btn.textContent = "Erro, tente de novo"; });
-      });
-    });
-    raiz.querySelectorAll("[data-pontos-marcar-atividade]").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        btn.disabled = true;
-        apiPost("/api/trilhas-cliente", { acao: "concluir_atividade", trilhaVideoId: btn.getAttribute("data-pontos-marcar-atividade") })
-          .then(function(){ carregarPontos(); })
-          .catch(function(){ btn.disabled = false; });
       });
     });
     raiz.querySelectorAll("[data-resgatar]").forEach(function(btn){

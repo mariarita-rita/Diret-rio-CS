@@ -176,18 +176,15 @@ export async function listarTrilhasAdmin() {
  */
 export async function listarTrilhasAtivas() {
   return sb(
-    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,pontos_conclusao,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos,nota,atividade_titulo,atividade_pontos)&trilha_videos.ativo=eq.true&order=ordem.asc`
+    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos,nota,atividade_titulo)&trilha_videos.ativo=eq.true&order=ordem.asc`
   );
 }
 
-export async function criarTrilha({ titulo, descricao, produtos, ordem, pontosConclusao }) {
+export async function criarTrilha({ titulo, descricao, produtos, ordem }) {
   const linhas = await sb(`/trilhas`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
-    body: JSON.stringify([{
-      titulo, descricao: descricao || null, produtos: produtos || [], ordem: ordem || 0,
-      pontos_conclusao: pontosConclusao ?? null,
-    }]),
+    body: JSON.stringify([{ titulo, descricao: descricao || null, produtos: produtos || [], ordem: ordem || 0 }]),
   });
   return linhas?.[0] || null;
 }
@@ -201,7 +198,7 @@ export async function editarTrilha(id, campos) {
   return linhas?.[0] || null;
 }
 
-export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota, atividadeTitulo, atividadePontos }) {
+export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota, atividadeTitulo }) {
   const linhas = await sb(`/trilha_videos`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -213,7 +210,6 @@ export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSe
       duracao_segundos: duracaoSegundos || null,
       nota: nota || null,
       atividade_titulo: atividadeTitulo || null,
-      atividade_pontos: atividadeTitulo ? (atividadePontos ?? null) : null,
     }]),
   });
   return linhas?.[0] || null;
@@ -389,12 +385,12 @@ export async function listarRegras() {
   return sb(`/pontos_regras?select=*&order=ordem.asc,titulo.asc`);
 }
 
-export async function criarRegra({ titulo, pontos, tipo, criterioProdutos, pedeIdentificacao, ordem }) {
+export async function criarRegra({ titulo, tipo, criterioProdutos, pedeIdentificacao, ordem }) {
   const linhas = await sb(`/pontos_regras`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
     body: JSON.stringify([{
-      titulo, pontos, tipo,
+      titulo, tipo,
       criterio_produtos: criterioProdutos || [],
       pede_identificacao: Boolean(pedeIdentificacao),
       ordem: ordem || 0,
@@ -461,7 +457,7 @@ export async function revisarEvento(id, status, revisadoPor) {
 // ── Gamificação: prêmios ────────────────────────────────────────────────────
 
 export async function listarPremiosAdmin() {
-  return sb(`/premios?select=*,premio_faixas(*)&order=ordem.asc,titulo.asc`);
+  return sb(`/premios?select=*,premio_faixas(*),premio_criterios(*)&order=ordem.asc,titulo.asc`);
 }
 
 export async function criarPremio({ titulo, descricao, prazoFinal, estoqueTotal, restrito, ordem }) {
@@ -505,6 +501,27 @@ export async function editarFaixa(id, campos) {
 
 export async function excluirFaixa(id) {
   await sb(`/premio_faixas?id=eq.${enc(id)}`, { method: 'DELETE' });
+}
+
+// ── Gamificação: critérios de pontuação por prêmio ──────────────────────────
+// O "cartão de pontuação" de cada prêmio — ver comentário em
+// sql/trilhas-schema.sql. Cada linha vale pontos só PRA ESTE prêmio.
+
+export async function criarCriterio({ premioId, tipo, regraId, trilhaId, pontos, ordem }) {
+  const linhas = await sb(`/premio_criterios`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify([{
+      premio_id: premioId, tipo,
+      regra_id: regraId || null, trilha_id: trilhaId || null,
+      pontos, ordem: ordem || 0,
+    }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function excluirCriterio(id) {
+  await sb(`/premio_criterios?id=eq.${enc(id)}`, { method: 'DELETE' });
 }
 
 // ── Gamificação: elegibilidade restrita ─────────────────────────────────────
@@ -567,16 +584,23 @@ export async function atualizarResgate(id, status) {
   return linhas?.[0] || null;
 }
 
-// ── Gamificação: cálculo de pontos do cliente ───────────────────────────────
+// ── Gamificação: cálculo de pontos POR PRÊMIO ───────────────────────────────
+// Cada prêmio tem sua própria pontuação — a mesma trilha/regra/atividade pode
+// valer pontos diferentes (ou nem contar) em outro prêmio, então não existe
+// mais um "total do cliente" único; existe um total por prêmio, montado a
+// partir do "cartão de pontuação" daquele prêmio (premio_criterios).
+// Sempre calculado no servidor a partir de dados vivos — nunca confia em
+// total calculado no navegador (mesma fonte usada pra mostrar a barra de
+// progresso do cliente e pra validar um resgate).
 
 /**
- * Pontuação total do cliente + detalhamento (o que já pontuou, o que falta).
- * Sempre calculado no servidor a partir de dados vivos (nunca confia em total
- * calculado no navegador) — é a mesma fonte usada tanto pra mostrar a barra de
- * progresso do cliente quanto pra validar um resgate.
+ * Contexto compartilhado (uma leitura só, reaproveitada pra todos os prêmios
+ * de uma vez): quais trilhas existem e estão 100% concluídas, quantas
+ * atividades o cliente já fez entre as trilhas liberadas a ele, e o status
+ * de cada regra (automática calculada na hora, ou evento aprovado/pendente).
  */
-export async function calcularPontosCliente({ email, produtosAtivos }) {
-  const [trilhas, visualizacoes, atividadesFeitas, regras, eventosDoEmail] = await Promise.all([
+export async function construirContextoPontos({ email, produtosAtivos }) {
+  const [todasTrilhas, visualizacoes, atividadesFeitas, regras, eventosDoEmail] = await Promise.all([
     listarTrilhasAtivas(),
     listarVisualizacoesPorEmail(email),
     listarAtividadesPorEmail(email),
@@ -586,56 +610,89 @@ export async function calcularPontosCliente({ email, produtosAtivos }) {
 
   const assistidoPorVideo = new Map(visualizacoes.map((v) => [v.trilha_video_id, v.concluido]));
   const atividadeFeitaSet = new Set(atividadesFeitas.map((a) => a.trilha_video_id));
+  const regraPorId = new Map(regras.map((r) => [r.id, r]));
   const eventoPorRegra = new Map(eventosDoEmail.map((e) => [e.regra_id, e]));
 
-  const detalhamento = [];
-  let total = 0;
-
-  for (const t of trilhas) {
-    const liberada = !t.produtos || !t.produtos.length || t.produtos.some((p) => produtosAtivos.includes(p));
-    if (!liberada) continue;
+  const trilhaPorId = new Map(todasTrilhas.map((t) => [t.id, t]));
+  const trilhaCompleta = new Map();
+  for (const t of todasTrilhas) {
     const videos = t.trilha_videos || [];
+    trilhaCompleta.set(t.id, videos.length > 0 && videos.every((v) => assistidoPorVideo.get(v.id)));
+  }
 
-    if (t.pontos_conclusao) {
-      const completa = videos.length > 0 && videos.every((v) => assistidoPorVideo.get(v.id));
-      detalhamento.push({ tipo: 'trilha', titulo: `Concluir a trilha: ${t.titulo}`, pontos: t.pontos_conclusao, obtido: completa });
-      if (completa) total += t.pontos_conclusao;
-    }
+  const trilhasLiberadas = todasTrilhas.filter(
+    (t) => !t.produtos || !t.produtos.length || t.produtos.some((p) => produtosAtivos.includes(p))
+  );
+  const todasTrilhasLiberadasCompletas = trilhasLiberadas.length > 0 && trilhasLiberadas.every((t) => trilhaCompleta.get(t.id));
 
-    for (const v of videos) {
-      if (!v.atividade_titulo || !v.atividade_pontos) continue;
-      const feita = atividadeFeitaSet.has(v.id);
-      detalhamento.push({
-        tipo: 'atividade', trilhaVideoId: v.id, titulo: v.atividade_titulo, pontos: v.atividade_pontos, obtido: feita,
-      });
-      if (feita) total += v.atividade_pontos;
+  let atividadesFeitasDisponiveis = 0;
+  for (const t of trilhasLiberadas) {
+    for (const v of t.trilha_videos || []) {
+      if (v.atividade_titulo && atividadeFeitaSet.has(v.id)) atividadesFeitasDisponiveis++;
     }
   }
 
-  for (const r of regras) {
-    if (!r.ativa) continue;
-    if (r.tipo === 'automatica') {
-      const obtido = (r.criterio_produtos || []).some((p) => produtosAtivos.includes(p));
-      detalhamento.push({ tipo: 'regra', regraId: r.id, titulo: r.titulo, pontos: r.pontos, obtido, status: obtido ? 'aprovado' : null });
-      if (obtido) total += r.pontos;
-    } else {
-      const evento = eventoPorRegra.get(r.id);
-      const obtido = evento?.status === 'aprovado';
-      detalhamento.push({
-        tipo: 'regra', regraId: r.id, titulo: r.titulo, pontos: r.pontos, obtido,
-        status: evento?.status || null, pedeIdentificacao: r.pede_identificacao,
-      });
-      if (obtido) total += r.pontos;
-    }
-  }
+  return { produtosAtivos, trilhaPorId, trilhaCompleta, todasTrilhasLiberadasCompletas, atividadesFeitasDisponiveis, regraPorId, eventoPorRegra };
+}
 
+function tituloCriterio(c, ctx) {
+  if (c.tipo === 'trilhas_disponiveis') return 'Concluir todas as trilhas disponíveis no seu acesso';
+  if (c.tipo === 'trilha') return `Concluir a trilha: ${ctx.trilhaPorId.get(c.trilha_id)?.titulo || '(trilha removida)'}`;
+  if (c.tipo === 'atividade') return 'Atividades práticas concluídas';
+  if (c.tipo === 'regra') return ctx.regraPorId.get(c.regra_id)?.titulo || '(regra removida)';
+  return '';
+}
+
+/** Avalia um critério contra o contexto do cliente. */
+function avaliarCriterio(c, ctx) {
+  if (c.tipo === 'trilhas_disponiveis') {
+    return { obtido: ctx.todasTrilhasLiberadasCompletas, pontos: c.pontos };
+  }
+  if (c.tipo === 'trilha') {
+    return { obtido: ctx.trilhaCompleta.get(c.trilha_id) === true, pontos: c.pontos };
+  }
+  if (c.tipo === 'atividade') {
+    const unidades = ctx.atividadesFeitasDisponiveis;
+    return { obtido: unidades > 0, pontos: c.pontos * unidades, unidades };
+  }
+  if (c.tipo === 'regra') {
+    const regra = ctx.regraPorId.get(c.regra_id);
+    if (!regra || !regra.ativa) return { obtido: false, pontos: c.pontos, status: null };
+    if (regra.tipo === 'automatica') {
+      const obtido = (regra.criterio_produtos || []).some((p) => ctx.produtosAtivos.includes(p));
+      return { obtido, pontos: c.pontos, status: obtido ? 'aprovado' : null };
+    }
+    const evento = ctx.eventoPorRegra.get(c.regra_id);
+    const obtido = evento?.status === 'aprovado';
+    return { obtido, pontos: c.pontos, status: evento?.status || null, pedeIdentificacao: regra.pede_identificacao };
+  }
+  return { obtido: false, pontos: 0 };
+}
+
+/** Pontuação + detalhamento de UM prêmio (a partir dos critérios já embutidos nele). */
+export function calcularPontosPremio(criterios, ctx) {
+  let total = 0;
+  const detalhamento = (criterios || []).map((c) => {
+    const r = avaliarCriterio(c, ctx);
+    if (r.obtido) total += r.pontos;
+    return {
+      id: c.id,
+      tipo: c.tipo,
+      titulo: tituloCriterio(c, ctx),
+      pontos: r.pontos,
+      obtido: r.obtido,
+      status: r.status || null,
+      regraId: c.regra_id || null,
+      pedeIdentificacao: r.pedeIdentificacao || false,
+    };
+  });
   return { total, detalhamento };
 }
 
-/** Prêmios ativos, dentro do prazo, e elegíveis (respeitando `restrito`) para este cliente. */
+/** Prêmios ativos, dentro do prazo, e elegíveis (respeitando `restrito`) para este cliente — com seus critérios e faixas. */
 export async function listarPremiosParaCliente(clienteId) {
   const hoje = new Date().toISOString().slice(0, 10);
-  const premios = await sb(`/premios?ativo=eq.true&select=*,premio_faixas(*)&order=ordem.asc,titulo.asc`);
+  const premios = await sb(`/premios?ativo=eq.true&select=*,premio_faixas(*),premio_criterios(*)&order=ordem.asc,titulo.asc`);
   const resultado = [];
   for (const p of premios || []) {
     if (p.prazo_final && p.prazo_final < hoje) continue;

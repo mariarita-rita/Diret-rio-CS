@@ -14,6 +14,7 @@
 //                                             aprovar_evento | rejeitar_evento
 //                                             criar_premio | editar_premio
 //                                             criar_faixa | editar_faixa | excluir_faixa
+//                                             criar_criterio | excluir_criterio
 //                                             definir_elegiveis
 //                                             atualizar_resgate
 //
@@ -59,6 +60,8 @@ import {
   definirElegiveis,
   listarResgates,
   atualizarResgate,
+  criarCriterio,
+  excluirCriterio,
   ErroConfigSupabase,
   ErroSupabase,
 } from './_lib/supabase.js';
@@ -66,6 +69,7 @@ import {
 const TIPOS_REGRA = new Set(['automatica', 'autodeclarada', 'pendente_aprovacao']);
 const STATUS_EVENTO = new Set(['pendente', 'aprovado', 'rejeitado']);
 const STATUS_RESGATE = new Set(['solicitado', 'contatado', 'entregue', 'cancelado']);
+const TIPOS_CRITERIO = new Set(['regra', 'trilha', 'trilhas_disponiveis', 'atividade']);
 
 const RE_YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -199,7 +203,6 @@ async function executarAcao(acao, corpo, sessao, res) {
       descricao: texto(corpo.descricao, 2000) || null,
       produtos,
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
-      pontosConclusao: Number.isInteger(corpo.pontosConclusao) && corpo.pontosConclusao > 0 ? corpo.pontosConclusao : null,
     });
     return res.status(200).json({ trilha });
   }
@@ -216,9 +219,6 @@ async function executarAcao(acao, corpo, sessao, res) {
       campos.produtos = produtos;
     }
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
-    if (corpo.pontosConclusao !== undefined) {
-      campos.pontos_conclusao = Number.isInteger(corpo.pontosConclusao) && corpo.pontosConclusao > 0 ? corpo.pontosConclusao : null;
-    }
     const trilha = await editarTrilha(id, campos);
     return res.status(200).json({ trilha });
   }
@@ -237,7 +237,6 @@ async function executarAcao(acao, corpo, sessao, res) {
     if (!trilhaId || !titulo || !youtubeId) {
       return erro(res, 400, 'campos_invalidos', 'trilhaId, título e um vídeo do YouTube válido são obrigatórios.');
     }
-    const atividadeTitulo = texto(corpo.atividadeTitulo, 300) || null;
     const video = await criarVideo({
       trilhaId,
       titulo,
@@ -245,8 +244,7 @@ async function executarAcao(acao, corpo, sessao, res) {
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
       duracaoSegundos: Number.isInteger(corpo.duracaoSegundos) ? corpo.duracaoSegundos : null,
       nota: texto(corpo.nota, 2000) || null,
-      atividadeTitulo,
-      atividadePontos: Number.isInteger(corpo.atividadePontos) && corpo.atividadePontos > 0 ? corpo.atividadePontos : null,
+      atividadeTitulo: texto(corpo.atividadeTitulo, 300) || null,
     });
     return res.status(200).json({ video });
   }
@@ -263,14 +261,7 @@ async function executarAcao(acao, corpo, sessao, res) {
     }
     if (corpo.nota !== undefined) campos.nota = texto(corpo.nota, 2000) || null;
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
-    if (corpo.atividadeTitulo !== undefined) {
-      const atividadeTitulo = texto(corpo.atividadeTitulo, 300) || null;
-      campos.atividade_titulo = atividadeTitulo;
-      // Sem título de atividade não faz sentido guardar pontos órfãos.
-      campos.atividade_pontos = atividadeTitulo && Number.isInteger(corpo.atividadePontos) && corpo.atividadePontos > 0
-        ? corpo.atividadePontos
-        : null;
-    }
+    if (corpo.atividadeTitulo !== undefined) campos.atividade_titulo = texto(corpo.atividadeTitulo, 300) || null;
     const video = await editarVideo(id, campos);
     return res.status(200).json({ video });
   }
@@ -302,19 +293,20 @@ async function executarAcao(acao, corpo, sessao, res) {
   if (acao === 'remover_email') return await removerEmail(corpo, res);
 
   // ── Gamificação: regras de pontos ───────────────────────────────────────
+  // Regra é só o "gatilho" (o que precisa acontecer) — não tem pontuação
+  // própria; quanto vale isso é definido por prêmio em premio_criterios.
   if (acao === 'criar_regra') {
     const titulo = texto(corpo.titulo, 200);
-    const pontos = Number.isInteger(corpo.pontos) ? corpo.pontos : null;
     const tipo = String(corpo.tipo || '');
-    if (!titulo || !pontos || pontos <= 0 || !TIPOS_REGRA.has(tipo)) {
-      return erro(res, 400, 'campos_invalidos', 'Título, pontos (>0) e tipo válido são obrigatórios.');
+    if (!titulo || !TIPOS_REGRA.has(tipo)) {
+      return erro(res, 400, 'campos_invalidos', 'Título e tipo válido são obrigatórios.');
     }
     const criterioProdutos = tipo === 'automatica' ? (sanearProdutos(corpo.criterioProdutos) ?? []) : [];
     if (tipo === 'automatica' && !criterioProdutos.length) {
       return erro(res, 400, 'campos_invalidos', 'Regra automática precisa de ao menos um produto-critério.');
     }
     const regra = await criarRegra({
-      titulo, pontos, tipo, criterioProdutos,
+      titulo, tipo, criterioProdutos,
       pedeIdentificacao: Boolean(corpo.pedeIdentificacao),
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
     });
@@ -326,10 +318,6 @@ async function executarAcao(acao, corpo, sessao, res) {
     if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
     const campos = {};
     if (corpo.titulo !== undefined) campos.titulo = texto(corpo.titulo, 200);
-    if (corpo.pontos !== undefined) {
-      if (!Number.isInteger(corpo.pontos) || corpo.pontos <= 0) return erro(res, 400, 'campos_invalidos', 'pontos deve ser um inteiro positivo.');
-      campos.pontos = corpo.pontos;
-    }
     if (corpo.criterioProdutos !== undefined) {
       const criterioProdutos = sanearProdutos(corpo.criterioProdutos);
       if (criterioProdutos === null) return erro(res, 400, 'campos_invalidos', 'criterioProdutos deve ser uma lista.');
@@ -411,6 +399,29 @@ async function executarAcao(acao, corpo, sessao, res) {
     const id = texto(corpo.id, 64);
     if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
     await excluirFaixa(id);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ── Gamificação: critérios de pontuação por prêmio ──────────────────────
+  if (acao === 'criar_criterio') {
+    const premioId = texto(corpo.premioId, 64);
+    const tipo = String(corpo.tipo || '');
+    const pontos = Number.isInteger(corpo.pontos) ? corpo.pontos : null;
+    if (!premioId || !TIPOS_CRITERIO.has(tipo) || !pontos || pontos <= 0) {
+      return erro(res, 400, 'campos_invalidos', 'premioId, tipo válido e pontos (>0) são obrigatórios.');
+    }
+    const regraId = tipo === 'regra' ? texto(corpo.regraId, 64) : null;
+    const trilhaId = tipo === 'trilha' ? texto(corpo.trilhaId, 64) : null;
+    if (tipo === 'regra' && !regraId) return erro(res, 400, 'campos_invalidos', 'regraId é obrigatório pra critério do tipo "regra".');
+    if (tipo === 'trilha' && !trilhaId) return erro(res, 400, 'campos_invalidos', 'trilhaId é obrigatório pra critério do tipo "trilha".');
+    const criterio = await criarCriterio({ premioId, tipo, regraId, trilhaId, pontos, ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0 });
+    return res.status(200).json({ criterio });
+  }
+
+  if (acao === 'excluir_criterio') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    await excluirCriterio(id);
     return res.status(200).json({ ok: true });
   }
 

@@ -42,7 +42,6 @@ create table trilhas (
   produtos text[] not null default '{}',
   ativa boolean not null default true,   -- arquivar preserva vídeos e histórico, só some da lista do cliente
   ordem integer not null default 0,
-  pontos_conclusao integer,              -- pontos de gamificação ao concluir 100% (null = trilha não pontua)
   criado_em timestamptz not null default now(),
   atualizado_em timestamptz not null default now()
 );
@@ -57,7 +56,6 @@ create table trilha_videos (
   duracao_segundos integer,
   nota text,                            -- texto livre exibido junto do vídeo (ex: link pra base de conhecimento)
   atividade_titulo text,                -- ex: "Emitir uma nota no Gestor" — autodeclarada, sem aprovação
-  atividade_pontos integer,             -- pontos ao marcar a atividade como concluída (null = sem atividade)
   ativo boolean not null default true,   -- arquivar preserva o histórico de quem assistiu
   criado_em timestamptz not null default now()
 );
@@ -94,12 +92,14 @@ create table atividades_concluidas (
 );
 create index idx_atividades_cliente on atividades_concluidas (cliente_id);
 
--- Catálogo de regras de pontos, cadastrado pelo admin — não é código, é dado,
--- porque pontuação muda por campanha sem precisar de deploy.
+-- Catálogo de "gatilhos" de pontos (o QUE precisa acontecer), cadastrado pelo
+-- admin. Não tem pontuação própria — quanto vale cada regra é definido por
+-- PRÊMIO em premio_criterios (a mesma regra pode valer pontuações diferentes
+-- em prêmios diferentes: "Já uso o Waipe" pode valer 15 pts pro Ingresso do
+-- Camp e não entrar no Certificado, por exemplo).
 create table pontos_regras (
   id uuid primary key default gen_random_uuid(),
   titulo text not null,
-  pontos integer not null,
   tipo text not null,                    -- 'automatica' | 'autodeclarada' | 'pendente_aprovacao'
   criterio_produtos text[] not null default '{}', -- só usado por 'automatica': satisfaz se produtos_ativos intersecta
   pede_identificacao boolean not null default false, -- pede e-mail/CPF-CNPJ da inscrição (ex: ingresso do Camp)
@@ -140,6 +140,25 @@ create table premios (
   ordem integer not null default 0,
   criado_em timestamptz not null default now()
 );
+
+-- O "cartão de pontuação" de cada prêmio: cada linha é um critério que soma
+-- pontos PRA ESTE prêmio especificamente — a mesma trilha/regra pode valer
+-- pontuações diferentes (ou nem contar) em outro prêmio.
+--   tipo='regra'               -> conta pontos_regras(regra_id) satisfeita (produto ativo, ou evento aprovado)
+--   tipo='trilha'               -> conta quando a trilha(trilha_id) específica está 100% concluída
+--   tipo='trilhas_disponiveis'  -> conta quando TODAS as trilhas liberadas pro cliente estão 100% concluídas
+--   tipo='atividade'            -> soma `pontos` a cada atividade de vídeo concluída (entre as trilhas liberadas)
+create table premio_criterios (
+  id uuid primary key default gen_random_uuid(),
+  premio_id uuid not null references premios(id) on delete cascade,
+  tipo text not null,
+  regra_id uuid references pontos_regras(id) on delete cascade,
+  trilha_id uuid references trilhas(id) on delete cascade,
+  pontos integer not null,
+  ordem integer not null default 0,
+  criado_em timestamptz not null default now()
+);
+create index idx_premio_criterios_premio on premio_criterios (premio_id);
 
 -- Um prêmio pode ter várias faixas de pontuação (ex: 100pts=grátis, 80=70% off, 60=50% off).
 create table premio_faixas (
@@ -188,9 +207,11 @@ alter table atividades_concluidas enable row level security;
 alter table pontos_regras enable row level security;
 alter table pontos_eventos enable row level security;
 alter table premios enable row level security;
+alter table premio_criterios enable row level security;
 alter table premio_faixas enable row level security;
 alter table premio_elegiveis enable row level security;
 alter table premio_resgates enable row level security;
+-- (fim das tabelas base — a migração no final do arquivo cria premio_criterios)
 
 -- MIGRAÇÃO (rodar só se a tabela `trilhas` já existir com a coluna `produto`
 -- antiga, de um texto só — troca por `produtos`, um array, sem perder trilha
@@ -294,3 +315,24 @@ alter table premios enable row level security;
 alter table premio_faixas enable row level security;
 alter table premio_elegiveis enable row level security;
 alter table premio_resgates enable row level security;
+
+-- MIGRAÇÃO: pontuação passa a ser POR PRÊMIO, não mais um total global.
+-- A mesma regra/trilha/atividade pode valer pontuações diferentes em
+-- prêmios diferentes — quem carrega o peso agora é premio_criterios, não
+-- mais colunas soltas em trilhas/trilha_videos/pontos_regras.
+alter table pontos_regras drop column if exists pontos;
+alter table trilhas drop column if exists pontos_conclusao;
+alter table trilha_videos drop column if exists atividade_pontos;
+
+create table if not exists premio_criterios (
+  id uuid primary key default gen_random_uuid(),
+  premio_id uuid not null references premios(id) on delete cascade,
+  tipo text not null,
+  regra_id uuid references pontos_regras(id) on delete cascade,
+  trilha_id uuid references trilhas(id) on delete cascade,
+  pontos integer not null,
+  ordem integer not null default 0,
+  criado_em timestamptz not null default now()
+);
+create index if not exists idx_premio_criterios_premio on premio_criterios (premio_id);
+alter table premio_criterios enable row level security;

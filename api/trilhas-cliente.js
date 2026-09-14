@@ -1,5 +1,5 @@
 // GET  /api/trilhas-cliente                    -> trilhas dos produtos ativados, com progresso
-// GET  /api/trilhas-cliente?recurso=pontos      -> total de pontos, detalhamento e prêmios elegíveis
+// GET  /api/trilhas-cliente?recurso=pontos      -> prêmios elegíveis, cada um com seu próprio total/detalhamento
 // POST /api/trilhas-cliente { acao, ... }       -> marcar_assistido (padrão, compatível com chamadas
 //                                                   antigas sem `acao`) | concluir_atividade |
 //                                                   declarar_evento | resgatar_premio
@@ -25,7 +25,8 @@ import {
   listarRegras,
   buscarEvento,
   declararEvento,
-  calcularPontosCliente,
+  construirContextoPontos,
+  calcularPontosPremio,
   listarPremiosParaCliente,
   contarResgatesAtivos,
   listarResgatesPorEmail,
@@ -115,7 +116,6 @@ async function listarTrilhas(sessao, res) {
             concluido: Boolean(p?.concluido),
             percentual: p?.percentual_maximo || 0,
             atividadeTitulo: v.atividade_titulo || null,
-            atividadePontos: v.atividade_pontos || null,
             atividadeFeita: atividadeFeitaSet.has(v.id),
           };
         });
@@ -172,8 +172,12 @@ async function marcarAssistido(corpo, sessao, res) {
 // ── Gamificação ──────────────────────────────────────────────────────────
 
 async function obterPontos(sessao, res) {
-  const [{ total, detalhamento }, premiosElegiveis, resgatesDoEmail] = await Promise.all([
-    calcularPontosCliente({ email: sessao.email, produtosAtivos: sessao.produtos }),
+  // Contexto montado uma vez só e reaproveitado pra todos os prêmios — cada um
+  // tem seu próprio "cartão de pontuação" (premio_criterios), mas os dados de
+  // base (trilhas concluídas, atividades feitas, eventos aprovados) são os
+  // mesmos pra todos.
+  const [ctx, premiosElegiveis, resgatesDoEmail] = await Promise.all([
+    construirContextoPontos({ email: sessao.email, produtosAtivos: sessao.produtos }),
     listarPremiosParaCliente(sessao.clienteId),
     listarResgatesPorEmail(sessao.email),
   ]);
@@ -184,6 +188,7 @@ async function obterPontos(sessao, res) {
   }
 
   const premios = await Promise.all(premiosElegiveis.map(async (p) => {
+    const { total, detalhamento } = calcularPontosPremio(p.premio_criterios, ctx);
     const faixas = (p.premio_faixas || []).slice().sort((a, b) => b.pontos_minimos - a.pontos_minimos);
     const faixaAtingida = faixas.find((f) => total >= f.pontos_minimos) || null;
     let estoqueRestante = null;
@@ -197,6 +202,8 @@ async function obterPontos(sessao, res) {
       titulo: p.titulo,
       descricao: p.descricao,
       prazoFinal: p.prazo_final,
+      total,
+      detalhamento,
       faixas: faixas.map((f) => ({ id: f.id, pontosMinimos: f.pontos_minimos, descricao: f.descricao })),
       faixaAtingida: faixaAtingida
         ? { id: faixaAtingida.id, pontosMinimos: faixaAtingida.pontos_minimos, descricao: faixaAtingida.descricao }
@@ -206,7 +213,7 @@ async function obterPontos(sessao, res) {
     };
   }));
 
-  return res.status(200).json({ total, detalhamento, premios });
+  return res.status(200).json({ premios });
 }
 
 async function concluirAtividade(corpo, sessao, res) {
@@ -271,7 +278,8 @@ async function resgatarPremio(corpo, sessao, res) {
   const premio = premiosElegiveis.find((p) => p.id === premioId);
   if (!premio) return erro(res, 404, 'premio_nao_encontrado', 'Prêmio não encontrado ou não disponível.');
 
-  const { total } = await calcularPontosCliente({ email: sessao.email, produtosAtivos: sessao.produtos });
+  const ctx = await construirContextoPontos({ email: sessao.email, produtosAtivos: sessao.produtos });
+  const { total } = calcularPontosPremio(premio.premio_criterios, ctx);
   const faixas = (premio.premio_faixas || []).slice().sort((a, b) => b.pontos_minimos - a.pontos_minimos);
   const faixaEscolhida = faixaId ? faixas.find((f) => f.id === faixaId) : faixas[0];
   if (!faixaEscolhida || total < faixaEscolhida.pontos_minimos) {
