@@ -1,22 +1,32 @@
 // GET  /api/trilhas-admin                              -> lista todas as trilhas + vídeos (inclui arquivadas)
 // GET  /api/trilhas-admin?recurso=clientes             -> lista clientes (Supabase) + e-mails cadastrados
 // GET  /api/trilhas-admin?recurso=indicadores          -> engajamento de treinamento por cliente
+// GET  /api/trilhas-admin?recurso=pontos-regras        -> catálogo de regras de pontos
+// GET  /api/trilhas-admin?recurso=pontos-eventos[&status=pendente|aprovado|rejeitado] -> eventos declarados
+// GET  /api/trilhas-admin?recurso=premios              -> prêmios + faixas (admin, inclui inativos)
+// GET  /api/trilhas-admin?recurso=premio-elegiveis&premioId=... -> lista de elegíveis de um prêmio restrito
+// GET  /api/trilhas-admin?recurso=resgates[&status=...] -> fila de resgates
 // POST /api/trilhas-admin  { acao, ... }   -> criar_trilha | editar_trilha | arquivar_trilha
 //                                             criar_video | editar_video | arquivar_video | excluir_video
 //                                             reordenar_videos
 //                                             sincronizar | adicionar_email | remover_email
+//                                             criar_regra | editar_regra
+//                                             aprovar_evento | rejeitar_evento
+//                                             criar_premio | editar_premio
+//                                             criar_faixa | editar_faixa | excluir_faixa
+//                                             definir_elegiveis
+//                                             atualizar_resgate
 //
 // Uso interno (sessão cs_sessao, mesma da Carteira/Implantação). Leitura para
 // qualquer nível autenticado; escrita exige podeEscrever (gestão/csm/ism —
 // consulta é só-leitura em todo o resto do app, e aqui não é diferente).
 //
-// Os três recursos (trilhas, clientes/e-mails, indicadores) viviam em três
-// arquivos separados — juntados aqui num só porque cada arquivo em /api vira
-// uma Serverless Function, e o plano Hobby da Vercel limita a 12 por deploy.
-// Mesmo padrão de "ação num corpo só" que api/clickup.js já usa pra tudo que
-// é dado de carteira/implantação.
+// Tudo isso vive num arquivo só porque cada arquivo em /api vira uma
+// Serverless Function, e o plano Hobby da Vercel limita a 12 por deploy (ver
+// commit e51b14e). Mesmo padrão de "ação num corpo só" que api/clickup.js já
+// usa pra tudo que é dado de carteira/implantação.
 
-import { aplicarCors, erro, lerCorpo, ErroCorpo, texto } from './_lib/http.js';
+import { aplicarCors, erro, lerCorpo, ErroCorpo, texto, uuidValido } from './_lib/http.js';
 import { ErroConfig, exigirSessao, podeEscrever } from './_lib/auth.js';
 import { getCarteira, ErroUpstream } from './_lib/clickup.js';
 import {
@@ -34,9 +44,28 @@ import {
   adicionarEmailCliente,
   removerEmailCliente,
   indicadoresPorCliente,
+  listarRegras,
+  criarRegra,
+  editarRegra,
+  listarEventos,
+  revisarEvento,
+  listarPremiosAdmin,
+  criarPremio,
+  editarPremio,
+  criarFaixa,
+  editarFaixa,
+  excluirFaixa,
+  listarElegiveis,
+  definirElegiveis,
+  listarResgates,
+  atualizarResgate,
   ErroConfigSupabase,
   ErroSupabase,
 } from './_lib/supabase.js';
+
+const TIPOS_REGRA = new Set(['automatica', 'autodeclarada', 'pendente_aprovacao']);
+const STATUS_EVENTO = new Set(['pendente', 'aprovado', 'rejeitado']);
+const STATUS_RESGATE = new Set(['solicitado', 'contatado', 'entregue', 'cancelado']);
 
 const RE_YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -87,6 +116,30 @@ export default async function handler(req, res) {
       if (recurso === 'indicadores') {
         const indicadores = await indicadoresPorCliente();
         return res.status(200).json({ indicadores });
+      }
+      if (recurso === 'pontos-regras') {
+        const regras = await listarRegras();
+        return res.status(200).json({ regras });
+      }
+      if (recurso === 'pontos-eventos') {
+        const status = String(req.query?.status || '');
+        const eventos = await listarEventos(STATUS_EVENTO.has(status) ? status : undefined);
+        return res.status(200).json({ eventos });
+      }
+      if (recurso === 'premios') {
+        const premios = await listarPremiosAdmin();
+        return res.status(200).json({ premios });
+      }
+      if (recurso === 'premio-elegiveis') {
+        const premioId = String(req.query?.premioId || '');
+        if (!uuidValido(premioId)) return erro(res, 400, 'campos_invalidos', 'premioId inválido.');
+        const elegiveis = await listarElegiveis(premioId);
+        return res.status(200).json({ elegiveis });
+      }
+      if (recurso === 'resgates') {
+        const status = String(req.query?.status || '');
+        const resgates = await listarResgates(STATUS_RESGATE.has(status) ? status : undefined);
+        return res.status(200).json({ resgates });
       }
       return erro(res, 400, 'recurso_desconhecido', `Recurso desconhecido: ${recurso}`);
     }
@@ -146,6 +199,7 @@ async function executarAcao(acao, corpo, sessao, res) {
       descricao: texto(corpo.descricao, 2000) || null,
       produtos,
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
+      pontosConclusao: Number.isInteger(corpo.pontosConclusao) && corpo.pontosConclusao > 0 ? corpo.pontosConclusao : null,
     });
     return res.status(200).json({ trilha });
   }
@@ -162,6 +216,9 @@ async function executarAcao(acao, corpo, sessao, res) {
       campos.produtos = produtos;
     }
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
+    if (corpo.pontosConclusao !== undefined) {
+      campos.pontos_conclusao = Number.isInteger(corpo.pontosConclusao) && corpo.pontosConclusao > 0 ? corpo.pontosConclusao : null;
+    }
     const trilha = await editarTrilha(id, campos);
     return res.status(200).json({ trilha });
   }
@@ -180,6 +237,7 @@ async function executarAcao(acao, corpo, sessao, res) {
     if (!trilhaId || !titulo || !youtubeId) {
       return erro(res, 400, 'campos_invalidos', 'trilhaId, título e um vídeo do YouTube válido são obrigatórios.');
     }
+    const atividadeTitulo = texto(corpo.atividadeTitulo, 300) || null;
     const video = await criarVideo({
       trilhaId,
       titulo,
@@ -187,6 +245,8 @@ async function executarAcao(acao, corpo, sessao, res) {
       ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
       duracaoSegundos: Number.isInteger(corpo.duracaoSegundos) ? corpo.duracaoSegundos : null,
       nota: texto(corpo.nota, 2000) || null,
+      atividadeTitulo,
+      atividadePontos: Number.isInteger(corpo.atividadePontos) && corpo.atividadePontos > 0 ? corpo.atividadePontos : null,
     });
     return res.status(200).json({ video });
   }
@@ -203,6 +263,14 @@ async function executarAcao(acao, corpo, sessao, res) {
     }
     if (corpo.nota !== undefined) campos.nota = texto(corpo.nota, 2000) || null;
     if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
+    if (corpo.atividadeTitulo !== undefined) {
+      const atividadeTitulo = texto(corpo.atividadeTitulo, 300) || null;
+      campos.atividade_titulo = atividadeTitulo;
+      // Sem título de atividade não faz sentido guardar pontos órfãos.
+      campos.atividade_pontos = atividadeTitulo && Number.isInteger(corpo.atividadePontos) && corpo.atividadePontos > 0
+        ? corpo.atividadePontos
+        : null;
+    }
     const video = await editarVideo(id, campos);
     return res.status(200).json({ video });
   }
@@ -232,6 +300,136 @@ async function executarAcao(acao, corpo, sessao, res) {
   if (acao === 'sincronizar') return await sincronizar(res);
   if (acao === 'adicionar_email') return await adicionarEmail(corpo, sessao, res);
   if (acao === 'remover_email') return await removerEmail(corpo, res);
+
+  // ── Gamificação: regras de pontos ───────────────────────────────────────
+  if (acao === 'criar_regra') {
+    const titulo = texto(corpo.titulo, 200);
+    const pontos = Number.isInteger(corpo.pontos) ? corpo.pontos : null;
+    const tipo = String(corpo.tipo || '');
+    if (!titulo || !pontos || pontos <= 0 || !TIPOS_REGRA.has(tipo)) {
+      return erro(res, 400, 'campos_invalidos', 'Título, pontos (>0) e tipo válido são obrigatórios.');
+    }
+    const criterioProdutos = tipo === 'automatica' ? (sanearProdutos(corpo.criterioProdutos) ?? []) : [];
+    if (tipo === 'automatica' && !criterioProdutos.length) {
+      return erro(res, 400, 'campos_invalidos', 'Regra automática precisa de ao menos um produto-critério.');
+    }
+    const regra = await criarRegra({
+      titulo, pontos, tipo, criterioProdutos,
+      pedeIdentificacao: Boolean(corpo.pedeIdentificacao),
+      ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
+    });
+    return res.status(200).json({ regra });
+  }
+
+  if (acao === 'editar_regra') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    const campos = {};
+    if (corpo.titulo !== undefined) campos.titulo = texto(corpo.titulo, 200);
+    if (corpo.pontos !== undefined) {
+      if (!Number.isInteger(corpo.pontos) || corpo.pontos <= 0) return erro(res, 400, 'campos_invalidos', 'pontos deve ser um inteiro positivo.');
+      campos.pontos = corpo.pontos;
+    }
+    if (corpo.criterioProdutos !== undefined) {
+      const criterioProdutos = sanearProdutos(corpo.criterioProdutos);
+      if (criterioProdutos === null) return erro(res, 400, 'campos_invalidos', 'criterioProdutos deve ser uma lista.');
+      campos.criterio_produtos = criterioProdutos;
+    }
+    if (corpo.pedeIdentificacao !== undefined) campos.pede_identificacao = Boolean(corpo.pedeIdentificacao);
+    if (corpo.ativa !== undefined) campos.ativa = Boolean(corpo.ativa);
+    if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
+    const regra = await editarRegra(id, campos);
+    return res.status(200).json({ regra });
+  }
+
+  // ── Gamificação: aprovação de eventos ───────────────────────────────────
+  if (acao === 'aprovar_evento' || acao === 'rejeitar_evento') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    const evento = await revisarEvento(id, acao === 'aprovar_evento' ? 'aprovado' : 'rejeitado', sessao.nome || null);
+    return res.status(200).json({ evento });
+  }
+
+  // ── Gamificação: prêmios ─────────────────────────────────────────────────
+  if (acao === 'criar_premio') {
+    const titulo = texto(corpo.titulo, 200);
+    if (!titulo) return erro(res, 400, 'campos_invalidos', 'Título é obrigatório.');
+    const premio = await criarPremio({
+      titulo,
+      descricao: texto(corpo.descricao, 2000) || null,
+      prazoFinal: texto(corpo.prazoFinal, 10) || null,
+      estoqueTotal: Number.isInteger(corpo.estoqueTotal) && corpo.estoqueTotal >= 0 ? corpo.estoqueTotal : null,
+      restrito: Boolean(corpo.restrito),
+      ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0,
+    });
+    return res.status(200).json({ premio });
+  }
+
+  if (acao === 'editar_premio') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    const campos = {};
+    if (corpo.titulo !== undefined) campos.titulo = texto(corpo.titulo, 200);
+    if (corpo.descricao !== undefined) campos.descricao = texto(corpo.descricao, 2000) || null;
+    if (corpo.prazoFinal !== undefined) campos.prazo_final = texto(corpo.prazoFinal, 10) || null;
+    if (corpo.estoqueTotal !== undefined) {
+      campos.estoque_total = Number.isInteger(corpo.estoqueTotal) && corpo.estoqueTotal >= 0 ? corpo.estoqueTotal : null;
+    }
+    if (corpo.restrito !== undefined) campos.restrito = Boolean(corpo.restrito);
+    if (corpo.ativo !== undefined) campos.ativo = Boolean(corpo.ativo);
+    if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
+    const premio = await editarPremio(id, campos);
+    return res.status(200).json({ premio });
+  }
+
+  if (acao === 'criar_faixa') {
+    const premioId = texto(corpo.premioId, 64);
+    const descricao = texto(corpo.descricao, 200);
+    const pontosMinimos = Number.isInteger(corpo.pontosMinimos) ? corpo.pontosMinimos : null;
+    if (!premioId || !descricao || pontosMinimos === null || pontosMinimos < 0) {
+      return erro(res, 400, 'campos_invalidos', 'premioId, descrição e pontosMinimos (>=0) são obrigatórios.');
+    }
+    const faixa = await criarFaixa({ premioId, pontosMinimos, descricao, ordem: Number.isInteger(corpo.ordem) ? corpo.ordem : 0 });
+    return res.status(200).json({ faixa });
+  }
+
+  if (acao === 'editar_faixa') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    const campos = {};
+    if (corpo.descricao !== undefined) campos.descricao = texto(corpo.descricao, 200);
+    if (corpo.pontosMinimos !== undefined) {
+      if (!Number.isInteger(corpo.pontosMinimos) || corpo.pontosMinimos < 0) return erro(res, 400, 'campos_invalidos', 'pontosMinimos inválido.');
+      campos.pontos_minimos = corpo.pontosMinimos;
+    }
+    if (corpo.ordem !== undefined && Number.isInteger(corpo.ordem)) campos.ordem = corpo.ordem;
+    const faixa = await editarFaixa(id, campos);
+    return res.status(200).json({ faixa });
+  }
+
+  if (acao === 'excluir_faixa') {
+    const id = texto(corpo.id, 64);
+    if (!id) return erro(res, 400, 'campos_invalidos', 'id é obrigatório.');
+    await excluirFaixa(id);
+    return res.status(200).json({ ok: true });
+  }
+
+  if (acao === 'definir_elegiveis') {
+    const premioId = texto(corpo.premioId, 64);
+    const clienteIds = Array.isArray(corpo.clienteIds) ? corpo.clienteIds.filter((v) => uuidValido(v)) : null;
+    if (!premioId || !clienteIds) return erro(res, 400, 'campos_invalidos', 'premioId e clienteIds (lista) são obrigatórios.');
+    await definirElegiveis(premioId, clienteIds);
+    return res.status(200).json({ ok: true, total: clienteIds.length });
+  }
+
+  // ── Gamificação: resgates ────────────────────────────────────────────────
+  if (acao === 'atualizar_resgate') {
+    const id = texto(corpo.id, 64);
+    const status = String(corpo.status || '');
+    if (!id || !STATUS_RESGATE.has(status)) return erro(res, 400, 'campos_invalidos', 'id e status válido são obrigatórios.');
+    const resgate = await atualizarResgate(id, status);
+    return res.status(200).json({ resgate });
+  }
 
   return erro(res, 400, 'acao_desconhecida', `Ação desconhecida: ${acao}`);
 }

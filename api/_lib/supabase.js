@@ -176,15 +176,18 @@ export async function listarTrilhasAdmin() {
  */
 export async function listarTrilhasAtivas() {
   return sb(
-    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos,nota)&trilha_videos.ativo=eq.true&order=ordem.asc`
+    `/trilhas?ativa=eq.true&select=id,titulo,descricao,produtos,ordem,pontos_conclusao,trilha_videos(id,titulo,youtube_id,ordem,duracao_segundos,nota,atividade_titulo,atividade_pontos)&trilha_videos.ativo=eq.true&order=ordem.asc`
   );
 }
 
-export async function criarTrilha({ titulo, descricao, produtos, ordem }) {
+export async function criarTrilha({ titulo, descricao, produtos, ordem, pontosConclusao }) {
   const linhas = await sb(`/trilhas`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
-    body: JSON.stringify([{ titulo, descricao: descricao || null, produtos: produtos || [], ordem: ordem || 0 }]),
+    body: JSON.stringify([{
+      titulo, descricao: descricao || null, produtos: produtos || [], ordem: ordem || 0,
+      pontos_conclusao: pontosConclusao ?? null,
+    }]),
   });
   return linhas?.[0] || null;
 }
@@ -198,7 +201,7 @@ export async function editarTrilha(id, campos) {
   return linhas?.[0] || null;
 }
 
-export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota }) {
+export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSegundos, nota, atividadeTitulo, atividadePontos }) {
   const linhas = await sb(`/trilha_videos`, {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -209,6 +212,8 @@ export async function criarVideo({ trilhaId, titulo, youtubeId, ordem, duracaoSe
       ordem: ordem || 0,
       duracao_segundos: duracaoSegundos || null,
       nota: nota || null,
+      atividade_titulo: atividadeTitulo || null,
+      atividade_pontos: atividadeTitulo ? (atividadePontos ?? null) : null,
     }]),
   });
   return linhas?.[0] || null;
@@ -361,4 +366,284 @@ export async function indicadoresPorCliente() {
       ultimaAtividade: reg?.ultimaAtividade || null,
     };
   });
+}
+
+// ── Gamificação: atividades por vídeo ───────────────────────────────────────
+
+export async function listarAtividadesPorEmail(email) {
+  return sb(`/atividades_concluidas?email=eq.${enc(email)}&select=trilha_video_id`);
+}
+
+export async function marcarAtividadeConcluida(clienteId, email, trilhaVideoId) {
+  const linhas = await sb(`/atividades_concluidas?on_conflict=email,trilha_video_id`, {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify([{ cliente_id: clienteId, email, trilha_video_id: trilhaVideoId }]),
+  });
+  return linhas?.[0] || null;
+}
+
+// ── Gamificação: regras de pontos ───────────────────────────────────────────
+
+export async function listarRegras() {
+  return sb(`/pontos_regras?select=*&order=ordem.asc,titulo.asc`);
+}
+
+export async function criarRegra({ titulo, pontos, tipo, criterioProdutos, pedeIdentificacao, ordem }) {
+  const linhas = await sb(`/pontos_regras`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify([{
+      titulo, pontos, tipo,
+      criterio_produtos: criterioProdutos || [],
+      pede_identificacao: Boolean(pedeIdentificacao),
+      ordem: ordem || 0,
+    }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function editarRegra(id, campos) {
+  const linhas = await sb(`/pontos_regras?id=eq.${enc(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(campos),
+  });
+  return linhas?.[0] || null;
+}
+
+// ── Gamificação: eventos de pontos (autodeclarada / pendente_aprovacao) ────
+
+/** Todos os eventos, com dados da regra e do cliente — visão admin (opcionalmente filtrado por status). */
+export async function listarEventos(status) {
+  const filtro = status ? `&status=eq.${enc(status)}` : '';
+  return sbTodos(
+    `/pontos_eventos?select=*,pontos_regras(titulo,pontos,tipo),clientes(nome,id_nucleo,cnpj)${filtro}&order=criado_em.desc`
+  );
+}
+
+export async function listarEventosPorEmail(email) {
+  return sb(`/pontos_eventos?email=eq.${enc(email)}&select=regra_id,status,identificacao,observacao,criado_em`);
+}
+
+export async function buscarEvento(email, regraId) {
+  const linhas = await sb(`/pontos_eventos?email=eq.${enc(email)}&regra_id=eq.${enc(regraId)}&select=*`);
+  return linhas?.[0] || null;
+}
+
+/**
+ * Cliente declara um evento (autodeclarada nasce 'aprovado' direto,
+ * pendente_aprovacao nasce 'pendente'). Quem chama decide o status — ver
+ * guarda em api/trilhas-cliente.js pra não deixar resubmeter por cima de um
+ * evento já aprovado.
+ */
+export async function declararEvento({ clienteId, email, regraId, status, identificacao, observacao }) {
+  const linhas = await sb(`/pontos_eventos?on_conflict=email,regra_id`, {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify([{
+      cliente_id: clienteId, email, regra_id: regraId, status,
+      identificacao: identificacao || null, observacao: observacao || null,
+    }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function revisarEvento(id, status, revisadoPor) {
+  const linhas = await sb(`/pontos_eventos?id=eq.${enc(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ status, revisado_em: new Date().toISOString(), revisado_por: revisadoPor || null }),
+  });
+  return linhas?.[0] || null;
+}
+
+// ── Gamificação: prêmios ────────────────────────────────────────────────────
+
+export async function listarPremiosAdmin() {
+  return sb(`/premios?select=*,premio_faixas(*)&order=ordem.asc,titulo.asc`);
+}
+
+export async function criarPremio({ titulo, descricao, prazoFinal, estoqueTotal, restrito, ordem }) {
+  const linhas = await sb(`/premios`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify([{
+      titulo, descricao: descricao || null, prazo_final: prazoFinal || null,
+      estoque_total: estoqueTotal ?? null, restrito: Boolean(restrito), ordem: ordem || 0,
+    }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function editarPremio(id, campos) {
+  const linhas = await sb(`/premios?id=eq.${enc(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(campos),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function criarFaixa({ premioId, pontosMinimos, descricao, ordem }) {
+  const linhas = await sb(`/premio_faixas`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify([{ premio_id: premioId, pontos_minimos: pontosMinimos, descricao, ordem: ordem || 0 }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function editarFaixa(id, campos) {
+  const linhas = await sb(`/premio_faixas?id=eq.${enc(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(campos),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function excluirFaixa(id) {
+  await sb(`/premio_faixas?id=eq.${enc(id)}`, { method: 'DELETE' });
+}
+
+// ── Gamificação: elegibilidade restrita ─────────────────────────────────────
+
+export async function listarElegiveis(premioId) {
+  return sb(`/premio_elegiveis?premio_id=eq.${enc(premioId)}&select=cliente_id,clientes(nome,id_nucleo,cnpj)`);
+}
+
+/** Substitui a lista inteira de elegíveis do prêmio (apaga e recria). */
+export async function definirElegiveis(premioId, clienteIds) {
+  await sb(`/premio_elegiveis?premio_id=eq.${enc(premioId)}`, { method: 'DELETE' });
+  if (!clienteIds.length) return [];
+  return sb(`/premio_elegiveis`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(clienteIds.map((id) => ({ premio_id: premioId, cliente_id: id }))),
+  });
+}
+
+export async function clienteEhElegivel(premioId, clienteId) {
+  const linhas = await sb(
+    `/premio_elegiveis?premio_id=eq.${enc(premioId)}&cliente_id=eq.${enc(clienteId)}&select=cliente_id`
+  );
+  return Boolean(linhas?.length);
+}
+
+// ── Gamificação: resgates ────────────────────────────────────────────────────
+
+export async function listarResgates(status) {
+  const filtro = status ? `&status=eq.${enc(status)}` : '';
+  return sbTodos(
+    `/premio_resgates?select=*,premios(titulo),premio_faixas(descricao),clientes(nome,id_nucleo,cnpj)${filtro}&order=criado_em.desc`
+  );
+}
+
+export async function listarResgatesPorEmail(email) {
+  return sb(`/premio_resgates?email=eq.${enc(email)}&select=premio_id,faixa_id,status,criado_em`);
+}
+
+export async function contarResgatesAtivos(premioId) {
+  const linhas = await sb(`/premio_resgates?premio_id=eq.${enc(premioId)}&status=neq.cancelado&select=id`);
+  return linhas?.length || 0;
+}
+
+export async function criarResgate({ premioId, faixaId, clienteId, email, whatsapp }) {
+  const linhas = await sb(`/premio_resgates`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify([{ premio_id: premioId, faixa_id: faixaId || null, cliente_id: clienteId, email, whatsapp: whatsapp || null }]),
+  });
+  return linhas?.[0] || null;
+}
+
+export async function atualizarResgate(id, status) {
+  const linhas = await sb(`/premio_resgates?id=eq.${enc(id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ status, atualizado_em: new Date().toISOString() }),
+  });
+  return linhas?.[0] || null;
+}
+
+// ── Gamificação: cálculo de pontos do cliente ───────────────────────────────
+
+/**
+ * Pontuação total do cliente + detalhamento (o que já pontuou, o que falta).
+ * Sempre calculado no servidor a partir de dados vivos (nunca confia em total
+ * calculado no navegador) — é a mesma fonte usada tanto pra mostrar a barra de
+ * progresso do cliente quanto pra validar um resgate.
+ */
+export async function calcularPontosCliente({ email, produtosAtivos }) {
+  const [trilhas, visualizacoes, atividadesFeitas, regras, eventosDoEmail] = await Promise.all([
+    listarTrilhasAtivas(),
+    listarVisualizacoesPorEmail(email),
+    listarAtividadesPorEmail(email),
+    listarRegras(),
+    listarEventosPorEmail(email),
+  ]);
+
+  const assistidoPorVideo = new Map(visualizacoes.map((v) => [v.trilha_video_id, v.concluido]));
+  const atividadeFeitaSet = new Set(atividadesFeitas.map((a) => a.trilha_video_id));
+  const eventoPorRegra = new Map(eventosDoEmail.map((e) => [e.regra_id, e]));
+
+  const detalhamento = [];
+  let total = 0;
+
+  for (const t of trilhas) {
+    const liberada = !t.produtos || !t.produtos.length || t.produtos.some((p) => produtosAtivos.includes(p));
+    if (!liberada) continue;
+    const videos = t.trilha_videos || [];
+
+    if (t.pontos_conclusao) {
+      const completa = videos.length > 0 && videos.every((v) => assistidoPorVideo.get(v.id));
+      detalhamento.push({ tipo: 'trilha', titulo: `Concluir a trilha: ${t.titulo}`, pontos: t.pontos_conclusao, obtido: completa });
+      if (completa) total += t.pontos_conclusao;
+    }
+
+    for (const v of videos) {
+      if (!v.atividade_titulo || !v.atividade_pontos) continue;
+      const feita = atividadeFeitaSet.has(v.id);
+      detalhamento.push({
+        tipo: 'atividade', trilhaVideoId: v.id, titulo: v.atividade_titulo, pontos: v.atividade_pontos, obtido: feita,
+      });
+      if (feita) total += v.atividade_pontos;
+    }
+  }
+
+  for (const r of regras) {
+    if (!r.ativa) continue;
+    if (r.tipo === 'automatica') {
+      const obtido = (r.criterio_produtos || []).some((p) => produtosAtivos.includes(p));
+      detalhamento.push({ tipo: 'regra', regraId: r.id, titulo: r.titulo, pontos: r.pontos, obtido, status: obtido ? 'aprovado' : null });
+      if (obtido) total += r.pontos;
+    } else {
+      const evento = eventoPorRegra.get(r.id);
+      const obtido = evento?.status === 'aprovado';
+      detalhamento.push({
+        tipo: 'regra', regraId: r.id, titulo: r.titulo, pontos: r.pontos, obtido,
+        status: evento?.status || null, pedeIdentificacao: r.pede_identificacao,
+      });
+      if (obtido) total += r.pontos;
+    }
+  }
+
+  return { total, detalhamento };
+}
+
+/** Prêmios ativos, dentro do prazo, e elegíveis (respeitando `restrito`) para este cliente. */
+export async function listarPremiosParaCliente(clienteId) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const premios = await sb(`/premios?ativo=eq.true&select=*,premio_faixas(*)&order=ordem.asc,titulo.asc`);
+  const resultado = [];
+  for (const p of premios || []) {
+    if (p.prazo_final && p.prazo_final < hoje) continue;
+    if (p.restrito) {
+      const elegivel = await clienteEhElegivel(p.id, clienteId);
+      if (!elegivel) continue;
+    }
+    resultado.push(p);
+  }
+  return resultado;
 }
