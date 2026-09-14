@@ -21,12 +21,16 @@
 //        (MARCADOR_RESUMO_REUNIAO).
 //
 //   POST /api/ia?action=gerar-relatorio-finalizacao     { id }
-//        Gera o RASCUNHO do relatório de finalização do projeto — NÃO relê
-//        conversas/transcrições brutas, só os comentários já marcados como
-//        resumo de IA (dos dois pontos acima) + dados objetivos (dias em
-//        aberto, CSM, ISM). Não salva nada sozinho: a tela mostra o rascunho
-//        editável, e salvar passa pela ação normal `atualizar-implantacao`
-//        (campo `finalizacao`), igual qualquer outro campo do projeto.
+//        Gera o RASCUNHO do relatório de finalização do projeto, lendo TODO
+//        o histórico de comentários do projeto (notas do ISM, atividades,
+//        resumos de IA marcados pelos dois pontos acima, e-mails registrados
+//        etc.) + dados objetivos (dias em aberto, CSM, ISM, reagendamentos).
+//        Não depende de existir nenhum resumo de IA — um projeto sem nenhum
+//        "Resumir conversa"/"Analisar reunião" ainda gera relatório a partir
+//        dos comentários que existirem. Não salva nada sozinho: a tela
+//        mostra o rascunho editável, e salvar passa pela ação normal
+//        `atualizar-implantacao` (campo `finalizacao`), igual qualquer outro
+//        campo do projeto.
 //
 //   POST /api/ia?action=gerar-secoes-proposta           { cliente, contexto,
 //        secoes[], diagnosticoWaipe?, agentes?, outrasSolucoes? }
@@ -466,12 +470,16 @@ async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
 
 // ── Ação: gerar-relatorio-finalizacao ──────────────────────────────────────
 
-const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório de finalização de um projeto de implantação do Waipe, com base SOMENTE nos resumos já registrados ao longo do projeto (não invente além do que eles dizem) e nos dados objetivos informados.
+const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório de finalização de um projeto de implantação do Waipe, com base no HISTÓRICO COMPLETO de comentários do projeto (notas do ISM, atividades registradas, resumos de conversa/reunião, e-mails, sinalizações de risco de relatórios anteriores etc. — tudo que ficou registrado ao longo do projeto, não só os resumos gerados por IA) e nos dados objetivos informados. Não invente além do que o histórico e os dados objetivos dizem — mas TAMBÉM não exija uma frase explícita quando o comportamento registrado já é um sinal claro (ex: cliente que some, recusa repetida de agendamento, ou pede cancelamento, é sinal de insatisfação mesmo que ele nunca tenha dito literalmente "estou insatisfeito").
 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código), neste formato exato:
-{"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia se os resumos não derem sinal de causa específica de atraso, senão uma frase curta","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada"}
+{"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres — inclua qualquer risco ou ponto de atenção identificado no histórico (ex: pendência técnica/cadastral não resolvida, cliente pouco responsivo, sinal de possível cancelamento), não só uma narrativa neutra dos fatos","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia só se o histórico realmente não der nenhum sinal de causa de atraso, senão uma frase curta com a causa","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada"}
 
-Regras: "satisfacaoPercebida" deve ser "indeterminada" quando os resumos não tiverem sinal suficiente pra inferir isso — é esperado e aceitável, não force uma resposta só porque o campo existe. "riscoPercebido" reflete o risco de o cliente terminar insatisfeito ou com algo mal resolvido, não risco comercial. "causaDaDemora" só quando houver sinal claro (ex: vários reagendamentos, demora do cliente em responder, problema técnico recorrente) — se os dados objetivos mostrarem vários reagendamentos ou não comparecimentos do cliente, isso já é sinal suficiente pra preencher esse campo.`;
+Regras:
+- "satisfacaoPercebida": só use "indeterminada" quando o histórico realmente não tiver NENHUM sinal, nem direto nem indireto. Comportamento conta como sinal: cliente que pede cancelamento, para de responder, recusa treinamento repetidas vezes, ou reclama de algo tecnicamente não resolvido — isso é ao menos "neutra" (ou "negativa", se o sinal for mais forte), não "indeterminada". Só é "positiva" quando há elogio, confirmação de uso satisfatório, ou fechamento tranquilo.
+- "riscoPercebido" reflete o risco de o cliente ter terminado insatisfeito ou com algo mal resolvido, não risco comercial.
+- "causaDaDemora": procure ativamente no histórico qualitativo (não só nos números de reagendamento) — ex: "cliente sobrecarregado com outra obrigação", "pendência cadastral/técnica externa", "cliente trocou de fornecedor/sistema", "demora em responder contato". Se os dados objetivos mostrarem vários reagendamentos ou não comparecimentos, isso sozinho já é sinal suficiente mesmo sem uma causa qualitativa explícita.
+- O objetivo é minimizar o quanto a pessoa que revisa precisa complementar à mão — prefira uma inferência razoável e sinalizada como tal a deixar o campo genérico ou vazio.`;
 
 async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
   let corpo;
@@ -490,11 +498,18 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
   if (negado) return erro(res, 403, 'fora_da_carteira', negado);
 
   const comentarios = await listarComentarios(projeto.id);
-  const resumosRegistrados = comentarios
+  // Histórico inteiro, do mais antigo pro mais recente (ClickUp devolve
+  // mais recente primeiro) — antes só entravam os comentários marcados
+  // como resumo de IA, o que deixava o rascunho raso sempre que a maior
+  // parte do histórico real (notas do ISM, atividades, e-mails, riscos
+  // sinalizados em relatórios) nunca passava por "Resumir conversa"/
+  // "Analisar reunião".
+  const historicoCompleto = comentarios
     .map((c) => String(c.comment_text || ''))
-    .filter((t) => t.startsWith(MARCADOR_RESUMO_CONVERSA) || t.startsWith(MARCADOR_RESUMO_REUNIAO));
-  if (!resumosRegistrados.length) {
-    return erro(res, 400, 'sem_registros', 'Nenhum resumo de conversa ou reunião foi registrado neste projeto ainda — use "Resumir conversa" ou "Analisar reunião" primeiro.');
+    .filter(Boolean)
+    .reverse();
+  if (!historicoCompleto.length) {
+    return erro(res, 400, 'sem_registros', 'Nenhum comentário foi registrado neste projeto ainda.');
   }
 
   const csm = csmDaDescricaoImplantacao(projeto.description);
@@ -524,11 +539,11 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
       : null,
   ].filter(Boolean).join(' ');
 
-  const mensagem = `${dadosObjetivos}\n\nResumos registrados ao longo do projeto:\n\n${resumosRegistrados.join('\n\n---\n\n')}`;
+  const mensagem = `${dadosObjetivos}\n\nHistórico completo de comentários do projeto (do mais antigo pro mais recente):\n\n${historicoCompleto.join('\n\n---\n\n')}`;
 
   let respostaTexto;
   try {
-    respostaTexto = await chamarClaudeTexto({ system: INSTRUCOES_RELATORIO_FINAL, mensagem, maxTokens: 1024 });
+    respostaTexto = await chamarClaudeTexto({ system: INSTRUCOES_RELATORIO_FINAL, mensagem, maxTokens: 1536 });
   } catch (e) {
     if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
     if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido.');
@@ -546,7 +561,7 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
     riscoPercebido: RISCO_PERCEBIDO_VALIDOS.has(parsed.riscoPercebido) ? parsed.riscoPercebido : '',
     causaDaDemora: texto(parsed.causaDaDemora, 500),
     satisfacaoPercebida: SATISFACAO_PERCEBIDA_VALIDOS.has(parsed.satisfacaoPercebida) ? parsed.satisfacaoPercebida : 'indeterminada',
-    resumosConsiderados: resumosRegistrados.length,
+    resumosConsiderados: historicoCompleto.length,
     // Fatos objetivos (nao rascunho da IA pra revisar) — calculados aqui,
     // nao inventados pelo modelo.
     diasEmAberto,

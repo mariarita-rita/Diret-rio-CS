@@ -1124,10 +1124,31 @@ export async function criarComentario(taskId, texto) {
   });
 }
 
-/** Comentarios nativos de uma task, mais recentes primeiro (como o ClickUp devolve). */
+/**
+ * Comentarios nativos de uma task, mais recentes primeiro (como o ClickUp
+ * devolve) — paginado por completo. O ClickUp so devolve ate 25 por
+ * chamada; sem paginar, qualquer task com mais de 25 comentarios (comum
+ * depois de uma migracao com dezenas de notas/atividades, ou so de uso
+ * normal ao longo do tempo) perdia os mais antigos em silencio — tanto no
+ * card "Comentarios" quanto no relatorio de finalizacao por IA, que
+ * justamente precisa do historico inteiro.
+ */
 export async function listarComentarios(taskId) {
-  const r = await cu(`/task/${taskId}/comment`);
-  return Array.isArray(r.comments) ? r.comments : [];
+  const todos = [];
+  let start, startId;
+  for (let volta = 0; volta < 100; volta++) {
+    const qs = start != null ? `?start=${start}&start_id=${startId}` : '';
+    const r = await cu(`/task/${taskId}/comment${qs}`);
+    const comentariosDaPagina = Array.isArray(r.comments) ? r.comments : [];
+    if (!comentariosDaPagina.length) break;
+    todos.push(...comentariosDaPagina);
+    const ultimo = comentariosDaPagina[comentariosDaPagina.length - 1];
+    if (!ultimo?.date || (start === ultimo.date && startId === ultimo.id)) break;
+    start = ultimo.date;
+    startId = ultimo.id;
+    if (comentariosDaPagina.length < 25) break;
+  }
+  return todos;
 }
 
 /**

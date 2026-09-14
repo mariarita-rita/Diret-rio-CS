@@ -9,3 +9,8 @@ Thumbs.db
 
 .vercel
 .env*
+
+# Relatório/plano da migração em massa Moskit -> ClickUp — dado real de
+# cliente (CNPJ, telefone, e-mail), nunca commitar.
+scripts/relatorio-migracao-moskit.json
+scripts/plano-migracao-moskit.json

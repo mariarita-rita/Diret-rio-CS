@@ -2578,7 +2578,7 @@
       };
       var statsEl = document.getElementById("finEstatisticas");
       if (statsEl) statsEl.innerHTML = finEstatisticasHtml(finalizacaoStatsAtual);
-      showSimToast("Rascunho gerado a partir de " + r.resumosConsiderados + " resumo(s) registrado(s) — revise antes de salvar.");
+      showSimToast("Rascunho gerado a partir de " + r.resumosConsiderados + " comentário(s) do histórico do projeto — revise antes de salvar.");
     }).catch(function(e){
       showSimToast(mensagemErro(e) || "Não deu para gerar o relatório.");
     }).then(function(){

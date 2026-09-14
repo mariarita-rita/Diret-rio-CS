@@ -1210,9 +1210,20 @@ function descricaoSolucao(o) {
  * quanto na promoção de uma proposta (outrasSolucoesPropostas), que antes
  * duplicava este mesmo laço.
  */
-export async function criarSubtasksSolucao(projetoId, solucoes) {
+/**
+ * `faseInicial` (opcional, default FASE_ITEM_PADRAO) — usado por
+ * criarProjetoImplantacao quando o projeto já nasce "Entregue" (migração):
+ * cada item já entra com a fase e o checklist inteiro marcados, em vez de
+ * "não iniciado" com nada marcado. Devolve os ids das subtasks criadas, na
+ * mesma ordem de `solucoes` — quem chama usa isso pra popular `concluidos`
+ * no projeto-pai (só dá pra saber esses ids depois de criados).
+ */
+export async function criarSubtasksSolucao(projetoId, solucoes, faseInicial) {
+  const ids = [];
   for (const o of solucoes) {
-    await criarSubtaskAgente(projetoId, {
+    const checklist = jornadaPara(o.produto, o.ambienteMuda);
+    const fase = FASES_ITEM_VALIDAS.has(faseInicial) ? faseInicial : FASE_ITEM_PADRAO;
+    const subtask = await criarSubtaskAgente(projetoId, {
       name: o.produto + (o.planoSugerido ? ` — ${o.planoSugerido}` : ''),
       markdown_description: stringifyWaipeState(descricaoSolucao(o), {
         tipo: 'solucao',
@@ -1228,12 +1239,14 @@ export async function criarSubtasksSolucao(projetoId, solucoes) {
         descontoPercent: o.descontoPercent,
         vigenciaMeses: o.vigenciaMeses ?? null,
         isencaoSetup: !!o.isencaoSetup,
-        checklist: jornadaPara(o.produto, o.ambienteMuda),
-        checklistChecks: {},
-        fase: FASE_ITEM_PADRAO,
+        checklist,
+        checklistChecks: fase === 'entregue' ? Object.fromEntries(checklist.map((_, i) => [i, true])) : {},
+        fase,
       }),
     });
+    ids.push(subtask.id);
   }
+  return ids;
 }
 
 /**
@@ -1461,10 +1474,26 @@ function dadosTributariosCampos(estadoProjeto, agentes, projetoId) {
  * `origemMoskitDealId` (opcional) marca projetos nascidos da automação — é
  * a chave de idempotência que o webhook usa pra não criar duplicata quando
  * o mesmo evento chega mais de uma vez.
+ *
+ * `origemMoskitProjetoId` (opcional) é o mesmo tipo de marca, só que pro
+ * script de migração em massa dos Projetos do Moskit (módulo Projetos,
+ * diferente de Negócios — ver scripts/migrar-moskit-projetos.mjs): evita
+ * recriar a mesma task se o script rodar de novo.
  */
 export async function criarProjetoImplantacao({
-  nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor, origemMoskitDealId,
+  nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor,
+  origemMoskitDealId, origemMoskitProjetoId, faseProjetoManual,
 }) {
+  // Projeto que já nasce "Entregue" (ex: migração de um projeto do Moskit
+  // que já estava finalizado de verdade) precisa refletir isso em MAIS que
+  // só essa flag — senão a barra de progresso fica em 0/N pra sempre (nada
+  // em `concluidos`) e o projeto continua aparecendo em "Projetos em
+  // Andamento" (aquela aba filtra pelo status NATIVO do ClickUp, não pela
+  // fase — ver listarImplantacoesAcao). Isso é resolvido abaixo: os itens
+  // já nascem com fase "entregue", e depois de criados (só então os ids das
+  // subtasks existem) o projeto-pai é atualizado com `concluidos` cheio e
+  // status ClickUp "concluído".
+  const jaEntregue = faseProjetoManual === 'entregue';
   const descricaoProjeto = stringifyWaipeState(
     // Sem csmNome (projeto ainda sem gerente de contas, ver
     // definir-gerente-contas), a linha "**CSM:**" nem entra — deixá-la vazia
@@ -1483,6 +1512,12 @@ export async function criarProjetoImplantacao({
       cliente: texto(cliente, 120),
       vendedor: texto(vendedor, 120),
       origemMoskitDealId: origemMoskitDealId ?? null,
+      origemMoskitProjetoId: origemMoskitProjetoId ?? null,
+      // Override manual de fase na criação — usado pela migração vinda do
+      // Moskit quando o projeto já nasce sabidamente "Entregue"/"Cancelado"
+      // etc. (ver FASES_ITEM_VALIDAS); null preserva o comportamento
+      // automático de sempre (faseEfetiva cai pra faseProjetoDerivada).
+      faseProjetoManual: FASES_ITEM_VALIDAS.has(faseProjetoManual) ? faseProjetoManual : null,
       ...dadosCliente,
     }
   );
@@ -1493,6 +1528,7 @@ export async function criarProjetoImplantacao({
     assignees: ismProjeto,
   });
 
+  const idsCriados = [];
   for (const a of agentes) {
     const descricaoAgenteTask = stringifyWaipeState(descricaoAgente(a.estrutura), {
       tipo: 'agente',
@@ -1502,16 +1538,39 @@ export async function criarProjetoImplantacao({
       entregaChecks: {},
       prereqChecks: {},
       diagnostico: {},
-      validacao: { status: 'pendente', motivo: '' },
+      validacao: jaEntregue ? { status: 'validado', motivo: '' } : { status: 'pendente', motivo: '' },
     });
-    await criarSubtaskAgente(projeto.id, {
+    const subtask = await criarSubtaskAgente(projeto.id, {
       name: a.estrutura.nome,
       markdown_description: descricaoAgenteTask,
       assignees: a.ism,
     });
+    idsCriados.push(subtask.id);
   }
 
-  await criarSubtasksSolucao(projeto.id, solucoes);
+  idsCriados.push(...await criarSubtasksSolucao(projeto.id, solucoes, jaEntregue ? 'entregue' : undefined));
+
+  if (jaEntregue) {
+    await atualizarTask(projeto.id, {
+      markdown_description: stringifyWaipeState(
+        [csmNome ? `**CSM:** ${csmNome}` : null, contexto].filter(Boolean).join('\n\n'),
+        {
+          etapaAtual: 'entrega',
+          prioridade: [],
+          agenteAtualId: null,
+          concluidos: idsCriados,
+          agentesTotal: agentes.length + solucoes.length,
+          cliente: texto(cliente, 120),
+          vendedor: texto(vendedor, 120),
+          origemMoskitDealId: origemMoskitDealId ?? null,
+          origemMoskitProjetoId: origemMoskitProjetoId ?? null,
+          faseProjetoManual: 'entregue',
+          ...dadosCliente,
+        }
+      ),
+      status: 'concluído',
+    });
+  }
 
   return projeto;
 }
