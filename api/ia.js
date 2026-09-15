@@ -1,12 +1,13 @@
 // Proxy da Claude API.
 //
 //   POST /api/ia?action=analisar-transcricao            { transcricao }
-//        Usado pela aba de proposta do simulador Waipe pra ler a transcrição
-//        de uma consultoria e sugerir os outros produtos do ecossistema
-//        (Gestor, Simplaz, Unique, BIME APP). O motor de sugestão de AGENTES
-//        do Waipe continua sendo o de sempre (palavra-chave, no front) — esta
-//        ação só preenche cliente/segmento/dores e aponta oportunidades de
-//        outros produtos, nunca escreve nada no ClickUp.
+//        Usado pela aba de proposta da Arquitetura de Solução (ecossistema
+//        Londrisoft) pra ler a transcrição de uma consultoria e sugerir os
+//        demais produtos do ecossistema (Gestor, Simplaz, Unique, BIME APP).
+//        O motor de sugestão de AGENTES do Waipe continua sendo o de sempre
+//        (palavra-chave, no front) — esta ação só preenche cliente/segmento/
+//        dores e aponta oportunidades de outros produtos, nunca escreve nada
+//        no ClickUp.
 //
 //   POST /api/ia?action=resumir-conversa-umbler         { id }
 //        SOB DEMANDA (nunca automático — custo por chamada): lê a conversa
@@ -161,7 +162,7 @@ function registrarChamada(ip, agora) {
 // ── Catálogo condensado — não os PDFs crus, grandes e granulares demais ────
 
 const CATALOGO_PRODUTOS = `
-CATÁLOGO DE PRODUTOS LONDRISOFT (além do Waipe, que já tem seu próprio motor de recomendação por palavra-chave — não recomende agentes ou funcionalidades do Waipe aqui):
+CATÁLOGO DE PRODUTOS DO ECOSSISTEMA LONDRISOFT — Gestor, Simplaz Gestor, Simplaz Unique, Unique, BIME APP (o Waipe não entra neste catálogo: ele já tem seu próprio motor de recomendação por palavra-chave, separado desta lista — não recomende agentes ou funcionalidades do Waipe aqui):
 
 GESTOR (ERP) — 4 planos, por funcionalidade, cada um inclui o anterior:
 - NF-e: só emissão de nota fiscal eletrônica, sem controle de vendas/estoque/financeiro.
@@ -193,7 +194,7 @@ REGRAS DO DIAGNÓSTICO WAIPE (Individual/Time/Enterprise — preencha "waipeDiag
 - Quando a transcrição não der sinal suficiente pra um campo, use o padrão seguro: usuarios=1, empresas=1, governanca="nao", auditoria="nao", automacao="pronta", enterprisePorVolume="nao".
 `.trim();
 
-const INSTRUCOES = `Você vai ler a transcrição de uma reunião de consultoria da Londrisoft com um cliente e ajudar o time de Customer Success a montar a arquitetura de solução: qual o plano Waipe ideal, quais outros produtos/planos ofertar, e por quê.
+const INSTRUCOES = `Você vai ler a transcrição de uma reunião de consultoria da Londrisoft com um cliente e ajudar o time de Customer Success a montar a arquitetura de solução do ecossistema Londrisoft: qual o plano Waipe ideal (quando fizer sentido para o cliente), quais outros produtos/planos do ecossistema (Gestor, Simplaz, Unique, BIME APP) ofertar, e por quê.
 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código markdown), neste formato exato:
 {"cliente":"nome do cliente/empresa mencionado, ou string vazia se não identificado","segmento":"segmento/ramo de atuação, ou string vazia","dores":"resumo em texto simples (não markdown) das dores e do contexto do cliente hoje, como uma nota de CSM — até 800 caracteres","waipeDiagnostico":{"usuarios":1,"empresas":1,"governanca":"sim|nao","auditoria":"sim|nao","automacao":"pronta|personalizada","enterprisePorVolume":"sim|nao"},"recomendacoes":[{"produto":"Gestor|Simplaz Gestor|Simplaz Unique|Unique|BIME APP","planoSugerido":"nome do plano/tier","motivo":"por que esse produto/plano resolve uma dor especifica mencionada","atencao":"presente SO no caso do Modulo Industria ou outra ressalva que precise checagem manual — omita nos outros casos","quantidadeSugerida":"numero de usuarios/vendedores, SOMENTE quando a transcricao citar uma quantidade clara para um produto cobrado por usuario (hoje so o BIME APP) — null nos demais casos"}]}
@@ -372,7 +373,7 @@ async function analisarTranscricaoAcao(req, res) {
 
 // ── Ação: resumir-conversa-umbler ──────────────────────────────────────────
 
-const INSTRUCOES_RESUMO_CONVERSA = `Você vai ler uma conversa de WhatsApp entre o time de Customer Success da Londrisoft e um cliente, durante um projeto de implantação do Waipe.
+const INSTRUCOES_RESUMO_CONVERSA = `Você vai ler uma conversa de WhatsApp entre o time de Customer Success da Londrisoft e um cliente, durante um projeto de implantação de soluções do ecossistema Londrisoft (Waipe, Gestor, Simplaz, Unique, BIME APP, entre outros — o projeto pode envolver só um desses sistemas, não necessariamente o Waipe).
 
 Resuma em até 4 frases, em texto simples (sem markdown, sem título): o assunto tratado, o status atual (ex: aguardando resposta do cliente, confirmou horário, relatou um problema, pediu pra remarcar), e qualquer sinal de satisfação ou insatisfação do cliente que apareça na conversa. Seja objetivo — não invente informação que não está na conversa. Se a conversa for só sobre agendamento, sem nada relevante além disso, diga isso em uma frase só.`;
 
@@ -429,9 +430,9 @@ async function resumirConversaUmblerAcao(req, res, sessao) {
 
 // ── Ação: analisar-reuniao-implantacao ─────────────────────────────────────
 
-const INSTRUCOES_RESUMO_REUNIAO = `Você vai ler a transcrição de uma reunião entre o time de Implantação da Londrisoft e um cliente, durante um projeto de implantação do Waipe.
+const INSTRUCOES_RESUMO_REUNIAO = `Você vai ler a transcrição de uma reunião entre o time de Implantação da Londrisoft e um cliente, durante um projeto de implantação de soluções do ecossistema Londrisoft (Waipe, Gestor, Simplaz, Unique, BIME APP, entre outros — o projeto pode envolver só um desses sistemas, não necessariamente o Waipe).
 
-Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as ferramentas/sistemas que o cliente usa hoje, regras ou processos importantes que ele mencionou, quais agentes ou funcionalidades foram discutidos como prioridade, e qualquer sinal de satisfação, insatisfação ou risco percebido. Seja objetivo — não invente informação que não está na transcrição.`;
+Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as ferramentas/sistemas que o cliente usa hoje, regras ou processos importantes que ele mencionou, quais agentes, produtos ou funcionalidades foram discutidos como prioridade, e qualquer sinal de satisfação, insatisfação ou risco percebido. Seja objetivo — não invente informação que não está na transcrição.`;
 
 async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
   let corpo;
@@ -470,7 +471,7 @@ async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
 
 // ── Ação: gerar-relatorio-finalizacao ──────────────────────────────────────
 
-const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório de finalização de um projeto de implantação do Waipe, com base no HISTÓRICO COMPLETO de comentários do projeto (notas do ISM, atividades registradas, resumos de conversa/reunião, e-mails, sinalizações de risco de relatórios anteriores etc. — tudo que ficou registrado ao longo do projeto, não só os resumos gerados por IA) e nos dados objetivos informados. Não invente além do que o histórico e os dados objetivos dizem — mas TAMBÉM não exija uma frase explícita quando o comportamento registrado já é um sinal claro (ex: cliente que some, recusa repetida de agendamento, ou pede cancelamento, é sinal de insatisfação mesmo que ele nunca tenha dito literalmente "estou insatisfeito").
+const INSTRUCOES_RELATORIO_FINAL = `Você vai gerar o RASCUNHO de um relatório de finalização de um projeto de implantação de soluções do ecossistema Londrisoft (Waipe, Gestor, Simplaz, Unique, BIME APP, entre outros — o projeto pode ser só de um desses sistemas, não necessariamente o Waipe), com base no HISTÓRICO COMPLETO de comentários do projeto (notas do ISM, atividades registradas, resumos de conversa/reunião, e-mails, sinalizações de risco de relatórios anteriores etc. — tudo que ficou registrado ao longo do projeto, não só os resumos gerados por IA) e nos dados objetivos informados. Não invente além do que o histórico e os dados objetivos dizem — mas TAMBÉM não exija uma frase explícita quando o comportamento registrado já é um sinal claro (ex: cliente que some, recusa repetida de agendamento, ou pede cancelamento, é sinal de insatisfação mesmo que ele nunca tenha dito literalmente "estou insatisfeito").
 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código), neste formato exato:
 {"resumoGeral":"resumo em texto simples do que aconteceu no projeto, até 800 caracteres — inclua qualquer risco ou ponto de atenção identificado no histórico (ex: pendência técnica/cadastral não resolvida, cliente pouco responsivo, sinal de possível cancelamento), não só uma narrativa neutra dos fatos","riscoPercebido":"baixo|medio|alto","causaDaDemora":"string vazia só se o histórico realmente não der nenhum sinal de causa de atraso, senão uma frase curta com a causa","satisfacaoPercebida":"positiva|neutra|negativa|indeterminada","riscoChurn":true|false}
@@ -615,13 +616,13 @@ const IDS_SECOES_PROPOSTA_VALIDAS = new Set([
 // — é o que mantém o custo desta ação na mesma ordem de grandeza das outras
 // três (resumo de conversa/reunião), bem longe do custo de gerar o HTML
 // inteiro da proposta do zero.
-const INSTRUCOES_SECOES_PROPOSTA = `Você escreve seções narrativas de uma proposta comercial da Londrisoft (ecossistema Waipe + Gestor/Simplaz/Unique/BIME APP), no mesmo padrão de tom que os gerentes de conta mais experientes já usam: direto, endereça o cliente pelo nome/segmento, nunca genérico ou robótico.
+const INSTRUCOES_SECOES_PROPOSTA = `Você escreve seções narrativas de uma proposta comercial da Londrisoft (ecossistema Londrisoft: Waipe, Gestor, Simplaz, Unique, BIME APP — sistemas que podem se integrar entre si ou ser propostos separadamente, nenhum é a base dos outros), no mesmo padrão de tom que os gerentes de conta mais experientes já usam: direto, endereça o cliente pelo nome/segmento, nunca genérico ou robótico.
 
 Você recebe: o nome do cliente, um resumo de contexto/dores (texto livre do CSM ou extraído de transcrição), e os DADOS DISPONÍVEIS desta proposta (diagnóstico Waipe, agentes selecionados com o que cada um substitui, outras soluções incluídas). Você recebe também a lista exata de seções que devem ser escritas nesta chamada — escreva SOMENTE essas, uma por id.
 
 REGRA MAIS IMPORTANTE: nunca invente número (hora, valor, quantidade, percentual) que não esteja explicitamente nos dados recebidos. Quando não houver dado numérico suficiente pra uma seção, escreva de forma qualitativa (sem inventar a estimativa) em vez de forçar um número.
 
-REGRA DO INVESTIMENTO TOTAL: sempre que precisar citar o valor mensal total sendo proposto (Waipe + outras soluções), NUNCA escreva o número você mesmo — escreva literalmente o marcador {{INVESTIMENTO_TOTAL}} no lugar do valor (ex: "por {{INVESTIMENTO_TOTAL}}/mês"). Esse marcador é substituído pelo valor calculado no momento em que a proposta é montada — se você escrever o número direto, ele fica congelado e pode ficar errado assim que o CSM mudar algo no diagnóstico depois de gerar esta seção.
+REGRA DO INVESTIMENTO TOTAL: sempre que precisar citar o valor mensal total sendo proposto (soma de tudo incluído nesta proposta — Waipe e/ou outras soluções do ecossistema), NUNCA escreva o número você mesmo — escreva literalmente o marcador {{INVESTIMENTO_TOTAL}} no lugar do valor (ex: "por {{INVESTIMENTO_TOTAL}}/mês"). Esse marcador é substituído pelo valor calculado no momento em que a proposta é montada — se você escrever o número direto, ele fica congelado e pode ficar errado assim que o CSM mudar algo no diagnóstico depois de gerar esta seção.
 
 REGRA DE FORMATO — NUNCA escreva parede de texto corrido. Cada seção é um documento visual, não um parágrafo de e-mail: intercale os elementos abaixo, nunca mais de 2 frases seguidas dentro do mesmo <p> sem quebrar pra um componente visual. Um CSM que abrir a proposta tem que entender o ponto principal so de bater o olho, antes de ler qualquer frase inteira.
 
@@ -699,7 +700,7 @@ async function gerarSecoesPropostaAcao(req, res) {
     `Seções a escrever (nesta ordem, só estas): ${idsPedidos.join(', ')}`,
     diagnosticoWaipe ? `Diagnóstico Waipe: ${JSON.stringify(diagnosticoWaipe)}` : null,
     agentes.length ? `Agentes Waipe selecionados: ${JSON.stringify(agentes)}` : 'Nenhum agente Waipe selecionado nesta proposta.',
-    outrasSolucoes.length ? `Outras soluções incluídas: ${JSON.stringify(outrasSolucoes)}` : 'Nenhuma outra solução incluída além do Waipe.',
+    outrasSolucoes.length ? `Outras soluções incluídas: ${JSON.stringify(outrasSolucoes)}` : 'Nenhuma outra solução (Gestor/Simplaz/Unique/BIME APP) incluída nesta proposta.',
   ].filter(Boolean).join('\n\n');
 
   let respostaTexto;
