@@ -81,6 +81,20 @@ export default async function handler(req, res) {
       return erro(res, 403, 'token_invalido', 'Token inválido.');
     }
 
+    // PAUSADO (2026-09-15, a pedido da usuária): ela está migrando manualmente
+    // os projetos que já existiam só no Moskit, um a um, e não quer que a
+    // criação automática entre em cena até terminar — depois disso, ela quer
+    // reativar com filtros que ainda serão definidos (quais negócios devem ou
+    // não criar projeto automático). Responde 200 sem processar, pra o Moskit
+    // não ficar retentando — mas isso significa que TODO negócio que ganhar
+    // enquanto isso estiver true NÃO gera projeto sozinho (fica só nesse log
+    // de function do Vercel, sem fila de retomada) — reative assim que puder.
+    const WEBHOOK_PAUSADO = true;
+    if (WEBHOOK_PAUSADO) {
+      console.log('[moskit-webhook] evento recebido, mas o webhook está PAUSADO (ver comentário no código) — ignorado.');
+      return res.status(200).json({ ok: true, ignorado: 'webhook_pausado' });
+    }
+
     let corpo;
     try {
       corpo = await lerCorpo(req);
