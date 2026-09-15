@@ -138,6 +138,7 @@ import {
   ErroConfigClickUp,
   ErroUpstream,
   espelharAlertas,
+  excluirComentario,
   excluirTask,
   GERENTE_OPCOES,
   getCarteira,
@@ -226,10 +227,13 @@ function mapearAnexos(attachments) {
 // Nivel "ism" nao acessa dados financeiros (carteira/metas/cliente/set-field/
 // log-proposta, que e o log de propostas ligado a carteira) nem o pipeline de
 // proposta de implantacao (criar/salvar-proposta/confirmar-fechamento — isso
-// e trabalho de CSM/gestao; o ISM so entra depois, quando o projeto ja existe).
+// e trabalho de CSM/gestao; o ISM so entra depois, quando o projeto ja existe)
+// nem exclusao de projeto/comentario (so Gestao — o handler de cada uma ja
+// checa isso de novo, aqui e so a primeira barreira, mesmo padrao das outras).
 const ACOES_PROIBIDAS_ISM = new Set([
   'carteira', 'metas', 'cliente', 'set-field', 'log-proposta',
   'criar-implantacao', 'salvar-proposta-implantacao', 'confirmar-fechamento-implantacao',
+  'excluir-implantacao', 'excluir-comentario-implantacao',
 ]);
 
 export default async function handler(req, res) {
@@ -276,6 +280,10 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-comentarios') return await listarComentariosAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'excluir-comentario-implantacao') {
+      return await excluirComentarioImplantacaoAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'excluir-implantacao') return await excluirImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'anexar-arquivo-implantacao') {
       return await anexarArquivoImplantacaoAcao(req, res, sessao);
     }
@@ -328,7 +336,8 @@ export default async function handler(req, res) {
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
       'definir-gerente-contas',
       'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
-      'listar-comentarios', 'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
+      'listar-comentarios', 'excluir-comentario-implantacao', 'excluir-implantacao',
+      'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
       'atualizar-reserva', 'cancelar-reserva', 'marcar-comparecimento-reserva',
       'reagendar-reserva', 'disponibilidade-ism', 'conectar-agenda-google',
@@ -1259,7 +1268,11 @@ export async function criarSubtasksSolucao(projetoId, solucoes, faseInicial) {
         vigenciaMeses: o.vigenciaMeses ?? null,
         isencaoSetup: !!o.isencaoSetup,
         checklist,
-        checklistChecks: fase === 'entregue' ? Object.fromEntries(checklist.map((_, i) => [i, true])) : {},
+        // checklist pode ser null (produto sem jornada definida ainda, ex:
+        // "Outro" ou troca de ambiente do Gestor/Unique — ver jornadaPara) —
+        // sem o `|| []` aqui, um item assim marcado "entregue" (migração)
+        // quebrava a criação inteira.
+        checklistChecks: fase === 'entregue' ? Object.fromEntries((checklist || []).map((_, i) => [i, true])) : {},
         fase,
       }),
     });
@@ -1286,7 +1299,21 @@ async function resolverImplantacao(taskId) {
 async function listarImplantacoesAcao(res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   const tasks = await listarImplantacoes();
-  const linhas = tasks.map((t) => {
+  // listarImplantacoes() agora traz subtasks (agentes/soluções) junto na
+  // mesma lista (ver subtasks=true, em _lib/clickup.js) — separa os
+  // projetos (sem parent) das subtasks (com parent), e usa as subtasks só
+  // pra montar "itens" por projeto (nome de cada agente/solução), pro
+  // filtro/agrupamento por item na lista não custar 1 chamada por projeto.
+  const projetos = tasks.filter((t) => !t.parent);
+  const itensPorProjeto = new Map();
+  for (const t of tasks) {
+    if (!t.parent) continue;
+    const nome = texto(t.name, 120);
+    if (!nome) continue;
+    if (!itensPorProjeto.has(t.parent)) itensPorProjeto.set(t.parent, []);
+    itensPorProjeto.get(t.parent).push(nome);
+  }
+  const linhas = projetos.map((t) => {
     const estado = parseWaipeState(t.description);
     return {
       id: t.id,
@@ -1317,6 +1344,13 @@ async function listarImplantacoesAcao(res, sessao) {
       dataFimReal: Number.isFinite(Number(estado.dataFimReal)) ? Number(estado.dataFimReal) : null,
       finalizacao: sanearFinalizacao(estado.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estado, sessao),
+      // Alertas (🚨) — campo NATIVO do ClickUp (ver CAMPO_ALERTAS), não
+      // WaipeState — precisa vir na listagem em massa pra dar pra filtrar
+      // a aba de Entregues por alerta sem 1 chamada por projeto.
+      ...alertasDaTask(t),
+      // Nome de cada agente/solução do projeto (ex: "Simplaz Gestor —
+      // Bronze", "BIME APP") — usado pro filtro/agrupamento por item.
+      itens: itensPorProjeto.get(t.id) || [],
     };
   });
   // "ism" ve tudo igual "gestao" dentro de implantacao — a unica diferenca
@@ -3206,6 +3240,76 @@ async function comentarImplantacaoAcao(req, res, sessao) {
   }
 
   await criarComentario(corpo.taskId, textoFinal);
+  return res.status(200).json({ ok: true });
+}
+
+/**
+ * Exclui um comentário do projeto. Só nível Gestão — comentário é o
+ * histórico do que aconteceu no projeto (usado pelo relatório de
+ * finalização), apagar é exceção pra limpar teste, não fluxo normal do
+ * dia a dia (por isso nem `podeEscrever` cobre isso, é mais restrito).
+ */
+async function excluirComentarioImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'nivel_nao_permitido', 'Só o perfil Gestão pode excluir comentários.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+  const comentarioId = texto(corpo.comentarioId, 40);
+  if (!comentarioId) {
+    return erro(res, 400, 'comentario_invalido', 'comentarioId inválido.');
+  }
+
+  // Confirma que a task pertence à Implantação antes de excluir qualquer
+  // coisa nela — mesmo portão de posse das outras ações desta lista.
+  const resolvido = await resolverImplantacao(corpo.taskId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
+
+  await excluirComentario(comentarioId);
+  return res.status(200).json({ ok: true });
+}
+
+/**
+ * Exclui um projeto de implantação inteiro (e as subtasks junto — o
+ * ClickUp cascade-deleta sozinho). Só nível Gestão, e só a partir da task
+ * do PROJETO — nunca de uma subtask, pra nunca apagar um projeto inteiro
+ * por engano ao tentar excluir só um item dele.
+ */
+async function excluirImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'nivel_nao_permitido', 'Só o perfil Gestão pode excluir projetos.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  if (resolvido.tarefa.id !== resolvido.projeto.id) {
+    return erro(res, 400, 'task_invalida', 'Exclua a partir da task do projeto, não de uma subtask.');
+  }
+
+  await excluirTask(corpo.id);
   return res.status(200).json({ ok: true });
 }
 

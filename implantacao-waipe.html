@@ -1082,7 +1082,8 @@
         body: JSON.stringify({ senha: senha })
       }).then(function(r){
         return r.json().then(function(j){ if (!r.ok) throw j; return j; });
-      }).then(function(){
+      }).then(function(respostaLogin){
+        sessaoNivelAtual = respostaLogin && respostaLogin.nivel || null;
         loginPendente = false;
         renderProjetosPanel();
       }).catch(function(e){
@@ -1094,6 +1095,21 @@
     input.addEventListener("keydown", function(e){ if (e.key === "Enter") tentar(); });
     input.focus();
   }
+
+  // Sabe o nível da sessão (pros botões "Excluir", só Gestão) mesmo quando o
+  // cookie já era válido antes desta página abrir (ex: logou primeiro no
+  // Dashboard de carteiras) — sem isso, sessaoNivelAtual só seria preenchido
+  // depois de um login feito NESTA tela, nunca de um cookie já existente.
+  function carregarSessaoAtual(){
+    fetch("/api/login", { credentials: "same-origin" }).then(function(r){ return r.json(); }).then(function(j){
+      sessaoNivelAtual = j && j.autenticado ? j.nivel : null;
+      // Se um projeto já estava aberto quando isso resolveu, re-renderiza
+      // pra o botão "Excluir projeto" (Gestão) aparecer sem precisar de
+      // outra ação — sem isso ficaria escondido até o próximo re-render.
+      if (projetoAtualId && dadosProjeto && typeof renderProjetosPanel === "function") renderProjetosPanel();
+    }).catch(function(){ sessaoNivelAtual = null; });
+  }
+  carregarSessaoAtual();
 
   function tratarRespostaApi(r){
     return r.json().then(function(j){
@@ -1414,10 +1430,24 @@
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
-  var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM), vale pra lista e pro agrupado
-  var modoVisualizacaoProjetos = "lista"; // "lista" | "agrupado" — mesmos projetos, só reorganizados em seções por fase no agrupado
-  var secoesAbertas = {}; // { [fase]: true } no modo agrupado — ausente/false = secao fechada (todas comecam fechadas)
+  var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM); só existe na aba "Em andamento"
+  // "lista" | "agrupado_fase" | "agrupado_item" — agrupado_fase só existe em
+  // "Em andamento" (Entregues não agrupa por fase: já estão todos
+  // "entregue"); agrupado_item existe nas duas abas.
+  var modoVisualizacaoProjetos = "lista";
+  var secoesAbertas = {}; // { [fase]: true } no agrupado por fase — ausente/false = secao fechada (todas comecam fechadas)
+  var secoesItemAbertas = {}; // { [nomeItem]: true } no agrupado por item — mesmo espirito de secoesAbertas
+  var filtroBuscaProjeto = ""; // texto livre — filtra por SUBSTRING no nome do projeto (que já carrega o nome do cliente e o tipo, ex: "Cliente Novo"); nas duas abas
+  var filtroItemAtivo = ""; // "" = todos — filtro por item do projeto (p.itens); nas duas abas
+  // Filtros exclusivos da aba "Entregues" — nenhum deles existe/filtra nada em "Em andamento".
+  var filtroFechamentoAtivo = ""; // "" | "hoje" | "ontem" | "semana" | "mes" | "personalizado"
+  var filtroFechamentoDe = "";  // "YYYY-MM-DD", só quando personalizado
+  var filtroFechamentoAte = ""; // "YYYY-MM-DD", só quando personalizado
+  var filtroRiscoAtivo = ""; // "" | "baixo" | "medio" | "alto" (finalizacao.riscoPercebido)
+  var filtroSatisfacaoAtiva = ""; // "" | "positiva" | "neutra" | "negativa" | "indeterminada" (finalizacao.satisfacaoPercebida)
+  var filtroAlertaAtivo = ""; // "" | id de uma opção de ALERTAS_OPCOES
   var reservasCache = null; // lista de listar-reservas — buscada 1x junto com listar-implantacoes, pro sinal de agendamento no card
+  var sessaoNivelAtual = null; // preenchido no login (POST) ou ao carregar a página (GET /api/login) — só "gestao" vê os botões de excluir
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
@@ -1521,6 +1551,35 @@
       parts.forEach(function(p){ if (p.type !== "literal") out[p.type] = p.value; });
       return out.year + "-" + out.month + "-" + out.day;
     } catch(e){ return ""; }
+  }
+  // Segunda-feira desta semana, em SP — meio-dia UTC no cálculo evita
+  // qualquer dúvida de "que dia é hoje" por causa de fuso/DST; só serve pra
+  // fazer conta de QUANTOS DIAS, nunca é usado como horário de verdade.
+  function chaveInicioSemanaSP(){
+    var chaveHoje = chaveDataSP(Date.now());
+    var d = new Date(chaveHoje + "T12:00:00Z");
+    var diaSemana = d.getUTCDay(); // 0=domingo..6=sabado
+    d.setUTCDate(d.getUTCDate() - ((diaSemana + 6) % 7)); // volta até segunda (0)
+    return d.toISOString().slice(0, 10);
+  }
+  // Filtro de "Fechados em" da aba Entregues — compara sempre por CHAVE de
+  // dia em SP (string "YYYY-MM-DD"), nunca por milissegundo cru: mais simples
+  // e sem risco de comparação errada por causa de fuso horário.
+  function dataFechamentoBate(dataFimReal){
+    if (!filtroFechamentoAtivo) return true;
+    if (!dataFimReal) return false; // sem data de fechamento não entra em nenhum filtro de data
+    var chave = chaveDataSP(dataFimReal);
+    var chaveHoje = chaveDataSP(Date.now());
+    if (filtroFechamentoAtivo === "hoje") return chave === chaveHoje;
+    if (filtroFechamentoAtivo === "ontem") return chave === chaveDataSP(Date.now() - 86400000);
+    if (filtroFechamentoAtivo === "semana") return chave >= chaveInicioSemanaSP() && chave <= chaveHoje;
+    if (filtroFechamentoAtivo === "mes") return chave.slice(0, 7) === chaveHoje.slice(0, 7);
+    if (filtroFechamentoAtivo === "personalizado"){
+      if (filtroFechamentoDe && chave < filtroFechamentoDe) return false;
+      if (filtroFechamentoAte && chave > filtroFechamentoAte) return false;
+      return true;
+    }
+    return true;
   }
   function horaSP(ms){
     if (!ms) return "—";
@@ -1663,6 +1722,8 @@
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     var todasIsm = Array.from(new Set((projetosCache || []).flatMap(function(p){ return p.ism || []; }).filter(Boolean)))
       .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+    var todosItens = Array.from(new Set((projetosCache || []).flatMap(function(p){ return p.itens || []; }).filter(Boolean)))
+      .sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
     // Fase (manual ou derivada) é o rótulo principal do card — Status
     // nativo do ClickUp já não agrega nada acima dela, então some do
     // card (continua disponível no detalhe do projeto). Mesmo valor
@@ -1688,11 +1749,30 @@
       if (entregues ? p.status !== "concluído" : p.status === "concluído") return false;
       if (filtroCsmAtivo && p.csm !== filtroCsmAtivo) return false;
       if (filtroIsmAtivo && !(p.ism || []).includes(filtroIsmAtivo)) return false;
-      if (filtroFaseAtiva && faseEfetiva(p) !== filtroFaseAtiva) return false;
+      if (filtroBuscaProjeto && (p.cliente || "").toLowerCase().indexOf(filtroBuscaProjeto.toLowerCase()) === -1) return false;
+      if (filtroItemAtivo && !(p.itens || []).includes(filtroItemAtivo)) return false;
+      // Fase só existe como filtro em "Em andamento" — em Entregues todo
+      // projeto já está "entregue", filtrar por fase não faz sentido.
+      if (!entregues && filtroFaseAtiva && faseEfetiva(p) !== filtroFaseAtiva) return false;
+      if (entregues && !dataFechamentoBate(p.dataFimReal)) return false;
+      if (entregues && filtroRiscoAtivo && (!p.finalizacao || p.finalizacao.riscoPercebido !== filtroRiscoAtivo)) return false;
+      if (entregues && filtroSatisfacaoAtiva && (!p.finalizacao || p.finalizacao.satisfacaoPercebida !== filtroSatisfacaoAtiva)) return false;
+      if (entregues && filtroAlertaAtivo && !(p.alertasIds || []).includes(filtroAlertaAtivo)) return false;
       return true;
     });
     // Só mostra o filtro quando faz diferença — 1 CSM só ou nenhum não precisa.
-    var filtroHtml = (todasCsm.length > 1
+    var filtroHtml =
+      '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Buscar projeto</label>' +
+      '<input type="text" id="filtroBuscaProjetoInput" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;" placeholder="Nome do cliente ou do projeto…" value="' + esc(filtroBuscaProjeto) + '">' +
+      '</div>' +
+      (todosItens.length > 1
+      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por item</label>' +
+        '<select id="filtroItemProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value=""' + (filtroItemAtivo ? "" : " selected") + '>Todos</option>' +
+        todosItens.map(function(i){ return '<option value="' + esc(i) + '"' + (i === filtroItemAtivo ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") +
+        '</select></div>'
+      : "") +
+      (todasCsm.length > 1
       ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por CSM</label>' +
         '<select id="filtroCsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroCsmAtivo ? "" : " selected") + '>Todos</option>' +
@@ -1706,15 +1786,51 @@
         todasIsm.map(function(i){ return '<option value="' + esc(i) + '"' + (i === filtroIsmAtivo ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") +
         '</select></div>'
       : "") +
-      '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por fase</label>' +
-      '<select id="filtroFaseProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
-      '<option value=""' + (filtroFaseAtiva ? "" : " selected") + '>Todas</option>' +
-      FASES_ORDEM.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
-      '</select></div>' +
-      '<div class="modo-visualizacao" style="vertical-align:top;">' +
-      '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
-      '<button type="button" id="btnModoAgrupado" class="' + (modoVisualizacaoProjetos === "agrupado" ? "ativo" : "") + '">📂 Agrupado por fase</button>' +
-      '</div>';
+      (!entregues
+      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por fase</label>' +
+        '<select id="filtroFaseProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value=""' + (filtroFaseAtiva ? "" : " selected") + '>Todas</option>' +
+        FASES_ORDEM.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div class="modo-visualizacao" style="vertical-align:top;">' +
+        '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
+        '<button type="button" id="btnModoAgrupadoFase" class="' + (modoVisualizacaoProjetos === "agrupado_fase" ? "ativo" : "") + '">📂 Agrupado por fase</button>' +
+        '<button type="button" id="btnModoAgrupadoItem" class="' + (modoVisualizacaoProjetos === "agrupado_item" ? "ativo" : "") + '">🧩 Agrupado por item</button>' +
+        '</div>'
+      : '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Fechados</label>' +
+        '<select id="filtroFechamentoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value=""' + (filtroFechamentoAtivo ? "" : " selected") + '>Qualquer data</option>' +
+        '<option value="hoje"' + (filtroFechamentoAtivo === "hoje" ? " selected" : "") + '>Hoje</option>' +
+        '<option value="ontem"' + (filtroFechamentoAtivo === "ontem" ? " selected" : "") + '>Ontem</option>' +
+        '<option value="semana"' + (filtroFechamentoAtivo === "semana" ? " selected" : "") + '>Esta semana</option>' +
+        '<option value="mes"' + (filtroFechamentoAtivo === "mes" ? " selected" : "") + '>Este mês</option>' +
+        '<option value="personalizado"' + (filtroFechamentoAtivo === "personalizado" ? " selected" : "") + '>Personalizado…</option>' +
+        '</select>' +
+        (filtroFechamentoAtivo === "personalizado"
+          ? ' <input type="date" id="filtroFechamentoDe" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;" value="' + esc(filtroFechamentoDe) + '">' +
+            ' <span style="font-size:12px;color:var(--muted);">a</span> ' +
+            '<input type="date" id="filtroFechamentoAte" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;" value="' + esc(filtroFechamentoAte) + '">'
+          : "") +
+        '</div>' +
+        '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Risco</label>' +
+        '<select id="filtroRiscoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value="">Todos</option>' +
+        ["baixo", "medio", "alto"].map(function(v){ return '<option value="' + v + '"' + (v === filtroRiscoAtivo ? " selected" : "") + '>' + esc(RISCO_LABEL_CURTO[v] || v) + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Satisfação</label>' +
+        '<select id="filtroSatisfacaoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value="">Todas</option>' +
+        ["positiva", "neutra", "negativa", "indeterminada"].map(function(v){ return '<option value="' + v + '"' + (v === filtroSatisfacaoAtiva ? " selected" : "") + '>' + esc(SATISFACAO_LABEL_CURTO[v] || v) + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">🚨 Alertas</label>' +
+        '<select id="filtroAlertaProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value="">Todos</option>' +
+        ALERTAS_OPCOES.map(function(o){ return '<option value="' + o.id + '"' + (o.id === filtroAlertaAtivo ? " selected" : "") + '>' + esc(o.nome) + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div class="modo-visualizacao" style="vertical-align:top;">' +
+        '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
+        '<button type="button" id="btnModoAgrupadoItem" class="' + (modoVisualizacaoProjetos === "agrupado_item" ? "ativo" : "") + '">🧩 Agrupado por item</button>' +
+        '</div>');
 
     // Atrasado = tem reserva desse projeto que ja passou da hora e ninguem
     // marcou comparecimento/reagendamento — o caso que mais se perde de
@@ -1777,11 +1893,13 @@
       '</div>';
     }
 
+    var temFiltroAtivo = filtroCsmAtivo || filtroIsmAtivo || filtroFaseAtiva || filtroBuscaProjeto || filtroItemAtivo
+      || filtroFechamentoAtivo || filtroRiscoAtivo || filtroSatisfacaoAtiva || filtroAlertaAtivo;
     if (!lista.length){
       wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
-        (filtroCsmAtivo || filtroIsmAtivo || filtroFaseAtiva ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
+        (temFiltroAtivo ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
         '</div></div>';
-    } else if (modoVisualizacaoProjetos === "agrupado"){
+    } else if (!entregues && modoVisualizacaoProjetos === "agrupado_fase"){
       var porFase = {};
       lista.forEach(function(p){
         var f = faseEfetiva(p) || "";
@@ -1801,6 +1919,31 @@
               : '') +
           '</div>';
         }).join("");
+    } else if (modoVisualizacaoProjetos === "agrupado_item"){
+      // Um projeto pode ter vários itens (ex: Simplaz + BIME APP no mesmo
+      // projeto) — aqui, diferente do agrupado por fase, ele aparece em
+      // TODOS os grupos aos quais pertence, não só em um.
+      var porItem = {};
+      lista.forEach(function(p){
+        (p.itens && p.itens.length ? p.itens : ["(sem item registrado)"]).forEach(function(nomeItem){
+          (porItem[nomeItem] = porItem[nomeItem] || []).push(p);
+        });
+      });
+      var nomesItens = Object.keys(porItem).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+      wrap.innerHTML = filtroHtml +
+        nomesItens.map(function(nomeItem){
+          var doGrupo = porItem[nomeItem];
+          var aberta = !!secoesItemAbertas[nomeItem];
+          return '<div class="secao-fase">' +
+            '<div class="secao-fase-header' + (aberta ? " aberta" : "") + '" data-secao-item="' + esc(nomeItem) + '">' +
+              '<span class="secao-fase-seta">▸</span><span>' + esc(nomeItem) + '</span>' +
+              '<span class="secao-fase-count">' + doGrupo.length + '</span>' +
+            '</div>' +
+            (aberta
+              ? '<div class="secao-fase-corpo">' + doGrupo.map(cardHtml).join("") + '</div>'
+              : '') +
+          '</div>';
+        }).join("");
     } else {
       wrap.innerHTML = filtroHtml + lista.map(cardHtml).join("");
     }
@@ -1813,6 +1956,28 @@
         secoesAbertas[f] = !secoesAbertas[f];
         renderListaProjetosWrap();
       });
+    });
+    wrap.querySelectorAll("[data-secao-item]").forEach(function(header){
+      header.addEventListener("click", function(){
+        var nomeItem = header.getAttribute("data-secao-item");
+        secoesItemAbertas[nomeItem] = !secoesItemAbertas[nomeItem];
+        renderListaProjetosWrap();
+      });
+    });
+    var inputBusca = document.getElementById("filtroBuscaProjetoInput");
+    if (inputBusca) inputBusca.addEventListener("input", function(){
+      // O innerHTML inteiro é reconstruído a cada tecla — sem restaurar foco
+      // e cursor, o campo "perderia o teclado" depois da 1ª letra digitada.
+      var posCursor = inputBusca.selectionStart;
+      filtroBuscaProjeto = inputBusca.value;
+      renderListaProjetosWrap();
+      var novoInput = document.getElementById("filtroBuscaProjetoInput");
+      if (novoInput){ novoInput.focus(); novoInput.setSelectionRange(posCursor, posCursor); }
+    });
+    var selItem = document.getElementById("filtroItemProjetos");
+    if (selItem) selItem.addEventListener("change", function(){
+      filtroItemAtivo = selItem.value;
+      renderListaProjetosWrap();
     });
     var selCsm = document.getElementById("filtroCsmProjetos");
     if (selCsm) selCsm.addEventListener("change", function(){
@@ -1834,12 +1999,82 @@
       modoVisualizacaoProjetos = "lista";
       renderListaProjetosWrap();
     });
-    var btnModoAgrupado = document.getElementById("btnModoAgrupado");
-    if (btnModoAgrupado) btnModoAgrupado.addEventListener("click", function(){
-      modoVisualizacaoProjetos = "agrupado";
+    var btnModoAgrupadoFase = document.getElementById("btnModoAgrupadoFase");
+    if (btnModoAgrupadoFase) btnModoAgrupadoFase.addEventListener("click", function(){
+      modoVisualizacaoProjetos = "agrupado_fase";
+      renderListaProjetosWrap();
+    });
+    var btnModoAgrupadoItem = document.getElementById("btnModoAgrupadoItem");
+    if (btnModoAgrupadoItem) btnModoAgrupadoItem.addEventListener("click", function(){
+      modoVisualizacaoProjetos = "agrupado_item";
+      renderListaProjetosWrap();
+    });
+    var selFechamento = document.getElementById("filtroFechamentoProjetos");
+    if (selFechamento) selFechamento.addEventListener("change", function(){
+      filtroFechamentoAtivo = selFechamento.value;
+      // Troca de preset limpa o intervalo personalizado anterior — senão um
+      // "De/Até" de uma escolha antiga ficaria aplicado por baixo do preset novo.
+      if (filtroFechamentoAtivo !== "personalizado"){ filtroFechamentoDe = ""; filtroFechamentoAte = ""; }
+      renderListaProjetosWrap();
+    });
+    var inputFechamentoDe = document.getElementById("filtroFechamentoDe");
+    if (inputFechamentoDe) inputFechamentoDe.addEventListener("change", function(){
+      filtroFechamentoDe = inputFechamentoDe.value;
+      renderListaProjetosWrap();
+    });
+    var inputFechamentoAte = document.getElementById("filtroFechamentoAte");
+    if (inputFechamentoAte) inputFechamentoAte.addEventListener("change", function(){
+      filtroFechamentoAte = inputFechamentoAte.value;
+      renderListaProjetosWrap();
+    });
+    var selRisco = document.getElementById("filtroRiscoProjetos");
+    if (selRisco) selRisco.addEventListener("change", function(){
+      filtroRiscoAtivo = selRisco.value;
+      renderListaProjetosWrap();
+    });
+    var selSatisfacao = document.getElementById("filtroSatisfacaoProjetos");
+    if (selSatisfacao) selSatisfacao.addEventListener("change", function(){
+      filtroSatisfacaoAtiva = selSatisfacao.value;
+      renderListaProjetosWrap();
+    });
+    var selAlerta = document.getElementById("filtroAlertaProjetos");
+    if (selAlerta) selAlerta.addEventListener("change", function(){
+      filtroAlertaAtivo = selAlerta.value;
       renderListaProjetosWrap();
     });
   }
+
+  // ---- Auto-atualização da lista de projetos (sem precisar de F5) ----
+  // Só atualiza sozinho quando a aba "Em andamento"/"Entregues" está
+  // ativa E a tela mostrada é a LISTA — nunca em cima do assistente de
+  // novo projeto nem de um projeto aberto, onde o estado é local (sim,
+  // dadosProjeto) e um refresh por baixo derrubaria edição em curso.
+  var AUTO_REFRESH_PROJETOS_MS = 45000;
+  function podeAutoAtualizarProjetos(){
+    if (document.hidden) return false; // aba do navegador em segundo plano
+    if (wizard || projetoAtualId) return false;
+    var painel = document.getElementById(filtroProjetosAtivo === "entregues" ? "panel-entregues" : "panel-projetos");
+    return !!(painel && painel.classList.contains("active"));
+  }
+  function autoAtualizarProjetos(){
+    if (!podeAutoAtualizarProjetos()) return;
+    Promise.all([
+      apiGet("listar-implantacoes"),
+      apiGet("listar-reservas").catch(function(){ return { reservas: [] }; })
+    ]).then(function(resultados){
+      projetosCache = resultados[0].tasks || [];
+      reservasCache = resultados[1].reservas || [];
+      // Confere de novo: a resposta pode chegar depois de o usuário ter
+      // aberto um projeto ou o assistente enquanto a chamada estava no ar.
+      if (podeAutoAtualizarProjetos()) renderListaProjetosWrap();
+    }).catch(function(){ /* falha silenciosa — a próxima tentativa tenta de novo */ });
+  }
+  setInterval(autoAtualizarProjetos, AUTO_REFRESH_PROJETOS_MS);
+  // Refresh imediato ao voltar pra aba do navegador — não faz o usuário
+  // esperar o próximo tick só porque ficou uns minutos noutra aba.
+  document.addEventListener("visibilitychange", function(){
+    if (!document.hidden) autoAtualizarProjetos();
+  });
 
   function abrirProjeto(id){
     projetoAtualId = id;
@@ -1964,11 +2199,19 @@
     overlay.style.display = "flex";
   }
 
+  function botaoExcluirComentario(id){
+    // Só Gestão apaga comentário — é histórico do projeto (relatório de
+    // finalização lê tudo), apagar é exceção pra limpar teste, não rotina.
+    if (sessaoNivelAtual !== "gestao" || !id) return "";
+    return ' <button type="button" class="btn-reset" data-excluir-comentario="' + esc(id) + '" title="Excluir este comentário (Gestão)" style="color:var(--danger);margin-left:6px;">✕</button>';
+  }
+
   function comentarioHtml(c){
     if (/^\[\[FLOW\]\]/.test(c.texto)){
       var jsonTexto = c.texto.replace(/^\[\[FLOW\]\]/, "");
       return '<div class="build-check" style="align-items:flex-start"><span>📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
-        ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button></span></div>';
+        ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button>' +
+        botaoExcluirComentario(c.id) + '</span></div>';
     }
     var m = RE_URL_IMAGEM.exec(c.texto || "");
     var textoSemImagem = m ? (c.texto.slice(0, m.index) + c.texto.slice(m.index + m[0].length)).trim() : (c.texto || "");
@@ -1977,7 +2220,7 @@
       : "";
     return '<div class="build-check" style="align-items:flex-start"><span><b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
       imagemHtml +
-      '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span></span></div>';
+      '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span>' + botaoExcluirComentario(c.id) + '</span></div>';
   }
 
   function renderComentarios(taskId, container, titulo){
@@ -2002,6 +2245,18 @@
       });
       container.querySelectorAll("[data-lightbox-imagem]").forEach(function(img){
         img.addEventListener("click", function(){ abrirLightboxImagem(img.getAttribute("data-lightbox-imagem")); });
+      });
+      container.querySelectorAll("[data-excluir-comentario]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          if (!window.confirm("Excluir este comentário? Não tem como desfazer.")) return;
+          btn.disabled = true;
+          apiPost("excluir-comentario-implantacao", { taskId: taskId, comentarioId: btn.getAttribute("data-excluir-comentario") })
+            .then(function(){ renderComentarios(taskId, container, titulo); })
+            .catch(function(e){
+              showSimToast(mensagemErro(e) || "Não deu para excluir o comentário.");
+              btn.disabled = false;
+            });
+        });
       });
       var previewEl = container.querySelector("#comentarioPreview");
       var btnComentar = container.querySelector("#btnComentar");
@@ -2090,7 +2345,12 @@
     }
     root.innerHTML =
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">' +
-        '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
+        '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
+          '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
+          (sessaoNivelAtual === "gestao"
+            ? '<button type="button" class="btn-flow-secondary" id="btnExcluirProjeto" style="color:var(--danger);border-color:var(--danger);" title="Exclui o projeto inteiro (e os itens dele) — irreversível">🗑️ Excluir projeto</button>'
+            : "") +
+        '</div>' +
         '<div style="text-align:right"><h2 style="font-size:16px; margin:0;">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
         '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") +
           (dadosProjeto.projeto.vendedor ? ' · Vendedor: ' + esc(dadosProjeto.projeto.vendedor) : '') + '</div></div>' +
@@ -2113,6 +2373,25 @@
       dadosProjeto = null;
       itemAtual = null;
       renderProjetosPanel();
+    });
+    var btnExcluirProjeto = document.getElementById("btnExcluirProjeto");
+    if (btnExcluirProjeto) btnExcluirProjeto.addEventListener("click", function(){
+      var nomeConfirmacao = dadosProjeto.projeto.cliente;
+      if (!window.confirm('Excluir o projeto "' + nomeConfirmacao + '" e todos os itens dele? Isso apaga tudo no ClickUp (comentários, anexos, checklist) e não tem como desfazer.')) return;
+      btnExcluirProjeto.disabled = true;
+      btnExcluirProjeto.textContent = "Excluindo…";
+      apiPost("excluir-implantacao", { id: dadosProjeto.projeto.id }).then(function(){
+        showSimToast("Projeto excluído.");
+        projetosCache = null; // força recarregar a lista sem o projeto excluído
+        projetoAtualId = null;
+        dadosProjeto = null;
+        itemAtual = null;
+        renderProjetosPanel();
+      }).catch(function(e){
+        showSimToast(mensagemErro(e) || "Não deu para excluir o projeto.");
+        btnExcluirProjeto.disabled = false;
+        btnExcluirProjeto.textContent = "🗑️ Excluir projeto";
+      });
     });
     renderAnexos(dadosProjeto.projeto.id, document.getElementById("anexosProjetoWrap"), "Anexos do projeto", dadosProjeto.projeto.anexos);
     renderComentarios(dadosProjeto.projeto.id, document.getElementById("comentariosProjetoWrap"), "Comentários do projeto");

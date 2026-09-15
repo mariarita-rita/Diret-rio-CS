@@ -1120,9 +1120,24 @@ export async function salvarTokenEmail(chave, refreshToken, emailConectado) {
   });
 }
 
-/** DELETE /task/{id} — usado pra cancelar uma reserva. Responde 200 com corpo vazio. */
+/**
+ * DELETE /task/{id} — usado pra cancelar uma reserva, e (nível Gestão) pra
+ * excluir um projeto de teste inteiro. O ClickUp exclui as subtasks junto
+ * (agentes/soluções) — não precisa apagar uma a uma. Responde 200 com corpo
+ * vazio.
+ */
 export async function excluirTask(taskId) {
   return cu(`/task/${taskId}`, { method: 'DELETE' }, { semCorpo: true });
+}
+
+/**
+ * DELETE /comment/{id} — exclui um comentário nativo do ClickUp (nota do
+ * ISM, resumo de IA etc). Só o nível Gestão pode chamar isso (ver
+ * excluir-comentario-implantacao, em clickup.js) — comentário é histórico
+ * do projeto, apagar é exceção, não fluxo normal.
+ */
+export async function excluirComentario(comentarioId) {
+  return cu(`/comment/${comentarioId}`, { method: 'DELETE' }, { semCorpo: true });
 }
 
 /** GET de uma task sozinha, sem subtasks. `null` se o ClickUp disser 404/400. */
@@ -1140,7 +1155,18 @@ export async function obterTask(taskId) {
  * (uma linha por cliente em implantacao), mesmo raciocinio de getMetas.
  */
 export async function listarImplantacoes() {
-  return buscarPaginado(LISTA_IMPLANTACOES_WAIPE, 'include_closed=true', 1);
+  // include_custom_fields=true: sem isso, custom_fields vem vazio pra cada
+  // task e alertasDaTask() nunca acharia o campo Alertas (🚨) na listagem —
+  // só o GET de uma task sozinha (obterTask/obterTaskComSubtasks) traz isso
+  // por padrão, o endpoint de LISTAGEM precisa do parâmetro explícito.
+  //
+  // subtasks=true: faz as subtasks (agentes/soluções) virem junto na MESMA
+  // lista paginada, cada uma com `parent` apontando pro projeto — dá pra
+  // montar os "itens" de cada projeto (listarImplantacoesAcao) sem 1
+  // chamada extra por projeto. Quem só queria os projetos (ex: o rodízio
+  // de definir-gerente-contas) não quebra: as subtasks não têm os campos
+  // que esses laços procuram (rodizioEm, cnpj…), então são ignoradas ali.
+  return buscarPaginado(LISTA_IMPLANTACOES_WAIPE, 'include_closed=true&include_custom_fields=true&subtasks=true', 1);
 }
 
 /**
