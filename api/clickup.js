@@ -941,7 +941,7 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
 // 'vigencia': desconto do item vem da vigência contratada (3/6/12 meses,
 // Londrisoft Deploy), não de alçada negociável — ver VIGENCIAS_DEPLOY_VALIDAS.
@@ -1010,6 +1010,20 @@ const JORNADA_TEMPLATES = {
   'Simplaz Gestor': ['Adicionar o plano no Núcleo', 'Configurar certificado digital (se ainda não enviado)', 'Enviar e-mail com instruções de uso', 'Finalizar'],
   'Simplaz Unique': ['Adicionar o plano no Núcleo', 'Configurar certificado digital (se ainda não enviado)', 'Enviar e-mail com instruções de uso', 'Finalizar'],
   'Treinamento': ['Agendar o treinamento', 'Confirmar participantes', 'Realizar o treinamento na data agendada'],
+  'Migração Nuvem': [
+    'Coletar/confirmar dados do cliente (financeiro, contador, certificado)',
+    'Configurar certificado digital',
+    'Migrar a base para a nuvem',
+    'Realizar testes iniciais',
+    'Confirmar com o cliente que já está usando na nuvem',
+  ],
+  'Homologação de Boleto': [
+    'Coletar dados bancários do cliente (banco, agência, conta, carteira)',
+    'Configurar o banco no sistema e gerar arquivo de remessa',
+    'Validar homologação junto ao banco',
+    'Corrigir e reenviar em caso de erro',
+    'Confirmar homologação aprovada e liberar emissão de boletos',
+  ],
 };
 
 /** Gestor/Unique tem 2 fluxos: mesmo ambiente e so trocar o plano; troca de
