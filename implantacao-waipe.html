@@ -1964,52 +1964,58 @@
         renderListaProjetosWrap();
       });
     });
-    var inputBusca = document.getElementById("filtroBuscaProjetoInput");
+    // IMPORTANTE: busca escopada a `wrap` (querySelector), nunca
+    // document.getElementById — as duas abas (Em andamento/Entregues) ficam
+    // as DUAS renderizadas no DOM ao mesmo tempo (só uma visível via CSS),
+    // então um id repetido nas duas (ex: "btnModoLista") faria
+    // getElementById sempre pegar o da OUTRA aba (a primeira no documento),
+    // e o clique na aba certa não fazia nada — era exatamente esse o bug.
+    var inputBusca = wrap.querySelector("#filtroBuscaProjetoInput");
     if (inputBusca) inputBusca.addEventListener("input", function(){
       // O innerHTML inteiro é reconstruído a cada tecla — sem restaurar foco
       // e cursor, o campo "perderia o teclado" depois da 1ª letra digitada.
       var posCursor = inputBusca.selectionStart;
       filtroBuscaProjeto = inputBusca.value;
       renderListaProjetosWrap();
-      var novoInput = document.getElementById("filtroBuscaProjetoInput");
+      var novoInput = wrap.querySelector("#filtroBuscaProjetoInput");
       if (novoInput){ novoInput.focus(); novoInput.setSelectionRange(posCursor, posCursor); }
     });
-    var selItem = document.getElementById("filtroItemProjetos");
+    var selItem = wrap.querySelector("#filtroItemProjetos");
     if (selItem) selItem.addEventListener("change", function(){
       filtroItemAtivo = selItem.value;
       renderListaProjetosWrap();
     });
-    var selCsm = document.getElementById("filtroCsmProjetos");
+    var selCsm = wrap.querySelector("#filtroCsmProjetos");
     if (selCsm) selCsm.addEventListener("change", function(){
       filtroCsmAtivo = selCsm.value;
       renderListaProjetosWrap();
     });
-    var selIsm = document.getElementById("filtroIsmProjetos");
+    var selIsm = wrap.querySelector("#filtroIsmProjetos");
     if (selIsm) selIsm.addEventListener("change", function(){
       filtroIsmAtivo = selIsm.value;
       renderListaProjetosWrap();
     });
-    var selFase = document.getElementById("filtroFaseProjetos");
+    var selFase = wrap.querySelector("#filtroFaseProjetos");
     if (selFase) selFase.addEventListener("change", function(){
       filtroFaseAtiva = selFase.value;
       renderListaProjetosWrap();
     });
-    var btnModoLista = document.getElementById("btnModoLista");
+    var btnModoLista = wrap.querySelector("#btnModoLista");
     if (btnModoLista) btnModoLista.addEventListener("click", function(){
       modoVisualizacaoProjetos = "lista";
       renderListaProjetosWrap();
     });
-    var btnModoAgrupadoFase = document.getElementById("btnModoAgrupadoFase");
+    var btnModoAgrupadoFase = wrap.querySelector("#btnModoAgrupadoFase");
     if (btnModoAgrupadoFase) btnModoAgrupadoFase.addEventListener("click", function(){
       modoVisualizacaoProjetos = "agrupado_fase";
       renderListaProjetosWrap();
     });
-    var btnModoAgrupadoItem = document.getElementById("btnModoAgrupadoItem");
+    var btnModoAgrupadoItem = wrap.querySelector("#btnModoAgrupadoItem");
     if (btnModoAgrupadoItem) btnModoAgrupadoItem.addEventListener("click", function(){
       modoVisualizacaoProjetos = "agrupado_item";
       renderListaProjetosWrap();
     });
-    var selFechamento = document.getElementById("filtroFechamentoProjetos");
+    var selFechamento = wrap.querySelector("#filtroFechamentoProjetos");
     if (selFechamento) selFechamento.addEventListener("change", function(){
       filtroFechamentoAtivo = selFechamento.value;
       // Troca de preset limpa o intervalo personalizado anterior — senão um
@@ -2017,27 +2023,27 @@
       if (filtroFechamentoAtivo !== "personalizado"){ filtroFechamentoDe = ""; filtroFechamentoAte = ""; }
       renderListaProjetosWrap();
     });
-    var inputFechamentoDe = document.getElementById("filtroFechamentoDe");
+    var inputFechamentoDe = wrap.querySelector("#filtroFechamentoDe");
     if (inputFechamentoDe) inputFechamentoDe.addEventListener("change", function(){
       filtroFechamentoDe = inputFechamentoDe.value;
       renderListaProjetosWrap();
     });
-    var inputFechamentoAte = document.getElementById("filtroFechamentoAte");
+    var inputFechamentoAte = wrap.querySelector("#filtroFechamentoAte");
     if (inputFechamentoAte) inputFechamentoAte.addEventListener("change", function(){
       filtroFechamentoAte = inputFechamentoAte.value;
       renderListaProjetosWrap();
     });
-    var selRisco = document.getElementById("filtroRiscoProjetos");
+    var selRisco = wrap.querySelector("#filtroRiscoProjetos");
     if (selRisco) selRisco.addEventListener("change", function(){
       filtroRiscoAtivo = selRisco.value;
       renderListaProjetosWrap();
     });
-    var selSatisfacao = document.getElementById("filtroSatisfacaoProjetos");
+    var selSatisfacao = wrap.querySelector("#filtroSatisfacaoProjetos");
     if (selSatisfacao) selSatisfacao.addEventListener("change", function(){
       filtroSatisfacaoAtiva = selSatisfacao.value;
       renderListaProjetosWrap();
     });
-    var selAlerta = document.getElementById("filtroAlertaProjetos");
+    var selAlerta = wrap.querySelector("#filtroAlertaProjetos");
     if (selAlerta) selAlerta.addEventListener("change", function(){
       filtroAlertaAtivo = selAlerta.value;
       renderListaProjetosWrap();
