@@ -193,8 +193,19 @@ export async function enviarEmailGmail(accessToken, { de, para, assunto, corpoTe
   });
 }
 
-/** Consulta se a agenda primária do ISM tem algo marcado entre inicio/fim (epoch ms). */
-export async function consultarFreeBusy(accessToken, inicio, fim) {
+/**
+ * Todos os blocos ocupados da agenda primária do ISM entre inicio/fim
+ * (epoch ms), via FreeBusy — a MESMA fonte usada por consultarFreeBusy pra
+ * checar conflito na hora de criar/reagendar reserva. Usado pelo calendário
+ * de disponibilidade (disponibilidadeIsmAcao) pra garantir que o que é
+ * mostrado na grade é exatamente o que vai ser checado na hora de salvar;
+ * `listarEventos` (events.list) é uma fonte DIFERENTE e pode divergir do
+ * FreeBusy em casos que o Google trata de forma distinta entre as duas APIs
+ * (ex: convites ainda não respondidos, eventos de calendários secundários
+ * espelhados só no FreeBusy) — usar a mesma API nos dois lugares elimina
+ * essa divergência por completo, em vez de tentar cobrir caso a caso.
+ */
+export async function listarFreeBusy(accessToken, inicio, fim) {
   const r = await calendarRequest('/freeBusy', accessToken, {
     method: 'POST',
     body: JSON.stringify({
@@ -203,7 +214,12 @@ export async function consultarFreeBusy(accessToken, inicio, fim) {
       items: [{ id: 'primary' }],
     }),
   });
-  const ocupado = r?.calendars?.primary?.busy || [];
+  return r?.calendars?.primary?.busy || [];
+}
+
+/** Consulta se a agenda primária do ISM tem algo marcado entre inicio/fim (epoch ms). */
+export async function consultarFreeBusy(accessToken, inicio, fim) {
+  const ocupado = await listarFreeBusy(accessToken, inicio, fim);
   return ocupado.length ? ocupado[0] : null;
 }
 

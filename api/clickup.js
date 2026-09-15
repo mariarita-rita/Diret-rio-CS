@@ -173,7 +173,7 @@ import {
   STATUS_MES_ATUAL,
   stringifyWaipeState,
 } from './_lib/clickup.js';
-import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, listarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -277,6 +277,12 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'atualizar-implantacao') {
       return await atualizarImplantacaoAcao(req, res, sessao);
     }
+    if (req.method === 'POST' && acao === 'renomear-implantacao') {
+      return await renomearImplantacaoAcao(req, res, sessao);
+    }
+    if (req.method === 'POST' && acao === 'adicionar-item-implantacao') {
+      return await adicionarItemImplantacaoAcao(req, res, sessao);
+    }
     if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-comentarios') return await listarComentariosAcao(req, res, sessao);
@@ -294,6 +300,7 @@ export default async function handler(req, res) {
       return await confirmarFechamentoImplantacaoAcao(req, res, sessao);
     }
     if (req.method === 'GET' && acao === 'listar-reservas') return await listarReservasAcao(res, sessao);
+    if (req.method === 'GET' && acao === 'compromissos-hoje') return await compromissosHojeAcao(res);
     if (req.method === 'POST' && acao === 'criar-reserva') return await criarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'atualizar-reserva') return await atualizarReservaAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'cancelar-reserva') return await cancelarReservaAcao(req, res, sessao);
@@ -335,10 +342,11 @@ export default async function handler(req, res) {
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
       'definir-gerente-contas',
-      'atualizar-implantacao', 'atualizar-agente', 'comentar-implantacao',
+      'atualizar-implantacao', 'renomear-implantacao', 'adicionar-item-implantacao',
+      'atualizar-agente', 'comentar-implantacao',
       'listar-comentarios', 'excluir-comentario-implantacao', 'excluir-implantacao',
       'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
-      'confirmar-fechamento-implantacao', 'listar-reservas', 'criar-reserva',
+      'confirmar-fechamento-implantacao', 'listar-reservas', 'compromissos-hoje', 'criar-reserva',
       'atualizar-reserva', 'cancelar-reserva', 'marcar-comparecimento-reserva',
       'reagendar-reserva', 'disponibilidade-ism', 'conectar-agenda-google',
       'status-google-agenda', 'iniciar-conversa-umbler',
@@ -1978,6 +1986,120 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   return res.status(200).json({ ok: true });
 }
 
+/**
+ * POST ?action=renomear-implantacao { id, nome } — corrige o nome do
+ * projeto (a task-pai, nunca uma subtask de agente/solução — essas têm
+ * nome derivado do produto/plano, ver criarSubtasksSolucao). Existe porque
+ * o nome vem do Moskit/vendedor na criação e às vezes precisa de ajuste
+ * manual depois (ex: padronização, erro de digitação).
+ */
+async function renomearImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { tarefa, projeto } = resolvido;
+  if (tarefa.id !== projeto.id) {
+    return erro(res, 400, 'task_invalida', 'Renomeie a partir da task do projeto, não de uma subtask.');
+  }
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const nome = texto(corpo.nome, 200);
+  if (!nome) {
+    return erro(res, 400, 'nome_invalido', 'Nome é obrigatório.');
+  }
+
+  await atualizarTask(corpo.id, { name: nome });
+
+  return res.status(200).json({ ok: true, nome });
+}
+
+/**
+ * POST ?action=adicionar-item-implantacao { id, produto, planoSugerido?,
+ * variante?, motivo?, observacoes?, quantidade?, valorManual? } — cria um
+ * novo item (subtask "solução") num projeto já existente. Existe pro caso
+ * de o ISM descobrir, já durante a implantação, que falta algo que o
+ * vendedor não tinha identificado na criação (ex: vendedor marcou "sem
+ * treinamento" e o ISM percebe que o cliente precisa) — sem isso, não
+ * havia como registrar/executar esse item dentro do projeto, só por fora.
+ * O item novo sempre nasce "não iniciado" (nunca herda a fase do projeto),
+ * mesmo que o projeto já esteja "entregue" — é trabalho novo, ainda por
+ * fazer.
+ */
+async function adicionarItemImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { tarefa, projeto } = resolvido;
+  if (tarefa.id !== projeto.id) {
+    return erro(res, 400, 'task_invalida', 'Adicione o item a partir da task do projeto, não de uma subtask.');
+  }
+
+  const csm = csmDaDescricaoImplantacao(projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const solucao = sanearOutraSolucao(corpo);
+  if (!solucao) {
+    return erro(res, 400, 'produto_invalido', 'Produto inválido.');
+  }
+
+  const estadoAtual = parseWaipeState(projeto.description);
+  const agentesTotalAtual = Number.isFinite(estadoAtual.agentesTotal) ? estadoAtual.agentesTotal : 0;
+  if (agentesTotalAtual >= MAX_AGENTES + MAX_OUTRAS_SOLUCOES) {
+    return erro(res, 400, 'limite_itens', 'Este projeto já atingiu o limite de itens.');
+  }
+
+  const [novoId] = await criarSubtasksSolucao(projeto.id, [solucao]);
+
+  // Só incrementa o total — `concluidos` fica como está, o item novo nasce
+  // pendente (nunca marcado), mesmo que o projeto já esteja "entregue".
+  await atualizarTask(projeto.id, {
+    markdown_description: stringifyWaipeState(projeto.description, {
+      ...estadoAtual,
+      agentesTotal: agentesTotalAtual + 1,
+    }),
+  });
+
+  return res.status(200).json({ ok: true, id: novoId });
+}
+
 async function iniciarConversaUmblerAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   if (!podeEscrever(sessao)) {
@@ -2834,12 +2956,18 @@ async function disponibilidadeIsmAcao(req, res, sessao) {
   if (tokenGoogle) {
     try {
       const accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
-      const eventos = await listarEventos(accessToken, inicio, fim);
-      for (const ev of eventos) {
-        const inicioEvento = Date.parse(ev.start?.dateTime || ev.start?.date || '');
-        const fimEvento = Date.parse(ev.end?.dateTime || ev.end?.date || '');
-        if (!Number.isFinite(inicioEvento) || !Number.isFinite(fimEvento)) continue;
-        ocupados.push({ inicio: inicioEvento, fim: fimEvento, titulo: texto(ev.summary, 200) || 'Compromisso' });
+      // FreeBusy — a MESMA API usada em criarReservaComGoogle pra checar
+      // conflito de verdade na hora de salvar (ver consultarFreeBusy). Usar
+      // aqui também, em vez de listarEventos (events.list), garante que a
+      // grade nunca mostra livre um horário que o servidor vai recusar
+      // depois: as duas APIs do Google podem divergir (ex: convite ainda
+      // não respondido) e events.list já bateu nisso na prática.
+      const blocos = await listarFreeBusy(accessToken, inicio, fim);
+      for (const b of blocos) {
+        const inicioBloco = Date.parse(b.start || '');
+        const fimBloco = Date.parse(b.end || '');
+        if (!Number.isFinite(inicioBloco) || !Number.isFinite(fimBloco)) continue;
+        ocupados.push({ inicio: inicioBloco, fim: fimBloco, titulo: 'Compromisso (Google)' });
       }
     } catch (e) {
       // Token expirado/revogado — mostra so as reservas internas em vez de
@@ -2849,6 +2977,80 @@ async function disponibilidadeIsmAcao(req, res, sessao) {
   }
 
   return res.status(200).json({ ocupados });
+}
+
+/** Início/fim (epoch ms) do dia de hoje em América/Sao_Paulo — Brasil não tem
+ * horário de verão desde 2019, então -03:00 é fixo, sem precisar de Intl. */
+function limitesHojeSP() {
+  const iso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  return { inicio: Date.parse(`${iso}T00:00:00-03:00`), fim: Date.parse(`${iso}T23:59:59-03:00`) };
+}
+
+/**
+ * GET ?action=compromissos-hoje — visão do dia de TODOS os ISMs juntos, pra
+ * tela inicial (Compromissos do dia). Junta reservas internas (registradas
+ * aqui, com projeto vinculado) com a agenda REAL do Google de quem já
+ * conectou — sem isso, um compromisso marcado direto no Google (ou por uma
+ * página de agendamento externa) simplesmente não aparecia, mesmo
+ * acontecendo de verdade hoje (só reserva feita por "Registrar reserva"
+ * aparecia). Dedupe por sobreposição de horário: um evento do Google que já
+ * bate com uma reserva interna do mesmo ISM não entra de novo (evita
+ * mostrar o mesmo compromisso duas vezes quando o Meet foi criado
+ * automático e espelhado na agenda dele).
+ */
+async function compromissosHojeAcao(res) {
+  res.setHeader('Cache-Control', 'no-store');
+  const { inicio, fim } = limitesHojeSP();
+
+  const reservas = (await listarReservas())
+    .filter((t) => {
+      const ini = Number(t.start_date);
+      return Number.isFinite(ini) && ini >= inicio && ini <= fim;
+    })
+    .map((t) => ({
+      ismId: Number(t.assignees?.[0]?.id) || null,
+      ismNome: nomesIsm(t.assignees)[0] || 'ISM não informado',
+      titulo: texto(t.name, 200),
+      inicio: Number(t.start_date) || null,
+      fim: Number(t.due_date) || null,
+      projetoId: projetoDaDescricaoReserva(t.description) || null,
+      linkReuniao: linkDaDescricaoReserva(t.description) || '',
+      origem: 'interno',
+    }));
+
+  const compromissos = reservas.slice();
+  await Promise.all(ISM_OPCOES.map(async (ism) => {
+    const tokenGoogle = await obterTokenGoogle(ism.id);
+    if (!tokenGoogle) return;
+    try {
+      const accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
+      const eventos = await listarEventos(accessToken, inicio, fim);
+      const reservasDoIsm = reservas.filter((r) => r.ismId === ism.id);
+      for (const ev of eventos) {
+        const inicioEvento = Date.parse(ev.start?.dateTime || ev.start?.date || '');
+        const fimEvento = Date.parse(ev.end?.dateTime || ev.end?.date || '');
+        if (!Number.isFinite(inicioEvento) || !Number.isFinite(fimEvento)) continue;
+        const jaRepresentado = reservasDoIsm.some((r) => r.inicio < fimEvento && r.fim > inicioEvento);
+        if (jaRepresentado) continue;
+        compromissos.push({
+          ismId: ism.id,
+          ismNome: ism.nome,
+          titulo: texto(ev.summary, 200) || 'Compromisso',
+          inicio: inicioEvento,
+          fim: fimEvento,
+          projetoId: null,
+          linkReuniao: '',
+          origem: 'google',
+        });
+      }
+    } catch (e) {
+      // Token expirado/revogado — mostra so as reservas internas em vez de
+      // derrubar a tela (mesma tolerancia de sincronizar-agendamentos-google).
+      if (!(e instanceof ErroGoogle)) throw e;
+    }
+  }));
+
+  return res.status(200).json({ compromissos });
 }
 
 async function cancelarReservaAcao(req, res, sessao) {

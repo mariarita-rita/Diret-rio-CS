@@ -1023,6 +1023,13 @@
   };
   var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
 
+  // Mesma lista de PRODUTOS_SOLUCAO_VALIDOS em api/clickup.js — usada só pro
+  // seletor de "+ Adicionar item"; o servidor valida de novo do lado dele.
+  var PRODUTOS_SOLUCAO_OPCOES = [
+    "Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Bime",
+    "Deploy", "Treinamento", "Migração Nuvem", "Homologação de Boleto", "Outro"
+  ];
+
   // Tags de risco/satisfação no card do projeto (ver cardHtml) — só
   // aparecem quando já existe finalizacao (relatório de finalização já
   // gerado e salvo), pra dar pra localizar visualmente na lista quem foi
@@ -1997,15 +2004,18 @@
   function renderCompromissosHoje(container){
     if (!container) return;
     var agora = new Date();
-    var hoje = chaveDataSP(agora.getTime());
     var rotuloHoje = agora.toLocaleDateString("pt-BR", { timeZone:"America/Sao_Paulo", day:"2-digit", month:"2-digit", year:"numeric" });
     container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
       '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' +
       '<div class="sidebar-loading">Carregando agenda…</div></section>';
-    apiGet("listar-reservas").then(function(resp){
+    apiGet("compromissos-hoje").then(function(resp){
       var nomes = {};
       (projetosCache || []).forEach(function(p){ nomes[String(p.id)] = p.cliente || "Projeto"; });
-      var reservas = (resp.reservas || []).filter(function(r){ return chaveDataSP(r.inicio) === hoje; });
+      // Já vem só de hoje (o servidor filtra pelo dia em América/Sao_Paulo) —
+      // reservas registradas aqui (com projeto vinculado) + agenda REAL do
+      // Google de cada ISM conectado (sem projeto — marcado direto na
+      // agenda, ou por uma página de agendamento externa).
+      var reservas = resp.compromissos || [];
 
       // Agrupado por ISM (cada um com sua própria mini-agenda, em ordem de
       // horário) — em vez de uma lista só misturando todo mundo, onde dava
@@ -2019,12 +2029,17 @@
 
       function appointmentHtml(r){
         var projetoId = String(r.projetoId || "");
-        var projeto = nomes[projetoId] || "Projeto não encontrado";
-        return '<button type="button" class="today-appointment" data-open-project="' + esc(projetoId) + '">' +
+        var temProjeto = r.projetoId && projetoId !== "undefined";
+        var projeto = temProjeto ? (nomes[projetoId] || "Projeto não encontrado") : "Agenda do Google (sem projeto)";
+        var tag = temProjeto
+          ? '<button type="button" class="today-appointment" data-open-project="' + esc(projetoId) + '">'
+          : '<div class="today-appointment" style="cursor:default;">';
+        var fechaTag = temProjeto ? "</button>" : "</div>";
+        return tag +
           '<span class="today-appointment-time">' + horaSP(r.inicio) + '<br><span style="font-weight:500; color:var(--muted)">' + horaSP(r.fim) + '</span></span>' +
           '<span class="today-appointment-body"><span class="today-appointment-title">' + esc(r.titulo || "Compromisso") + '</span><span class="today-appointment-meta">' + esc(projeto) + '</span></span>' +
           (r.linkReuniao ? '<span class="today-appointment-link" title="Abrir reunião">↗</span>' : '') +
-        '</button>';
+        fechaTag;
       }
       var itens = nomesIsmOrdenados.length
         ? nomesIsmOrdenados.map(function(nomeIsm){
@@ -2730,7 +2745,11 @@
             ? '<button type="button" class="btn-flow-secondary" id="btnExcluirProjeto" style="color:var(--danger);border-color:var(--danger);" title="Exclui o projeto inteiro (e os itens dele) — irreversível">🗑️ Excluir projeto</button>'
             : "") +
         '</div>' +
-        '<div style="text-align:right"><h2 style="font-size:16px; margin:0;">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
+        '<div style="text-align:right">' +
+          '<div id="nomeProjetoWrap" style="display:flex; align-items:center; gap:6px; justify-content:flex-end;">' +
+            '<h2 style="font-size:16px; margin:0;" id="nomeProjetoTexto">' + esc(dadosProjeto.projeto.cliente) + '</h2>' +
+            '<button type="button" class="btn-flow-secondary" id="btnEditarNomeProjeto" title="Editar nome do projeto" style="padding:2px 8px; font-size:12px;">✏️</button>' +
+          '</div>' +
         '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") +
           (dadosProjeto.projeto.vendedor ? ' · Vendedor: ' + esc(dadosProjeto.projeto.vendedor) : '') + '</div></div>' +
       '</div>' +
@@ -2752,6 +2771,28 @@
       dadosProjeto = null;
       itemAtual = null;
       renderProjetosPanel();
+    });
+    var btnEditarNomeProjeto = document.getElementById("btnEditarNomeProjeto");
+    if (btnEditarNomeProjeto) btnEditarNomeProjeto.addEventListener("click", function(){
+      var wrap = document.getElementById("nomeProjetoWrap");
+      var nomeAtual = dadosProjeto.projeto.cliente;
+      wrap.innerHTML =
+        '<input type="text" class="form-input" id="nomeProjetoInput" style="font-size:14px; width:260px;" value="' + esc(nomeAtual) + '">' +
+        '<button type="button" class="btn-flow-secondary" id="btnSalvarNomeProjeto" style="padding:4px 10px; font-size:12px;">Salvar</button>' +
+        '<button type="button" class="btn-flow-secondary" id="btnCancelarNomeProjeto" style="padding:4px 10px; font-size:12px;">Cancelar</button>';
+      var input = document.getElementById("nomeProjetoInput");
+      input.focus();
+      input.select();
+      document.getElementById("btnCancelarNomeProjeto").addEventListener("click", renderProjetosPanel);
+      document.getElementById("btnSalvarNomeProjeto").addEventListener("click", function(){
+        var novoNome = input.value.trim();
+        if (!novoNome){ showSimToast("O nome não pode ficar vazio."); return; }
+        apiPost("renomear-implantacao", { id: dadosProjeto.projeto.id, nome: novoNome }).then(function(){
+          dadosProjeto.projeto.cliente = novoNome;
+          projetosCache = null;
+          renderProjetosPanel();
+        }).catch(function(e){ showSimToast(mensagemErro(e) || "Não deu para renomear o projeto."); });
+      });
     });
     var btnExcluirProjeto = document.getElementById("btnExcluirProjeto");
     if (btnExcluirProjeto) btnExcluirProjeto.addEventListener("click", function(){
@@ -3594,7 +3635,12 @@
       var slotsHtml = [];
       for (var min = 8 * 60; min < 19 * 60; min += 30){
         var slotIni = new Date(partes[0], partes[1] - 1, partes[2], Math.floor(min / 60), min % 60).getTime();
-        var slotFim = slotIni + 30 * 60 * 1000;
+        // Usa a duração JÁ SELECIONADA (duracaoMin), não um bloco fixo de
+        // 30min — senão um horário de início "livre" ficava clicável mesmo
+        // quando a duração escolhida avançava sobre outro compromisso (ex:
+        // 10:30 livre isoladamente, mas 10:30+1h invade uma reserva às
+        // 11:00) — o botão só era barrado depois de clicado, tarde demais.
+        var slotFim = slotIni + duracaoMin * 60 * 1000;
         var ocupado = ocupadosDia.some(function(o){ return o.inicio < slotFim && o.fim > slotIni; });
         var motivo = ocupado ? (ocupadosDia.filter(function(o){ return o.inicio < slotFim && o.fim > slotIni; })[0] || {}).titulo : "";
         var horaLabel = pad2Cal(Math.floor(min / 60)) + ":" + pad2Cal(min % 60);
@@ -3768,13 +3814,22 @@
 
   function formNovaReservaHtml(statusGoogle){
     var emailCliente = (dadosProjeto && dadosProjeto.projeto && dadosProjeto.projeto.email) || "";
+    // Só pré-seleciona um ISM quando o projeto tem EXATAMENTE um responsável
+    // definido (espelha o "ISM responsável pelo projeto" da aba Resumo) —
+    // caso contrário, começa em branco pra quem for agendar escolher, em vez
+    // de sempre cair no primeiro nome de ISM_OPCOES (era sempre Bruno Vaz,
+    // mesmo em projeto sem responsável definido ou com outro ISM).
+    var ismIdsProjeto = (dadosProjeto && dadosProjeto.projeto && dadosProjeto.projeto.ismIds) || [];
+    var ismProjetoId = ismIdsProjeto.length === 1 ? ismIdsProjeto[0] : null;
+    var ismPreSelecionavel = ismProjetoId != null && ISM_OPCOES.some(function(o){ return o.id === ismProjetoId; });
     return '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
       '<div class="sp-k">Agendar novo horário' + infoTip("Se o ISM já tem a agenda do Google conectada, é só preencher e registrar — o horário é checado de verdade e o Meet é criado sozinho. Senão, agenda manualmente primeiro e registra aqui o que foi combinado.") + '</div>' +
       agendaGoogleLinksHtml(statusGoogle) +
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
         '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
         '<select class="form-input" id="novaReservaIsm" style="width:auto;">' +
-          ISM_OPCOES.map(function(o){ return '<option value="' + o.id + '">' + esc(o.nome) + '</option>'; }).join("") +
+          (ismPreSelecionavel ? "" : '<option value="">Selecionar ISM…</option>') +
+          ISM_OPCOES.map(function(o){ return '<option value="' + o.id + '"' + (o.id === ismProjetoId ? " selected" : "") + '>' + esc(o.nome) + '</option>'; }).join("") +
         '</select>' +
       '</div>' +
       '<div id="calendarioNovaReserva"></div>' +
@@ -4101,7 +4156,24 @@
       '</div>' +
     '</div>' +
     '<div class="card">' +
-      '<h2>Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div>' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
+        '<div><h2 style="margin-bottom:2px;">Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div></div>' +
+        '<button type="button" class="btn-flow-secondary" id="btnAdicionarItem">+ Adicionar item</button>' +
+      '</div>' +
+      '<div id="adicionarItemPainel" style="display:none; margin-top:10px; padding:12px; border:1px solid var(--border); border-radius:8px;">' +
+        '<div class="form-grid-2">' +
+          '<div class="form-field"><label>Produto</label><select class="form-input" id="novoItemProduto">' +
+            PRODUTOS_SOLUCAO_OPCOES.map(function(v){ return '<option value="' + esc(v) + '">' + esc(v) + '</option>'; }).join("") +
+          '</select></div>' +
+          '<div class="form-field"><label>Plano/variação (opcional)</label><input type="text" class="form-input" id="novoItemPlano" placeholder="ex: Básico, NFe Cloud, Sicoob"></div>' +
+        '</div>' +
+        '<div class="form-field"><label>Ambiente (opcional)</label><select class="form-input" id="novoItemVariante">' +
+          '<option value="">—</option><option value="Nuvem">Nuvem</option><option value="Local">Local</option>' +
+        '</select></div>' +
+        '<div class="form-field"><label>Observações (opcional)</label><textarea class="form-input" id="novoItemObservacoes" rows="2" style="width:100%;"></textarea></div>' +
+        '<button type="button" class="btn-flow-secondary" id="btnSalvarNovoItem" style="margin-top:6px;">Salvar item</button> ' +
+        '<button type="button" class="btn-flow-secondary" id="btnCancelarNovoItem" style="margin-top:6px;">Cancelar</button>' +
+      '</div>' +
       '<div class="agent-pick-grid">' +
         solucoes.map(function(o){
           var total = Array.isArray(o.checklist) ? o.checklist.length : 0;
@@ -4119,6 +4191,36 @@
     '</div>';
     document.getElementById("stepContent").innerHTML = html;
     renderIsmPicker("ismProjetoWrap", "ISM responsável pelo projeto", p.ismIds || [], persistirProjetoIsm);
+    var btnAdicionarItem = document.getElementById("btnAdicionarItem");
+    var painelAdicionarItem = document.getElementById("adicionarItemPainel");
+    if (btnAdicionarItem) btnAdicionarItem.addEventListener("click", function(){
+      painelAdicionarItem.style.display = painelAdicionarItem.style.display === "none" ? "block" : "none";
+    });
+    var btnCancelarNovoItem = document.getElementById("btnCancelarNovoItem");
+    if (btnCancelarNovoItem) btnCancelarNovoItem.addEventListener("click", function(){
+      painelAdicionarItem.style.display = "none";
+    });
+    var btnSalvarNovoItem = document.getElementById("btnSalvarNovoItem");
+    if (btnSalvarNovoItem) btnSalvarNovoItem.addEventListener("click", function(){
+      var produto = document.getElementById("novoItemProduto").value;
+      var planoSugerido = document.getElementById("novoItemPlano").value.trim();
+      var variante = document.getElementById("novoItemVariante").value;
+      var observacoes = document.getElementById("novoItemObservacoes").value.trim();
+      btnSalvarNovoItem.disabled = true;
+      btnSalvarNovoItem.textContent = "Salvando…";
+      apiPost("adicionar-item-implantacao", {
+        id: p.id, produto: produto, planoSugerido: planoSugerido,
+        variante: variante || null, observacoes: observacoes
+      }).then(function(){
+        showSimToast("Item adicionado.");
+        projetosCache = null;
+        abrirProjeto(p.id);
+      }).catch(function(e){
+        showSimToast(mensagemErro(e) || "Não deu para adicionar o item.");
+        btnSalvarNovoItem.disabled = false;
+        btnSalvarNovoItem.textContent = "Salvar item";
+      });
+    });
     var selFaseProjeto = document.querySelector("[data-projeto-fase]");
     if (selFaseProjeto) selFaseProjeto.addEventListener("change", function(){
       persistirFaseProjeto(selFaseProjeto.value || null);
