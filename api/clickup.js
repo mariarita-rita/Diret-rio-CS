@@ -1306,12 +1306,31 @@ async function listarImplantacoesAcao(res, sessao) {
   // filtro/agrupamento por item na lista não custar 1 chamada por projeto.
   const projetos = tasks.filter((t) => !t.parent);
   const itensPorProjeto = new Map();
+  // Fase de cada item (entregue/cancelado/em andamento...) só existe pra
+  // subtask tipo "solucao" (Gestor/Simplaz/Unique/BIME APP/Treinamento/
+  // Outro) — agente Waipe não tem esse conceito no modelo dele (segue o
+  // pipeline escopo→entrega, sem "cancelado" próprio). Por isso os
+  // indicadores de "tipo de item" (aba Indicadores) usam só isto, não os
+  // agentes Waipe.
+  const itensStatusPorProjeto = new Map();
   for (const t of tasks) {
     if (!t.parent) continue;
     const nome = texto(t.name, 120);
-    if (!nome) continue;
-    if (!itensPorProjeto.has(t.parent)) itensPorProjeto.set(t.parent, []);
-    itensPorProjeto.get(t.parent).push(nome);
+    if (nome) {
+      if (!itensPorProjeto.has(t.parent)) itensPorProjeto.set(t.parent, []);
+      itensPorProjeto.get(t.parent).push(nome);
+    }
+    const estadoItem = parseWaipeState(t.description);
+    if (estadoItem.tipo === 'solucao' && nome) {
+      if (!itensStatusPorProjeto.has(t.parent)) itensStatusPorProjeto.set(t.parent, []);
+      itensStatusPorProjeto.get(t.parent).push({
+        nome,
+        // Nome-base do produto (sem " — Plano"), pra agrupar variações do
+        // mesmo produto num "tipo de item" só nos indicadores.
+        produtoBase: texto(estadoItem.produto, 60) || nome.split(' — ')[0].trim(),
+        fase: FASES_ITEM_VALIDAS.has(estadoItem.fase) ? estadoItem.fase : FASE_ITEM_PADRAO,
+      });
+    }
   }
   const linhas = projetos.map((t) => {
     const estado = parseWaipeState(t.description);
@@ -1351,6 +1370,9 @@ async function listarImplantacoesAcao(res, sessao) {
       // Nome de cada agente/solução do projeto (ex: "Simplaz Gestor —
       // Bronze", "BIME APP") — usado pro filtro/agrupamento por item.
       itens: itensPorProjeto.get(t.id) || [],
+      // { nome, produtoBase, fase } de cada item tipo "solucao" — usado
+      // pelos indicadores por tipo de item (aba Indicadores > Gráficos).
+      itensStatus: itensStatusPorProjeto.get(t.id) || [],
     };
   });
   // "ism" ve tudo igual "gestao" dentro de implantacao — a unica diferenca

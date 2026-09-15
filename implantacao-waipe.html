@@ -434,6 +434,8 @@
   .today-agenda-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;}
   .today-agenda-title{font-size:15px; font-weight:800; color:var(--noite,#000035);}
   .today-agenda-date{font-size:11px; color:var(--muted); white-space:nowrap;}
+  .today-agenda-ism-header{font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color:var(--profundo); margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
+  .today-agenda-ism-header:first-of-type{margin-top:0; padding-top:0; border-top:0;}
   .today-appointment{display:flex; width:100%; align-items:flex-start; gap:10px; padding:10px 0; border:0; border-top:1px solid var(--border); background:transparent; color:inherit; text-align:left; font:inherit; cursor:pointer;}
   .today-appointment:hover .today-appointment-title{color:var(--brand-dark); text-decoration:underline;}
   .today-appointment-time{flex:0 0 72px; font-size:12px; font-weight:800; color:var(--brand-dark); font-variant-numeric:tabular-nums;}
@@ -514,6 +516,7 @@
   @media(max-width:860px){.project-detail-layout{grid-template-columns:1fr}.project-detail-main{grid-column:1;grid-row:2}.project-detail-sidebar-ops{grid-column:1;grid-row:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;position:static;max-height:none;overflow:visible}.project-detail-sidebar-comunicacao{grid-column:1;grid-row:3;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;position:static;max-height:none;overflow:visible}}
   @media(max-width:560px){.project-detail-sidebar-ops,.project-detail-sidebar-comunicacao{display:flex;flex-direction:column;gap:12px}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
 <div class="page">
 
@@ -1229,9 +1232,13 @@
       // carregado nesta sessão — senão busca 1x aqui mesmo, mesma chamada
       // que carregarListaProjetos já usa.
       projetosCache ? Promise.resolve({ tasks: projetosCache }) : apiGet("listar-implantacoes"),
+      // Agenda dos ISMs (reservas) — só usada pela sub-aba Gráficos
+      // (atividade do ISM no dia/semana), mas a lista é pequena e busca
+      // 1x junto custa bem menos que buscar sob demanda depois.
+      apiGet("listar-reservas").catch(function(){ return { reservas: [] }; }),
     ]).then(function(resultados){
       if (!projetosCache) projetosCache = resultados[1].tasks || [];
-      renderIndicadores(root, resultados[0].indicadores || [], projetosCache);
+      renderIndicadores(root, resultados[0].indicadores || [], projetosCache, resultados[2].reservas || []);
     }).catch(function(e){
       // Sessão inválida nunca cai aqui: tratarRespostaApi devolve uma promise
       // que fica pendente pra sempre nesse caso, e mostrarLoginNoPainel já
@@ -1381,7 +1388,336 @@
       ' · Lista cliente a cliente: aba <b>Indicadores</b> em <a href="trilhas-admin.html" target="_blank">trilhas-admin.html</a>.</div>');
   }
 
-  function renderIndicadores(root, linhasTreinamento, projetos){
+  // ==================== Indicadores > Gráficos ====================
+  // Sub-aba nova (pedida pela usuária): projetos por mês/tipo de item,
+  // SLA por tipo de item + motivos de demora, reagendamentos/não
+  // comparecimentos, e atividade dos ISMs pela agenda. Único lugar do
+  // painel que usa Chart.js (carregado no <head>) — o resto da tela
+  // sempre foi só cards de texto.
+  var indicadoresSubAba = "resumo"; // "resumo" | "graficos"
+  var indicadoresGraficosFiltroIsm = ""; // "" = geral — só na sub-aba Gráficos
+  var indicadoresGraficosFiltroItem = ""; // "" = todos os tipos de item — idem
+  var chartsIndicadoresAtivos = []; // instâncias Chart.js da renderização atual — destruídas antes de recriar, senão "Canvas is already in use"
+
+  function destruirChartsIndicadores(){
+    chartsIndicadoresAtivos.forEach(function(c){ try { c.destroy(); } catch(e){} });
+    chartsIndicadoresAtivos = [];
+  }
+
+  /** Valor resolvido de uma CSS custom property — Chart.js desenha em canvas, que não entende var(--x) direto. */
+  function corCss(nomeVar){
+    var v = getComputedStyle(document.documentElement).getPropertyValue(nomeVar);
+    return (v && v.trim()) || "#8A8FB0";
+  }
+
+  var MESES_ABREV_GRAFICO = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  function rotuloMes(chaveAnoMes){ // "2026-07" -> "jul/26"
+    var partes = chaveAnoMes.split("-");
+    return (MESES_ABREV_GRAFICO[Number(partes[1]) - 1] || partes[1]) + "/" + partes[0].slice(2);
+  }
+
+  /** Todos os produtoBase distintos vistos nos itens tipo "solução" dos projetos — universo do filtro/eixo "tipo de item". */
+  function todosTiposItem(projetos){
+    var presentes = {};
+    (projetos || []).forEach(function(p){ (p.itensStatus || []).forEach(function(i){ if (i.produtoBase) presentes[i.produtoBase] = true; }); });
+    return Object.keys(presentes).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+  }
+
+  function seletoresGraficos(projetos){
+    var todasIsm = todosIsmDeProjetos(projetos);
+    var todosItens = todosTiposItem(projetos);
+    return '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:14px;">' +
+      (todasIsm.length > 1
+        ? '<div><label style="font-size:12px;color:var(--muted);margin-right:6px;">ISM</label>' +
+          '<select id="graficosFiltroIsmSel" class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:4px 8px;">' +
+          '<option value=""' + (indicadoresGraficosFiltroIsm ? "" : " selected") + '>Geral (todos)</option>' +
+          todasIsm.map(function(n){ return '<option value="' + esc(n) + '"' + (n === indicadoresGraficosFiltroIsm ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") +
+          '</select></div>'
+        : "") +
+      (todosItens.length > 1
+        ? '<div><label style="font-size:12px;color:var(--muted);margin-right:6px;">Tipo de item</label>' +
+          '<select id="graficosFiltroItemSel" class="form-input" style="width:auto;display:inline-block;font-size:12px;padding:4px 8px;">' +
+          '<option value=""' + (indicadoresGraficosFiltroItem ? "" : " selected") + '>Todos</option>' +
+          todosItens.map(function(n){ return '<option value="' + esc(n) + '"' + (n === indicadoresGraficosFiltroItem ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") +
+          '</select></div>'
+        : "") +
+    '</div>';
+  }
+
+  // ---- Gráfico 1: projetos por mês, comparando em andamento/entregue/cancelado ----
+  function secaoGraficoPorMes(projetos){
+    var linhas = [];
+    (projetos || []).forEach(function(p){
+      if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+      var inicio = p.dataInicioReal || p.dataCriacao;
+      if (!inicio) return;
+      var mesChave = chaveDataSP(inicio).slice(0, 7);
+      if (!mesChave) return;
+      (p.itensStatus || []).forEach(function(item){
+        if (indicadoresGraficosFiltroItem && item.produtoBase !== indicadoresGraficosFiltroItem) return;
+        linhas.push({ mesChave: mesChave, fase: item.fase });
+      });
+    });
+    if (!linhas.length){
+      return secaoIndicador("Itens criados por mês", '<div class="sub">Nenhum item registrado ainda com este filtro.</div>');
+    }
+    var porMes = {};
+    linhas.forEach(function(l){
+      if (!porMes[l.mesChave]) porMes[l.mesChave] = { entregue: 0, cancelado: 0, em_andamento: 0 };
+      var bucket = l.fase === "entregue" ? "entregue" : (l.fase === "cancelado" ? "cancelado" : "em_andamento");
+      porMes[l.mesChave][bucket]++;
+    });
+    var meses = Object.keys(porMes).sort();
+    var idCanvas = "chartPorMes";
+    return secaoIndicador("Itens criados por mês",
+      '<div class="sub" style="margin-bottom:10px;">Mês em que o item começou (data real de início) — comparando o que já foi entregue, cancelado, ou ainda está em andamento.</div>' +
+      '<div style="position:relative;height:280px;"><canvas id="' + idCanvas + '"></canvas></div>');
+  }
+  function montarChartPorMes(projetos){
+    var canvas = document.getElementById("chartPorMes");
+    if (!canvas || typeof Chart === "undefined") return;
+    var linhas = [];
+    (projetos || []).forEach(function(p){
+      if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+      var inicio = p.dataInicioReal || p.dataCriacao;
+      if (!inicio) return;
+      var mesChave = chaveDataSP(inicio).slice(0, 7);
+      if (!mesChave) return;
+      (p.itensStatus || []).forEach(function(item){
+        if (indicadoresGraficosFiltroItem && item.produtoBase !== indicadoresGraficosFiltroItem) return;
+        linhas.push({ mesChave: mesChave, fase: item.fase });
+      });
+    });
+    if (!linhas.length) return;
+    var porMes = {};
+    linhas.forEach(function(l){
+      if (!porMes[l.mesChave]) porMes[l.mesChave] = { entregue: 0, cancelado: 0, em_andamento: 0 };
+      var bucket = l.fase === "entregue" ? "entregue" : (l.fase === "cancelado" ? "cancelado" : "em_andamento");
+      porMes[l.mesChave][bucket]++;
+    });
+    var meses = Object.keys(porMes).sort();
+    chartsIndicadoresAtivos.push(new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: meses.map(rotuloMes),
+        datasets: [
+          { label: "Em andamento", data: meses.map(function(m){ return porMes[m].em_andamento; }), backgroundColor: corCss("--muted-2"), borderRadius: 4 },
+          { label: "Entregue", data: meses.map(function(m){ return porMes[m].entregue; }), backgroundColor: corCss("--tag-ambos"), borderRadius: 4 },
+          { label: "Cancelado", data: meses.map(function(m){ return porMes[m].cancelado; }), backgroundColor: corCss("--danger"), borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+        },
+        plugins: { legend: { position: "bottom" } },
+      },
+    }));
+  }
+
+  // ---- Gráfico 2: SLA (dias até a entrega) por tipo de item ----
+  function secaoSlaPorItem(projetos){
+    var porTipo = {};
+    (projetos || []).forEach(function(p){
+      if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+      if (!p.dataInicioReal || !p.dataFimReal) return;
+      var dias = Math.max(0, Math.round((p.dataFimReal - p.dataInicioReal) / 86400000));
+      (p.itensStatus || []).forEach(function(item){
+        if (item.fase !== "entregue") return;
+        if (indicadoresGraficosFiltroItem && item.produtoBase !== indicadoresGraficosFiltroItem) return;
+        if (!porTipo[item.produtoBase]) porTipo[item.produtoBase] = [];
+        porTipo[item.produtoBase].push(dias);
+      });
+    });
+    var tipos = Object.keys(porTipo);
+    var motivos = motivosDemoraLista(projetos);
+    var motivosHtml = motivos.length
+      ? '<div class="sub" style="margin-top:14px;margin-bottom:6px;"><b>Motivos de demora registrados na finalização</b></div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;">' +
+        motivos.map(function(m){
+          return '<div style="font-size:12px;border-left:3px solid var(--claro);padding:4px 10px;">' +
+            '<b>' + esc(m.cliente) + '</b>' + (Number.isFinite(m.dias) ? ' · ' + m.dias + ' dia(s)' : '') +
+            '<br><span style="color:var(--ink-2);">' + esc(m.causa) + '</span></div>';
+        }).join("") +
+        '</div>'
+      : '<div class="sub" style="margin-top:14px;">Nenhum motivo de demora registrado com este filtro.</div>';
+    if (!tipos.length){
+      return secaoIndicador("SLA por tipo de item", '<div class="sub">Nenhum item entregue com as duas datas reais preenchidas, com este filtro.</div>' + motivosHtml);
+    }
+    return secaoIndicador("SLA por tipo de item",
+      '<div class="sub" style="margin-bottom:10px;">Dias corridos entre o início real do projeto e a entrega — só itens já entregues. Sem meta de SLA definida ainda: os números são só o observado.</div>' +
+      '<div style="position:relative;height:' + Math.max(160, tipos.length * 46) + 'px;"><canvas id="chartSlaItem"></canvas></div>' +
+      motivosHtml);
+  }
+  function montarChartSlaItem(projetos){
+    var canvas = document.getElementById("chartSlaItem");
+    if (!canvas || typeof Chart === "undefined") return;
+    var porTipo = {};
+    (projetos || []).forEach(function(p){
+      if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+      if (!p.dataInicioReal || !p.dataFimReal) return;
+      var dias = Math.max(0, Math.round((p.dataFimReal - p.dataInicioReal) / 86400000));
+      (p.itensStatus || []).forEach(function(item){
+        if (item.fase !== "entregue") return;
+        if (indicadoresGraficosFiltroItem && item.produtoBase !== indicadoresGraficosFiltroItem) return;
+        if (!porTipo[item.produtoBase]) porTipo[item.produtoBase] = [];
+        porTipo[item.produtoBase].push(dias);
+      });
+    });
+    var tipos = Object.keys(porTipo);
+    if (!tipos.length) return;
+    var medias = tipos.map(function(t){ var arr = porTipo[t]; return Math.round(arr.reduce(function(s, d){ return s + d; }, 0) / arr.length); });
+    // Maior média primeiro — o que demora mais aparece no topo, é o que mais interessa olhar.
+    var ordem = tipos.map(function(_, i){ return i; }).sort(function(a, b){ return medias[b] - medias[a]; });
+    chartsIndicadoresAtivos.push(new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: ordem.map(function(i){ return tipos[i] + " (" + porTipo[tipos[i]].length + ")"; }),
+        datasets: [{ label: "Dias em média até a entrega", data: ordem.map(function(i){ return medias[i]; }), backgroundColor: corCss("--azul"), borderRadius: 4 }],
+      },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } },
+        plugins: { legend: { display: false } },
+      },
+    }));
+  }
+  function motivosDemoraLista(projetos){
+    var vistos = {};
+    var linhas = [];
+    (projetos || []).slice()
+      .sort(function(a, b){ return (b.finalizacao && b.finalizacao.geradoEm || 0) - (a.finalizacao && a.finalizacao.geradoEm || 0); })
+      .forEach(function(p){
+        if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+        var causa = p.finalizacao && p.finalizacao.causaDaDemora;
+        if (!causa) return;
+        if (indicadoresGraficosFiltroItem && !(p.itensStatus || []).some(function(i){ return i.produtoBase === indicadoresGraficosFiltroItem; })) return;
+        var chave = p.cliente + "|" + causa;
+        if (vistos[chave]) return;
+        vistos[chave] = true;
+        linhas.push({ cliente: p.cliente, causa: causa, dias: p.finalizacao.diasEmAberto });
+      });
+    return linhas;
+  }
+
+  // ---- Gráfico 3: reagendamentos e não comparecimentos ----
+  function secaoReagendamentos(projetos){
+    var total = { nossos: 0, cliente: 0, naoCompareceu: 0 };
+    (projetos || []).forEach(function(p){
+      if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+      if (indicadoresGraficosFiltroItem && !(p.itensStatus || []).some(function(i){ return i.produtoBase === indicadoresGraficosFiltroItem; })) return;
+      var f = p.finalizacao;
+      if (!f) return;
+      total.nossos += f.reagendamentosLondrisoft || 0;
+      total.cliente += f.reagendamentosCliente || 0;
+      total.naoCompareceu += f.naoComparecimentos || 0;
+    });
+    if (!total.nossos && !total.cliente && !total.naoCompareceu){
+      return secaoIndicador("Reagendamentos e não comparecimentos", '<div class="sub">Nenhum projeto finalizado com esses dados, com este filtro.</div>');
+    }
+    return secaoIndicador("Reagendamentos e não comparecimentos",
+      '<div class="sub" style="margin-bottom:10px;">Somado dos relatórios de finalização já salvos.</div>' +
+      '<div style="position:relative;height:220px;"><canvas id="chartReagendamentos"></canvas></div>');
+  }
+  function montarChartReagendamentos(projetos){
+    var canvas = document.getElementById("chartReagendamentos");
+    if (!canvas || typeof Chart === "undefined") return;
+    var total = { nossos: 0, cliente: 0, naoCompareceu: 0 };
+    (projetos || []).forEach(function(p){
+      if (indicadoresGraficosFiltroIsm && !(p.ism || []).includes(indicadoresGraficosFiltroIsm)) return;
+      if (indicadoresGraficosFiltroItem && !(p.itensStatus || []).some(function(i){ return i.produtoBase === indicadoresGraficosFiltroItem; })) return;
+      var f = p.finalizacao;
+      if (!f) return;
+      total.nossos += f.reagendamentosLondrisoft || 0;
+      total.cliente += f.reagendamentosCliente || 0;
+      total.naoCompareceu += f.naoComparecimentos || 0;
+    });
+    if (!total.nossos && !total.cliente && !total.naoCompareceu) return;
+    chartsIndicadoresAtivos.push(new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: ["Reagendado por nós", "Reagendado pelo cliente", "Não compareceu"],
+        datasets: [{
+          data: [total.nossos, total.cliente, total.naoCompareceu],
+          backgroundColor: [corCss("--tag-londrisoft"), corCss("--tag-cliente"), corCss("--danger")],
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } },
+        plugins: { legend: { display: false } },
+      },
+    }));
+  }
+
+  // ---- Atividade dos ISMs pela agenda (reservas) — hoje e esta semana ----
+  var ROTULO_STATUS_RESERVA = { agendado: "Agendado (a vencer)", compareceu: "Compareceu", nao_compareceu: "Não compareceu", reagendado: "Reagendado" };
+  function secaoAtividadeIsm(reservas){
+    var hoje = chaveDataSP(Date.now());
+    var inicioSemana = chaveInicioSemanaSP();
+    var porIsm = {};
+    (reservas || []).forEach(function(r){
+      var nome = r.ismNome || "ISM não identificado";
+      var chaveData = chaveDataSP(r.inicio);
+      if (!chaveData || chaveData < inicioSemana) return;
+      if (!porIsm[nome]) porIsm[nome] = { hoje: {}, semana: {} };
+      var status = r.status || "agendado";
+      porIsm[nome].semana[status] = (porIsm[nome].semana[status] || 0) + 1;
+      if (chaveData === hoje) porIsm[nome].hoje[status] = (porIsm[nome].hoje[status] || 0) + 1;
+    });
+    var nomes = Object.keys(porIsm).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+    if (!nomes.length){
+      return secaoIndicador("Atividade dos ISMs (agenda)", '<div class="sub">Nenhum compromisso registrado nesta semana.</div>');
+    }
+    function linhaContagem(porStatus){
+      var total = Object.keys(porStatus).reduce(function(s, k){ return s + porStatus[k]; }, 0);
+      if (!total) return '<span class="sub">nenhum compromisso</span>';
+      return Object.keys(ROTULO_STATUS_RESERVA).filter(function(k){ return porStatus[k]; })
+        .map(function(k){ return (porStatus[k] || 0) + ' ' + ROTULO_STATUS_RESERVA[k].toLowerCase(); }).join(" · ");
+    }
+    var corpo = nomes.map(function(nome){
+      var d = porIsm[nome];
+      return '<div style="border:1px solid var(--border);border-radius:12px;padding:12px 14px;min-width:220px;flex:1;">' +
+        '<div style="font-weight:700;margin-bottom:6px;">' + esc(nome) + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);">Hoje</div>' +
+        '<div style="font-size:13px;margin-bottom:8px;">' + linhaContagem(d.hoje) + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);">Esta semana</div>' +
+        '<div style="font-size:13px;">' + linhaContagem(d.semana) + '</div>' +
+      '</div>';
+    }).join("");
+    return secaoIndicador("Atividade dos ISMs (agenda)",
+      '<div class="sub" style="margin-bottom:10px;">Baseado nas reservas de agenda (Camada 1, treinamento, reunião) — não cobre trabalho fora da agenda.</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:12px;">' + corpo + '</div>');
+  }
+
+  function renderIndicadoresGraficos(root, projetos, reservas){
+    destruirChartsIndicadores();
+    root.innerHTML =
+      seletoresGraficos(projetos) +
+      secaoGraficoPorMes(projetos) +
+      secaoSlaPorItem(projetos) +
+      secaoReagendamentos(projetos) +
+      secaoAtividadeIsm(reservas);
+    // Canvas só existe no DOM depois do innerHTML acima — Chart.js precisa do elemento já montado.
+    montarChartPorMes(projetos);
+    montarChartSlaItem(projetos);
+    montarChartReagendamentos(projetos);
+    var selIsm = root.querySelector("#graficosFiltroIsmSel");
+    if (selIsm) selIsm.addEventListener("change", function(){
+      indicadoresGraficosFiltroIsm = selIsm.value;
+      renderIndicadoresGraficos(root, projetos, reservas);
+    });
+    var selItem = root.querySelector("#graficosFiltroItemSel");
+    if (selItem) selItem.addEventListener("change", function(){
+      indicadoresGraficosFiltroItem = selItem.value;
+      renderIndicadoresGraficos(root, projetos, reservas);
+    });
+  }
+
+  function renderIndicadoresResumo(content, linhasTreinamento, projetos){
     var todasIsmIndicadores = todosIsmDeProjetos(projetos);
     var filtroIsmHtml = todasIsmIndicadores.length > 1
       ? '<div style="margin-bottom:14px;"><label style="font-size:12px;color:var(--muted);margin-right:6px;">Filtrar satisfação/risco/duração por ISM</label>' +
@@ -1392,27 +1728,48 @@
       : "";
 
     var finalizados = projetosFinalizadosParaIndicadores(projetos);
-    root.innerHTML =
+    content.innerHTML =
       filtroIsmHtml +
       secaoSatisfacao(finalizados) +
       secaoRisco(finalizados) +
       secaoDuracao(finalizados) +
       secaoTreinamento(linhasTreinamento);
 
-    var selIsm = document.getElementById("indicadoresFiltroIsmSel");
+    var selIsm = content.querySelector("#indicadoresFiltroIsmSel");
     if (selIsm) selIsm.addEventListener("change", function(){
       indicadoresFiltroIsm = selIsm.value;
-      renderIndicadores(root, linhasTreinamento, projetos);
+      renderIndicadoresResumo(content, linhasTreinamento, projetos);
     });
     // Clique num card com detalhe (ver statIndicador) mostra/esconde a
     // lista de clientes daquele grupo, logo abaixo do número.
-    root.querySelectorAll("[data-toggle-detalhe]").forEach(function(card){
+    content.querySelectorAll("[data-toggle-detalhe]").forEach(function(card){
       card.addEventListener("click", function(){
         var id = card.getAttribute("data-toggle-detalhe");
-        var detalhe = root.querySelector('[data-detalhe="' + id + '"]');
+        var detalhe = content.querySelector('[data-detalhe="' + id + '"]');
         if (!detalhe) return;
         detalhe.style.display = detalhe.style.display === "none" ? "block" : "none";
       });
+    });
+  }
+
+  function renderIndicadores(root, linhasTreinamento, projetos, reservas){
+    root.innerHTML =
+      '<div class="modo-visualizacao" style="margin-bottom:14px;">' +
+        '<button type="button" id="btnIndicadoresResumo" class="' + (indicadoresSubAba === "resumo" ? "ativo" : "") + '">📋 Resumo</button>' +
+        '<button type="button" id="btnIndicadoresGraficos" class="' + (indicadoresSubAba === "graficos" ? "ativo" : "") + '">📈 Gráficos</button>' +
+      '</div>' +
+      '<div id="indicadoresSubContent"></div>';
+    var content = root.querySelector("#indicadoresSubContent");
+    if (indicadoresSubAba === "graficos") renderIndicadoresGraficos(content, projetos, reservas);
+    else renderIndicadoresResumo(content, linhasTreinamento, projetos);
+
+    root.querySelector("#btnIndicadoresResumo").addEventListener("click", function(){
+      indicadoresSubAba = "resumo";
+      renderIndicadores(root, linhasTreinamento, projetos, reservas);
+    });
+    root.querySelector("#btnIndicadoresGraficos").addEventListener("click", function(){
+      indicadoresSubAba = "graficos";
+      renderIndicadores(root, linhasTreinamento, projetos, reservas);
     });
   }
 
@@ -1648,17 +2005,33 @@
     apiGet("listar-reservas").then(function(resp){
       var nomes = {};
       (projetosCache || []).forEach(function(p){ nomes[String(p.id)] = p.cliente || "Projeto"; });
-      var reservas = (resp.reservas || []).filter(function(r){ return chaveDataSP(r.inicio) === hoje; })
-        .sort(function(a,b){ return (a.inicio || 0) - (b.inicio || 0); });
-      var itens = reservas.length ? reservas.map(function(r){
+      var reservas = (resp.reservas || []).filter(function(r){ return chaveDataSP(r.inicio) === hoje; });
+
+      // Agrupado por ISM (cada um com sua própria mini-agenda, em ordem de
+      // horário) — em vez de uma lista só misturando todo mundo, onde dava
+      // pra ler de quem era o compromisso só olhando o texto pequeno do meta.
+      var porIsm = {};
+      reservas.forEach(function(r){
+        var nomeIsm = r.ismNome || "ISM não informado";
+        (porIsm[nomeIsm] = porIsm[nomeIsm] || []).push(r);
+      });
+      var nomesIsmOrdenados = Object.keys(porIsm).sort(function(a, b){ return a.localeCompare(b, "pt-BR"); });
+
+      function appointmentHtml(r){
         var projetoId = String(r.projetoId || "");
         var projeto = nomes[projetoId] || "Projeto não encontrado";
         return '<button type="button" class="today-appointment" data-open-project="' + esc(projetoId) + '">' +
           '<span class="today-appointment-time">' + horaSP(r.inicio) + '<br><span style="font-weight:500; color:var(--muted)">' + horaSP(r.fim) + '</span></span>' +
-          '<span class="today-appointment-body"><span class="today-appointment-title">' + esc(r.titulo || "Compromisso") + '</span><span class="today-appointment-meta">' + esc(r.ismNome || "ISM não informado") + ' · ' + esc(projeto) + '</span></span>' +
+          '<span class="today-appointment-body"><span class="today-appointment-title">' + esc(r.titulo || "Compromisso") + '</span><span class="today-appointment-meta">' + esc(projeto) + '</span></span>' +
           (r.linkReuniao ? '<span class="today-appointment-link" title="Abrir reunião">↗</span>' : '') +
         '</button>';
-      }).join("") : '<div class="sidebar-loading">Nenhum compromisso registrado para hoje.</div>';
+      }
+      var itens = nomesIsmOrdenados.length
+        ? nomesIsmOrdenados.map(function(nomeIsm){
+            var doIsm = porIsm[nomeIsm].slice().sort(function(a, b){ return (a.inicio || 0) - (b.inicio || 0); });
+            return '<div class="today-agenda-ism-header">' + esc(nomeIsm) + '</div>' + doIsm.map(appointmentHtml).join("");
+          }).join("")
+        : '<div class="sidebar-loading">Nenhum compromisso registrado para hoje.</div>';
       container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
         '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' + itens + '</section>';
       container.querySelectorAll("[data-open-project]").forEach(function(btn){
