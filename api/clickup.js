@@ -3537,10 +3537,14 @@ function atividadesVirtuaisParadas(projetos, reservas) {
  * VIRTUAL, lido direto de listarReservas() (marcarComparecimentoReservaAcao
  * já existe, só nunca tinha sido lido como fila de trabalho).
  */
-function atividadesVirtuaisNaoComparecimento(reservas) {
+function atividadesVirtuaisNaoComparecimento(reservas, projetosValidosIds) {
   return reservas
     .filter((r) => statusDaDescricaoReserva(r.description) === 'nao_compareceu')
     .filter((r) => !proximaReservaIdDaDescricaoReserva(r.description))
+    // Projeto excluído -> reserva órfã, ninguém nunca vai reagendar por ela
+    // (a tela de reagendamento vive dentro do projeto) -> não é mais uma
+    // atividade de verdade, só lixo acumulado na fila.
+    .filter((r) => projetosValidosIds.has(projetoDaDescricaoReserva(r.description)))
     .map((r) => ({
       id: `nao_compareceu:${r.id}`,
       tipo: 'nao_compareceu',
@@ -3567,10 +3571,14 @@ async function listarAtividadesCsqAcao(res, sessao) {
   ]);
   const projetos = tasks.filter((t) => !t.parent);
   const nomeProjeto = new Map(projetos.map((t) => [t.id, t.name]));
+  const projetosValidosIds = new Set(projetos.map((t) => t.id));
 
   const persistidas = registradas
     .map(atividadeCsqParaFora)
     .filter((a) => a.status !== 'resolvida')
+    // Projeto excluído -> não sobra nada pra abrir/agir; a atividade em si
+    // perdeu o sentido (mesmo raciocínio do nao_compareceu órfão abaixo).
+    .filter((a) => projetosValidosIds.has(a.projetoId))
     .map((a) => ({
       ...a,
       cliente: nomeProjeto.get(a.projetoId) || '',
@@ -3579,7 +3587,7 @@ async function listarAtividadesCsqAcao(res, sessao) {
 
   const atividades = [
     ...atividadesVirtuaisParadas(projetos, reservas),
-    ...atividadesVirtuaisNaoComparecimento(reservas),
+    ...atividadesVirtuaisNaoComparecimento(reservas, projetosValidosIds),
     ...persistidas,
   ].sort((a, b) => b.prioridade - a.prioridade);
 

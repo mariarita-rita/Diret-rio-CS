@@ -2044,10 +2044,17 @@
     var resolverBtn = podeResolver
       ? '<button type="button" class="btn-flow-secondary" data-resolver-atividade="' + esc(a.id) + '" style="width:auto; padding:4px 10px; font-size:12px; margin-top:8px;">Marcar como resolvida</button>'
       : '';
+    // "não compareceu" é virtual (não tem registro próprio pra "resolver") —
+    // some sozinho quando reagendar pelo projeto; "Descartar" aqui é só um
+    // escape manual (cancela a reserva em si) pra quando isso não vai
+    // acontecer (ex: não vale mais a pena reagendar).
+    var descartarBtn = a.tipo === "nao_compareceu" && a.id && a.id.indexOf("nao_compareceu:") === 0
+      ? '<button type="button" class="btn-reset" data-descartar-reserva="' + esc(a.id.slice("nao_compareceu:".length)) + '" style="width:auto; padding:4px 10px; font-size:12px; margin-top:8px; margin-left:6px;">Descartar</button>'
+      : '';
     return '<div class="proj-card"' + (podeAbrir ? ' data-atividade-proj="' + esc(a.projetoId) + '" style="cursor:pointer;"' : '') + '>' +
       '<div class="proj-card-top"><span style="border-left:3px solid ' + info.cor + '; padding-left:6px;">' + info.emoji + ' ' + esc(info.label) + '</span><h3>' + esc(a.cliente || "—") + '</h3></div>' +
       '<div class="proj-card-meta">' + esc(atividadeDetalheTexto(a)) + '</div>' +
-      resolverBtn +
+      resolverBtn + descartarBtn +
     '</div>';
   }
 
@@ -2078,6 +2085,16 @@
           apiPost("resolver-atividade-csq", { id: btn.getAttribute("data-resolver-atividade") })
             .then(function(){ renderFilaAtividades(root); })
             .catch(function(){ showSimToast("Não deu para resolver esta atividade."); btn.disabled = false; });
+        });
+      });
+      wrap.querySelectorAll("[data-descartar-reserva]").forEach(function(btn){
+        btn.addEventListener("click", function(e){
+          e.stopPropagation();
+          if (!window.confirm("Descartar este registro de não comparecimento? Não é possível desfazer.")) return;
+          btn.disabled = true;
+          apiPost("cancelar-reserva", { id: btn.getAttribute("data-descartar-reserva") })
+            .then(function(){ renderFilaAtividades(root); })
+            .catch(function(){ showSimToast("Não deu para descartar."); btn.disabled = false; });
         });
       });
     }).catch(function(){
