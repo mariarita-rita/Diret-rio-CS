@@ -93,6 +93,17 @@
 //        "pessoal"|"compartilhada", destinatarios[], assunto, corpo } -> manda
 //        e-mail de verdade via Gmail (conexao ja feita) e registra como
 //        comentario no projeto
+//   GET  /api/clickup?action=listar-atividades-csq -> fila unificada da
+//        Daiane/Aline (nivel "csq"): tipos virtuais calculados na hora
+//        (projeto parado ha >=3 dias uteis sem interacao nem agendamento
+//        futuro, reserva sem comparecimento) + Atividades persistidas
+//        (mencao/churn/renovacao) nao resolvidas. So nivel csq/gestao.
+//   POST /api/clickup?action=criar-atividade-csq { projetoId, tipo:
+//        "churn"|"renovacao", alvoId, observacao? } -> registra diagnostico
+//        de cancelamento ou handoff de renovacao pro CSM. So nivel csq/gestao.
+//   POST /api/clickup?action=resolver-atividade-csq { id, resolucao? } ->
+//        fecha uma Atividade persistida (nunca mexe no projeto de
+//        implantacao). So nivel csq/gestao.
 //
 // Toda requisicao exige cookie de sessao valido. As regras de nivel sao
 // aplicadas aqui, no servidor:
@@ -113,6 +124,7 @@ import {
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
   alertasDaTask,
+  alvoDaDescricaoAtividade,
   anexarArquivoTask,
   assinarTokenProjeto,
   assuntoDoModelo,
@@ -123,6 +135,7 @@ import {
   CONTA_EMAIL_COMPARTILHADA,
   contextoSemEstado,
   corpoDoModelo,
+  criarAtividadeCsq,
   criarClienteCarteira,
   atualizarComentario,
   criarComentario,
@@ -134,7 +147,9 @@ import {
   convidadosDaDescricaoReserva,
   criptografarSegredo,
   csmDaDescricaoImplantacao,
+  CSM_OPCOES,
   descriptografarSegredo,
+  diasUteisEntre,
   EQUIPE_OPCAO,
   ErroConfigClickUp,
   ErroUpstream,
@@ -150,9 +165,11 @@ import {
   lerClienteFresco,
   limparCampo,
   linkDaDescricaoReserva,
+  LISTA_ATIVIDADES_CSQ,
   LISTA_CARTEIRA,
   LISTA_IMPLANTACOES_WAIPE,
   LISTA_RESERVAS_AGENDA,
+  listarAtividadesCsq,
   listarComentarios,
   listarImplantacoes,
   listarModelosMensagem,
@@ -164,15 +181,22 @@ import {
   obterTaskComSubtasks,
   obterTokenEmail,
   obterTokenGoogle,
+  origemDaDescricaoAtividade,
   parseWaipeState,
+  PESSOAS_MENCIONAVEIS,
+  projetoDaDescricaoAtividade,
   projetoDaDescricaoReserva,
   proximaReservaIdDaDescricaoReserva,
   reagendadoPorDaDescricaoReserva,
   refletirEscrita,
+  resolucaoDaDescricaoAtividade,
+  responsavelDaDescricaoReserva,
   soDigitos,
+  statusDaDescricaoAtividade,
   statusDaDescricaoReserva,
   STATUS_MES_ATUAL,
   stringifyWaipeState,
+  tipoDaDescricaoAtividade,
 } from './_lib/clickup.js';
 import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, listarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
@@ -237,6 +261,19 @@ const ACOES_PROIBIDAS_ISM = new Set([
   'excluir-implantacao', 'excluir-comentario-implantacao',
 ]);
 
+// CSM não tem `ismId` próprio na sessão (só o nome de carteira, `csm`) — sem
+// como restringir auto-escopo nessa ação, por isso ela fica de fora pra
+// esse nível (ver conectarAgendaGoogleAcao: CSM ainda funciona sem Google
+// conectado, só sem Meet automático).
+const ACOES_PROIBIDAS_CSM = new Set(['conectar-agenda-google']);
+
+// Fila CSQ (Atividades) — só quem coordena entre fluxos (Daiane/Aline) e
+// Gestão. ISM/CSM continuam vendo/agindo nos próprios projetos normalmente,
+// só não têm a fila agregada.
+const ACOES_SOMENTE_CSQ = new Set([
+  'listar-atividades-csq', 'criar-atividade-csq', 'resolver-atividade-csq',
+]);
+
 export default async function handler(req, res) {
   // req.query, como req.body, e getter lazy no runtime da Vercel: fica dentro
   // do try junto com todo o resto.
@@ -259,8 +296,14 @@ export default async function handler(req, res) {
     // financeiros) nem do pipeline de proposta (isso e trabalho de CSM/gestao).
     // Bloqueado aqui, ANTES de rotear pra funcao — nao depende de cada acao
     // lembrar de checar sozinha.
-    if (sessao.nivel === 'ism' && ACOES_PROIBIDAS_ISM.has(acao)) {
+    if ((sessao.nivel === 'ism' || sessao.nivel === 'csq') && ACOES_PROIBIDAS_ISM.has(acao)) {
       return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
+    }
+    if (sessao.nivel === 'csm' && ACOES_PROIBIDAS_CSM.has(acao)) {
+      return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
+    }
+    if (ACOES_SOMENTE_CSQ.has(acao) && sessao.nivel !== 'csq' && sessao.nivel !== 'gestao') {
+      return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso à fila de Atividades.');
     }
 
     if (req.method === 'GET' && acao === 'carteira') return await lerCarteira(res, sessao);
@@ -341,6 +384,9 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'enviar-email-implantacao') {
       return await enviarEmailImplantacaoAcao(req, res, sessao);
     }
+    if (req.method === 'GET' && acao === 'listar-atividades-csq') return await listarAtividadesCsqAcao(res, sessao);
+    if (req.method === 'POST' && acao === 'criar-atividade-csq') return await criarAtividadeManualCsqAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'resolver-atividade-csq') return await resolverAtividadeCsqAcao(req, res, sessao);
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
@@ -358,6 +404,7 @@ export default async function handler(req, res) {
       'historico-conversa-umbler', 'listar-modelos-mensagem', 'salvar-modelo-mensagem',
       'marcar-conversa-vista', 'conectar-email-google', 'status-email-google',
       'enviar-email-implantacao',
+      'listar-atividades-csq', 'criar-atividade-csq', 'resolver-atividade-csq',
     ];
     if (!ACOES_VALIDAS.includes(acao)) {
       return erro(res, 400, 'acao_invalida', 'Ação inválida.');
@@ -856,6 +903,15 @@ function sanearChecks(v) {
 
 const ISM_IDS_VALIDOS = new Set(ISM_OPCOES.map((i) => i.id));
 
+/**
+ * Allowlist de agenda generalizada: quem pode ser responsável por uma reserva
+ * (ISM ou CSM) — usada onde antes só ISM_IDS_VALIDOS valia (criar-reserva,
+ * disponibilidade-ism, conectar-agenda-google). O parâmetro continua se
+ * chamando `ismId` nesses endpoints (o ClickUp não diferencia ISM de CSM em
+ * `assignees`, não vale renomear só por estética).
+ */
+const RESPONSAVEL_IDS_VALIDOS = new Set([...ISM_OPCOES, ...CSM_OPCOES].map((o) => o.id));
+
 /** Ids de ISM saneados contra a allowlist ISM_OPCOES — o resto é descartado, nunca 500. */
 function sanearAssignees(ids) {
   if (!Array.isArray(ids)) return [];
@@ -868,11 +924,17 @@ function sanearAssignees(ids) {
   return out;
 }
 
-/** Nomes de ISM a partir do array `assignees` que o ClickUp devolve na task. */
+/** Nomes de ISM/CSM a partir do array `assignees` que o ClickUp devolve na task. */
 function nomesIsm(assignees) {
   if (!Array.isArray(assignees)) return [];
-  const porId = new Map(ISM_OPCOES.map((i) => [i.id, i.nome]));
+  const porId = new Map([...ISM_OPCOES, ...CSM_OPCOES].map((i) => [i.id, i.nome]));
   return assignees.map((a) => porId.get(Number(a?.id))).filter(Boolean);
+}
+
+/** Nome de ISM/CSM a partir do id resolvido (ver responsavelIdDaReserva) — '' se não achar. */
+function nomeResponsavel(id) {
+  const porId = new Map([...ISM_OPCOES, ...CSM_OPCOES].map((i) => [i.id, i.nome]));
+  return porId.get(Number(id)) || '';
 }
 
 const DIAGNOSTICO_RESPOSTAS_VALIDAS = new Set(['sim', 'nao', 'andamento']);
@@ -1362,7 +1424,11 @@ async function listarImplantacoesAcao(res, sessao) {
     const estado = parseWaipeState(t.description);
     return {
       id: t.id,
-      cliente: t.name,
+      // Mesma preferência de obterImplantacaoAcao: "cliente" salvo no estado,
+      // não o nome da task (que acumula sufixo "— Proposta — <data>" a cada
+      // save) — senão a lista "Carregar proposta salva" e o dashboard mostram
+      // o nome já sujo.
+      cliente: texto(estado.cliente, 120) || t.name,
       status: t.status?.status || '',
       etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
       csm: csmDaDescricaoImplantacao(t.description),
@@ -1381,6 +1447,11 @@ async function listarImplantacoesAcao(res, sessao) {
       faseProjetoManual: FASES_ITEM_VALIDAS.has(estado.faseProjetoManual) ? estado.faseProjetoManual : null,
       urgencia: sanearUrgencia(estado.urgencia),
       dataCriacao: Number.isFinite(Number(t.date_created)) ? Number(t.date_created) : null,
+      // Última atualização nativa da task — usada pelo gatilho de "projeto
+      // parado" da fila CSQ (ver atividadesVirtuaisParadas), não gravada
+      // aqui, só exposta pra listagem em massa dar pra calcular sem 1
+      // chamada por projeto.
+      dataAtualizacao: Number.isFinite(Number(t.date_updated)) ? Number(t.date_updated) : null,
       // Datas reais (ver criarProjetoImplantacao/atualizarImplantacaoAcao) e
       // o relatório de finalização — precisam vir na listagem em massa (não
       // só na tela de 1 projeto aberto) pra dar pra agregar num dashboard de
@@ -1495,7 +1566,12 @@ async function obterImplantacaoAcao(req, res, sessao) {
   return res.status(200).json({
     projeto: {
       id: pai.id,
-      cliente: pai.name,
+      // Preferir o "cliente" salvo no estado (ver salvarPropostaImplantacaoAcao)
+      // — o nome da task ganha um sufixo "— Proposta — <data>" a cada save,
+      // então usá-lo aqui faria esse sufixo (às vezes mais de um, acumulado)
+      // ir parar de novo no campo "Nome do cliente" ao reabrir pra editar.
+      // Cai pro nome da task só pra projetos salvos antes dessa mudança.
+      cliente: texto(estadoProjeto.cliente, 120) || pai.name,
       status: pai.status?.status || '',
       csm,
       ism: nomesIsm(pai.assignees),
@@ -2414,7 +2490,11 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
   const dadosCliente = sanearDadosCliente(corpo);
 
   const novoEstado = {
-    etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe,
+    // "cliente" salvo à parte do nome da task (que ganha um sufixo de data a
+    // cada "salvar proposta") — sem isso, reabrir a proposta pra editar
+    // preenchia "Nome do cliente" com o nome da task já sufixado, e o
+    // próximo save colava mais um sufixo em cima (ver obterImplantacaoAcao).
+    cliente, etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe,
     secoesPropostaSelecionadas, secoesPropostaGeradas, ...dadosCliente,
   };
   const nomeTask = `${cliente} — Proposta — ${dataRotuloHoje()}`;
@@ -2543,6 +2623,10 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
   await criarSubtasksSolucao(projeto.id, outrasSolucoesPropostas);
 
   const novoEstadoProjeto = {
+    // Mantém o "cliente" salvo (ver salvarPropostaImplantacaoAcao) na
+    // promoção pra projeto — senão obterImplantacaoAcao cai de volta pro
+    // nome da task (já com sufixo de data) assim que a proposta é confirmada.
+    cliente: texto(estadoAtual.cliente, 120) || tarefa.name,
     etapaAtual: 'escopo',
     prioridade: [],
     agenteAtualId: null,
@@ -2613,9 +2697,13 @@ function sanearListaEmails(lista) {
  * preservar um campo ao reescrever a description inteira (foi assim que
  * convidados quase se perdeu num reescrita anterior de atualizar-reserva).
  */
-function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId }) {
+function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId, responsavelId }) {
   return [
     projetoId ? `**Projeto:** ${projetoId}` : null,
+    // Ver responsavelIdDaReserva: gravado sempre, não só como fallback —
+    // barato de escrever, e é a única fonte confiável quando o assignee é
+    // descartado em silêncio pelo ClickUp.
+    responsavelId ? `**Responsavel:** ${responsavelId}` : null,
     linkReuniao ? `**Link:** ${linkReuniao}` : null,
     convidados && convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
     status && status !== 'agendado' ? `**Status:** ${status}` : null,
@@ -2624,12 +2712,26 @@ function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, re
   ].filter(Boolean).join('\n\n');
 }
 
+/**
+ * Id responsável pela reserva: assignee nativo do ClickUp quando presente,
+ * senão o id gravado em **Responsavel:** (ver linhasDescricaoReserva) — usa
+ * SEMPRE esta função em vez de ler `t.assignees` direto, pro fallback valer
+ * em todo lugar (conflito de horário, escopo por sessão, disponibilidade,
+ * compromissos do dia, exibição).
+ */
+function responsavelIdDaReserva(t) {
+  return Number(t.assignees?.[0]?.id) || Number(responsavelDaDescricaoReserva(t.description)) || null;
+}
+
 function reservaParaFora(t) {
   return {
     id: t.id,
     titulo: t.name,
-    ismId: Number(t.assignees?.[0]?.id) || null,
-    ismNome: nomesIsm(t.assignees)[0] || '',
+    ismId: responsavelIdDaReserva(t),
+    ismNome: nomeResponsavel(responsavelIdDaReserva(t)),
+    // 'csm' quando o responsável é um CSM (agenda sincronizada pra fila CSQ —
+    // ver criarReservaAcao/RESPONSAVEL_IDS_VALIDOS), 'ism' senão.
+    papel: CSM_OPCOES.some((c) => c.id === responsavelIdDaReserva(t)) ? 'csm' : 'ism',
     inicio: Number(t.start_date) || null,
     fim: Number(t.due_date) || null,
     projetoId: projetoDaDescricaoReserva(t.description) || null,
@@ -2639,6 +2741,67 @@ function reservaParaFora(t) {
     reagendadoPor: reagendadoPorDaDescricaoReserva(t.description) || null,
     proximaReservaId: proximaReservaIdDaDescricaoReserva(t.description) || null,
   };
+}
+
+/**
+ * Monta as linhas `**Campo:**` da description de uma Atividade CSQ — mesma
+ * técnica de linhasDescricaoReserva. `status` omitido/'pendente' não grava
+ * linha (ausência = pendente, mesmo padrão de statusDaDescricaoReserva).
+ */
+function linhasDescricaoAtividade({ projetoId, tipo, origem, alvo, status, resolucao }) {
+  return [
+    projetoId ? `**Projeto:** ${projetoId}` : null,
+    tipo ? `**Tipo:** ${tipo}` : null,
+    origem ? `**Origem:** ${origem}` : null,
+    alvo ? `**Alvo:** ${alvo}` : null,
+    status && status !== 'pendente' ? `**Status:** ${status}` : null,
+    resolucao ? `**Resolucao:** ${resolucao}` : null,
+  ].filter(Boolean).join('\n\n');
+}
+
+/**
+ * O `assignees` nativo do ClickUp às vezes é descartado em silêncio na
+ * criação quando a pessoa não tem acesso de guest configurado NESSA lista
+ * específica (mesmo comportamento já documentado em LISTA_GOOGLE_TOKENS/
+ * tokenDoIsm, em _lib/clickup.js) — por isso o alvo "de verdade" é lido do
+ * texto salvo em `**Alvo:**` (sempre começa pelo nome da pessoa), não do
+ * assignee da task.
+ */
+function assigneeIdDaAtividade(t, alvo) {
+  const doAssignee = Number(t.assignees?.[0]?.id) || null;
+  if (doAssignee) return doAssignee;
+  const pessoa = PESSOAS_MENCIONAVEIS.find((p) => alvo === p.nome || alvo.startsWith(`${p.nome} —`));
+  return pessoa?.id || null;
+}
+
+function atividadeCsqParaFora(t) {
+  const alvo = alvoDaDescricaoAtividade(t.description) || '';
+  return {
+    id: t.id,
+    titulo: texto(t.name, 200),
+    assigneeId: assigneeIdDaAtividade(t, alvo),
+    projetoId: projetoDaDescricaoAtividade(t.description) || null,
+    tipo: tipoDaDescricaoAtividade(t.description) || null,
+    origem: origemDaDescricaoAtividade(t.description) || null,
+    alvo,
+    status: statusDaDescricaoAtividade(t.description),
+    resolucao: resolucaoDaDescricaoAtividade(t.description) || '',
+    criadaEm: Number(t.date_created) || null,
+  };
+}
+
+/**
+ * Quem foi mencionado por "@Nome" no texto de um comentário — allowlist
+ * fechada (PESSOAS_MENCIONAVEIS), nunca texto livre. `\b` depois do nome
+ * evita casar um prefixo (ex: "@Daianepoderia" não casa "Daiane").
+ */
+function mencoesNoTexto(texto) {
+  const encontradas = new Map();
+  for (const p of PESSOAS_MENCIONAVEIS) {
+    const re = new RegExp(`@${p.nome}\\b`, 'i');
+    if (re.test(texto)) encontradas.set(p.id, p);
+  }
+  return [...encontradas.values()];
 }
 
 async function listarReservasAcao(res, sessao) {
@@ -2662,7 +2825,7 @@ async function listarReservasAcao(res, sessao) {
 async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados }) {
   const existentes = await listarReservas();
   const conflito = existentes
-    .filter((t) => Number(t.assignees?.[0]?.id) === ismId)
+    .filter((t) => responsavelIdDaReserva(t) === ismId)
     .find((t) => Number(t.start_date) < fim && Number(t.due_date) > inicio);
   if (conflito) {
     return {
@@ -2721,8 +2884,8 @@ async function criarReservaAcao(req, res, sessao) {
   if (!titulo) return erro(res, 400, 'titulo_invalido', 'Título da reserva é obrigatório.');
 
   const ismId = Number(corpo.ismId);
-  if (!ISM_IDS_VALIDOS.has(ismId)) {
-    return erro(res, 400, 'ism_invalido', 'Selecione um ISM válido.');
+  if (!RESPONSAVEL_IDS_VALIDOS.has(ismId)) {
+    return erro(res, 400, 'ism_invalido', 'Selecione um responsável válido.');
   }
   if (sessao.nivel === 'ism' && sessao.ismId && Number(sessao.ismId) !== ismId) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode registrar reserva na própria agenda.');
@@ -2761,7 +2924,7 @@ async function criarReservaAcao(req, res, sessao) {
     due_date: fim,
     due_date_time: true,
     assignees: [ismId],
-    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados }),
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados, responsavelId: ismId }),
   });
   return res.status(200).json({ ok: true, id: nova.id, linkReuniao, convidados });
 }
@@ -2788,7 +2951,7 @@ async function atualizarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
   }
 
@@ -2808,7 +2971,10 @@ async function atualizarReservaAcao(req, res, sessao) {
   const proximaReservaId = proximaReservaIdDaDescricaoReserva(tarefa.description);
 
   await atualizarTask(corpo.id, {
-    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId }),
+    markdown_description: linhasDescricaoReserva({
+      projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId,
+      responsavelId: responsavelIdDaReserva(tarefa),
+    }),
   });
   return res.status(200).json({ ok: true });
 }
@@ -2839,7 +3005,7 @@ async function marcarComparecimentoReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
   }
 
@@ -2849,6 +3015,7 @@ async function marcarComparecimentoReservaAcao(req, res, sessao) {
       linkReuniao: linkDaDescricaoReserva(tarefa.description),
       convidados: convidadosDaDescricaoReserva(tarefa.description),
       status,
+      responsavelId: responsavelIdDaReserva(tarefa),
     }),
   });
   return res.status(200).json({ ok: true, status });
@@ -2896,7 +3063,7 @@ async function reagendarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode reagendar reservas da própria agenda.');
   }
   const statusAtual = statusDaDescricaoReserva(tarefa.description);
@@ -2904,7 +3071,7 @@ async function reagendarReservaAcao(req, res, sessao) {
     return erro(res, 409, 'reserva_ja_resolvida', 'Esta reserva já foi marcada como comparecida/não comparecida/reagendada.');
   }
 
-  const ismId = Number(tarefa.assignees?.[0]?.id);
+  const ismId = responsavelIdDaReserva(tarefa);
   const titulo = texto(tarefa.name, 200);
   const projetoId = projetoDaDescricaoReserva(tarefa.description);
   const convidados = convidadosDaDescricaoReserva(tarefa.description);
@@ -2922,7 +3089,7 @@ async function reagendarReservaAcao(req, res, sessao) {
     due_date: novoFim,
     due_date_time: true,
     assignees: [ismId],
-    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao: resultado.linkReuniao, convidados }),
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao: resultado.linkReuniao, convidados, responsavelId: ismId }),
   });
 
   await atualizarTask(corpo.id, {
@@ -2932,6 +3099,7 @@ async function reagendarReservaAcao(req, res, sessao) {
       convidados,
       status: 'reagendado',
       reagendadoPor,
+      responsavelId: ismId,
       proximaReservaId: nova.id,
     }),
   });
@@ -2953,8 +3121,8 @@ const DISPONIBILIDADE_JANELA_MAX_MS = 60 * 24 * 60 * 60 * 1000; // 60 dias — t
 async function disponibilidadeIsmAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   const ismId = Number(req.query?.ismId);
-  if (!ISM_IDS_VALIDOS.has(ismId)) {
-    return erro(res, 400, 'ism_invalido', 'Selecione um ISM válido.');
+  if (!RESPONSAVEL_IDS_VALIDOS.has(ismId)) {
+    return erro(res, 400, 'ism_invalido', 'Selecione um responsável válido.');
   }
   const inicio = epocaOuNula(req.query?.inicio);
   const fim = epocaOuNula(req.query?.fim);
@@ -2967,7 +3135,7 @@ async function disponibilidadeIsmAcao(req, res, sessao) {
 
   const reservas = await listarReservas();
   const ocupados = reservas
-    .filter((t) => Number(t.assignees?.[0]?.id) === ismId)
+    .filter((t) => responsavelIdDaReserva(t) === ismId)
     .filter((t) => Number(t.start_date) < fim && Number(t.due_date) > inicio)
     .map((t) => ({ inicio: Number(t.start_date) || null, fim: Number(t.due_date) || null, titulo: texto(t.name, 200) }));
 
@@ -3027,8 +3195,8 @@ async function compromissosHojeAcao(res) {
       return Number.isFinite(ini) && ini >= inicio && ini <= fim;
     })
     .map((t) => ({
-      ismId: Number(t.assignees?.[0]?.id) || null,
-      ismNome: nomesIsm(t.assignees)[0] || 'ISM não informado',
+      ismId: responsavelIdDaReserva(t),
+      ismNome: nomeResponsavel(responsavelIdDaReserva(t)) || 'ISM não informado',
       titulo: texto(t.name, 200),
       inicio: Number(t.start_date) || null,
       fim: Number(t.due_date) || null,
@@ -3038,7 +3206,7 @@ async function compromissosHojeAcao(res) {
     }));
 
   const compromissos = reservas.slice();
-  await Promise.all(ISM_OPCOES.map(async (ism) => {
+  await Promise.all([...ISM_OPCOES, ...CSM_OPCOES].map(async (ism) => {
     const tokenGoogle = await obterTokenGoogle(ism.id);
     if (!tokenGoogle) return;
     try {
@@ -3098,7 +3266,7 @@ async function cancelarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && Number(tarefa.assignees?.[0]?.id) !== Number(sessao.ismId)) {
+  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
     return erro(res, 403, 'fora_do_escopo', 'Você só pode cancelar reservas da própria agenda.');
   }
 
@@ -3276,7 +3444,7 @@ async function vincularAgendamentoGoogleAcao(req, res, sessao) {
 async function conectarAgendaGoogleAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   const ismId = Number(req.query?.ismId);
-  if (!ISM_IDS_VALIDOS.has(ismId)) {
+  if (!RESPONSAVEL_IDS_VALIDOS.has(ismId)) {
     return erro(res, 400, 'ism_invalido', 'ismId inválido.');
   }
   // Um ISM so conecta a PROPRIA agenda — nunca a de outro (o ismId da sessao
@@ -3301,10 +3469,194 @@ async function conectarAgendaGoogleAcao(req, res, sessao) {
 async function statusGoogleAgendaAcao(res) {
   res.setHeader('Cache-Control', 'no-store');
   const status = {};
-  await Promise.all(ISM_OPCOES.map(async (o) => {
+  await Promise.all([...ISM_OPCOES, ...CSM_OPCOES].map(async (o) => {
     status[o.id] = !!(await obterTokenGoogle(o.id));
   }));
   return res.status(200).json({ status });
+}
+
+// ── Fila CSQ (Atividades) — Daiane/Aline ───────────────────────────────
+
+const DIAS_UTEIS_PARADO_MIN = 3;
+
+/**
+ * Projetos sem interação há >=3 dias úteis (seg-sex, ver diasUteisEntre) E
+ * sem nenhuma reserva futura agendada/reagendada — tipo VIRTUAL, nada
+ * gravado (compatível com "o projeto nunca sai do painel de implantação").
+ * Projeto já fechado (Closed/concluído) não entra: parado não faz sentido
+ * pra algo que já terminou.
+ */
+function atividadesVirtuaisParadas(projetos, reservas) {
+  const agora = Date.now();
+  return projetos
+    .filter((t) => t.status?.status !== 'Closed' && t.status?.status !== 'concluído')
+    // Etapa "proposta" é pré-implantação (CSM/simulador ainda fechando com o
+    // cliente) — o CSQ não tem nenhuma interação esperada nesse tipo de
+    // registro ainda, então não deve entrar na fila como "parado".
+    .filter((t) => parseWaipeState(t.description).etapaAtual !== 'proposta')
+    .map((t) => {
+      const diasUteis = diasUteisEntre(Number(t.date_updated) || 0, agora);
+      if (diasUteis < DIAS_UTEIS_PARADO_MIN) return null;
+      const temAgendamentoFuturo = reservas.some((r) =>
+        projetoDaDescricaoReserva(r.description) === t.id &&
+        ['agendado', 'reagendado'].includes(statusDaDescricaoReserva(r.description)) &&
+        Number(r.start_date) > agora);
+      if (temAgendamentoFuturo) return null;
+      return {
+        id: `parado:${t.id}`,
+        tipo: 'projeto_parado',
+        projetoId: t.id,
+        cliente: t.name,
+        diasUteis,
+        prioridade: 100 + diasUteis,
+      };
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Reservas marcadas "não compareceu" sem reagendamento seguinte — tipo
+ * VIRTUAL, lido direto de listarReservas() (marcarComparecimentoReservaAcao
+ * já existe, só nunca tinha sido lido como fila de trabalho).
+ */
+function atividadesVirtuaisNaoComparecimento(reservas) {
+  return reservas
+    .filter((r) => statusDaDescricaoReserva(r.description) === 'nao_compareceu')
+    .filter((r) => !proximaReservaIdDaDescricaoReserva(r.description))
+    .map((r) => ({
+      id: `nao_compareceu:${r.id}`,
+      tipo: 'nao_compareceu',
+      projetoId: projetoDaDescricaoReserva(r.description) || null,
+      cliente: texto(r.name, 200),
+      prioridade: 90,
+    }));
+}
+
+const PRIORIDADE_ATIVIDADE_PERSISTIDA = { churn: 95, mencao: 85, renovacao: 75 };
+
+/**
+ * GET ?action=listar-atividades-csq — fila unificada da Daiane/Aline: tipos
+ * virtuais calculados na hora (sem cron — as duas chamadas de base já são
+ * "no-store") + Atividades persistidas não resolvidas. Só nível csq/gestao
+ * (ver ACOES_SOMENTE_CSQ).
+ */
+async function listarAtividadesCsqAcao(res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const [tasks, reservas, registradas] = await Promise.all([
+    listarImplantacoes(),
+    listarReservas(),
+    listarAtividadesCsq(),
+  ]);
+  const projetos = tasks.filter((t) => !t.parent);
+  const nomeProjeto = new Map(projetos.map((t) => [t.id, t.name]));
+
+  const persistidas = registradas
+    .map(atividadeCsqParaFora)
+    .filter((a) => a.status !== 'resolvida')
+    .map((a) => ({
+      ...a,
+      cliente: nomeProjeto.get(a.projetoId) || '',
+      prioridade: PRIORIDADE_ATIVIDADE_PERSISTIDA[a.tipo] || 60,
+    }));
+
+  const atividades = [
+    ...atividadesVirtuaisParadas(projetos, reservas),
+    ...atividadesVirtuaisNaoComparecimento(reservas),
+    ...persistidas,
+  ].sort((a, b) => b.prioridade - a.prioridade);
+
+  return res.status(200).json({ atividades });
+}
+
+/**
+ * POST ?action=criar-atividade-csq { projetoId, tipo: "churn"|"renovacao",
+ * alvoId, observacao? } -> registra diagnóstico de cancelamento ou handoff
+ * de renovação pro CSM. Entrada sempre MANUAL (webhook do Moskit continua
+ * pausado, não é tocado por isso) — vira uma Atividade persistida, o
+ * projeto de implantação nunca é alterado por essa ação.
+ */
+async function criarAtividadeManualCsqAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.projetoId)) {
+    return erro(res, 400, 'task_invalida', 'projetoId inválido.');
+  }
+  const tipo = corpo.tipo === 'churn' || corpo.tipo === 'renovacao' ? corpo.tipo : null;
+  if (!tipo) {
+    return erro(res, 400, 'tipo_invalido', 'tipo precisa ser "churn" ou "renovacao".');
+  }
+  const alvoId = Number(corpo.alvoId);
+  const pessoaAlvo = PESSOAS_MENCIONAVEIS.find((p) => p.id === alvoId);
+  if (!pessoaAlvo) {
+    return erro(res, 400, 'alvo_invalido', 'Selecione um responsável válido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.projetoId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+
+  const observacao = texto(corpo.observacao, 500);
+  const nova = await criarAtividadeCsq({
+    name: `${tipo === 'churn' ? 'Churn' : 'Renovação'}: ${texto(resolvido.projeto.name, 120)}`,
+    assignees: [alvoId],
+    markdown_description: linhasDescricaoAtividade({
+      projetoId: resolvido.projeto.id,
+      tipo,
+      alvo: [pessoaAlvo.nome, observacao].filter(Boolean).join(' — '),
+    }),
+  });
+  return res.status(200).json({ ok: true, id: nova.id });
+}
+
+/**
+ * POST ?action=resolver-atividade-csq { id, resolucao? } -> fecha uma
+ * Atividade persistida (mencao/churn/renovacao). Só reescreve a task em
+ * LISTA_ATIVIDADES_CSQ — nunca toca no projeto de implantação.
+ */
+async function resolverAtividadeCsqAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.id)) {
+    return erro(res, 400, 'task_invalida', 'id inválido.');
+  }
+
+  const tarefa = await obterTask(corpo.id);
+  if (!tarefa || String(tarefa.list?.id || '') !== LISTA_ATIVIDADES_CSQ) {
+    return erro(res, 404, 'nao_encontrado', 'Atividade não encontrada.');
+  }
+
+  await atualizarTask(corpo.id, {
+    markdown_description: linhasDescricaoAtividade({
+      projetoId: projetoDaDescricaoAtividade(tarefa.description),
+      tipo: tipoDaDescricaoAtividade(tarefa.description),
+      origem: origemDaDescricaoAtividade(tarefa.description),
+      alvo: alvoDaDescricaoAtividade(tarefa.description),
+      status: 'resolvida',
+      resolucao: texto(corpo.resolucao, 500),
+    }),
+  });
+  return res.status(200).json({ ok: true });
 }
 
 /**
@@ -3566,7 +3918,25 @@ async function comentarImplantacaoAcao(req, res, sessao) {
     textoFinal = [comentario, anexado.url].filter(Boolean).join('\n');
   }
 
-  await criarComentario(corpo.taskId, textoFinal);
+  const comentarioSalvo = await criarComentario(corpo.taskId, textoFinal);
+
+  // "@Nome" no texto vira uma Atividade CSQ pra quem foi mencionado — não
+  // bloqueia o comentário se falhar (o comentário em si já foi salvo).
+  const mencoes = comentario ? mencoesNoTexto(comentario) : [];
+  if (mencoes.length) {
+    const nomeProjeto = texto(resolvido.projeto.name, 120);
+    await Promise.all(mencoes.map((pessoa) => criarAtividadeCsq({
+      name: `Menção de ${sessao.nome || 'alguém'}: ${nomeProjeto}`,
+      assignees: [pessoa.id],
+      markdown_description: linhasDescricaoAtividade({
+        projetoId: resolvido.projeto.id,
+        tipo: 'mencao',
+        origem: comentarioSalvo?.id ? String(comentarioSalvo.id) : '',
+        alvo: pessoa.nome,
+      }),
+    }))).catch((e) => console.error('[csq] falha ao criar atividade de mencao:', e));
+  }
+
   return res.status(200).json({ ok: true });
 }
 

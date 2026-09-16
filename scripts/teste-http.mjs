@@ -54,6 +54,7 @@ const auth = await import(authUrl);
 
 const stubClickup = `
   export const CAMPOS_ESCRITA = {};
+  export const LISTA_CARTEIRA = '901327787926';
   export const EQUIPE_OPCAO = 'a9832e95-4c6b-4b53-834f-cebb5000a188';
   export const STATUS_MES_ATUAL = 'mês atual';
   export class ErroConfigClickUp extends Error {}
@@ -94,6 +95,7 @@ const stubClickup = `
   export function statusDaDescricaoReserva() { return 'agendado'; }
   export function reagendadoPorDaDescricaoReserva() { return ''; }
   export function proximaReservaIdDaDescricaoReserva() { return ''; }
+  export function responsavelDaDescricaoReserva() { return ''; }
   export function soDigitos(v) { return String(v || '').replace(/\\D/g, ''); }
   export function cnpjDoAgendamentoGoogle() { return null; }
   export async function obterTokenGoogle() { return null; }
@@ -122,6 +124,37 @@ const stubClickup = `
     var m = /^stub-cifrado:(.*)$/.exec(String(valor || ''));
     return m ? m[1] : '';
   }
+  export const CAMPO_ALERTAS = 'stub-campo-alertas';
+  export function alertasDaTask() { return { alertas: [], alertasIds: [] }; }
+  export async function espelharAlertas() { return false; }
+  export async function excluirComentario() { return {}; }
+  export async function atualizarComentario() { return {}; }
+  export const CSM_OPCOES = [
+    { id: 99916966, nome: 'Gian Luca' },
+    { id: 118095183, nome: 'Guilherme Camargo' },
+    { id: 118095186, nome: 'Lucineia Felix' },
+    { id: 118095192, nome: 'Patricia Carvalho' },
+  ];
+  export const PESSOAS_MENCIONAVEIS = [
+    { id: 118033982, nome: 'Daiane' },
+    { id: 48749540, nome: 'Aline' },
+    { id: 118125102, nome: 'Bruno Vaz' },
+    { id: 48933858, nome: 'Erica Fernanda' },
+  ];
+  export const LISTA_ATIVIDADES_CSQ = '901329086459';
+  export async function criarAtividadeCsq() { return { id: 'stub-atividade' }; }
+  export async function listarAtividadesCsq() { return []; }
+  export function projetoDaDescricaoAtividade() { return ''; }
+  export function tipoDaDescricaoAtividade() { return ''; }
+  export function origemDaDescricaoAtividade() { return ''; }
+  export function alvoDaDescricaoAtividade() { return ''; }
+  export function statusDaDescricaoAtividade() { return 'pendente'; }
+  export function resolucaoDaDescricaoAtividade() { return ''; }
+  export function diasUteisEntre(inicioMs, fimMs) {
+    var inicio = Number(inicioMs), fim = Number(fimMs);
+    if (!Number.isFinite(inicio) || !Number.isFinite(fim) || fim <= inicio) return 0;
+    return Math.floor((fim - inicio) / (24 * 60 * 60 * 1000));
+  }
 `;
 const clickupLibUrl = dataUrl(stubClickup);
 
@@ -135,6 +168,7 @@ const stubGoogle = `
   export async function trocarCodigoPorToken() { return { access_token: 'stub', refresh_token: 'stub' }; }
   export async function renovarAccessToken() { return 'stub-access-token'; }
   export async function consultarFreeBusy() { return null; }
+  export async function listarFreeBusy() { return []; }
   export async function criarEventoComMeet() { return null; }
   export async function listarEventos() { return []; }
   export async function obterEmailConectado() { return 'stub@example.com'; }
@@ -3266,10 +3300,12 @@ console.log('\n[42] Nível "ism": login, sem dados financeiros, só os próprios
   const vincularAlheio = await chamarPost('vincular-agendamento-google', { projetoId: 'tProjBruno', ismId: ERICA, googleEventId: 'evt-x', inicio: 1, fim: 2 });
   checar('ism: vincular-agendamento-google pra outro ISM -> 403', [vincularAlheio.code, vincularAlheio.corpo.code], [403, 'fora_do_escopo']);
 
-  // "ism" auxiliar (Daiane/Aline): ismId null -> sem projeto/calendario proprio,
-  // entao SEM restricao nenhuma (ve tudo, mexe na agenda de qualquer ISM) —
-  // mas continua fora de carteira/metas/cliente/proposta, igual Bruno/Erica.
-  const ISM_AUXILIAR = { nivel: 'ism', csm: null, ismId: null, nome: 'Daiane' };
+  // nivel "csq" (Daiane/Aline, ex-"ism auxiliar"): ismId null -> sem projeto/
+  // calendario proprio, entao SEM restricao nenhuma (ve tudo, mexe na agenda
+  // de qualquer ISM/CSM) — mas continua fora de carteira/metas/cliente/
+  // proposta (ACOES_PROIBIDAS_ISM cobre os dois niveis), e e a UNICA (junto
+  // de gestao) com acesso a listar-atividades-csq (ACOES_SOMENTE_CSQ).
+  const ISM_AUXILIAR = { nivel: 'csq', csm: null, ismId: null, nome: 'Daiane' };
   const chamarGetAuxiliar = async (action, query = {}) => {
     const r = res();
     await cu({ method: 'GET', headers: cabecalhos({ cookie: cookieDe(ISM_AUXILIAR) }), query: { action, ...query } }, r);
@@ -3298,6 +3334,12 @@ console.log('\n[42] Nível "ism": login, sem dados financeiros, só os próprios
 
   const carteiraAuxiliar = await chamarGetAuxiliar('carteira');
   checar('ism auxiliar: continua sem acesso a carteira -> 403', [carteiraAuxiliar.code, carteiraAuxiliar.corpo.code], [403, 'nivel_nao_permitido']);
+
+  const atividadesCsq = await chamarGetAuxiliar('listar-atividades-csq');
+  checar('csq: listar-atividades-csq -> 200', atividadesCsq.code, 200);
+
+  const atividadesCsqComoIsm = await chamarGet('listar-atividades-csq');
+  checar('ism comum (nao csq): listar-atividades-csq -> 403', [atividadesCsqComoIsm.code, atividadesCsqComoIsm.corpo.code], [403, 'nivel_nao_permitido']);
 
   globalThis.fetch = fetchOriginal;
 }

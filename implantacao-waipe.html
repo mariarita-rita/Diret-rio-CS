@@ -540,6 +540,7 @@
   <nav class="tabs" role="tablist" aria-label="Seções">
     <button class="tab-btn active" data-tab="projetos">Projetos em Andamento</button>
     <button class="tab-btn" data-tab="entregues">Projetos Entregues</button>
+    <button class="tab-btn" data-tab="atividades" id="tabAtividades" style="display:none;">Atividades</button>
     <button class="tab-btn" data-tab="cliente">Jornada do Cliente</button>
     <button class="tab-btn" data-tab="escopo">Escopo Técnico</button>
     <button class="tab-btn" data-tab="apoio">Materiais de Apoio</button>
@@ -555,6 +556,11 @@
   <!-- ===================== PROJETOS ENTREGUES ===================== -->
   <section class="panel" id="panel-entregues">
     <div id="projetosEntreguesRoot"></div>
+  </section>
+
+  <!-- ===================== ATIVIDADES (fila CSQ) ===================== -->
+  <section class="panel" id="panel-atividades">
+    <div id="atividadesRoot"></div>
   </section>
 
   <!-- ===================== JORNADA DO CLIENTE (POR PRODUTO) ===================== -->
@@ -843,6 +849,7 @@
   var panels = {
     projetos: document.getElementById("panel-projetos"),
     entregues: document.getElementById("panel-entregues"),
+    atividades: document.getElementById("panel-atividades"),
     cliente: document.getElementById("panel-cliente"),
     escopo: document.getElementById("panel-escopo"),
     apoio: document.getElementById("panel-apoio"),
@@ -856,11 +863,11 @@
       Object.keys(panels).forEach(function(k){ panels[k].classList.remove("active"); });
       var tab = btn.getAttribute("data-tab");
       panels[tab].classList.add("active");
-      // "Projetos em Andamento"/"Projetos Entregues" são a mesma lista,
-      // só filtrada — trocar de aba sempre volta pra lista (não fica
-      // preso num projeto/wizard aberto na aba errada).
-      if (tab === "projetos" || tab === "entregues"){
-        filtroProjetosAtivo = tab === "entregues" ? "entregues" : "andamento";
+      // "Projetos em Andamento"/"Projetos Entregues"/"Atividades" são a
+      // mesma lista de projetos, só filtrada — trocar de aba sempre volta
+      // pra lista (não fica preso num projeto/wizard aberto na aba errada).
+      if (tab === "projetos" || tab === "entregues" || tab === "atividades"){
+        filtroProjetosAtivo = tab === "projetos" ? "andamento" : tab;
         projetoAtualId = null;
         wizard = null;
         if (typeof renderProjetosPanel === "function") renderProjetosPanel();
@@ -868,6 +875,44 @@
       if (tab === "indicadores" && typeof carregarIndicadores === "function") carregarIndicadores();
     });
   });
+
+  // Quem pode registrar diagnóstico de churn / handoff de renovação num
+  // projeto — csq/gestao (coordenação) e csm (dono da carteira/retenção).
+  // ISM não participa desse fluxo (fora do escopo dele).
+  function podeUsarAtividadesCsq(){
+    return sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao" || sessaoNivelAtual === "csm";
+  }
+
+  // Aba "Atividades" (fila CSQ) só existe pra quem coordena entre fluxos
+  // (Daiane/Aline, nível "csq") e Gestão — ISM/CSM continuam vendo/agindo
+  // nos próprios projetos normalmente, só não têm essa fila agregada.
+  function atualizarVisibilidadeAbaAtividades(){
+    var tab = document.getElementById("tabAtividades");
+    if (!tab) return;
+    var visivel = sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao";
+    tab.style.display = visivel ? "" : "none";
+    // Se a sessão caiu pra um nível sem acesso enquanto essa aba estava
+    // ativa (ex: expirou e logou de novo com outro perfil), volta pra
+    // "Projetos em Andamento" em vez de deixar uma aba escondida ativa.
+    if (!visivel && filtroProjetosAtivo === "atividades"){
+      tab.classList.remove("active");
+      var btnProjetos = document.querySelector('.tab-btn[data-tab="projetos"]');
+      if (btnProjetos) btnProjetos.click();
+    }
+  }
+
+  // CSQ (Daiane/Aline) já cai direto na fila de Atividades ao logar/abrir a
+  // página — ISM/Gestão continuam caindo em "Projetos em Andamento" como
+  // sempre. Só troca se ninguém já tiver navegado manualmente pra outra aba
+  // enquanto a sessão ainda carregava (filtroProjetosAtivo no valor padrão).
+  function aterrissarNaAbaCsqSeAplicavel(){
+    if (sessaoNivelAtual !== "csq") return;
+    if (filtroProjetosAtivo !== "andamento") return;
+    filtroProjetosAtivo = "atividades";
+    tabBtns.forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-tab") === "atividades"); });
+    Object.keys(panels).forEach(function(k){ panels[k].classList.toggle("active", k === "atividades"); });
+    renderProjetosPanel();
+  }
 
   // ---------- Runbook data ----------
   var PHASES = [
@@ -1153,6 +1198,8 @@
       }).then(function(respostaLogin){
         sessaoNivelAtual = respostaLogin && respostaLogin.nivel || null;
         loginPendente = false;
+        atualizarVisibilidadeAbaAtividades();
+        aterrissarNaAbaCsqSeAplicavel();
         renderProjetosPanel();
       }).catch(function(e){
         erro.textContent = (e && e.error) || "Senha incorreta.";
@@ -1171,6 +1218,8 @@
   function carregarSessaoAtual(){
     fetch("/api/login", { credentials: "same-origin" }).then(function(r){ return r.json(); }).then(function(j){
       sessaoNivelAtual = j && j.autenticado ? j.nivel : null;
+      atualizarVisibilidadeAbaAtividades();
+      aterrissarNaAbaCsqSeAplicavel();
       // Se um projeto já estava aberto quando isso resolveu, re-renderiza
       // pra o botão "Excluir projeto" (Gestão) aparecer sem precisar de
       // outra ação — sem isso ficaria escondido até o próximo re-render.
@@ -1849,7 +1898,7 @@
 
   // ---- Estado ----
   var projetosCache = null;   // lista de listar-implantacoes (nao filtrada — a mesma pras 2 abas)
-  var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" — qual aba de projetos esta ativa
+  var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" | "atividades" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
   var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM); só existe na aba "Em andamento"
@@ -1881,7 +1930,9 @@
   var waipeVisaoGeral = true;
 
   function projetosRootAtivo(){
-    return document.getElementById(filtroProjetosAtivo === "entregues" ? "projetosEntreguesRoot" : "projetosRoot");
+    if (filtroProjetosAtivo === "entregues") return document.getElementById("projetosEntreguesRoot");
+    if (filtroProjetosAtivo === "atividades") return document.getElementById("atividadesRoot");
+    return document.getElementById("projetosRoot");
   }
 
   function agentePorId(id){
@@ -1961,7 +2012,77 @@
     if (!root) return;
     if (wizard){ renderWizard(root); return; }
     if (projetoAtualId){ renderProjetoDetalhe(root); return; }
+    if (filtroProjetosAtivo === "atividades"){ renderFilaAtividades(root); return; }
     renderListaProjetos(root);
+  }
+
+  // ---- Fila CSQ (Atividades) — Daiane/Aline ----
+  // Tipos virtuais (projeto_parado/nao_compareceu, calculados na hora pelo
+  // servidor) não têm `id` de verdade pra resolver — só abrem o projeto.
+  // Tipos persistidos (mencao/churn/renovacao) têm botão de "resolvida".
+  var ATIVIDADE_TIPO_INFO = {
+    projeto_parado: { emoji: "⏸️", label: "Parado", cor: "#e16b16" },
+    nao_compareceu: { emoji: "❌", label: "Não compareceu", cor: "#d64545" },
+    mencao: { emoji: "💬", label: "Menção", cor: "#4466ff" },
+    churn: { emoji: "🚨", label: "Churn", cor: "#d64545" },
+    renovacao: { emoji: "🔄", label: "Renovação", cor: "#008844" }
+  };
+
+  function atividadeDetalheTexto(a){
+    if (a.titulo) return a.titulo;
+    if (a.tipo === "projeto_parado"){
+      return "Sem interação há " + a.diasUteis + (a.diasUteis === 1 ? " dia útil" : " dias úteis") + ", sem agendamento futuro.";
+    }
+    if (a.tipo === "nao_compareceu") return "Reserva marcada como não compareceu, aguardando reagendar.";
+    return "";
+  }
+
+  function atividadeCardHtml(a){
+    var info = ATIVIDADE_TIPO_INFO[a.tipo] || { emoji: "•", label: a.tipo, cor: "var(--muted)" };
+    var podeAbrir = !!a.projetoId;
+    var podeResolver = a.id && (a.tipo === "mencao" || a.tipo === "churn" || a.tipo === "renovacao");
+    var resolverBtn = podeResolver
+      ? '<button type="button" class="btn-flow-secondary" data-resolver-atividade="' + esc(a.id) + '" style="width:auto; padding:4px 10px; font-size:12px; margin-top:8px;">Marcar como resolvida</button>'
+      : '';
+    return '<div class="proj-card"' + (podeAbrir ? ' data-atividade-proj="' + esc(a.projetoId) + '" style="cursor:pointer;"' : '') + '>' +
+      '<div class="proj-card-top"><span style="border-left:3px solid ' + info.cor + '; padding-left:6px;">' + info.emoji + ' ' + esc(info.label) + '</span><h3>' + esc(a.cliente || "—") + '</h3></div>' +
+      '<div class="proj-card-meta">' + esc(atividadeDetalheTexto(a)) + '</div>' +
+      resolverBtn +
+    '</div>';
+  }
+
+  function renderFilaAtividades(root){
+    root.innerHTML =
+      '<div class="callout"><div class="dot"></div><div>Fila unificada — projetos parados, menções, não comparecimentos, churn e renovação. Clique num card para abrir o projeto sem sair desta tela; ele continua aparecendo normalmente no painel de implantação.</div></div>' +
+      '<div id="compromissosHojeWrap"></div>' +
+      '<div data-atividades-wrap><div class="sub">Carregando…</div></div>';
+    renderCompromissosHoje(root.querySelector("#compromissosHojeWrap"));
+    var wrap = root.querySelector("[data-atividades-wrap]");
+    apiGet("listar-atividades-csq").then(function(resp){
+      var lista = (resp && resp.atividades) || [];
+      if (!lista.length){
+        wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>Nenhuma atividade pendente agora.</div></div>';
+        return;
+      }
+      wrap.innerHTML = lista.map(atividadeCardHtml).join("");
+      wrap.querySelectorAll("[data-atividade-proj]").forEach(function(card){
+        card.addEventListener("click", function(e){
+          if (e.target.closest("[data-resolver-atividade]")) return;
+          abrirProjeto(card.getAttribute("data-atividade-proj"));
+        });
+      });
+      wrap.querySelectorAll("[data-resolver-atividade]").forEach(function(btn){
+        btn.addEventListener("click", function(e){
+          e.stopPropagation();
+          btn.disabled = true;
+          apiPost("resolver-atividade-csq", { id: btn.getAttribute("data-resolver-atividade") })
+            .then(function(){ renderFilaAtividades(root); })
+            .catch(function(){ showSimToast("Não deu para resolver esta atividade."); btn.disabled = false; });
+        });
+      });
+    }).catch(function(){
+      wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>Não foi possível carregar a fila de atividades.</div></div>';
+    });
   }
 
   function chaveDataSP(ms){
@@ -2650,6 +2771,23 @@
     { id: 48933858, nome: "Erica Fernanda", linkAgenda: null }
   ];
 
+  // CSMs que também agendam reunião com cliente (retenção/renovação) — mesmos
+  // ids reais do servidor (RESPONSAVEL_IDS_VALIDOS em api/clickup.js), pra
+  // aparecerem como opção no mesmo formulário de reserva do ISM.
+  var CSM_OPCOES = [
+    { id: 99916966, nome: "Gian Luca" },
+    { id: 118095183, nome: "Guilherme Camargo" },
+    { id: 118095186, nome: "Lucineia Felix" },
+    { id: 118095192, nome: "Patricia Carvalho" }
+  ];
+
+  // Allowlist de quem pode ser alvo de uma Atividade CSQ (menção/churn/
+  // renovação) — mesma lista do servidor (PESSOAS_MENCIONAVEIS).
+  var PESSOAS_MENCIONAVEIS = [
+    { id: 118033982, nome: "Daiane" },
+    { id: 48749540, nome: "Aline" }
+  ].concat(ISM_OPCOES).concat(CSM_OPCOES);
+
   function renderIsmPicker(containerId, label, idsAtuais, onChange){
     var el = document.getElementById(containerId);
     if (!el) return;
@@ -2929,6 +3067,10 @@
         '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
           '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
           '<button type="button" class="btn-flow-secondary" id="btnCopiarLinkProjeto" title="Copiar link direto deste projeto, pra mandar pra alguém">🔗 Copiar link</button>' +
+          (podeUsarAtividadesCsq()
+            ? '<button type="button" class="btn-flow-secondary" id="btnRegistrarChurn">🚨 Registrar churn</button>' +
+              '<button type="button" class="btn-flow-secondary" id="btnHandoffRenovacao">🔄 Handoff renovação</button>'
+            : "") +
           (sessaoNivelAtual === "gestao"
             ? '<button type="button" class="btn-flow-secondary" id="btnExcluirProjeto" style="color:var(--danger);border-color:var(--danger);" title="Exclui o projeto inteiro (e os itens dele) — irreversível">🗑️ Excluir projeto</button>'
             : "") +
@@ -2941,6 +3083,21 @@
         '<div class="sub" style="margin-top:2px;">CSM: ' + esc(dadosProjeto.projeto.csm || "—") +
           (dadosProjeto.projeto.vendedor ? ' · Vendedor: ' + esc(dadosProjeto.projeto.vendedor) : '') + '</div></div>' +
       '</div>' +
+      (podeUsarAtividadesCsq() ? '<div id="painelAtividadeCsq" style="display:none; margin-bottom:14px; padding:10px; background:var(--surface-2); border-radius:8px;">' +
+        '<div class="sp-k" id="painelAtividadeCsqTitulo">Registrar atividade</div>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
+          '<select class="form-input" id="atividadeCsqAlvo" style="width:auto;">' +
+            '<option value="">Selecionar responsável…</option>' +
+            PESSOAS_MENCIONAVEIS.map(function(p){ return '<option value="' + p.id + '">' + esc(p.nome) + '</option>'; }).join("") +
+          '</select>' +
+        '</div>' +
+        '<textarea class="form-input" id="atividadeCsqObservacao" placeholder="Observação (opcional)" style="width:100%; margin-top:6px; min-height:60px;"></textarea>' +
+        '<div style="margin-top:6px; display:flex; gap:8px;">' +
+          '<button type="button" class="btn-flow-secondary" id="btnConfirmarAtividadeCsq" style="width:auto;">Registrar</button>' +
+          '<button type="button" class="btn-reset" id="btnCancelarAtividadeCsq">Cancelar</button>' +
+        '</div>' +
+        '<div id="atividadeCsqErro" style="display:none; color:var(--danger); font-size:12px; margin-top:6px;"></div>' +
+      '</div>' : '') +
       '<div class="project-detail-layout">' +
         '<main class="project-detail-main">' +
           '<div class="backlog-strip" id="backlogStrip"></div>' +
@@ -2968,6 +3125,47 @@
         showSimToast("Não deu para copiar — copie manualmente: " + url);
       });
     });
+    if (podeUsarAtividadesCsq()){
+      var atividadeCsqTipoAtual = null;
+      var painelAtividadeCsq = document.getElementById("painelAtividadeCsq");
+      var abrirPainelAtividadeCsq = function(tipo, titulo){
+        atividadeCsqTipoAtual = tipo;
+        document.getElementById("painelAtividadeCsqTitulo").textContent = titulo;
+        document.getElementById("atividadeCsqErro").style.display = "none";
+        painelAtividadeCsq.style.display = "block";
+        painelAtividadeCsq.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      };
+      document.getElementById("btnRegistrarChurn").addEventListener("click", function(){
+        abrirPainelAtividadeCsq("churn", "Registrar diagnóstico de cancelamento");
+      });
+      document.getElementById("btnHandoffRenovacao").addEventListener("click", function(){
+        abrirPainelAtividadeCsq("renovacao", "Handoff de renovação pro CSM");
+      });
+      document.getElementById("btnCancelarAtividadeCsq").addEventListener("click", function(){
+        painelAtividadeCsq.style.display = "none";
+      });
+      document.getElementById("btnConfirmarAtividadeCsq").addEventListener("click", function(){
+        var erroEl = document.getElementById("atividadeCsqErro");
+        erroEl.style.display = "none";
+        var alvoId = parseInt(document.getElementById("atividadeCsqAlvo").value, 10);
+        if (!alvoId){ erroEl.textContent = "Selecione um responsável."; erroEl.style.display = "block"; return; }
+        var observacao = document.getElementById("atividadeCsqObservacao").value.trim();
+        var btn = document.getElementById("btnConfirmarAtividadeCsq");
+        btn.disabled = true;
+        apiPost("criar-atividade-csq", { projetoId: dadosProjeto.projeto.id, tipo: atividadeCsqTipoAtual, alvoId: alvoId, observacao: observacao })
+          .then(function(){
+            painelAtividadeCsq.style.display = "none";
+            document.getElementById("atividadeCsqObservacao").value = "";
+            document.getElementById("atividadeCsqAlvo").value = "";
+            btn.disabled = false;
+            showSimToast("Registrado na fila de Atividades.");
+          }).catch(function(e){
+            erroEl.textContent = mensagemErro(e) || "Não deu para registrar.";
+            erroEl.style.display = "block";
+            btn.disabled = false;
+          });
+      });
+    }
     var btnEditarNomeProjeto = document.getElementById("btnEditarNomeProjeto");
     if (btnEditarNomeProjeto) btnEditarNomeProjeto.addEventListener("click", function(){
       var wrap = document.getElementById("nomeProjetoWrap");
@@ -4024,8 +4222,13 @@
       '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
         '<input type="text" class="form-input" id="novaReservaTitulo" placeholder="Título (ex: Camada 1 — Alinhamento)" style="flex:1; min-width:180px;">' +
         '<select class="form-input" id="novaReservaIsm" style="width:auto;">' +
-          (ismPreSelecionavel ? "" : '<option value="">Selecionar ISM…</option>') +
+          (ismPreSelecionavel ? "" : '<option value="">Selecionar responsável…</option>') +
+          '<optgroup label="ISM">' +
           ISM_OPCOES.map(function(o){ return '<option value="' + o.id + '"' + (o.id === ismProjetoId ? " selected" : "") + '>' + esc(o.nome) + '</option>'; }).join("") +
+          '</optgroup>' +
+          '<optgroup label="CSM">' +
+          CSM_OPCOES.map(function(o){ return '<option value="' + o.id + '">' + esc(o.nome) + '</option>'; }).join("") +
+          '</optgroup>' +
         '</select>' +
       '</div>' +
       '<div id="calendarioNovaReserva"></div>' +

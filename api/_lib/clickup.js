@@ -37,6 +37,18 @@ export const LISTA_IMPLANTACOES_WAIPE = '901328976497';
 export const LISTA_RESERVAS_AGENDA = '901329017742';
 
 /**
+ * Fila CSQ da Daiane/Aline — cada task e um registro de "Atividade"
+ * PERSISTIDA (mencao @Nome em comentario, diagnostico de churn, handoff de
+ * renovacao pro CSM). E so um ponteiro pro projeto (`**Projeto:**` na
+ * descricao, mesmo padrao de LISTA_RESERVAS_AGENDA) — nunca o projeto em
+ * si, que continua vivendo so em LISTA_IMPLANTACOES_WAIPE. Tipos "virtuais"
+ * (projeto parado, nao-comparecimento) NAO entram aqui: sao calculados
+ * on-the-fly a partir de listarImplantacoes()/listarReservas() a cada
+ * leitura, sem nada gravado (ver listarAtividadesCsqAcao em clickup.js).
+ */
+export const LISTA_ATIVIDADES_CSQ = '901329086459';
+
+/**
  * Modelos de mensagem de abertura pro Umbler Talk (botão "Iniciar conversa" em
  * implantacao-waipe.html) — cada task e um modelo: name = nome do modelo,
  * description = texto. Compartilhado entre todo o time, sem dono.
@@ -1018,6 +1030,19 @@ export async function listarReservas() {
   return buscarPaginado(LISTA_RESERVAS_AGENDA, '', 1);
 }
 
+/** Cria um registro de Atividade CSQ (mencao/churn/renovacao) em LISTA_ATIVIDADES_CSQ. */
+export async function criarAtividadeCsq(payload) {
+  return cu(`/list/${LISTA_ATIVIDADES_CSQ}/task`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Todas as Atividades CSQ registradas — lista pequena, 1 chamada basta. */
+export async function listarAtividadesCsq() {
+  return buscarPaginado(LISTA_ATIVIDADES_CSQ, '', 1);
+}
+
 /** Todas as tasks de LISTA_GOOGLE_TOKENS — no maximo 1 por ISM, lista minuscula. */
 export async function listarTokensGoogle() {
   return buscarPaginado(LISTA_GOOGLE_TOKENS, '', 1);
@@ -1273,6 +1298,34 @@ export const ISM_OPCOES = [
   { id: 48933858, nome: 'Erica Fernanda' },
 ];
 
+/**
+ * CSMs (donos de carteira) que TAMBEM agendam reunião com cliente (retenção/
+ * renovação) — mesmo espírito de ISM_OPCOES: ids reais de membro do
+ * workspace (confirmados via clickup_get_workspace_members), não os UUIDs de
+ * opção de campo de GERENTE_OPCOES (aquilo é só o valor de um dropdown,
+ * nunca assignable). Usado pra generalizar a agenda (RESPONSAVEL_IDS_VALIDOS
+ * em clickup.js) e pra allowlist de menção (PESSOAS_MENCIONAVEIS).
+ */
+export const CSM_OPCOES = [
+  { id: 99916966, nome: 'Gian Luca' },
+  { id: 118095183, nome: 'Guilherme Camargo' },
+  { id: 118095186, nome: 'Lucineia Felix' },
+  { id: 118095192, nome: 'Patricia Carvalho' },
+];
+
+/**
+ * Quem pode ser acionado por "@Nome" num comentário (ver mencoesNoTexto em
+ * clickup.js) — allowlist fechada, nunca texto livre. Daiane/Aline não têm
+ * id de ISM/CSM (mesmo id de workspace usado nas duas, ismId:null na sessão
+ * — ver PERFIS em _lib/auth.js), por isso entram à parte aqui.
+ */
+export const PESSOAS_MENCIONAVEIS = [
+  { id: 118033982, nome: 'Daiane' },
+  { id: 48749540, nome: 'Aline' },
+  ...ISM_OPCOES,
+  ...CSM_OPCOES,
+];
+
 // ── Estado do fluxo Waipe embutido na descricao ────────────────────────────
 //
 // O workflow de status do ClickUp e fixo por espaco (pendente/in progress/
@@ -1377,6 +1430,81 @@ export function reagendadoPorDaDescricaoReserva(description) {
 export function proximaReservaIdDaDescricaoReserva(description) {
   const m = /\*{0,2}ProximaReservaId:\*{0,2}\s*(\S+)/.exec(String(description || ''));
   return m ? m[1].trim() : '';
+}
+
+/**
+ * Id (ISM ou CSM) responsavel pela reserva, gravado no CONTEUDO da task —
+ * fallback pro `assignees` nativo do ClickUp, que e descartado em silencio
+ * na criacao quando a pessoa nao tem acesso de guest configurado NESSA
+ * lista especifica (mesmo comportamento ja documentado em
+ * LISTA_GOOGLE_TOKENS/tokenDoIsm, confirmado ao vivo pra CSM: acontece com
+ * qualquer pessoa nova numa lista, nao e exclusivo de CSM). Sem isso, uma
+ * reserva de CSM perderia o dono assim que o assignee fosse descartado.
+ */
+export function responsavelDaDescricaoReserva(description) {
+  const m = /\*{0,2}Responsavel:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+// ── Atividades CSQ — mesma tecnica de extracao por linha das reservas ─────
+
+/** Qual projeto de implantacao essa Atividade referencia. */
+export function projetoDaDescricaoAtividade(description) {
+  const m = /\*{0,2}Projeto:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Tipo da Atividade: 'mencao' | 'churn' | 'renovacao'. */
+export function tipoDaDescricaoAtividade(description) {
+  const m = /\*{0,2}Tipo:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Id do comentario que originou a Atividade (so faz sentido pro tipo 'mencao'). */
+export function origemDaDescricaoAtividade(description) {
+  const m = /\*{0,2}Origem:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Nome de quem foi mencionado/acionado, ou do CSM alvo do handoff. */
+export function alvoDaDescricaoAtividade(description) {
+  const m = /\*{0,2}Alvo:\*{0,2}\s*(.+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/** Ausencia de `Status` significa "pendente" — mesmo padrao de statusDaDescricaoReserva. */
+export function statusDaDescricaoAtividade(description) {
+  const m = /\*{0,2}Status:\*{0,2}\s*(\S+)/.exec(String(description || ''));
+  return m ? m[1].trim() : 'pendente';
+}
+
+/** Texto livre curto de fechamento, preenchido ao resolver a Atividade. */
+export function resolucaoDaDescricaoAtividade(description) {
+  const m = /\*{0,2}Resolucao:\*{0,2}\s*(.+)/.exec(String(description || ''));
+  return m ? m[1].trim() : '';
+}
+
+/**
+ * Dias UTEIS estritos (segunda-sexta) entre duas datas, timezone
+ * America/Sao_Paulo (mesmo raciocinio de limitesHojeSP em clickup.js: sem
+ * horario de verao desde 2019, -03:00 fixo). Conta dias de calendario
+ * completos cruzados — sexta 18h -> segunda 9h da 1 dia util (so cruzou o
+ * fim de semana), nao 3 dias corridos.
+ */
+export function diasUteisEntre(inicioMs, fimMs) {
+  const inicio = Number(inicioMs);
+  const fim = Number(fimMs);
+  if (!Number.isFinite(inicio) || !Number.isFinite(fim) || fim <= inicio) return 0;
+  const chaveDia = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  let cursor = new Date(`${chaveDia(inicio)}T12:00:00Z`);
+  const fimChave = chaveDia(fim);
+  let dias = 0;
+  while (cursor.toISOString().slice(0, 10) < fimChave) {
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+    const diaSemana = cursor.getUTCDay(); // 0=domingo, 6=sabado
+    if (diaSemana !== 0 && diaSemana !== 6) dias++;
+  }
+  return dias;
 }
 
 /**

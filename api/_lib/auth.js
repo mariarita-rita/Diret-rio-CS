@@ -8,7 +8,7 @@ export const COOKIE_NOME = 'cs_sessao';
 export const SESSAO_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const TOLERANCIA_FUTURO_MS = 60 * 1000;
 
-export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism'];
+export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism', 'csq'];
 
 /**
  * Perfis de acesso. A senha de cada perfil vive apenas na variável de ambiente
@@ -18,6 +18,13 @@ export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism'];
  * e dentro da implantação só os projetos onde a pessoa está entre os ISMs
  * atribuídos (ver pertenceAoIsm). `ismId` precisa bater com um dos ids em
  * ISM_OPCOES (api/_lib/clickup.js) — são o mesmo id em ambos os lugares.
+ *
+ * Nível "csq": papel de coordenação da Daiane/Aline (implantação + agenda de
+ * CSM + fila de Atividades) — mesma visibilidade de implantação que "ism"
+ * (ver ACOES_PROIBIDAS_ISM em api/clickup.js, que cobre os dois níveis), mais
+ * acesso exclusivo à fila de Atividades (ACOES_SOMENTE_CSQ). Não é uma
+ * variação de "ism": tem allowlist e endpoints próprios, por isso é nível
+ * irmão, não uma flag dentro de "ism".
  */
 export const PERFIS = [
   { env: 'AUTH_CONSULTA', nivel: 'consulta', csm: null, ismId: null, nome: 'Consulta Geral' },
@@ -28,14 +35,14 @@ export const PERFIS = [
   { env: 'AUTH_CSM_PATRICIA', nivel: 'csm', csm: 'Patricia Carvalho', ismId: null, nome: 'Patricia Carvalho' },
   { env: 'AUTH_ISM_BRUNO', nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' },
   { env: 'AUTH_ISM_ERICA', nivel: 'ism', csm: null, ismId: 48933858, nome: 'Erica Fernanda' },
-  // Daiane e Aline ajudam com agendamentos (acompanhar e reagendar clientes)
-  // mas não são ISM responsável por nenhum projeto — por isso `ismId: null`,
-  // igual ao "sem escopo" de csm: pertenceAoIsm/os checks de agenda por ismId
-  // tratam null como "sem restrição", então elas veem tudo e mexem na agenda
-  // de qualquer ISM, sem aparecer como opção de responsável (isso é definido
-  // por ISM_OPCOES em api/_lib/clickup.js, que continua só com Bruno/Erica).
-  // Uma senha só pras duas — mesma permissão, sem necessidade de diferenciar.
-  { env: 'AUTH_ISM_AUXILIAR', nivel: 'ism', csm: null, ismId: null, nome: 'Suporte ISM' },
+  // Daiane e Aline: papel CSQ (implantação/ISM + agenda de CSM + Atividades),
+  // não ISM responsável por projeto — por isso `ismId: null`, mesmo "sem
+  // restrição" que csm=null já tinha (pertenceAoIsm/os checks de agenda por
+  // ismId tratam null como "sem restrição": elas veem tudo e mexem na agenda
+  // de qualquer ISM/CSM, sem aparecer como opção de responsável — isso é
+  // definido por ISM_OPCOES/CSM_OPCOES em api/_lib/clickup.js). Uma senha só
+  // pras duas — mesma permissão, sem necessidade de diferenciar.
+  { env: 'AUTH_ISM_AUXILIAR', nivel: 'csq', csm: null, ismId: null, nome: 'Suporte ISM' },
 ];
 
 export class ErroConfig extends Error {
@@ -173,7 +180,7 @@ export function exigirSessao(req, res, { detalharExpiracao = false } = {}) {
 
 /** consulta é somente leitura: nada de escrita no ClickUp nem no Moskit. */
 export function podeEscrever(sessao) {
-  return sessao.nivel === 'gestao' || sessao.nivel === 'csm' || sessao.nivel === 'ism';
+  return sessao.nivel === 'gestao' || sessao.nivel === 'csm' || sessao.nivel === 'ism' || sessao.nivel === 'csq';
 }
 
 /**
