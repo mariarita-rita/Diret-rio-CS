@@ -2712,8 +2712,8 @@
             '<div style="margin:10px 0; border-top:1px solid var(--border);"></div>' : "") +
           demais.map(comentarioHtml).join("");
       container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2>' +
-        '<div style="display:flex; gap:8px; align-items:flex-end;">' +
-          '<textarea class="form-input" id="novoComentario" rows="3" style="flex:1; resize:vertical; min-height:64px; font-family:inherit;"></textarea>' +
+        '<textarea class="form-input" id="novoComentario" rows="3" style="width:100%; resize:vertical; min-height:64px; font-family:inherit;"></textarea>' +
+        '<div style="display:flex; gap:8px; justify-content:flex-end; margin-top:6px;">' +
           '<button type="button" class="btn-reset" id="btnDitarComentario" title="Ditar por voz" style="font-size:18px; padding:4px 8px;">🎤</button>' +
           '<button type="button" class="btn-flow-secondary" id="btnComentar">Comentar</button>' +
         '</div>' +
