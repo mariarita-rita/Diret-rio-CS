@@ -442,7 +442,7 @@
   .today-agenda-ism-header{font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color:var(--profundo); margin-bottom:4px;}
   .today-agenda-mais{background:transparent; border:0; padding:8px 0 0; font-size:11.5px; font-weight:700; color:var(--brand-dark,#0A41B4); cursor:pointer; text-align:left;}
   .today-agenda-mais:hover{text-decoration:underline;}
-  .today-appointment{display:flex; width:100%; align-items:flex-start; gap:10px; padding:10px 0; border:0; border-top:1px solid var(--border); background:transparent; color:inherit; text-align:left; font:inherit; cursor:pointer;}
+  .today-appointment{display:flex; width:100%; align-items:flex-start; gap:10px; padding:10px 0; border:0; border-top:1px solid var(--border); background:transparent; color:inherit; text-align:left; text-decoration:none; font:inherit; cursor:pointer;}
   .today-appointment:hover .today-appointment-title{color:var(--brand-dark); text-decoration:underline;}
   .today-appointment-time{flex:0 0 72px; font-size:12px; font-weight:800; color:var(--brand-dark); font-variant-numeric:tabular-nums;}
   .today-appointment-body{min-width:0; flex:1;}
@@ -2063,9 +2063,17 @@
     if (!container) return;
     var agora = new Date();
     var rotuloHoje = agora.toLocaleDateString("pt-BR", { timeZone:"America/Sao_Paulo", day:"2-digit", month:"2-digit", year:"numeric" });
-    container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
-      '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' +
-      '<div class="sidebar-loading">Carregando agenda…</div></section>';
+    // "Carregando agenda…" só na primeira vez (nada ainda na tela) — no
+    // refresh automático de 45s, busca por baixo dos panos e só troca o
+    // conteúdo quando a resposta chegar, sem apagar o que já tava visível.
+    // Antes, cada refresh piscava "Carregando…" de novo, dando a falsa
+    // impressão de que a conexão caiu.
+    var primeiraVez = !container.querySelector(".today-agenda");
+    if (primeiraVez){
+      container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
+        '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' +
+        '<div class="sidebar-loading">Carregando agenda…</div></section>';
+    }
     apiGet("compromissos-hoje").then(function(resp){
       var nomes = {};
       (projetosCache || []).forEach(function(p){ nomes[String(p.id)] = p.cliente || "Projeto"; });
@@ -2089,10 +2097,19 @@
         var projetoId = String(r.projetoId || "");
         var temProjeto = r.projetoId && projetoId !== "undefined";
         var projeto = temProjeto ? (nomes[projetoId] || "Projeto não encontrado") : "Agenda do Google (sem projeto)";
-        var tag = temProjeto
-          ? '<button type="button" class="today-appointment" data-open-project="' + esc(projetoId) + '">'
-          : '<div class="today-appointment" style="cursor:default;">';
-        var fechaTag = temProjeto ? "</button>" : "</div>";
+        var tag, fechaTag;
+        if (temProjeto){
+          tag = '<button type="button" class="today-appointment" data-open-project="' + esc(projetoId) + '">';
+          fechaTag = "</button>";
+        } else if (r.linkAgenda){
+          // Compromisso "cru" do Google (sem projeto vinculado aqui) — leva
+          // pro próprio evento na agenda do Google, em vez de ficar sem ação.
+          tag = '<a class="today-appointment" href="' + esc(r.linkAgenda) + '" target="_blank" rel="noopener" title="Abrir na agenda do Google">';
+          fechaTag = "</a>";
+        } else {
+          tag = '<div class="today-appointment" style="cursor:default;">';
+          fechaTag = "</div>";
+        }
         return tag +
           '<span class="today-appointment-time">' + horaSP(r.inicio) + '<br><span style="font-weight:500; color:var(--muted)">' + horaSP(r.fim) + '</span></span>' +
           '<span class="today-appointment-body"><span class="today-appointment-title">' + esc(r.titulo || "Compromisso") + '</span><span class="today-appointment-meta">' + esc(projeto) + '</span></span>' +
@@ -2145,6 +2162,11 @@
         });
       });
     }).catch(function(){
+      // Só substitui a tela por erro na primeira carga — se já tinha agenda
+      // visível e um refresh de fundo falhou, mantém o que já tava mostrado
+      // em vez de piscar pra "não deu pra carregar" (falha transitória do
+      // refresh não precisa alarmar quem já tava vendo a agenda certa).
+      if (!primeiraVez) return;
       container.innerHTML = '<section class="today-agenda"><div class="today-agenda-title">Compromissos do dia</div><div class="sidebar-loading">Não foi possível carregar a agenda.</div></section>';
     });
   }

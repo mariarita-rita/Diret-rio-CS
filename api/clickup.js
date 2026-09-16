@@ -1913,9 +1913,14 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     // ex: migração que já veio com dataFimReal setado na criação). Sem
     // isso, a usuária precisaria lembrar de preencher isso à mão toda vez
     // que finaliza um projeto pra "dias de projeto" sair certo depois.
-    dataFimReal: novaFaseProjetoManual === 'entregue' && !estadoAtual.dataFimReal
-      ? Date.now()
-      : (estadoAtual.dataFimReal ?? null),
+    //
+    // Reabrir (fase manual sai de "entregue" pra qualquer outra, ex:
+    // pendência identificada depois) LIMPA dataFimReal — senão, ao
+    // entregar de novo depois, a data antiga ficaria presa e "dias de
+    // implantação" contaria errado.
+    dataFimReal: novaFaseProjetoManual === 'entregue'
+      ? (estadoAtual.dataFimReal || Date.now())
+      : (estadoAtual.faseProjetoManual === 'entregue' && novaFaseProjetoManual !== 'entregue' ? null : (estadoAtual.dataFimReal ?? null)),
     // Urgencia — mesmo padrao: so muda quando vem no corpo, senao o spread
     // de estadoAtual (logo acima) ja preserva. So repete aqui pra sanear
     // caso venha um valor invalido no corpo. NUNCA usar a chave
@@ -1950,6 +1955,16 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
   if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
     payload.status = corpo.status;
+  } else if (
+    estadoAtual.faseProjetoManual === 'entregue' &&
+    novaFaseProjetoManual !== 'entregue' &&
+    projeto.status?.status === 'concluído'
+  ) {
+    // Reabrir o projeto (fase manual sai de "entregue") tem que tirar o
+    // status nativo de "concluído" também — senão o projeto continua
+    // aparecendo em "Projetos Entregues" (aquela aba filtra pelo status
+    // nativo, não pela fase) mesmo já mostrando "Em andamento" na etiqueta.
+    payload.status = 'in progress';
   } else if (projeto.status?.status === 'pendente') {
     // O status nativo do ClickUp nunca era tocado por aqui — ficava preso em
     // "pendente" pra sempre, mesmo com etapa/camada1/prioridade avançando.
@@ -3044,6 +3059,10 @@ async function compromissosHojeAcao(res) {
           fim: fimEvento,
           projetoId: null,
           linkReuniao: '',
+          // Link do próprio evento na agenda do Google (não é o Meet —
+          // é a página do compromisso) — só existe pra evento "cru" do
+          // Google, reserva interna abre pelo projeto vinculado.
+          linkAgenda: texto(ev.htmlLink, 500) || '',
           origem: 'google',
         });
       }
