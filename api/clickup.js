@@ -1015,7 +1015,7 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Londrisoft Camp 2026', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
 // 'vigencia': desconto do item vem da vigência contratada (3/6/12 meses,
 // Londrisoft Deploy), não de alçada negociável — ver VIGENCIAS_DEPLOY_VALIDAS.
@@ -1428,7 +1428,7 @@ async function listarImplantacoesAcao(res, sessao) {
       // não o nome da task (que acumula sufixo "— Proposta — <data>" a cada
       // save) — senão a lista "Carregar proposta salva" e o dashboard mostram
       // o nome já sujo.
-      cliente: texto(estado.cliente, 120) || t.name,
+      cliente: texto(estado.cliente, 120) || limparSufixoProposta(t.name),
       status: t.status?.status || '',
       etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
       csm: csmDaDescricaoImplantacao(t.description),
@@ -1570,8 +1570,9 @@ async function obterImplantacaoAcao(req, res, sessao) {
       // — o nome da task ganha um sufixo "— Proposta — <data>" a cada save,
       // então usá-lo aqui faria esse sufixo (às vezes mais de um, acumulado)
       // ir parar de novo no campo "Nome do cliente" ao reabrir pra editar.
-      // Cai pro nome da task só pra projetos salvos antes dessa mudança.
-      cliente: texto(estadoProjeto.cliente, 120) || pai.name,
+      // Cai pro nome da task (limpo do sufixo de data) só pra projetos salvos
+      // antes dessa mudança.
+      cliente: texto(estadoProjeto.cliente, 120) || limparSufixoProposta(pai.name),
       status: pai.status?.status || '',
       csm,
       ism: nomesIsm(pai.assignees),
@@ -2442,6 +2443,19 @@ function dataRotuloHoje() {
 }
 
 /**
+ * Remove o(s) sufixo(s) "— Proposta — dd/mm/aaaa" que salvarPropostaImplantacaoAcao
+ * cola no NOME DA TASK a cada save — nunca no "cliente" salvo à parte, mas
+ * projetos salvos antes dessa separação existir não têm esse campo, então
+ * caem no fallback do nome da task (ver obterImplantacaoAcao/listarImplantacoesAcao).
+ * Sem essa limpeza, o fallback devolveria o sufixo (às vezes mais de um,
+ * acumulado de saves sucessivos) como se fosse parte do nome do cliente.
+ * `+` no grupo não-capturante casa quantos sufixos existirem, não só o último.
+ */
+function limparSufixoProposta(nome) {
+  return String(nome || '').replace(/(?:\s*—\s*Proposta\s*—\s*\d{2}\/\d{2}\/\d{4})+\s*$/, '').trim();
+}
+
+/**
  * POST ?action=salvar-proposta-implantacao — cria (ou atualiza, com
  * `taskIdExistente`) uma task na etapa "proposta" em LISTA_IMPLANTACOES_WAIPE.
  * Diferente de log-proposta (auditoria, uma task nova a cada clique, sem
@@ -2463,7 +2477,11 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     throw e;
   }
 
-  const cliente = texto(corpo.cliente, 120);
+  // Limpa antes de validar/usar — protege contra o "Nome do cliente" ter sido
+  // preenchido a partir de um projeto salvo antes de existir o campo "cliente"
+  // separado (ver limparSufixoProposta), o que faria o próximo save colar
+  // mais um sufixo em cima do que já tinha.
+  const cliente = limparSufixoProposta(texto(corpo.cliente, 120));
   if (!cliente) {
     return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
   }
@@ -2626,7 +2644,7 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     // Mantém o "cliente" salvo (ver salvarPropostaImplantacaoAcao) na
     // promoção pra projeto — senão obterImplantacaoAcao cai de volta pro
     // nome da task (já com sufixo de data) assim que a proposta é confirmada.
-    cliente: texto(estadoAtual.cliente, 120) || tarefa.name,
+    cliente: texto(estadoAtual.cliente, 120) || limparSufixoProposta(tarefa.name),
     etapaAtual: 'escopo',
     prioridade: [],
     agenteAtualId: null,

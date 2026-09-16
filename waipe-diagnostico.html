@@ -1461,36 +1461,37 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
       <div id="campSolucaoCard" style="background:var(--surface-2); border:1px solid var(--border-strong); border-radius:12px; padding:18px; margin-top:18px;">
         <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-          <input type="checkbox" id="campIncluidoCheck" style="width:16px; height:16px; accent-color:var(--ink); flex:0 0 auto;">
+          <input type="checkbox" id="campIncluidoCheck" checked style="width:16px; height:16px; accent-color:var(--ink); flex:0 0 auto;">
           <h3 style="font-size:15px; font-weight:700; margin:0;">🎟️ Convite Londrisoft Camp 2026</h3>
         </label>
-        <div class="sub" style="margin-top:6px;">11 de novembro de 2026 · Laguna Buffet, Cambé-PR. Marque para incluir, no final da proposta, uma seção convidando o cliente para o evento — com a condição de cortesia e/ou desconto de ingresso definida abaixo.</div>
+        <div class="sub" style="margin-top:6px;">11 de novembro de 2026 · Laguna Buffet, Cambé-PR. Vem marcado por padrão — toda proposta já convida o cliente pro evento; desmarque aqui se este cliente não deve ser convidado. A condição de cortesia e/ou desconto de ingresso fica definida abaixo.</div>
 
         <div id="campSolucaoCampos" style="margin-top:14px; display:none;">
+          <div class="field">
+            <label for="camp-passe">Tipo de ingresso oferecido</label>
+            <select id="camp-passe" class="sel">
+              <option value="Full Pass">Full Pass — R$ 347,00 (2º lote)</option>
+              <option value="Premium Pass">Premium Pass — R$ 497,00 (2º lote)</option>
+            </select>
+            <div class="hint">Valor de tabela do 2º lote — confira o lote vigente antes de enviar, o preço do ingresso muda por lote.</div>
+          </div>
           <div class="field-row">
             <div class="field">
-              <label for="camp-passe">Tipo de ingresso oferecido</label>
-              <select id="camp-passe" class="sel">
-                <option value="Full Pass">Full Pass</option>
-                <option value="Premium Pass">Premium Pass</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="camp-cortesia">Ingressos cortesia</label>
+              <label for="camp-cortesia">Ingressos cortesia (isentos)</label>
               <input type="number" id="camp-cortesia" class="num-input tabular" min="0" step="1" value="1">
             </div>
-          </div>
-          <div class="field-row">
             <div class="field">
-              <label for="camp-desconto-qtd">Ingressos adicionais com desconto</label>
+              <label for="camp-desconto-qtd">Ingressos com desconto</label>
               <input type="number" id="camp-desconto-qtd" class="num-input tabular" min="0" step="1" value="0">
             </div>
-            <div class="field">
-              <label for="camp-desconto-percent">Desconto nesses ingressos (%)</label>
-              <input type="number" id="camp-desconto-percent" class="num-input tabular" min="0" max="100" step="5" value="20">
-            </div>
           </div>
-          <div class="field" style="margin-bottom:0;">
+          <div class="field">
+            <label for="camp-desconto-percent">Desconto nesses ingressos (%)</label>
+            <input type="number" id="camp-desconto-percent" class="num-input tabular" min="0" max="100" step="5" value="20">
+            <div class="hint">Use 100% para isentar totalmente também esses ingressos, além dos de cortesia.</div>
+          </div>
+          <div id="campResumoPreco" class="hint" style="margin-top:2px; font-weight:600; color:var(--ink);"></div>
+          <div class="field" style="margin-bottom:0; margin-top:10px;">
             <label for="camp-obs">Observações (opcional)</label>
             <input type="text" id="camp-obs" class="num-input" placeholder="ex: válido até 30/09, cortesia para o sócio">
           </div>
@@ -2474,7 +2475,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     "Unique": ["Light", "Plus", "Premium", "Empresarial"],
     "Deploy": ["Entrada", "Essencial", "Crescimento", "Performance"],
   };
-  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Bime", "Deploy", "Treinamento", "Outro"];
+  var PRODUTOS_SELECIONAVEIS = ["Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Bime", "Deploy", "Treinamento", "Londrisoft Camp 2026", "Outro"];
 
   function novoItemRecomendacao(r){
     var variante = r.produto === "Gestor" ? "Nuvem" : null;
@@ -2982,8 +2983,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
    * própria chamada também em restaurarRascunho(). */
   function atualizarCampVisibilidade(){
     document.getElementById("campSolucaoCampos").style.display = document.getElementById("campIncluidoCheck").checked ? "block" : "none";
+    atualizarCampResumoPreco();
   }
   document.getElementById("campIncluidoCheck").addEventListener("change", atualizarCampVisibilidade);
+  // Chamada já na carga da página — o checkbox vem marcado por padrão (convite
+  // recomendado em toda proposta), então os campos precisam abrir visíveis
+  // sem esperar um "change" que só o próprio CSM dispararia.
+  atualizarCampVisibilidade();
+  ["camp-passe", "camp-cortesia", "camp-desconto-qtd", "camp-desconto-percent"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", atualizarCampResumoPreco);
+    document.getElementById(id).addEventListener("change", atualizarCampResumoPreco);
+  });
 
   // ---------- Implantação Enterprise ----------
   function updatePacoteHint(){
@@ -3316,7 +3326,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       .then(function(resultado){
         var projeto = resultado.projeto;
         propostaSalvaId = projeto.id;
-        document.getElementById("p-cliente").value = projeto.cliente || "";
+        // O nome do projeto no ClickUp já vem com "— Proposta — DD/MM/AAAA"
+        // no fim (convenção de nomeação da task, ver dataRotuloHoje em
+        // api/clickup.js) — sem tirar isso, o título da proposta gerada
+        // mostra a data de quando a proposta foi salva a primeira vez,
+        // além da data "Data" (hoje) que já aparece embaixo dela.
+        var clienteSemSufixoProposta = String(projeto.cliente || "")
+          .replace(/\s*—\s*Proposta\s*—\s*\d{2}\/\d{2}\/\d{4}\s*$/i, "");
+        document.getElementById("p-cliente").value = clienteSemSufixoProposta;
         document.getElementById("p-id-nucleo").value = projeto.idNucleo || "";
         document.getElementById("p-cnpj").value = projeto.cnpj || "";
         document.getElementById("p-email").value = projeto.email || "";
@@ -3443,6 +3460,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     };
   }
 
+  /** Valor de tabela do 2º lote (fonte: time do evento) — só os dois tipos de
+   * ingresso existem, sem variante por plano/ambiente como o resto do
+   * catálogo. Precisa ser atualizado manualmente a cada lote novo. */
+  var PRECOS_CAMP = { "Full Pass": 347.00, "Premium Pass": 497.00 };
+
   /** Condição de cortesia/desconto do Londrisoft Camp 2026 definida pelo CSM
    * nesta proposta — lida direto do DOM na hora de montar o documento, como
    * ctx.obs acima (não precisa virar estado global: só alimenta o HTML final). */
@@ -3457,19 +3479,72 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     };
   }
 
-  /** Selo de destaque (mesmo componente .freeband do desconto do Waipe) com a
-   * condição comercial de ingresso desta proposta — vazio quando o CSM
-   * marcou "incluir" mas não configurou nem cortesia nem desconto de verdade. */
+  /** Preço calculado da condição de ingresso desta proposta — cortesia sempre
+   * isenta (R$0), desconto aplica o percentual sobre o valor de tabela (100%
+   * = isenção total também nesses). Nunca inventa valor: só multiplica
+   * quantidade × tabela, igual ao resto do simulador (ver subtotalItem). */
+  function campPrecoResumo(camp){
+    var unit = PRECOS_CAMP[camp.passe] || 0;
+    var cortesiaValor = camp.cortesia * unit;
+    var descontoBase = camp.descontoQtd * unit;
+    var descontoFinal = descontoBase * (1 - camp.descontoPercent / 100);
+    return {
+      unit: unit,
+      totalIngressos: camp.cortesia + camp.descontoQtd,
+      totalTabela: cortesiaValor + descontoBase,
+      totalFinal: descontoFinal,
+      economia: (cortesiaValor + descontoBase) - descontoFinal
+    };
+  }
+
+  /** Resumo em texto do valor calculado — mostrado ao vivo no formulário
+   * (campResumoPreco) e reaproveitado na proposta gerada. */
+  function campResumoPrecoTexto(camp){
+    var r = campPrecoResumo(camp);
+    if (!r.totalIngressos) return "";
+    return r.totalIngressos + " ingresso" + (r.totalIngressos > 1 ? "s" : "") + " · valor de tabela " + fmtBRL(r.totalTabela) +
+      (r.economia > 0 ? " → cliente paga " + fmtBRL(r.totalFinal) + " (economia de " + fmtBRL(r.economia) + ")" : " (sem desconto aplicado)");
+  }
+
+  function atualizarCampResumoPreco(){
+    var el = document.getElementById("campResumoPreco");
+    if (el) el.textContent = campResumoPrecoTexto(getCampContext());
+  }
+
+  /** Tabela de preço + selo de destaque (mesmo componente .freeband do
+   * desconto do Waipe) com a condição comercial de ingresso desta proposta —
+   * vazio quando o CSM marcou "incluir" mas não configurou nenhuma
+   * quantidade de verdade (nem cortesia, nem desconto). */
   function buildCampFreeband(camp){
-    var partes = [];
-    if (camp.cortesia > 0) partes.push(camp.cortesia + " ingresso" + (camp.cortesia > 1 ? "s" : "") + " " + escapeHtml(camp.passe) + " cortesia");
-    if (camp.descontoQtd > 0 && camp.descontoPercent > 0) partes.push(camp.descontoQtd + " ingresso" + (camp.descontoQtd > 1 ? "s" : "") + " adicion" + (camp.descontoQtd > 1 ? "ais" : "al") + " com " + camp.descontoPercent + "% de desconto");
-    if (!partes.length) return "";
+    var r = campPrecoResumo(camp);
+    if (!r.totalIngressos) return "";
+
+    var linhas = "";
+    if (camp.cortesia > 0){
+      linhas += '<tr><td>' + camp.cortesia + 'x ' + escapeHtml(camp.passe) + ' — cortesia</td>' +
+        '<td class="num"><span class="strike">' + fmtBRL(camp.cortesia * r.unit) + '</span></td>' +
+        '<td>Isento</td><td class="num">' + fmtBRL(0) + '</td></tr>';
+    }
+    if (camp.descontoQtd > 0){
+      var base = camp.descontoQtd * r.unit;
+      var final = base * (1 - camp.descontoPercent / 100);
+      linhas += '<tr><td>' + camp.descontoQtd + 'x ' + escapeHtml(camp.passe) + ' — desconto</td>' +
+        '<td class="num">' + (camp.descontoPercent > 0 ? '<span class="strike">' + fmtBRL(base) + '</span>' : fmtBRL(base)) + '</td>' +
+        '<td>' + (camp.descontoPercent >= 100 ? 'Isento' : (camp.descontoPercent > 0 ? camp.descontoPercent + '% off' : '—')) + '</td>' +
+        '<td class="num">' + fmtBRL(final) + '</td></tr>';
+    }
+    var tabela = '<table><tr><th>Ingressos</th><th style="text-align:right">Valor de tabela</th><th>Condição</th><th style="text-align:right">Valor final</th></tr>' +
+      linhas + '<tr class="destaque-linha"><td><strong>Total (' + r.totalIngressos + ' ingresso' + (r.totalIngressos > 1 ? 's' : '') + ')</strong></td>' +
+      '<td class="num">' + fmtBRL(r.totalTabela) + '</td><td></td><td class="num"><strong>' + fmtBRL(r.totalFinal) + '</strong></td></tr></table>';
+
     var selo = camp.cortesia > 0
       ? "<b>" + camp.cortesia + "</b><span>cortesia</span>"
       : "<b>" + camp.descontoPercent + "%</b><span>desconto</span>";
-    return '<div class="freeband"><div class="selo">' + selo + '</div><div class="txt"><b>Condição especial de acesso ao Londrisoft Camp 2026.</b><br>' +
-      partes.join(" + ") + "." + (camp.obs ? " " + escapeHtml(camp.obs) : "") + '</div></div>';
+    var freeband = '<div class="freeband"><div class="selo">' + selo + '</div><div class="txt"><b>Condição especial de acesso ao Londrisoft Camp 2026.</b><br>' +
+      (r.economia > 0 ? 'Economia de ' + fmtBRL(r.economia) + ' em relação ao valor de tabela.' : 'Valor de tabela do 2º lote, sem desconto adicional.') +
+      (camp.obs ? ' ' + escapeHtml(camp.obs) : '') + '</div></div>';
+
+    return tabela + freeband;
   }
 
   /** Seção "Um convite especial" da proposta — só entra no documento quando o
