@@ -2977,6 +2977,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     refreshPropSummary();
   });
 
+  /** Valor de tabela do 2º lote (fonte: time do evento) — só os dois tipos de
+   * ingresso existem, sem variante por plano/ambiente como o resto do
+   * catálogo. Precisa ser atualizado manualmente a cada lote novo. Declarado
+   * ANTES de atualizarCampVisibilidade() por causa da chamada imediata logo
+   * abaixo — "var" só é atribuído quando essa linha roda (hoisting só
+   * garante o nome existir como undefined, não o valor), então essa
+   * constante precisa vir antes de qualquer coisa que a use na carga da
+   * página, não só antes de onde é declarada em ordem "lógica". */
+  var PRECOS_CAMP = { "Full Pass": 347.00, "Premium Pass": 497.00 };
+
   /** Mostra/esconde os campos de cortesia/desconto do Camp conforme o
    * checkbox — não depende do evento "change" (que não dispara quando o
    * rascunho restaura o estado programaticamente), por isso é uma função
@@ -3459,11 +3469,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       contato: contato, csm: csm, erp: erp, dores: dores, obs: obs, agents: agents
     };
   }
-
-  /** Valor de tabela do 2º lote (fonte: time do evento) — só os dois tipos de
-   * ingresso existem, sem variante por plano/ambiente como o resto do
-   * catálogo. Precisa ser atualizado manualmente a cada lote novo. */
-  var PRECOS_CAMP = { "Full Pass": 347.00, "Premium Pass": 497.00 };
 
   /** Condição de cortesia/desconto do Londrisoft Camp 2026 definida pelo CSM
    * nesta proposta — lida direto do DOM na hora de montar o documento, como
