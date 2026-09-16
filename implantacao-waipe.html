@@ -433,11 +433,15 @@
   .project-sidebar-card .build-check{padding:9px 0;}
   .project-sidebar-card .form-input{min-height:38px;}
   .today-agenda{margin:0 0 18px; padding:18px 20px; border-color:var(--claro,#A8C5FF); background:var(--surface-2); box-shadow:var(--shadow);}
-  .today-agenda-head{display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;}
+  .today-agenda-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;}
   .today-agenda-title{font-size:15px; font-weight:800; color:var(--noite,#000035);}
-  .today-agenda-date{font-size:11px; color:var(--muted); white-space:nowrap;}
-  .today-agenda-ism-header{font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color:var(--profundo); margin-top:14px; padding-top:10px; border-top:1px solid var(--border);}
-  .today-agenda-ism-header:first-of-type{margin-top:0; padding-top:0; border-top:0;}
+  .today-agenda-date{font-size:14px; font-weight:800; color:var(--profundo); white-space:nowrap; background:var(--tag-londrisoft-bg,#EAF1FF); padding:4px 12px; border-radius:999px;}
+  .today-agenda-columns{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0 28px;}
+  .today-agenda-column + .today-agenda-column{border-left:1px solid var(--border); padding-left:28px;}
+  @media(max-width:640px){ .today-agenda-columns{grid-template-columns:1fr;} .today-agenda-column + .today-agenda-column{border-left:0; padding-left:0; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);} }
+  .today-agenda-ism-header{font-size:11px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; color:var(--profundo); margin-bottom:4px;}
+  .today-agenda-mais{background:transparent; border:0; padding:8px 0 0; font-size:11.5px; font-weight:700; color:var(--brand-dark,#0A41B4); cursor:pointer; text-align:left;}
+  .today-agenda-mais:hover{text-decoration:underline;}
   .today-appointment{display:flex; width:100%; align-items:flex-start; gap:10px; padding:10px 0; border:0; border-top:1px solid var(--border); background:transparent; color:inherit; text-align:left; font:inherit; cursor:pointer;}
   .today-appointment:hover .today-appointment-title{color:var(--brand-dark); text-decoration:underline;}
   .today-appointment-time{flex:0 0 72px; font-size:12px; font-weight:800; color:var(--brand-dark); font-variant-numeric:tabular-nums;}
@@ -2095,11 +2099,28 @@
           (r.linkReuniao ? '<span class="today-appointment-link" title="Abrir reunião">↗</span>' : '') +
         fechaTag;
       }
+      // Por padrão só os 2 próximos (ainda não terminados) de cada ISM — o
+      // resto (mais tarde hoje + já finalizados) fica atrás de "Mostrar
+      // mais", pra não empilhar o dia inteiro de cara numa agenda cheia.
+      var agoraMs = Date.now();
       var itens = nomesIsmOrdenados.length
-        ? nomesIsmOrdenados.map(function(nomeIsm){
+        ? '<div class="today-agenda-columns">' + nomesIsmOrdenados.map(function(nomeIsm, idxIsm){
             var doIsm = porIsm[nomeIsm].slice().sort(function(a, b){ return (a.inicio || 0) - (b.inicio || 0); });
-            return '<div class="today-agenda-ism-header">' + esc(nomeIsm) + '</div>' + doIsm.map(appointmentHtml).join("");
-          }).join("")
+            var proximos = doIsm.filter(function(r){ return (r.fim || 0) >= agoraMs; });
+            var visiveis = proximos.slice(0, 2);
+            var idsVisiveis = {};
+            visiveis.forEach(function(r){ idsVisiveis[r.id || (r.inicio + "_" + r.titulo)] = true; });
+            var escondidos = doIsm.filter(function(r){ return !idsVisiveis[r.id || (r.inicio + "_" + r.titulo)]; });
+            var htmlEscondidos = escondidos.length
+              ? '<div data-mais-agenda="' + idxIsm + '" style="display:none;">' + escondidos.map(appointmentHtml).join("") + '</div>' +
+                '<button type="button" class="today-agenda-mais" data-toggle-mais="' + idxIsm + '">Mostrar mais (' + escondidos.length + ')</button>'
+              : "";
+            return '<div class="today-agenda-column">' +
+              '<div class="today-agenda-ism-header">' + esc(nomeIsm) + '</div>' +
+              (visiveis.length ? visiveis.map(appointmentHtml).join("") : '<div class="sidebar-loading">Nenhum compromisso restante hoje.</div>') +
+              htmlEscondidos +
+            '</div>';
+          }).join("") + '</div>'
         : '<div class="sidebar-loading">Nenhum compromisso registrado para hoje.</div>';
       container.innerHTML = '<section class="today-agenda" aria-labelledby="todayAgendaTitle">' +
         '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' + itens + '</section>';
@@ -2107,6 +2128,20 @@
         btn.addEventListener("click", function(){
           var id = btn.getAttribute("data-open-project");
           if (id && id !== "undefined") abrirProjeto(id);
+        });
+      });
+      // Os botões escondidos (dentro de [data-mais-agenda]) já foram
+      // percorridos pelo querySelectorAll("[data-open-project]") acima —
+      // display:none não tira o nó do DOM, só esconde visualmente — então
+      // o clique já funciona assim que o bloco aparece, sem religar nada.
+      container.querySelectorAll("[data-toggle-mais]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var idx = btn.getAttribute("data-toggle-mais");
+          var bloco = container.querySelector('[data-mais-agenda="' + idx + '"]');
+          if (!bloco) return;
+          var aberto = bloco.style.display !== "none";
+          bloco.style.display = aberto ? "none" : "block";
+          btn.textContent = aberto ? btn.textContent.replace("Mostrar menos", "Mostrar mais") : btn.textContent.replace("Mostrar mais", "Mostrar menos");
         });
       });
     }).catch(function(){
@@ -2678,11 +2713,17 @@
   function comentarioHtml(c){
     var meta = metaComentarioTexto(c.texto);
     var textoBruto = meta.texto;
-    var estiloDiv = "align-items:flex-start;" + (meta.destaque ? "background:var(--tag-cliente-bg); border-radius:8px; padding:8px 10px; margin:4px 0;" : "");
+    // Cor literal (não var(--tag-cliente-bg)): esse token some redefinido pra
+    // azul por um bloco :root legado mais abaixo no arquivo (paleta antiga,
+    // sem guarda de tema) — usar a variável aqui pintaria de azul por engano,
+    // confundindo com a conversa do Utalk (motivo pelo qual a usuária pediu
+    // amarelo em vez de azul).
+    var estiloDiv = "align-items:flex-start; overflow-wrap:anywhere; word-break:break-word; max-width:100%;" +
+      (meta.destaque ? "background:#FFF6D8; border-radius:8px; padding:8px 10px; margin:4px 0;" : "");
     var seloFixado = meta.pin ? '<span class="tag londrisoft" style="margin-right:6px;">📌 Fixado</span>' : "";
     if (/^\[\[FLOW\]\]/.test(textoBruto)){
       var jsonTexto = textoBruto.replace(/^\[\[FLOW\]\]/, "");
-      return '<div class="build-check" style="' + estiloDiv + '"><span>' + seloFixado + '📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
+      return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
         ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button>' +
         botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
     }
@@ -2691,7 +2732,7 @@
     var imagemHtml = m
       ? '<div style="margin-top:6px;"><img src="' + esc(m[0]) + '" data-lightbox-imagem="' + esc(m[0]) + '" alt="print anexado" style="max-width:240px;max-height:240px;border-radius:8px;display:block;cursor:zoom-in;"></div>'
       : "";
-    return '<div class="build-check" style="' + estiloDiv + '"><span>' + seloFixado + '<b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
+    return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '<b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
       imagemHtml +
       '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span>' + botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
   }
