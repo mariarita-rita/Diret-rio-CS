@@ -1190,6 +1190,14 @@ export async function criarComentario(taskId, texto) {
   });
 }
 
+/** Edita o texto de um comentario ja existente (ex: corrigir um nome digitado errado numa migracao) — preserva a data/posicao original, diferente de excluir+recriar. */
+export async function atualizarComentario(comentarioId, texto) {
+  return cu(`/comment/${comentarioId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ comment_text: texto }),
+  });
+}
+
 /**
  * Comentarios nativos de uma task, mais recentes primeiro (como o ClickUp
  * devolve) — paginado por completo. O ClickUp so devolve ate 25 por
