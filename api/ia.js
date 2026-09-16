@@ -1,13 +1,17 @@
 // Proxy da Claude API.
 //
-//   POST /api/ia?action=analisar-transcricao            { transcricao }
+//   POST /api/ia?action=analisar-transcricao            { transcricao, planoAtual? }
 //        Usado pela aba de proposta da Arquitetura de Solução (ecossistema
 //        Londrisoft) pra ler a transcrição de uma consultoria e sugerir os
 //        demais produtos do ecossistema (Gestor, Simplaz, Unique, BIME APP).
 //        O motor de sugestão de AGENTES do Waipe continua sendo o de sempre
 //        (palavra-chave, no front) — esta ação só preenche cliente/segmento/
 //        dores e aponta oportunidades de outros produtos, nunca escreve nada
-//        no ClickUp.
+//        no ClickUp. `planoAtual` (opcional, texto livre do CSM: o que o
+//        cliente já contrata hoje) evita recomendar de novo o que o plano
+//        atual já cobre — quando a dor já é coberta pelo plano atual e só
+//        falta o cliente usar o recurso, a recomendação vira "Treinamento"
+//        em vez de upgrade de plano.
 //
 //   POST /api/ia?action=resumir-conversa-umbler         { id }
 //        SOB DEMANDA (nunca automático — custo por chamada): lê a conversa
@@ -194,12 +198,23 @@ REGRAS DO DIAGNÓSTICO WAIPE (Individual/Time/Enterprise — preencha "waipeDiag
 - Quando a transcrição não der sinal suficiente pra um campo, use o padrão seguro: usuarios=1, empresas=1, governanca="nao", auditoria="nao", automacao="pronta", enterprisePorVolume="nao".
 `.trim();
 
-const INSTRUCOES = `Você vai ler a transcrição de uma reunião de consultoria da Londrisoft com um cliente e ajudar o time de Customer Success a montar a arquitetura de solução do ecossistema Londrisoft: qual o plano Waipe ideal (quando fizer sentido para o cliente), quais outros produtos/planos do ecossistema (Gestor, Simplaz, Unique, BIME APP) ofertar, e por quê.
+const REGRA_PLANO_ATUAL = `
+REGRA DO PLANO ATUAL DO CLIENTE (só se aplica quando a mensagem do usuário trouxer "Plano atual do cliente"):
+- Compare cada necessidade identificada na transcrição com o que esse plano atual já cobre — lembre que, dentro de uma mesma linha (Gestor, Simplaz Gestor, Simplaz Unique, Unique), cada plano inclui tudo do(s) plano(s) anterior(es) (ver CATALOGO_PRODUTOS abaixo).
+- Se a funcionalidade que resolveria a dor já está incluída no plano atual do cliente (ele só não usa ou não sabe usar) — NÃO recomende upgrade de plano para essa dor. Recomende em vez disso "produto":"Treinamento", com "planoSugerido" descrevendo em poucas palavras o que treinar (ex: "Uso do financeiro do Gestor Intermediário") e "motivo" explicando a dor que o treinamento resolve.
+- Se a funcionalidade NÃO está no plano atual do cliente — recomende o plano/produto necessário normalmente (upgrade ou produto novo).
+- Quando o plano atual não for informado, recomende normalmente sem essa comparação (não dá pra saber se falta treinamento ou plano).`.trim();
+
+const INSTRUCOES = `Você vai ler a transcrição de uma reunião de consultoria da Londrisoft com um cliente e ajudar o time de Customer Success a montar a arquitetura de solução do ecossistema Londrisoft: qual o plano Waipe ideal (quando fizer sentido para o cliente), quais outros produtos/planos do ecossistema (Gestor, Simplaz, Unique, BIME APP) ofertar — ou, quando o cliente já tiver o plano certo e só não estiver usando um recurso dele, um treinamento — e por quê.
+
+A mensagem do usuário pode opcionalmente trazer, antes da transcrição, uma linha "Plano atual do cliente no ecossistema Londrisoft" — use-a conforme a REGRA DO PLANO ATUAL abaixo.
 
 Responda APENAS com um JSON (sem texto antes ou depois, sem bloco de código markdown), neste formato exato:
-{"cliente":"nome do cliente/empresa mencionado, ou string vazia se não identificado","segmento":"segmento/ramo de atuação, ou string vazia","dores":"resumo em texto simples (não markdown) das dores e do contexto do cliente hoje, como uma nota de CSM — até 800 caracteres","waipeDiagnostico":{"usuarios":1,"empresas":1,"governanca":"sim|nao","auditoria":"sim|nao","automacao":"pronta|personalizada","enterprisePorVolume":"sim|nao"},"recomendacoes":[{"produto":"Gestor|Simplaz Gestor|Simplaz Unique|Unique|BIME APP","planoSugerido":"nome do plano/tier","motivo":"por que esse produto/plano resolve uma dor especifica mencionada","atencao":"presente SO no caso do Modulo Industria ou outra ressalva que precise checagem manual — omita nos outros casos","quantidadeSugerida":"numero de usuarios/vendedores, SOMENTE quando a transcricao citar uma quantidade clara para um produto cobrado por usuario (hoje so o BIME APP) — null nos demais casos"}]}
+{"cliente":"nome do cliente/empresa mencionado, ou string vazia se não identificado","segmento":"segmento/ramo de atuação, ou string vazia","dores":"resumo em texto simples (não markdown) das dores e do contexto do cliente hoje, como uma nota de CSM — até 800 caracteres","waipeDiagnostico":{"usuarios":1,"empresas":1,"governanca":"sim|nao","auditoria":"sim|nao","automacao":"pronta|personalizada","enterprisePorVolume":"sim|nao"},"recomendacoes":[{"produto":"Gestor|Simplaz Gestor|Simplaz Unique|Unique|BIME APP|Treinamento","planoSugerido":"nome do plano/tier (ou, para Treinamento, uma descrição curta do que treinar)","motivo":"por que esse produto/plano/treinamento resolve uma dor especifica mencionada","atencao":"presente SO no caso do Modulo Industria ou outra ressalva que precise checagem manual — omita nos outros casos","quantidadeSugerida":"numero de usuarios/vendedores, SOMENTE quando a transcricao citar uma quantidade clara para um produto cobrado por usuario (hoje so o BIME APP) — null nos demais casos"}]}
 
-Regras gerais: só recomende um produto se a transcrição realmente sugerir a necessidade dele — não invente; "recomendacoes" pode ser array vazio; nunca recomende o Módulo Indústria como oferta pronta; "quantidadeSugerida" só quando a transcrição der um número explícito, senão null (não estime nem arredonde); "planoSugerido" usa exatamente os nomes de plano do catálogo abaixo (ex: "Básico"/"Intermediário"/"Avançado", "Bronze"/"Prata"/"Ouro", "Light"/"Plus"/"Premium"/"Empresarial") — nunca traduza ou invente uma variação em inglês desses nomes.
+Regras gerais: só recomende um produto (ou treinamento) se a transcrição realmente sugerir a necessidade dele — não invente; "recomendacoes" pode ser array vazio; nunca recomende o Módulo Indústria como oferta pronta; "quantidadeSugerida" só quando a transcrição der um número explícito, senão null (não estime nem arredonde); para produtos que não sejam "Treinamento", "planoSugerido" usa exatamente os nomes de plano do catálogo abaixo (ex: "Básico"/"Intermediário"/"Avançado", "Bronze"/"Prata"/"Ouro", "Light"/"Plus"/"Premium"/"Empresarial") — nunca traduza ou invente uma variação em inglês desses nomes.
+
+${REGRA_PLANO_ATUAL}
 
 ${REGRAS_WAIPE}
 
@@ -223,7 +238,7 @@ function jsonTolerante(texto) {
   return null;
 }
 
-const PRODUTOS_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP']);
+const PRODUTOS_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Treinamento']);
 const SIM_NAO_VALIDOS = new Set(['sim', 'nao']);
 const AUTOMACAO_VALIDOS = new Set(['pronta', 'personalizada']);
 
@@ -328,10 +343,14 @@ async function chamarClaudeTexto({ system, mensagem, maxTokens }) {
   return respostaTexto;
 }
 
-async function chamarClaude(transcricao) {
+async function chamarClaude(transcricao, planoAtual) {
+  const mensagem = [
+    planoAtual ? `Plano atual do cliente no ecossistema Londrisoft (o que ele já contrata hoje): ${planoAtual}` : null,
+    `Transcrição da reunião:\n\n${transcricao}`,
+  ].filter(Boolean).join('\n\n');
   const respostaTexto = await chamarClaudeTexto({
     system: INSTRUCOES,
-    mensagem: `Transcrição da reunião:\n\n${transcricao}`,
+    mensagem,
     maxTokens: 4096,
   });
   const parsed = jsonTolerante(respostaTexto);
@@ -357,10 +376,11 @@ async function analisarTranscricaoAcao(req, res) {
   if (transcricao.length < 20) {
     return erro(res, 400, 'transcricao_invalida', 'Cole a transcrição da reunião antes de analisar.');
   }
+  const planoAtual = texto(corpo.planoAtual, 500);
 
   let resultado;
   try {
-    resultado = await chamarClaude(transcricao);
+    resultado = await chamarClaude(transcricao, planoAtual);
   } catch (e) {
     if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
     if (e.message === 'resposta_nao_json' || e.message === 'resposta_vazia') {

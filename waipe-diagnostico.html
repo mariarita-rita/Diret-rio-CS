@@ -1179,6 +1179,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
         <div class="divider"></div>
 
+        <div class="field">
+          <label for="p-plano-atual">Plano atual do cliente no ecossistema Londrisoft (opcional)</label>
+          <input type="text" id="p-plano-atual" class="num-input" placeholder="ex: Gestor Intermediário, Simplaz Gestor Prata...">
+          <div class="hint">Preencha o que o cliente já contrata hoje antes de analisar a transcrição — assim a IA não recomenda de novo algo que já está no plano dele: se ele só não estiver usando um recurso já incluído, ela sugere treinamento em vez de upgrade; se faltar mesmo, sugere o plano certo.</div>
+        </div>
+
         <div class="field" style="margin-bottom:0;">
           <label for="p-transcricao">✨ Colar transcrição da consultoria (opcional)</label>
           <textarea id="p-transcricao" class="ta" placeholder="Cole aqui a transcrição da reunião — a IA preenche cliente, segmento e dores, o diagnóstico Waipe e aponta outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP)."></textarea>
@@ -1452,6 +1458,44 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       </div>
 
       <div id="analiseIaResultado"></div>
+
+      <div id="campSolucaoCard" style="background:var(--surface-2); border:1px solid var(--border-strong); border-radius:12px; padding:18px; margin-top:18px;">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="campIncluidoCheck" style="width:16px; height:16px; accent-color:var(--ink); flex:0 0 auto;">
+          <h3 style="font-size:15px; font-weight:700; margin:0;">🎟️ Convite Londrisoft Camp 2026</h3>
+        </label>
+        <div class="sub" style="margin-top:6px;">11 de novembro de 2026 · Laguna Buffet, Cambé-PR. Marque para incluir, no final da proposta, uma seção convidando o cliente para o evento — com a condição de cortesia e/ou desconto de ingresso definida abaixo.</div>
+
+        <div id="campSolucaoCampos" style="margin-top:14px; display:none;">
+          <div class="field-row">
+            <div class="field">
+              <label for="camp-passe">Tipo de ingresso oferecido</label>
+              <select id="camp-passe" class="sel">
+                <option value="Full Pass">Full Pass</option>
+                <option value="Premium Pass">Premium Pass</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="camp-cortesia">Ingressos cortesia</label>
+              <input type="number" id="camp-cortesia" class="num-input tabular" min="0" step="1" value="1">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="camp-desconto-qtd">Ingressos adicionais com desconto</label>
+              <input type="number" id="camp-desconto-qtd" class="num-input tabular" min="0" step="1" value="0">
+            </div>
+            <div class="field">
+              <label for="camp-desconto-percent">Desconto nesses ingressos (%)</label>
+              <input type="number" id="camp-desconto-percent" class="num-input tabular" min="0" max="100" step="5" value="20">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="camp-obs">Observações (opcional)</label>
+            <input type="text" id="camp-obs" class="num-input" placeholder="ex: válido até 30/09, cortesia para o sócio">
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -2732,6 +2776,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     var btn = this;
     var erroEl = document.getElementById("analiseIaErro");
     var transcricao = document.getElementById("p-transcricao").value.trim();
+    var planoAtual = document.getElementById("p-plano-atual").value.trim();
     erroEl.style.display = "none";
     if (!transcricao){ erroEl.textContent = "Cole a transcrição da reunião antes de analisar."; erroEl.style.display = "block"; return; }
 
@@ -2742,7 +2787,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     fetch("/api/ia?action=analisar-transcricao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcricao: transcricao })
+      body: JSON.stringify({ transcricao: transcricao, planoAtual: planoAtual })
     }).then(function(r){
       return r.json().then(function(j){ if (!r.ok) throw j; return j; });
     }).then(function(resultado){
@@ -2931,6 +2976,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     refreshPropSummary();
   });
 
+  /** Mostra/esconde os campos de cortesia/desconto do Camp conforme o
+   * checkbox — não depende do evento "change" (que não dispara quando o
+   * rascunho restaura o estado programaticamente), por isso é uma função
+   * própria chamada também em restaurarRascunho(). */
+  function atualizarCampVisibilidade(){
+    document.getElementById("campSolucaoCampos").style.display = document.getElementById("campIncluidoCheck").checked ? "block" : "none";
+  }
+  document.getElementById("campIncluidoCheck").addEventListener("change", atualizarCampVisibilidade);
+
   // ---------- Implantação Enterprise ----------
   function updatePacoteHint(){
     var pac = PACOTES_IMPLANTACAO.filter(function(p){ return p.id === implantacao.pacoteId; })[0];
@@ -3017,10 +3071,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
   // ---------- Rascunho local (não perder o que já foi preenchido ao trocar de aba/página) ----------
   var CHAVE_RASCUNHO = "waipeArquiteturaSolucao.rascunho.v1";
-  var CAMPOS_RASCUNHO = ["p-transcricao", "p-cliente", "p-segmento", "p-id-nucleo", "p-cnpj", "p-email", "p-telefone", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
+  var CAMPOS_RASCUNHO = ["p-transcricao", "p-plano-atual", "p-cliente", "p-segmento", "p-id-nucleo", "p-cnpj", "p-email", "p-telefone", "p-contato", "p-csm", "p-erp", "p-dores", "p-obs",
     "waipeIncluidoCheck", "f-usuarios", "f-empresas", "f-motivo", "f-conversas", "f-execucoes",
     "p-desc-tipo", "p-desc-valor", "p-ent-base",
-    "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento"];
+    "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento",
+    "campIncluidoCheck", "camp-passe", "camp-cortesia", "camp-desconto-qtd", "camp-desconto-percent", "camp-obs"];
 
   function coletarRascunho(){
     var campos = {};
@@ -3073,6 +3128,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       else el.value = d.campos[id];
     });
     waipeIncluido = document.getElementById("waipeIncluidoCheck").checked;
+    atualizarCampVisibilidade();
 
     if (d.segState){
       Object.keys(d.segState).forEach(function(grupo){
@@ -3385,6 +3441,62 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       cliente: cliente, segmento: segmento, idNucleo: idNucleo, cnpj: cnpj, email: email, telefone: telefone,
       contato: contato, csm: csm, erp: erp, dores: dores, obs: obs, agents: agents
     };
+  }
+
+  /** Condição de cortesia/desconto do Londrisoft Camp 2026 definida pelo CSM
+   * nesta proposta — lida direto do DOM na hora de montar o documento, como
+   * ctx.obs acima (não precisa virar estado global: só alimenta o HTML final). */
+  function getCampContext(){
+    return {
+      incluir: document.getElementById("campIncluidoCheck").checked,
+      passe: document.getElementById("camp-passe").value,
+      cortesia: parseInt(document.getElementById("camp-cortesia").value, 10) || 0,
+      descontoQtd: parseInt(document.getElementById("camp-desconto-qtd").value, 10) || 0,
+      descontoPercent: parseInt(document.getElementById("camp-desconto-percent").value, 10) || 0,
+      obs: document.getElementById("camp-obs").value.trim()
+    };
+  }
+
+  /** Selo de destaque (mesmo componente .freeband do desconto do Waipe) com a
+   * condição comercial de ingresso desta proposta — vazio quando o CSM
+   * marcou "incluir" mas não configurou nem cortesia nem desconto de verdade. */
+  function buildCampFreeband(camp){
+    var partes = [];
+    if (camp.cortesia > 0) partes.push(camp.cortesia + " ingresso" + (camp.cortesia > 1 ? "s" : "") + " " + escapeHtml(camp.passe) + " cortesia");
+    if (camp.descontoQtd > 0 && camp.descontoPercent > 0) partes.push(camp.descontoQtd + " ingresso" + (camp.descontoQtd > 1 ? "s" : "") + " adicion" + (camp.descontoQtd > 1 ? "ais" : "al") + " com " + camp.descontoPercent + "% de desconto");
+    if (!partes.length) return "";
+    var selo = camp.cortesia > 0
+      ? "<b>" + camp.cortesia + "</b><span>cortesia</span>"
+      : "<b>" + camp.descontoPercent + "%</b><span>desconto</span>";
+    return '<div class="freeband"><div class="selo">' + selo + '</div><div class="txt"><b>Condição especial de acesso ao Londrisoft Camp 2026.</b><br>' +
+      partes.join(" + ") + "." + (camp.obs ? " " + escapeHtml(camp.obs) : "") + '</div></div>';
+  }
+
+  /** Seção "Um convite especial" da proposta — só entra no documento quando o
+   * CSM marcou "incluir" E configurou uma condição de verdade (freeband não
+   * vazio); nunca convida sem oferecer nada concreto. */
+  function buildCampSection(camp){
+    var freeband = buildCampFreeband(camp);
+    if (!freeband) return "";
+    return '<p>O <strong>Londrisoft Camp</strong> é o maior evento de tecnologia, inteligência artificial e gestão para contabilidade e empresas de Londrina e região — conteúdo prático, trilhas simultâneas (contábil, fiscal, financeiro, vendas, tecnologia e IA), workshops mão na massa e feira de negócios, pensados para sair do evento e aplicar no dia a dia da operação.</p>' +
+      '<div class="callout"><span class="lbl">📅 Quando e onde</span>11 de novembro de 2026 · Laguna Buffet — BR-369, Parque Res. Manela, Cambé-PR.</div>' +
+      '<h4>Palestrantes confirmados</h4>' +
+      '<ul class="clean">' +
+        '<li><strong>Dafna Blaschkauer</strong> — executiva global, autora e TEDx Speaker; mais de 25 anos de liderança em empresas como Nike, Apple e Microsoft.</li>' +
+        '<li><strong>Bruno Amaral</strong> — Product Manager especialista em Inteligência Artificial aplicada a produto e negócios, no iFood.</li>' +
+        '<li><strong>Ricardo de Almeida</strong> — especialista em Inteligência Artificial na Google Cloud.</li>' +
+      '</ul>' +
+      '<table><tr><th>Acesso / Benefícios</th><th>Full Pass</th><th>Premium Pass</th></tr>' +
+        '<tr><td>Feira de Negócios</td><td class="bom">✔</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Palco Principal, Palco 2 e Palco 3</td><td class="bom">✔</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Espaço de Networking, Welcome Coffee e Happy Hour</td><td class="bom">✔</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Entrada desde a abertura</td><td class="bom">✔</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Credenciamento prioritário</td><td class="risco">✕</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Área reservada nos palcos</td><td class="risco">✕</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Almoço incluído</td><td class="risco">✕</td><td class="bom">✔</td></tr>' +
+        '<tr><td>Kit premium</td><td class="risco">✕</td><td class="bom">✔</td></tr>' +
+      '</table>' +
+      freeband;
   }
 
   /** Os 4 campos de identificação do cliente — obrigatórios só na hora de
@@ -3825,6 +3937,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         if (isEnterprise && impl.hasPacote){
           sections.push({ title: "Implantação Enterprise", body: buildImplantacaoSection(impl) });
         }
+      }
+
+      var campCtx = getCampContext();
+      if (campCtx.incluir){
+        var campBody = buildCampSection(campCtx);
+        if (campBody) sections.push({ title: "Um convite especial: Londrisoft Camp 2026", body: campBody });
       }
 
       sections.push({ title: "Próximos Passos",
