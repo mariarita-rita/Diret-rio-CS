@@ -2654,21 +2654,46 @@
     return ' <button type="button" class="btn-reset" data-excluir-comentario="' + esc(id) + '" title="Excluir este comentário (Gestão)" style="color:var(--danger);margin-left:6px;">✕</button>';
   }
 
-  function comentarioHtml(c){
-    if (/^\[\[FLOW\]\]/.test(c.texto)){
-      var jsonTexto = c.texto.replace(/^\[\[FLOW\]\]/, "");
-      return '<div class="build-check" style="align-items:flex-start"><span>📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
-        ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button>' +
-        botaoExcluirComentario(c.id) + '</span></div>';
+  // Fixar/destacar não é campo nativo do ClickUp — vive como marcador no
+  // INÍCIO do próprio texto do comentário (mesmo espírito do [[FLOW]] já
+  // usado pra "fluxo salvo"), espelhando a mesma lógica do servidor
+  // (metaComentarioTexto em api/clickup.js).
+  function metaComentarioTexto(bruto){
+    var t = String(bruto || "");
+    var pin = false, destaque = false, mudou = true;
+    while (mudou){
+      mudou = false;
+      if (t.indexOf("[[PIN]]") === 0){ pin = true; t = t.slice(7); mudou = true; }
+      if (t.indexOf("[[DESTAQUE]]") === 0){ destaque = true; t = t.slice(12); mudou = true; }
     }
-    var m = RE_URL_IMAGEM.exec(c.texto || "");
-    var textoSemImagem = m ? (c.texto.slice(0, m.index) + c.texto.slice(m.index + m[0].length)).trim() : (c.texto || "");
+    return { pin: pin, destaque: destaque, texto: t };
+  }
+
+  function botoesFixarDestacar(id, pin, destaque){
+    if (sessaoNivelAtual === "consulta" || !id) return "";
+    return ' <button type="button" class="btn-reset" data-fixar-comentario="' + esc(id) + '" data-pin-atual="' + (pin ? "1" : "0") + '" title="' + (pin ? "Desafixar" : "Fixar no topo, pra todo mundo ver primeiro") + '" style="margin-left:6px;' + (pin ? "border-color:var(--profundo);color:var(--profundo);" : "") + '">📌</button>' +
+      ' <button type="button" class="btn-reset" data-destacar-comentario="' + esc(id) + '" data-destaque-atual="' + (destaque ? "1" : "0") + '" title="' + (destaque ? "Remover destaque" : "Destacar (fundo diferenciado)") + '" style="margin-left:4px;' + (destaque ? "border-color:var(--warning);color:var(--warning);" : "") + '">🖍️</button>';
+  }
+
+  function comentarioHtml(c){
+    var meta = metaComentarioTexto(c.texto);
+    var textoBruto = meta.texto;
+    var estiloDiv = "align-items:flex-start;" + (meta.destaque ? "background:var(--tag-cliente-bg); border-radius:8px; padding:8px 10px; margin:4px 0;" : "");
+    var seloFixado = meta.pin ? '<span class="tag londrisoft" style="margin-right:6px;">📌 Fixado</span>' : "";
+    if (/^\[\[FLOW\]\]/.test(textoBruto)){
+      var jsonTexto = textoBruto.replace(/^\[\[FLOW\]\]/, "");
+      return '<div class="build-check" style="' + estiloDiv + '"><span>' + seloFixado + '📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
+        ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button>' +
+        botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
+    }
+    var m = RE_URL_IMAGEM.exec(textoBruto || "");
+    var textoSemImagem = m ? (textoBruto.slice(0, m.index) + textoBruto.slice(m.index + m[0].length)).trim() : (textoBruto || "");
     var imagemHtml = m
       ? '<div style="margin-top:6px;"><img src="' + esc(m[0]) + '" data-lightbox-imagem="' + esc(m[0]) + '" alt="print anexado" style="max-width:240px;max-height:240px;border-radius:8px;display:block;cursor:zoom-in;"></div>'
       : "";
-    return '<div class="build-check" style="align-items:flex-start"><span><b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
+    return '<div class="build-check" style="' + estiloDiv + '"><span>' + seloFixado + '<b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
       imagemHtml +
-      '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span>' + botaoExcluirComentario(c.id) + '</span></div>';
+      '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span>' + botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
   }
 
   function renderComentarios(taskId, container, titulo){
@@ -2677,17 +2702,24 @@
     container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2><div class="sub">Carregando…</div></div>';
     apiGet("listar-comentarios", { taskId: taskId }).then(function(resp){
       var lista = resp.comentarios || [];
+      // Fixados sempre no topo (pra todo mundo achar de cara), na frente dos
+      // demais — que continuam na ordem normal (mais recente primeiro).
+      var fixados = lista.filter(function(c){ return metaComentarioTexto(c.texto).pin; });
+      var demais = lista.filter(function(c){ return !metaComentarioTexto(c.texto).pin; });
+      var listaHtml = !lista.length
+        ? '<div class="sub">Nenhum comentário ainda.</div>'
+        : (fixados.length ? '<div class="sub" style="font-weight:700; margin-bottom:4px;">📌 Fixados</div>' + fixados.map(comentarioHtml).join("") +
+            '<div style="margin:10px 0; border-top:1px solid var(--border);"></div>' : "") +
+          demais.map(comentarioHtml).join("");
       container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2>' +
-        '<div style="display:flex; gap:8px; align-items:center;">' +
-          '<input type="text" class="form-input" id="novoComentario" style="flex:1;">' +
+        '<div style="display:flex; gap:8px; align-items:flex-end;">' +
+          '<textarea class="form-input" id="novoComentario" rows="3" style="flex:1; resize:vertical; min-height:64px; font-family:inherit;"></textarea>' +
           '<button type="button" class="btn-reset" id="btnDitarComentario" title="Ditar por voz" style="font-size:18px; padding:4px 8px;">🎤</button>' +
           '<button type="button" class="btn-flow-secondary" id="btnComentar">Comentar</button>' +
         '</div>' +
         '<div id="comentarioPreview" style="display:none;margin-top:10px;"></div>' +
-        '<div class="sub" style="margin-top:6px;">Dá para colar um print (Ctrl+V) direto no campo acima, ou ditar por voz (🎤).</div>' +
-        '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' +
-          (lista.length ? lista.map(comentarioHtml).join("") : '<div class="sub">Nenhum comentário ainda.</div>') +
-        '</div></div>';
+        '<div class="sub" style="margin-top:6px;">Enter comenta · Shift+Enter ou Ctrl+Enter pula linha · Ctrl+V cola um print · 🎤 dita por voz.</div>' +
+        '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' + listaHtml + '</div></div>';
       container.querySelectorAll("[data-copiar-flow]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var jsonTexto = decodeURIComponent(btn.getAttribute("data-copiar-flow"));
@@ -2709,10 +2741,44 @@
             });
         });
       });
+      container.querySelectorAll("[data-fixar-comentario]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var novoPin = btn.getAttribute("data-pin-atual") !== "1";
+          btn.disabled = true;
+          apiPost("marcar-comentario-implantacao", { taskId: taskId, comentarioId: btn.getAttribute("data-fixar-comentario"), pin: novoPin })
+            .then(function(){ renderComentarios(taskId, container, titulo); })
+            .catch(function(e){
+              showSimToast(mensagemErro(e) || "Não deu para fixar o comentário.");
+              btn.disabled = false;
+            });
+        });
+      });
+      container.querySelectorAll("[data-destacar-comentario]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var novoDestaque = btn.getAttribute("data-destaque-atual") !== "1";
+          btn.disabled = true;
+          apiPost("marcar-comentario-implantacao", { taskId: taskId, comentarioId: btn.getAttribute("data-destacar-comentario"), destaque: novoDestaque })
+            .then(function(){ renderComentarios(taskId, container, titulo); })
+            .catch(function(e){
+              showSimToast(mensagemErro(e) || "Não deu para destacar o comentário.");
+              btn.disabled = false;
+            });
+        });
+      });
       var previewEl = container.querySelector("#comentarioPreview");
       var btnComentar = container.querySelector("#btnComentar");
       var input = container.querySelector("#novoComentario");
       ligarDitadoPorVoz(container.querySelector("#btnDitarComentario"), input);
+
+      // Enter sozinho comenta (como a maioria dos chats); Shift+Enter ou
+      // Ctrl+Enter pula linha (comportamento padrão do textarea nesses
+      // casos — só intercepta o Enter puro pra virar "Comentar").
+      input.addEventListener("keydown", function(e){
+        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey){
+          e.preventDefault();
+          btnComentar.click();
+        }
+      });
 
       function mostrarPreview(){
         if (!imagemPendente){ previewEl.style.display = "none"; previewEl.innerHTML = ""; return; }

@@ -124,6 +124,7 @@ import {
   contextoSemEstado,
   corpoDoModelo,
   criarClienteCarteira,
+  atualizarComentario,
   criarComentario,
   criarModeloMensagem,
   criarReserva,
@@ -289,6 +290,9 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'excluir-comentario-implantacao') {
       return await excluirComentarioImplantacaoAcao(req, res, sessao);
     }
+    if (req.method === 'POST' && acao === 'marcar-comentario-implantacao') {
+      return await marcarComentarioImplantacaoAcao(req, res, sessao);
+    }
     if (req.method === 'POST' && acao === 'excluir-implantacao') return await excluirImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'anexar-arquivo-implantacao') {
       return await anexarArquivoImplantacaoAcao(req, res, sessao);
@@ -344,7 +348,7 @@ export default async function handler(req, res) {
       'definir-gerente-contas',
       'atualizar-implantacao', 'renomear-implantacao', 'adicionar-item-implantacao',
       'atualizar-agente', 'comentar-implantacao',
-      'listar-comentarios', 'excluir-comentario-implantacao', 'excluir-implantacao',
+      'listar-comentarios', 'excluir-comentario-implantacao', 'marcar-comentario-implantacao', 'excluir-implantacao',
       'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'compromissos-hoje', 'criar-reserva',
       'atualizar-reserva', 'cancelar-reserva', 'marcar-comparecimento-reserva',
@@ -3427,6 +3431,72 @@ async function listarComentariosAcao(req, res, sessao) {
     data: c.date || null,
   }));
   return res.status(200).json({ comentarios: mapeados });
+}
+
+// Fixar/destacar um comentário não é um campo nativo do ClickUp — vive como
+// um marcador no INÍCIO do próprio texto do comentário (mesmo espírito do
+// prefixo [[FLOW]] já usado pra "fluxo salvo"). O front usa a mesma lógica
+// pra ler de volta (esconde o marcador, some só a formatação).
+function metaComentarioTexto(bruto) {
+  let t = String(bruto || '');
+  let pin = false;
+  let destaque = false;
+  let mudou = true;
+  while (mudou) {
+    mudou = false;
+    if (t.startsWith('[[PIN]]')) { pin = true; t = t.slice(7); mudou = true; }
+    if (t.startsWith('[[DESTAQUE]]')) { destaque = true; t = t.slice(12); mudou = true; }
+  }
+  return { pin, destaque, texto: t };
+}
+
+/**
+ * POST ?action=marcar-comentario-implantacao { taskId, comentarioId, pin?,
+ * destaque? } — fixa (aparece sempre no topo, pra todo mundo ver primeiro)
+ * e/ou destaca (fundo diferenciado, sem subir de posição) um comentário.
+ * `pin`/`destaque` só mudam quando vêm no corpo — omitir preserva o valor
+ * atual (permite alternar só um dos dois sem precisar saber o outro).
+ */
+async function marcarComentarioImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+  const comentarioId = texto(corpo.comentarioId, 40);
+  if (!comentarioId) {
+    return erro(res, 400, 'comentario_invalido', 'comentarioId inválido.');
+  }
+
+  const resolvido = await resolverImplantacao(corpo.taskId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
+  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  const comentarios = await listarComentarios(corpo.taskId);
+  const alvo = comentarios.find((c) => String(c.id) === comentarioId);
+  if (!alvo) return erro(res, 404, 'comentario_nao_encontrado', 'Comentário não encontrado.');
+
+  const atual = metaComentarioTexto(alvo.comment_text || '');
+  const pin = 'pin' in corpo ? !!corpo.pin : atual.pin;
+  const destaque = 'destaque' in corpo ? !!corpo.destaque : atual.destaque;
+  const novoTexto = (pin ? '[[PIN]]' : '') + (destaque ? '[[DESTAQUE]]' : '') + atual.texto;
+
+  await atualizarComentario(comentarioId, novoTexto);
+  return res.status(200).json({ ok: true, pin, destaque });
 }
 
 async function comentarImplantacaoAcao(req, res, sessao) {
