@@ -1015,7 +1015,7 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Londrisoft Camp 2026', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Nota de Serviço', 'Londrisoft Camp 2026', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
 // 'vigencia': desconto do item vem da vigência contratada (3/6/12 meses,
 // Londrisoft Deploy), não de alçada negociável — ver VIGENCIAS_DEPLOY_VALIDAS.
@@ -1097,6 +1097,13 @@ const JORNADA_TEMPLATES = {
     'Validar homologação junto ao banco',
     'Corrigir e reenviar em caso de erro',
     'Confirmar homologação aprovada e liberar emissão de boletos',
+  ],
+  'Nota de Serviço': [
+    'Coletar dados de acesso à prefeitura (CPF/senha) e IE municipal',
+    'Coletar tributação por serviço (CST PIS/COFINS, retenções ISS/INSS, código da lista 116/03, alíquota)',
+    'Configurar numeração inicial (última NF-e, MDF-e e nota de serviço emitidas)',
+    'Ativar emissão de nota de serviço e realizar teste',
+    'Confirmar com o cliente que a emissão está funcionando',
   ],
 };
 
