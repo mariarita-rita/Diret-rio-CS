@@ -93,6 +93,7 @@ const CF = {
   CAMP_VALOR: '748dbd02-1c2f-4f31-a5f7-5cc82bcd3cb0',
   CAMP_2025: '0ca6b980-8de1-47e6-bb87-1157e54d2525',
   OBS_EVENTO: '1089289b-c7e8-4ffa-97fc-02448d9ab909',
+  OBS_CAMP_2026: '17ad4601-cce6-437f-97e4-9189a8a18c5d',
 };
 
 /**
@@ -298,7 +299,12 @@ export const CAMPOS_ESCRITA = {
     opcoes: new Set(CAMP_2025_OPCOES.map((o) => o.id)),
   },
   [CF.OBS_EVENTO]: {
-    nome: 'Observação do evento',
+    nome: 'Observação do evento 2025',
+    tipo: 'texto',
+    max: 500,
+  },
+  [CF.OBS_CAMP_2026]: {
+    nome: 'Observação do CAMP 2026',
     tipo: 'texto',
     max: 500,
   },
@@ -559,6 +565,7 @@ function mapTask(t) {
     camp2025: cfVal(t, CF.CAMP_2025),
     camp2025Id: cfOpcaoId(t, CF.CAMP_2025),
     obsEvento: cfVal(t, CF.OBS_EVENTO),
+    obsCamp2026: cfVal(t, CF.OBS_CAMP_2026),
   };
 }
 
@@ -1630,6 +1637,10 @@ export function refletirEscrita(taskId, fieldId, valor) {
   }
   if (fieldId === CF.OBS_EVENTO) {
     alvo.linha.obsEvento = valor;
+    return;
+  }
+  if (fieldId === CF.OBS_CAMP_2026) {
+    alvo.linha.obsCamp2026 = valor;
     return;
   }
 

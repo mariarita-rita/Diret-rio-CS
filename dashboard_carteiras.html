@@ -552,6 +552,7 @@ const CAMP_2025=[
 ];
 const CAMPO_CAMP_2025='0ca6b980-8de1-47e6-bb87-1157e54d2525';
 const CAMPO_OBS_EVENTO='1089289b-c7e8-4ffa-97fc-02448d9ab909';
+const CAMPO_OBS_CAMP_2026='17ad4601-cce6-437f-97e4-9189a8a18c5d';
 
 // Campos numéricos da campanha Camp 2026. Mesma allowlist em api/_lib/clickup.js —
 // a suíte prova que os dois lados batem.
@@ -1994,6 +1995,7 @@ function openDetail(rStr,showMRR){
       ${drow('Critério',r.criterio||'—')}
       ${r.motivoPerda?drow('Motivo cancelamento',r.motivoPerda):''}
       ${drow('Camp 2026',campBadge(r))}
+      ${r.obsCamp2026?drow('Obs. CAMP 2026',esc(r.obsCamp2026)):''}
       ${drow('Camp 2025',camp2025Badge(r))}
       ${r.obsEvento?drow('Obs. evento 2025',esc(r.obsEvento)):''}
     </div>
@@ -2024,6 +2026,12 @@ function openDetail(rStr,showMRR){
           value="${r.campValor||0}" onchange="salvarCampoNumero(this,CAMPO_CAMP_VALOR,'campValor')">
       </div>
     </div>
+    <div style="margin-top:8px">
+      <label style="font-size:10px;color:var(--neutral-500)">✍️ Observação do CAMP 2026</label>
+      <input type="text" id="obs-camp2026" class="ctrl-select" maxlength="500" style="width:100%"
+        value="${esc(r.obsCamp2026||'')}" onchange="salvarCampoTexto(this,CAMPO_OBS_CAMP_2026,'obsCamp2026',500,'obs-camp2026-estado')">
+    </div>
+    <span id="obs-camp2026-estado" style="font-size:11px"></span>
     <span id="camp-num-estado" style="font-size:11px"></span>
     <div class="detail-section-title" style="margin-top:14px">🔁 Camp 2025 (histórico)</div>
     <div style="display:flex;align-items:center;gap:8px">
@@ -2175,9 +2183,9 @@ async function salvarCamp2025(sel){
   }
 }
 /** Grava um campo de texto livre (hoje só Observação do evento). Mesmo padrão otimista. */
-async function salvarCampoTexto(input,fieldId,prop,max){
+async function salvarCampoTexto(input,fieldId,prop,max,estadoId='obs-evento-estado'){
   const r=_currentDetailCliente;
-  const estado=document.getElementById('obs-evento-estado');
+  const estado=document.getElementById(estadoId);
   if(!r||!estado)return;
   const anterior=r[prop]||'';
   const novo=input.value;
