@@ -6,5 +6,8 @@
         { "key": "Cache-Control", "value": "s-maxage=300, stale-while-revalidate=600" }
       ]
     }
+  ],
+  "crons": [
+    { "path": "/api/cron-relatorio-finalizacao", "schedule": "0 10 * * *" }
   ]
 }

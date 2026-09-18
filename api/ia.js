@@ -119,7 +119,7 @@ class ErroConfigIa extends Error {
   }
 }
 
-class ErroUpstreamIa extends Error {
+export class ErroUpstreamIa extends Error {
   constructor(status) {
     super(`Claude API respondeu ${status}`);
     this.name = 'ErroUpstreamIa';
@@ -503,22 +503,29 @@ Regras:
 - "causaDaDemora": procure ativamente no histórico qualitativo (não só nos números de reagendamento) — ex: "cliente sobrecarregado com outra obrigação", "pendência cadastral/técnica externa", "cliente trocou de fornecedor/sistema", "demora em responder contato". Se os dados objetivos mostrarem vários reagendamentos ou não comparecimentos, isso sozinho já é sinal suficiente mesmo sem uma causa qualitativa explícita.
 - O objetivo é minimizar o quanto a pessoa que revisa precisa complementar à mão — prefira uma inferência razoável e sinalizada como tal a deixar o campo genérico ou vazio.`;
 
-async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
-  let corpo;
-  try {
-    corpo = await lerCorpo(req);
-  } catch (e) {
-    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
-    throw e;
+export class ErroSemRegistros extends Error {
+  constructor() {
+    super('Nenhum comentário foi registrado neste projeto ainda.');
+    this.name = 'ErroSemRegistros';
   }
-  if (!taskIdValido(corpo.id)) return erro(res, 400, 'task_invalida', 'id inválido.');
+}
 
-  const resolvido = await resolverImplantacao(corpo.id);
-  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
-  const { projeto } = resolvido;
-  const negado = checarPosseProjeto(sessao, projeto);
-  if (negado) return erro(res, 403, 'fora_da_carteira', negado);
+export class ErroRelatorioNaoJson extends Error {
+  constructor() {
+    super('A IA não devolveu um resultado válido.');
+    this.name = 'ErroRelatorioNaoJson';
+  }
+}
 
+/**
+ * Núcleo de `gerar-relatorio-finalizacao`, sem req/res — usado tanto pela
+ * ação HTTP (sob demanda, revisão manual) quanto pela rotina automática
+ * (api/cron/relatorio-finalizacao.js, sem sessão de usuário nenhuma). Lança
+ * `ErroSemRegistros`/`ErroRelatorioNaoJson`/`ErroUpstreamIa` em vez de
+ * escrever em `res` — quem chama decide o que fazer com cada erro (a ação
+ * HTTP mapeia pra 400/502; a rotina só loga e segue pro próximo projeto).
+ */
+export async function montarRelatorioFinalizacao(projeto) {
   const comentarios = await listarComentarios(projeto.id);
   // Histórico inteiro, do mais antigo pro mais recente (ClickUp devolve
   // mais recente primeiro) — antes só entravam os comentários marcados
@@ -531,7 +538,7 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
     .filter(Boolean)
     .reverse();
   if (!historicoCompleto.length) {
-    return erro(res, 400, 'sem_registros', 'Nenhum comentário foi registrado neste projeto ainda.');
+    throw new ErroSemRegistros();
   }
 
   const csm = csmDaDescricaoImplantacao(projeto.description);
@@ -576,21 +583,14 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
 
   const mensagem = `${dadosObjetivos}\n\nHistórico completo de comentários do projeto (do mais antigo pro mais recente):\n\n${historicoCompleto.join('\n\n---\n\n')}`;
 
-  let respostaTexto;
-  try {
-    respostaTexto = await chamarClaudeTexto({ system: INSTRUCOES_RELATORIO_FINAL, mensagem, maxTokens: 1536 });
-  } catch (e) {
-    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
-    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido.');
-    throw e;
-  }
+  const respostaTexto = await chamarClaudeTexto({ system: INSTRUCOES_RELATORIO_FINAL, mensagem, maxTokens: 1536 });
   const parsed = jsonTolerante(respostaTexto);
   if (!parsed) {
     console.error(`[ia] relatorio_nao_json: ${respostaTexto.slice(0, 500)}`);
-    return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido — tente novamente.');
+    throw new ErroRelatorioNaoJson();
   }
 
-  return res.status(200).json({
+  return {
     ok: true,
     resumoGeral: texto(parsed.resumoGeral, 2000),
     riscoPercebido: RISCO_PERCEBIDO_VALIDOS.has(parsed.riscoPercebido) ? parsed.riscoPercebido : '',
@@ -609,7 +609,37 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
     reagendamentos,
     reagendamentosLondrisoft,
     reagendamentosCliente,
-  });
+  };
+}
+
+async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+  if (!taskIdValido(corpo.id)) return erro(res, 400, 'task_invalida', 'id inválido.');
+
+  const resolvido = await resolverImplantacao(corpo.id);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
+  const { projeto } = resolvido;
+  const negado = checarPosseProjeto(sessao, projeto);
+  if (negado) return erro(res, 403, 'fora_da_carteira', negado);
+
+  let relatorio;
+  try {
+    relatorio = await montarRelatorioFinalizacao(projeto);
+  } catch (e) {
+    if (e instanceof ErroSemRegistros) return erro(res, 400, 'sem_registros', e.message);
+    if (e instanceof ErroRelatorioNaoJson) return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido — tente novamente.');
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resultado válido.');
+    throw e;
+  }
+
+  return res.status(200).json(relatorio);
 }
 
 const RISCO_PERCEBIDO_VALIDOS = new Set(['baixo', 'medio', 'alto']);

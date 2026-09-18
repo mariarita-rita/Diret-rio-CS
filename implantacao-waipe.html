@@ -539,6 +539,7 @@
       <p>Passos, cronograma, escopo técnico e pontos de atenção do ecossistema Londrisoft (Waipe, Gestor, Simplaz, Unique, BIME APP) — para o time interno e para o cliente</p>
     </div>
     <div class="header-meta">Fontes<br><a href="https://docs.londrisoft.com.br/waipe/central-do-cliente/como-funciona-a-implantacao-do-waipe" target="_blank" rel="noopener">docs.londrisoft.com.br › Implantação do Waipe</a></div>
+    <div class="header-meta" id="sessaoIdentidade" style="text-align:right;"></div>
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Seções">
@@ -1207,7 +1208,9 @@
         return r.json().then(function(j){ if (!r.ok) throw j; return j; });
       }).then(function(respostaLogin){
         sessaoNivelAtual = respostaLogin && respostaLogin.nivel || null;
+        sessaoNomeAtual = respostaLogin && respostaLogin.nome || null;
         loginPendente = false;
+        renderIdentidadeSessao();
         atualizarVisibilidadeAbaAtividades();
         aterrissarNaAbaCsqSeAplicavel();
         renderProjetosPanel();
@@ -1228,6 +1231,8 @@
   function carregarSessaoAtual(){
     fetch("/api/login", { credentials: "same-origin" }).then(function(r){ return r.json(); }).then(function(j){
       sessaoNivelAtual = j && j.autenticado ? j.nivel : null;
+      sessaoNomeAtual = j && j.autenticado ? j.nome : null;
+      renderIdentidadeSessao();
       atualizarVisibilidadeAbaAtividades();
       aterrissarNaAbaCsqSeAplicavel();
       // Se um projeto já estava aberto quando isso resolveu, re-renderiza
@@ -1241,6 +1246,7 @@
   function tratarRespostaApi(r){
     return r.json().then(function(j){
       if (r.status === 401 && j && j.code === "sessao_invalida"){
+        sessaoNivelAtual = null; sessaoNomeAtual = null; renderIdentidadeSessao();
         mostrarLoginNoPainel();
         return new Promise(function(){}); // fica pendente pra sempre — a tela de login assume a partir daqui
       }
@@ -1929,6 +1935,24 @@
   var filtroAlertaAtivo = ""; // "" | id de uma opção de ALERTAS_OPCOES
   var reservasCache = null; // lista de listar-reservas — buscada 1x junto com listar-implantacoes, pro sinal de agendamento no card
   var sessaoNivelAtual = null; // preenchido no login (POST) ou ao carregar a página (GET /api/login) — só "gestao" vê os botões de excluir
+  var sessaoNomeAtual = null; // idem — mostrado em #sessaoIdentidade, pra evitar confusão tipo "logou com a senha errada e nem percebeu"
+  var NIVEL_LABEL = { consulta: "Consulta (só leitura)", gestao: "Gestão", csm: "CSM", ism: "ISM", csq: "CSQ" };
+  function renderIdentidadeSessao(){
+    var el = document.getElementById("sessaoIdentidade");
+    if (!el) return;
+    if (!sessaoNivelAtual){ el.innerHTML = ""; return; }
+    var rotulo = NIVEL_LABEL[sessaoNivelAtual] || sessaoNivelAtual;
+    el.innerHTML = "Logado como<br>" +
+      "<b>" + esc(sessaoNomeAtual || "—") + "</b> (" + esc(rotulo) + ") · " +
+      '<a href="#" id="btnSairSessao">Sair</a>';
+    var btnSair = document.getElementById("btnSairSessao");
+    if (btnSair) btnSair.addEventListener("click", function(e){
+      e.preventDefault();
+      fetch("/api/login?action=logout", { method: "POST", credentials: "same-origin" }).catch(function(){}).then(function(){
+        location.reload();
+      });
+    });
+  }
   var projetoAtualId = null;  // id do projeto aberto, ou null = lista
   var dadosProjeto = null;    // { projeto, agentes } do obter-implantacao
   var wizard = null;          // assistente de novo projeto
@@ -3050,8 +3074,8 @@
         btnComentar.disabled = true;
         apiPost("comentar-implantacao", payload).then(function(){
           renderComentarios(taskId, container, titulo);
-        }).catch(function(){
-          showSimToast("Não deu para comentar.");
+        }).catch(function(e){
+          showSimToast(mensagemErro(e) || "Não deu para comentar.");
           btnComentar.disabled = false;
         });
       });
@@ -3414,7 +3438,13 @@
     }).then(function(){
       dadosProjeto.projeto.faseProjetoManual = faseProjetoManual;
       renderListaItens();
-    }).catch(function(){ showSimToast("Não deu para salvar a fase do projeto."); });
+    }).catch(function(e){
+      showSimToast(mensagemErro(e) || "Não deu para salvar a fase do projeto.");
+      // Reverte o <select> pro valor que estava realmente salvo — sem isso
+      // ele fica mostrando "Entregue"/"Cancelado" mesmo com o servidor
+      // tendo recusado (ex: item pendente), até o projeto ser reaberto.
+      renderListaItens();
+    });
   }
 
   // Chave do corpo é "urgencia", NUNCA "prioridade" — essa já é a ordem dos
@@ -4559,28 +4589,43 @@
     cardDadosTributarios(p) +
     '<div class="card">' +
       '<h2>Finalização do projeto</h2>' +
-      '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
-      '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;"' +
-        (todosItensConcluidos() ? '' : ' disabled title="Só disponível quando todos os itens do projeto estiverem concluídos/cancelados."') +
-        '>🤖 Gerar relatório de finalização</button>' +
-      '<div id="finEstatisticas">' + finEstatisticasHtml(p.finalizacao) + '</div>' +
-      '<div id="finRiscoChurnSugestao" class="tag perigo" style="display:none;margin-top:10px;gap:8px;padding:6px 12px;">' +
-        '🚨 A IA identificou sinal de risco de churn neste histórico. ' +
-        '<button type="button" class="btn-flow-secondary" id="btnAplicarAlertaChurn" style="margin-left:6px;">Marcar nos Alertas</button>' +
-      '</div>' +
-      '<div id="finalizacaoCampos" style="margin-top:12px;' + (p.finalizacao && p.finalizacao.resumoGeral ? '' : 'display:none;') + '">' +
-        '<div class="form-field"><label>Resumo geral</label><textarea class="form-input" id="finResumoGeral" rows="3" style="width:100%;">' + esc((p.finalizacao && p.finalizacao.resumoGeral) || "") + '</textarea></div>' +
-        '<div class="form-grid-2">' +
-          '<div class="form-field"><label>Risco percebido</label><select class="form-input" id="finRisco">' +
-            ['', 'baixo', 'medio', 'alto'].map(function(v){ return '<option value="' + v + '"' + (((p.finalizacao && p.finalizacao.riscoPercebido) || '') === v ? ' selected' : '') + '>' + (v || "—") + '</option>'; }).join("") +
-          '</select></div>' +
-          '<div class="form-field"><label>Satisfação percebida</label><select class="form-input" id="finSatisfacao">' +
-            ['', 'positiva', 'neutra', 'negativa', 'indeterminada'].map(function(v){ return '<option value="' + v + '"' + (((p.finalizacao && p.finalizacao.satisfacaoPercebida) || '') === v ? ' selected' : '') + '>' + (v || "—") + '</option>'; }).join("") +
-          '</select></div>' +
-        '</div>' +
-        '<div class="form-field"><label>Causa da demora (se houver)</label><input type="text" class="form-input" id="finCausaDemora" style="width:100%;" value="' + esc((p.finalizacao && p.finalizacao.causaDaDemora) || "") + '"></div>' +
-        '<button type="button" class="btn-flow-secondary" id="btnSalvarFinalizacao" style="margin-top:8px;">Salvar</button>' +
-      '</div>' +
+      (sessaoNivelAtual === "gestao"
+        ? '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
+          '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;"' +
+            (todosItensConcluidos() ? '' : ' disabled title="Só disponível quando todos os itens do projeto estiverem concluídos/cancelados."') +
+            '>🤖 Gerar relatório de finalização</button>' +
+          '<div id="finEstatisticas">' + finEstatisticasHtml(p.finalizacao) + '</div>' +
+          '<div id="finRiscoChurnSugestao" class="tag perigo" style="display:none;margin-top:10px;gap:8px;padding:6px 12px;">' +
+            '🚨 A IA identificou sinal de risco de churn neste histórico. ' +
+            '<button type="button" class="btn-flow-secondary" id="btnAplicarAlertaChurn" style="margin-left:6px;">Marcar nos Alertas</button>' +
+          '</div>' +
+          '<div id="finalizacaoCampos" style="margin-top:12px;' + (p.finalizacao && p.finalizacao.resumoGeral ? '' : 'display:none;') + '">' +
+            '<div class="form-field"><label>Resumo geral</label><textarea class="form-input" id="finResumoGeral" rows="3" style="width:100%;">' + esc((p.finalizacao && p.finalizacao.resumoGeral) || "") + '</textarea></div>' +
+            '<div class="form-grid-2">' +
+              '<div class="form-field"><label>Risco percebido</label><select class="form-input" id="finRisco">' +
+                ['', 'baixo', 'medio', 'alto'].map(function(v){ return '<option value="' + v + '"' + (((p.finalizacao && p.finalizacao.riscoPercebido) || '') === v ? ' selected' : '') + '>' + (v || "—") + '</option>'; }).join("") +
+              '</select></div>' +
+              '<div class="form-field"><label>Satisfação percebida</label><select class="form-input" id="finSatisfacao">' +
+                ['', 'positiva', 'neutra', 'negativa', 'indeterminada'].map(function(v){ return '<option value="' + v + '"' + (((p.finalizacao && p.finalizacao.satisfacaoPercebida) || '') === v ? ' selected' : '') + '>' + (v || "—") + '</option>'; }).join("") +
+              '</select></div>' +
+            '</div>' +
+            '<div class="form-field"><label>Causa da demora (se houver)</label><input type="text" class="form-input" id="finCausaDemora" style="width:100%;" value="' + esc((p.finalizacao && p.finalizacao.causaDaDemora) || "") + '"></div>' +
+            '<button type="button" class="btn-flow-secondary" id="btnSalvarFinalizacao" style="margin-top:8px;">Salvar</button>' +
+          '</div>'
+        // Fora da Gestão: só leitura — o relatório é gerado automaticamente
+        // pela rotina diária (api/cron-relatorio-finalizacao.js) e a edição
+        // é exclusiva da Gestão, já que os campos são métrica do próprio
+        // desempenho de quem executou o projeto (ver atualizar-implantacao).
+        : (p.finalizacao && p.finalizacao.resumoGeral
+            ? '<div class="sub">Gerado automaticamente — revisão exclusiva da Gestão.</div>' +
+              '<div id="finEstatisticas">' + finEstatisticasHtml(p.finalizacao) + '</div>' +
+              '<div class="form-field" style="margin-top:10px;"><label>Resumo geral</label><div>' + esc(p.finalizacao.resumoGeral) + '</div></div>' +
+              '<div class="form-grid-2">' +
+                '<div class="form-field"><label>Risco percebido</label><div>' + esc(p.finalizacao.riscoPercebido || "—") + '</div></div>' +
+                '<div class="form-field"><label>Satisfação percebida</label><div>' + esc(p.finalizacao.satisfacaoPercebida || "—") + '</div></div>' +
+              '</div>' +
+              (p.finalizacao.causaDaDemora ? '<div class="form-field"><label>Causa da demora</label><div>' + esc(p.finalizacao.causaDaDemora) + '</div></div>' : "")
+            : '<div class="sub">Ainda não gerado — a rotina automática roda todo dia às 07h e preenche assim que o projeto estiver finalizado.</div>')) +
     '</div>' +
     '<div class="card">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
@@ -5091,7 +5136,7 @@
         showSimToast("Fluxo salvo como comentário.");
         document.getElementById("flowJsonInput").value = "";
         renderComentarios(a.id, document.getElementById("comentariosConstrucao"), "Comentários deste agente");
-      }).catch(function(){ showSimToast("Não deu para salvar o Fluxo."); });
+      }).catch(function(e){ showSimToast(mensagemErro(e) || "Não deu para salvar o Fluxo."); });
     });
     wireLinkVisaoGeral();
     document.getElementById("btnVoltarAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });

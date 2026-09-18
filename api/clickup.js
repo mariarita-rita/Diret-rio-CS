@@ -1080,6 +1080,29 @@ function faseWaipeDerivada(estadoProjeto, totalAgentes) {
   return concluidos >= totalAgentes ? 'entregue' : 'em_andamento';
 }
 
+/**
+ * Mesmo critério de itemConcluido()/todosItensConcluidos() em
+ * implantacao-waipe.html (duplicado aqui de propósito — o front não é um
+ * módulo importável, mesmo padrão de outras duplicações pequenas já
+ * documentadas neste arquivo) — item "solucao" concluído é fase entregue
+ * ou cancelada; agente Waipe concluído é validação validada ou cancelada.
+ * `false` sem nenhum item (nada foi confirmado como pronto/descartado
+ * ainda). Usado pra travar faseProjetoManual "entregue"/"cancelado" no
+ * projeto enquanto sobrar item em aberto (ver atualizarImplantacaoAcao).
+ */
+function todosItensConcluidos(subtasks) {
+  if (!subtasks.length) return false;
+  return subtasks.every((t) => {
+    const e = parseWaipeState(t.description);
+    if (e.tipo === 'solucao') {
+      const fase = e.fase || FASE_ITEM_PADRAO;
+      return fase === 'entregue' || fase === 'cancelado';
+    }
+    const status = (e.validacao || {}).status || 'pendente';
+    return status === 'validado' || status === 'cancelado';
+  });
+}
+
 // Jornada (checklist) por produto — passos concretos, documentados pelo
 // time (nao mais o binario generico produtoSimples/requerImplantacao).
 // null = ainda sem passo a passo definido (ex: "Outro", ou Gestor/Unique
@@ -1962,12 +1985,41 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
   }
 
+  // Relatório de finalização (satisfação/risco percebido etc.) é métrica do
+  // próprio desempenho de quem executou o projeto — só Gestão pode gravar,
+  // pra a primeira versão salva ser sempre a da rotina automática (ver
+  // api/cron/relatorio-finalizacao.js), nunca editada por ISM/CSM antes de
+  // alguém revisar. Isso vale tanto pra primeira geração quanto pra edição
+  // posterior — não é permitido nenhum dos dois fora de "gestao".
+  if ('finalizacao' in corpo && sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'somente_gestao', 'Só a Gestão pode editar o relatório de finalização.');
+  }
+
   const estadoAtual = parseWaipeState(tarefa.description);
   // Calculada antes do objeto pra poder decidir o carimbo de dataFimReal
   // logo abaixo — mesma regra usada dentro do objeto (ver faseProjetoManual).
   const novaFaseProjetoManual = 'faseProjetoManual' in corpo
     ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
     : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null);
+
+  // Só pode ENTRAR em "entregue"/"cancelado" (isso que finaliza o projeto,
+  // ver finalizado/jaEntregue em criarProjetoImplantacao) com todo item já
+  // concluído — mesmo critério de itemConcluido()/todosItensConcluidos()
+  // do front, que já trava o botão "Gerar relatório de finalização", mas
+  // só no front: sem essa checagem aqui, dava pra forçar a fase do projeto
+  // pela API direto (ou por um bug de UI) com item pendente e ele sumir da
+  // aba "Projetos em Andamento" mesmo com trabalho real ainda em aberto.
+  // Só valida numa TRANSIÇÃO de verdade — resalvar a mesma fase de novo
+  // (ex: outra edição qualquer no projeto já entregue) não passa por aqui.
+  if (
+    (novaFaseProjetoManual === 'entregue' || novaFaseProjetoManual === 'cancelado') &&
+    novaFaseProjetoManual !== estadoAtual.faseProjetoManual
+  ) {
+    const { subtasks } = await obterTaskComSubtasks(projeto.id);
+    if (!todosItensConcluidos(subtasks)) {
+      return erro(res, 400, 'itens_pendentes', 'Todos os itens do projeto precisam estar Entregues ou Cancelados antes de marcar o projeto inteiro como Entregue/Cancelado.');
+    }
+  }
   const novoEstado = {
     // Espalha o estado atual ANTES dos campos explícitos abaixo — garante
     // que qualquer campo que não seja mexido aqui (origemMoskitDealId,
@@ -2469,6 +2521,32 @@ async function atualizarAgenteAcao(req, res, sessao) {
   }
 
   await atualizarTask(corpo.taskId, payload);
+
+  // A barra de progresso do projeto (agentesConcluidos/agentesTotal, ver
+  // listarImplantacoesAcao) conta só o array `concluidos` do PROJETO — que
+  // só era populado pelo pipeline de agente Waipe (sim.concluidos.push no
+  // front, ao entregar um agente). Um item tipo "solucao" (Gestor/Simplaz/
+  // Migração Nuvem/etc.) virando "Entregue"/"Cancelado" por este mesmo
+  // endpoint NUNCA refletia aqui — o item mostrava "Entregue" na etiqueta,
+  // mas o projeto continuava contando como se nada tivesse sido concluído
+  // (0/N na lista, mesmo com todos os itens prontos). Mesmo critério de
+  // "item concluído" já usado em todosItensConcluidos() no front: entregue
+  // OU cancelado — cancelado também não é mais trabalho pendente.
+  if (estadoAtual.tipo === 'solucao' && tarefa.id !== projeto.id) {
+    const eraConcluido = estadoAtual.fase === 'entregue' || estadoAtual.fase === 'cancelado';
+    const ficouConcluido = novoEstado.fase === 'entregue' || novoEstado.fase === 'cancelado';
+    if (eraConcluido !== ficouConcluido) {
+      const estadoProjeto = parseWaipeState(projeto.description);
+      const concluidosAtuais = Array.isArray(estadoProjeto.concluidos) ? estadoProjeto.concluidos : [];
+      const novosConcluidos = ficouConcluido
+        ? Array.from(new Set([...concluidosAtuais, corpo.taskId]))
+        : concluidosAtuais.filter((id) => id !== corpo.taskId);
+      await atualizarTask(projeto.id, {
+        markdown_description: stringifyWaipeState(projeto.description, { ...estadoProjeto, concluidos: novosConcluidos }),
+      });
+    }
+  }
+
   // Mesmo raciocinio de atualizar-implantacao: mexer no checklist/progresso de
   // QUALQUER item/agente já tira o projeto do "pendente" — sobe o PROJETO
   // (nao esta subtask) pra "in progress" sozinho, só na primeira vez.
@@ -3861,14 +3939,26 @@ async function listarComentariosAcao(req, res, sessao) {
   }
 
   const comentarios = await listarComentarios(taskId);
-  const mapeados = comentarios.map((c) => ({
-    id: c.id,
-    texto: c.comment_text || '',
-    autor: c.user?.username || '',
-    data: c.date || null,
-  }));
+  const mapeados = comentarios.map((c) => {
+    const bruto = c.comment_text || '';
+    // [[AUTOR:Nome]] pode vir DEPOIS de [[PIN]]/[[DESTAQUE]] (marcados
+    // sempre são prependados na frente de tudo que já existia, ver
+    // marcarComentarioImplantacaoAcao) — nunca antes. Mantém os dois
+    // intactos no texto devolvido: o front ainda precisa deles pra saber
+    // se o comentário está fixado/destacado.
+    const m = MARCADOR_AUTOR_RE.exec(bruto);
+    return {
+      id: c.id,
+      texto: m ? (m[1] || '') + (m[2] || '') + bruto.slice(m[0].length) : bruto,
+      autor: m ? m[3] : (c.user?.username || ''),
+      data: c.date || null,
+    };
+  });
   return res.status(200).json({ comentarios: mapeados });
 }
+
+// Ver comentarImplantacaoAcao (por que existe) e listarComentariosAcao (onde é lido).
+const MARCADOR_AUTOR_RE = /^(\[\[PIN\]\])?(\[\[DESTAQUE\]\])?\[\[AUTOR:([^\]]*)\]\]/;
 
 // Fixar/destacar um comentário não é um campo nativo do ClickUp — vive como
 // um marcador no INÍCIO do próprio texto do comentário (mesmo espírito do
@@ -3984,7 +4074,17 @@ async function comentarImplantacaoAcao(req, res, sessao) {
     textoFinal = [comentario, anexado.url].filter(Boolean).join('\n');
   }
 
-  const comentarioSalvo = await criarComentario(corpo.taskId, textoFinal);
+  // O comentário no ClickUp sempre aparece "postado por" quem for o dono da
+  // CLICKUP_API_KEY compartilhada — nunca a pessoa de verdade logada no
+  // painel (ISM/CSM/Gestão são só perfis da NOSSA sessão, sem usuário
+  // próprio no ClickUp). Sem isso, o comentário da Erica aparecia com o
+  // nome da Maria Rita, e ninguém sabia quem escreveu de verdade. Marcador
+  // no INÍCIO do texto (mesmo padrão de [[PIN]]/[[DESTAQUE]], ver
+  // metaComentarioTexto) — listarComentariosAcao lê e usa como "autor" no
+  // lugar do usuário nativo do ClickUp, e tira o marcador antes de devolver
+  // pro front.
+  const autorMarcado = sessao.nome ? `[[AUTOR:${texto(sessao.nome, 60).replace(/\]/g, '')}]]` : '';
+  const comentarioSalvo = await criarComentario(corpo.taskId, autorMarcado + textoFinal);
 
   // "@Nome" no texto vira uma Atividade CSQ pra quem foi mencionado — não
   // bloqueia o comentário se falhar (o comentário em si já foi salvo).

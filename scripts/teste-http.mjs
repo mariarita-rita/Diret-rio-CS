@@ -1963,7 +1963,15 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
       return ok({});
     }
     if (metodo === 'GET' && u.endsWith('/comment')) {
-      return ok({ comments: [{ id: 'c1', comment_text: 'Nota antiga', user: { username: 'Gian Luca' }, date: '1700000000000' }] });
+      return ok({ comments: [
+        { id: 'c1', comment_text: 'Nota antiga', user: { username: 'Gian Luca' }, date: '1700000000000' },
+        // Marcador [[AUTOR:...]] (ver comentarImplantacaoAcao) — o "autor"
+        // devolvido tem que vir do marcador, NUNCA do user.username nativo
+        // do ClickUp (sempre o dono da API key, nunca quem comentou de
+        // verdade pelo painel). [[PIN]] na frente testa que o marcador de
+        // fixar continua intacto no texto devolvido pro front.
+        { id: 'c2', comment_text: '[[PIN]][[AUTOR:Erica Fernanda]]Cliente confirmou o horário.', user: { username: 'Maria Rita' }, date: '1700000001000' },
+      ] });
     }
     if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
       escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
@@ -2135,8 +2143,14 @@ console.log('\n[34] Projetos em Andamento — posse por CSM, etapas e estado emb
 
   // listar-comentarios: dono le, outro csm 403, taskId invalido 400
   const comentariosGian = await chamarAcao(GIAN, 'GET', 'listar-comentarios', { query: { taskId: 'tAgente1' } });
-  checar('listar-comentarios: 200 com o comentario mockado', [comentariosGian.code, comentariosGian.corpo.comentarios.length], [200, 1]);
+  checar('listar-comentarios: 200 com o comentario mockado', [comentariosGian.code, comentariosGian.corpo.comentarios.length], [200, 2]);
   checar('  autor traduzido', comentariosGian.corpo.comentarios[0].autor, 'Gian Luca');
+  // [[AUTOR:...]] (ver comentarImplantacaoAcao) tem que virar o "autor" no
+  // lugar do usuario nativo do ClickUp (Maria Rita, dono da API key), e sair
+  // do texto — mas [[PIN]] continua no texto devolvido pro front reconhecer.
+  const comentarioComAutorMarcado = comentariosGian.corpo.comentarios[1];
+  checar('  autor vem do marcador [[AUTOR]], nao do user nativo do ClickUp', comentarioComAutorMarcado.autor, 'Erica Fernanda');
+  checar('  [[AUTOR]] sai do texto, [[PIN]] continua (pro front reconhecer fixado)', comentarioComAutorMarcado.texto, '[[PIN]]Cliente confirmou o horário.');
   const comentariosPatricia = await chamarAcao(PATRICIA, 'GET', 'listar-comentarios', { query: { taskId: 'tAgente1' } });
   checar('listar-comentarios: csm de outra carteira -> 403', [comentariosPatricia.code, comentariosPatricia.corpo.code], [403, 'fora_da_carteira']);
   const comentariosInvalido = await chamarAcao(GESTAO, 'GET', 'listar-comentarios', { query: { taskId: 'zzz!!' } });
@@ -2303,6 +2317,21 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
       checklist: null, checklistChecks: {},
     }),
   });
+  // Projeto dedicado pra testar o gate de faseProjetoManual "entregue"/
+  // "cancelado" (todos os itens ja concluidos) sem mexer nos fixtures
+  // acima, usados por varios outros testes (tProposta tem 0 subtasks de
+  // proposito, pra testar o caso "sem item nenhum -> bloqueado").
+  const taskProjTudoOk = () => ({
+    id: 'tProjTudoOk', name: 'Cliente W — Implantação Waipe', list: { id: LISTA },
+    status: { status: 'pendente' }, parent: null,
+    subtasks: [{ id: 'tItemTudoOk' }],
+    description: descProposta({ etapaAtual: 'entrega', prioridade: [], agenteAtualId: null, concluidos: [], agentesTotal: 1 }),
+  });
+  const taskItemTudoOk = () => ({
+    id: 'tItemTudoOk', name: 'Gestor — Básico', list: { id: LISTA }, parent: 'tProjTudoOk',
+    status: { status: 'pendente' },
+    description: descProposta({ tipo: 'solucao', produto: 'Gestor', fase: 'entregue', checklist: null, checklistChecks: {} }),
+  });
 
   function ok(corpo) {
     return {
@@ -2323,6 +2352,14 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
       escritas.push({ alvo: 'solucao1', body: JSON.parse(init.body) });
       return ok({});
     }
+    if (metodo === 'PUT' && u.endsWith('/task/tPromovida')) {
+      escritas.push({ alvo: 'promovida', body: JSON.parse(init.body) });
+      return ok({});
+    }
+    if (metodo === 'PUT' && u.endsWith('/task/tProjTudoOk')) {
+      escritas.push({ alvo: 'projTudoOk', body: JSON.parse(init.body) });
+      return ok({});
+    }
     if (metodo === 'POST' && u.endsWith(`/list/${LISTA}/task`)) {
       escritas.push({ alvo: 'criar', body: JSON.parse(init.body) });
       return ok({ id: 'tSubtaskNova' });
@@ -2331,6 +2368,8 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
     if (u.includes('/task/tSolucao1')) return ok(taskSolucaoExistente());
     if (u.includes('/task/tSolucaoAntiga')) return ok(taskSolucaoAntigaSemChecklist());
     if (u.includes('/task/tPromovida')) return ok(taskJaPromovida());
+    if (u.includes('/task/tProjTudoOk')) return ok(taskProjTudoOk());
+    if (u.includes('/task/tItemTudoOk')) return ok(taskItemTudoOk());
     return ok({});
   };
 
@@ -2466,6 +2505,14 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   const marcarFase = await chamarAcao(GIAN, 'atualizar-agente', { taskId: 'tSolucao1', fase: 'entregue' });
   checar('atualizar-agente (solucao): fase gravada', [marcarFase.code, escritas.find((e) => e.alvo === 'solucao1')?.body.markdown_description.includes('"fase":"entregue"')], [200, true]);
 
+  // atualizar-agente (solucao) virando "entregue"/"cancelado" tem que
+  // refletir no `concluidos` do PROJETO-PAI — sem isso a barra de progresso
+  // (agentesConcluidos/agentesTotal) nunca contava um item tipo "solucao"
+  // como concluido, so o pipeline de agente Waipe (sim.concluidos no
+  // front) escrevia nesse array.
+  const escritaConcluidosEntrega = escritas.find((e) => e.alvo === 'promovida' && e.body.markdown_description.includes('"concluidos"'));
+  checar('  projeto-pai ganha o item nos concluidos ao virar entregue', escritaConcluidosEntrega?.body.markdown_description.includes('"concluidos":["tSolucao1"]'), true);
+
   // atualizar-implantacao: camada1Checks (ativacao Waipe) e gravado e preserva o historico da proposta
   escritas.length = 0;
   const salvarCamada1 = await chamarAcao(GIAN, 'atualizar-implantacao', {
@@ -2477,18 +2524,45 @@ console.log('\n[36] Ponte proposta -> fechamento: salvar-proposta-implantacao e 
   checar('  historico da proposta preservado (nao apaga agentesPropostos/outrasSolucoesPropostas)', escritaCamada1.body.markdown_description.includes('"nome":"Agente Novo"'), true);
   checar('  faseProjetoManual preservado quando o campo nao vem no corpo', escritaCamada1.body.markdown_description.includes('"faseProjetoManual":"aguardando_cliente"'), true);
 
-  // atualizar-implantacao: faseProjetoManual e gravavel, e null explicito volta pro automatico
+  // atualizar-implantacao: faseProjetoManual "entregue"/"cancelado" exige TODO
+  // item do projeto ja concluido (entregue ou cancelado) — tProposta nao tem
+  // nenhum item ainda (subtasks: []), entao fica bloqueado.
   escritas.length = 0;
-  const setarFaseManual = await chamarAcao(GIAN, 'atualizar-implantacao', {
+  const setarFaseManualSemItens = await chamarAcao(GIAN, 'atualizar-implantacao', {
     id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], faseProjetoManual: 'entregue',
   });
-  checar('atualizar-implantacao: faseProjetoManual definido', [setarFaseManual.code, escritas.find((e) => e.alvo === 'proposta')?.body.markdown_description.includes('"faseProjetoManual":"entregue"')], [200, true]);
+  checar('atualizar-implantacao: faseProjetoManual entregue SEM itens concluidos -> 400', [setarFaseManualSemItens.code, setarFaseManualSemItens.corpo.code], [400, 'itens_pendentes']);
+  checar('  nao escreve nada', escritas.length, 0);
+
+  // Com TODO item do projeto ja concluido, a mesma transicao e permitida.
+  escritas.length = 0;
+  const setarFaseManual = await chamarAcao(GIAN, 'atualizar-implantacao', {
+    id: 'tProjTudoOk', etapaAtual: 'entrega', prioridade: [], concluidos: [], faseProjetoManual: 'entregue',
+  });
+  checar('atualizar-implantacao: faseProjetoManual entregue COM itens todos concluidos -> 200', [setarFaseManual.code, escritas.find((e) => e.alvo === 'projTudoOk')?.body.markdown_description.includes('"faseProjetoManual":"entregue"')], [200, true]);
 
   escritas.length = 0;
   const limparFaseManual = await chamarAcao(GIAN, 'atualizar-implantacao', {
     id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], faseProjetoManual: null,
   });
   checar('atualizar-implantacao: faseProjetoManual null volta pro automatico', [limparFaseManual.code, escritas.find((e) => e.alvo === 'proposta')?.body.markdown_description.includes('"faseProjetoManual":null')], [200, true]);
+
+  // atualizar-implantacao: relatorio de finalizacao e metrica do proprio
+  // desempenho de quem executou o projeto — so Gestao pode gravar (a
+  // primeira geracao e sempre da rotina automatica, ver
+  // api/cron-relatorio-finalizacao.js); CSM/ISM/CSQ tomam 403 mesmo
+  // mandando o campo junto com uma edicao normal.
+  const finalizacaoTentativa = { resumoGeral: 'x', riscoPercebido: 'baixo', causaDaDemora: '', satisfacaoPercebida: 'positiva' };
+  const salvarFinalizacaoCsm = await chamarAcao(GIAN, 'atualizar-implantacao', {
+    id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], finalizacao: finalizacaoTentativa,
+  });
+  checar('atualizar-implantacao: CSM tentando gravar finalizacao -> 403', [salvarFinalizacaoCsm.code, salvarFinalizacaoCsm.corpo.code], [403, 'somente_gestao']);
+
+  escritas.length = 0;
+  const salvarFinalizacaoGestao = await chamarAcao(GESTAO, 'atualizar-implantacao', {
+    id: 'tProposta', etapaAtual: 'escopo', prioridade: [], concluidos: [], finalizacao: finalizacaoTentativa,
+  });
+  checar('atualizar-implantacao: Gestao grava finalizacao -> 200', [salvarFinalizacaoGestao.code, escritas.find((e) => e.alvo === 'proposta')?.body.markdown_description.includes('"satisfacaoPercebida":"positiva"')], [200, true]);
 
   // obter-implantacao: solucao fechada ANTES da jornada por produto existir
   // ficou com checklist:null gravado — precisa recalcular pelo template
@@ -3909,12 +3983,12 @@ console.log('\n[47] anexar-arquivo-implantacao + print colado em comentario');
   comentariosCriados.length = 0;
   const soPrint = await chamarPost(GIAN, 'comentar-implantacao', { taskId: 'tAnexoProj', texto: '', imagem: { nomeArquivo: 'print.png', mimeType: 'image/png', base64: base64Fake } });
   checar('comentar-implantacao: so print (sem texto) -> 200', [soPrint.code, soPrint.corpo.ok], [200, true]);
-  checar('  comentario carrega a URL do anexo', comentariosCriados[0]?.comment_text, 'https://clickup-attachments.example/print.png');
+  checar('  comentario carrega a URL do anexo', comentariosCriados[0]?.comment_text, '[[AUTOR:Gian Luca]]https://clickup-attachments.example/print.png');
 
   comentariosCriados.length = 0;
   const textoComPrint = await chamarPost(GIAN, 'comentar-implantacao', { taskId: 'tAnexoProj', texto: 'Segue o print do erro', imagem: { nomeArquivo: 'print.png', mimeType: 'image/png', base64: base64Fake } });
   checar('comentar-implantacao: texto + print -> 200', [textoComPrint.code, textoComPrint.corpo.ok], [200, true]);
-  checar('  comentario carrega texto e a URL do anexo', comentariosCriados[0]?.comment_text, 'Segue o print do erro\nhttps://clickup-attachments.example/print.png');
+  checar('  comentario carrega texto e a URL do anexo', comentariosCriados[0]?.comment_text, '[[AUTOR:Gian Luca]]Segue o print do erro\nhttps://clickup-attachments.example/print.png');
 
   globalThis.fetch = fetchOriginal;
 }
