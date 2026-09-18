@@ -1028,7 +1028,12 @@ const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
 // tag manual editada pelo CSM, independente do checklist. FASE_ITEM_PADRAO
 // entra em todo item novo; "cancelado" nao conta como pendencia pro derivado
 // do projeto (ver derivarFaseProjeto).
-const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'em_andamento', 'aguardando_cliente', 'aguardando_interno', 'cancelado', 'entregue']);
+// "analise_desistencia" só existe no vocabulário do PROJETO (faseProjetoManual)
+// — nunca aparece como fase de item/agente no front, mas entra aqui porque
+// esta é a mesma validação usada pros dois níveis (ver comentário acima).
+// Ao contrário de "cancelado"/"entregue", não finaliza o projeto: fica em
+// "Projetos em Andamento" enquanto o CSM investiga um sinal de desistência.
+const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'em_andamento', 'aguardando_cliente', 'aguardando_interno', 'analise_desistencia', 'cancelado', 'entregue']);
 const FASE_ITEM_PADRAO = 'nao_iniciado';
 
 // Urgencia do projeto — classificacao manual (CSM/ISM), sem derivacao
@@ -1680,22 +1685,22 @@ export async function criarProjetoImplantacao({
   nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor,
   origemMoskitDealId, origemMoskitProjetoId, faseProjetoManual, dataInicioReal, dataFimReal,
 }) {
-  // Projeto que já nasce "Entregue" (ex: migração de um projeto do Moskit
-  // que já estava finalizado de verdade) precisa refletir isso em MAIS que
-  // só essa flag — senão a barra de progresso fica em 0/N pra sempre (nada
-  // em `concluidos`) e o projeto continua aparecendo em "Projetos em
-  // Andamento" (aquela aba filtra pelo status NATIVO do ClickUp, não pela
-  // fase — ver listarImplantacoesAcao). Isso é resolvido abaixo: os itens
-  // já nascem com fase "entregue", e depois de criados (só então os ids das
-  // subtasks existem) o projeto-pai é atualizado com `concluidos` cheio e
-  // status ClickUp "concluído".
+  // Projeto que já nasce "Entregue" OU "Cancelado" (ex: migração de um
+  // projeto do Moskit que já estava finalizado de verdade, entregue ou não)
+  // precisa refletir isso em MAIS que só essa flag — senão o projeto
+  // continua aparecendo em "Projetos em Andamento" (aquela aba filtra pelo
+  // status NATIVO do ClickUp, não pela fase — ver listarImplantacoesAcao).
+  // "Cancelado" não marca os itens como concluídos (nada foi entregue de
+  // verdade) — só "Entregue" faz isso; os dois igualmente carimbam
+  // dataFimReal e tiram o status nativo de "pendente"/"in progress".
   const jaEntregue = faseProjetoManual === 'entregue';
+  const finalizado = jaEntregue || faseProjetoManual === 'cancelado';
   // Calculadas uma vez só e reaproveitadas nos dois stringifyWaipeState
-  // abaixo (criação + o follow-up de "já entregue") — senão dois
+  // abaixo (criação + o follow-up de finalização) — senão dois
   // `Date.now()` em momentos diferentes da mesma criação divergiam por
   // alguns milissegundos à toa.
   const dataInicioRealFinal = Number.isFinite(Number(dataInicioReal)) ? Number(dataInicioReal) : Date.now();
-  const dataFimRealFinal = Number.isFinite(Number(dataFimReal)) ? Number(dataFimReal) : (jaEntregue ? Date.now() : null);
+  const dataFimRealFinal = Number.isFinite(Number(dataFimReal)) ? Number(dataFimReal) : (finalizado ? Date.now() : null);
   const descricaoProjeto = stringifyWaipeState(
     // Sem csmNome (projeto ainda sem gerente de contas, ver
     // definir-gerente-contas), a linha "**CSM:**" nem entra — deixá-la vazia
@@ -1762,21 +1767,23 @@ export async function criarProjetoImplantacao({
 
   idsCriados.push(...await criarSubtasksSolucao(projeto.id, solucoes, jaEntregue ? 'entregue' : undefined));
 
-  if (jaEntregue) {
+  if (finalizado) {
     await atualizarTask(projeto.id, {
       markdown_description: stringifyWaipeState(
         [csmNome ? `**CSM:** ${csmNome}` : null, contexto].filter(Boolean).join('\n\n'),
         {
-          etapaAtual: 'entrega',
+          etapaAtual: jaEntregue ? 'entrega' : 'escopo',
           prioridade: [],
           agenteAtualId: null,
-          concluidos: idsCriados,
+          // Cancelado não marca os itens como concluídos — nada foi
+          // entregue de verdade, só encerrado.
+          concluidos: jaEntregue ? idsCriados : [],
           agentesTotal: agentes.length + solucoes.length,
           cliente: texto(cliente, 120),
           vendedor: texto(vendedor, 120),
           origemMoskitDealId: origemMoskitDealId ?? null,
           origemMoskitProjetoId: origemMoskitProjetoId ?? null,
-          faseProjetoManual: 'entregue',
+          faseProjetoManual,
           dataInicioReal: dataInicioRealFinal,
           dataFimReal: dataFimRealFinal,
           ...dadosCliente,
@@ -1998,13 +2005,20 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     // isso, a usuária precisaria lembrar de preencher isso à mão toda vez
     // que finaliza um projeto pra "dias de projeto" sair certo depois.
     //
-    // Reabrir (fase manual sai de "entregue" pra qualquer outra, ex:
-    // pendência identificada depois) LIMPA dataFimReal — senão, ao
+    // Reabrir (fase manual sai de "entregue"/"cancelado" pra qualquer outra,
+    // ex: pendência identificada depois) LIMPA dataFimReal — senão, ao
     // entregar de novo depois, a data antiga ficaria presa e "dias de
-    // implantação" contaria errado.
-    dataFimReal: novaFaseProjetoManual === 'entregue'
+    // implantação" contaria errado. "Cancelado" carimba a mesma data —
+    // também é um jeito de finalizar o projeto, só que sem entrega real.
+    dataFimReal: (novaFaseProjetoManual === 'entregue' || novaFaseProjetoManual === 'cancelado')
       ? (estadoAtual.dataFimReal || Date.now())
-      : (estadoAtual.faseProjetoManual === 'entregue' && novaFaseProjetoManual !== 'entregue' ? null : (estadoAtual.dataFimReal ?? null)),
+      : (
+          (estadoAtual.faseProjetoManual === 'entregue' || estadoAtual.faseProjetoManual === 'cancelado') &&
+          novaFaseProjetoManual !== 'entregue' &&
+          novaFaseProjetoManual !== 'cancelado'
+            ? null
+            : (estadoAtual.dataFimReal ?? null)
+        ),
     // Urgencia — mesmo padrao: so muda quando vem no corpo, senao o spread
     // de estadoAtual (logo acima) ja preserva. So repete aqui pra sanear
     // caso venha um valor invalido no corpo. NUNCA usar a chave
@@ -2039,15 +2053,23 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
   if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
     payload.status = corpo.status;
+  } else if (novaFaseProjetoManual === 'entregue' || novaFaseProjetoManual === 'cancelado') {
+    // Entrar em "entregue" OU "cancelado" marca o status nativo como
+    // "concluído" — é só esse status nativo que decide a aba "Projetos
+    // Finalizados" (renderListaProjetosWrap filtra por ele, não pela fase
+    // manual). Sem isso um projeto cancelado fica preso em "Em Andamento".
+    if (projeto.status?.status !== 'concluído') {
+      payload.status = 'concluído';
+    }
   } else if (
-    estadoAtual.faseProjetoManual === 'entregue' &&
-    novaFaseProjetoManual !== 'entregue' &&
+    (estadoAtual.faseProjetoManual === 'entregue' || estadoAtual.faseProjetoManual === 'cancelado') &&
     projeto.status?.status === 'concluído'
   ) {
-    // Reabrir o projeto (fase manual sai de "entregue") tem que tirar o
-    // status nativo de "concluído" também — senão o projeto continua
-    // aparecendo em "Projetos Entregues" (aquela aba filtra pelo status
-    // nativo, não pela fase) mesmo já mostrando "Em andamento" na etiqueta.
+    // Reabrir o projeto (fase manual sai de "entregue"/"cancelado" pra
+    // qualquer outra) tem que tirar o status nativo de "concluído" também —
+    // senão o projeto continua aparecendo em "Projetos Finalizados" (aquela
+    // aba filtra pelo status nativo, não pela fase) mesmo já mostrando
+    // outra etiqueta.
     payload.status = 'in progress';
   } else if (projeto.status?.status === 'pendente') {
     // O status nativo do ClickUp nunca era tocado por aqui — ficava preso em

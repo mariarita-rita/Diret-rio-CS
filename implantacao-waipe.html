@@ -118,6 +118,10 @@
   .tag.ambos{background:var(--tag-ambos-bg); color:var(--tag-ambos);}
   .tag.neutro{background:var(--surface-2); color:var(--muted);}
   .tag.perigo{background:var(--danger-bg); color:var(--danger);}
+  /* Cor literal (não var(--tag-*)) — ver memória "CSS :root duplicado (cores
+     de tag)": um 2º bloco :root mais abaixo redefine --tag-*-bg tudo pra
+     azul, então variável nova aqui sairia com a cor errada. */
+  .tag.alerta{background:#FFEDD5; color:#C2410C;}
 
   /* Runbook checklist */
   .phase{border:1px solid var(--border); border-radius:16px; margin-bottom:14px; overflow:hidden; background:var(--surface);}
@@ -539,7 +543,7 @@
 
   <nav class="tabs" role="tablist" aria-label="Seções">
     <button class="tab-btn active" data-tab="projetos">Projetos em Andamento</button>
-    <button class="tab-btn" data-tab="entregues">Projetos Entregues</button>
+    <button class="tab-btn" data-tab="entregues">Projetos Finalizados</button>
     <button class="tab-btn" data-tab="atividades" id="tabAtividades" style="display:none;">Atividades</button>
     <button class="tab-btn" data-tab="cliente">Jornada do Cliente</button>
     <button class="tab-btn" data-tab="escopo">Escopo Técnico</button>
@@ -1118,13 +1122,19 @@
   // "em_andamento", pra não soar como alarme de bloqueio.
   var FASE_LABEL = {
     nao_iniciado: "Não iniciado", em_andamento: "Em andamento", aguardando_cliente: "Aguardando cliente",
-    aguardando_interno: "Aguardando interno (bloqueio)", cancelado: "Cancelado", entregue: "Entregue"
+    aguardando_interno: "Aguardando interno (bloqueio)", analise_desistencia: "Análise de Desistência",
+    cancelado: "Cancelado", entregue: "Entregue"
   };
   var FASE_TAG_CLASS = {
     nao_iniciado: "neutro", em_andamento: "londrisoft", aguardando_cliente: "cliente",
-    aguardando_interno: "perigo", cancelado: "perigo", entregue: "ambos"
+    aguardando_interno: "perigo", analise_desistencia: "alerta", cancelado: "perigo", entregue: "ambos"
   };
   var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
+  // "Análise de Desistência" só existe no nível do PROJETO (seletor "Forçar
+  // fase", filtro de fase e visão agrupada da aba Em Andamento) — nunca como
+  // opção de fase de item/agente (seletorFase usa FASES_ORDEM puro). Ao
+  // contrário de "Cancelado", não finaliza o projeto (fica em Em Andamento).
+  var FASES_ORDEM_PROJETO = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "analise_desistencia", "cancelado", "entregue"];
 
   // Mesma lista de PRODUTOS_SOLUCAO_VALIDOS em api/clickup.js — usada só pro
   // seletor de "+ Adicionar item"; o servidor valida de novo do lado dele.
@@ -2313,7 +2323,7 @@
   function renderListaProjetos(root){
     var entregues = filtroProjetosAtivo === "entregues";
     var introTexto = entregues
-      ? "Projetos de implantação já entregues — agentes Waipe e outras soluções do ecossistema concluídos."
+      ? "Projetos de implantação finalizados — entregues normalmente ou encerrados por cancelamento da implantação/desistência do cliente."
       : "Lista de projetos de implantação em andamento — agentes Waipe e outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) fechadas junto. Clique num projeto para abrir o fluxo (escopo → alinhamento → construção → testes → entrega).";
     root.innerHTML =
       '<div class="callout"><div class="dot"></div><div>' + introTexto + ' Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
@@ -2427,7 +2437,7 @@
       ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por fase</label>' +
         '<select id="filtroFaseProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroFaseAtiva ? "" : " selected") + '>Todas</option>' +
-        FASES_ORDEM.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
+        FASES_ORDEM_PROJETO.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
         '</select></div>' +
         '<div class="modo-visualizacao" style="vertical-align:top;">' +
         '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
@@ -2509,8 +2519,9 @@
       var faseTag = fase
         ? ' <span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span>'
         : "";
-      var statusCor = p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)");
-      var statusDot = '<span title="Status: ' + esc(STATUS_LABEL[p.status] || p.status || "—") + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
+      var statusCorTexto = fase === "cancelado" ? "Cancelado" : (STATUS_LABEL[p.status] || p.status || "—");
+      var statusCor = fase === "cancelado" ? "var(--danger)" : (p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)"));
+      var statusDot = '<span title="Status: ' + esc(statusCorTexto) + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
       var pct = p.agentesTotal ? Math.round((p.agentesConcluidos / p.agentesTotal) * 100) : 0;
       var novaMsgDot = p.temMensagemNova
         ? '<span title="Mensagem nova do cliente" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
@@ -2534,7 +2545,7 @@
       || filtroFechamentoAtivo || filtroRiscoAtivo || filtroSatisfacaoAtiva || filtroAlertaAtivo;
     if (!lista.length){
       wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
-        (temFiltroAtivo ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto entregue ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
+        (temFiltroAtivo ? "Nenhum projeto com esse filtro." : (entregues ? "Nenhum projeto finalizado ainda." : 'Nenhum projeto em andamento. Clique em "+ Novo projeto" para criar o primeiro.')) +
         '</div></div>';
     } else if (!entregues && modoVisualizacaoProjetos === "agrupado_fase"){
       var porFase = {};
@@ -2543,7 +2554,7 @@
         (porFase[f] = porFase[f] || []).push(p);
       });
       wrap.innerHTML = filtroHtml +
-        FASES_ORDEM.map(function(f){
+        FASES_ORDEM_PROJETO.map(function(f){
           var doGrupo = porFase[f] || [];
           var aberta = !!secoesAbertas[f];
           return '<div class="secao-fase">' +
@@ -3390,7 +3401,7 @@
     return '<span class="tag ' + (FASE_TAG_CLASS[valorEfetivo] || "neutro") + '">' + esc(FASE_LABEL[valorEfetivo] || valorEfetivo) + (manual ? "" : " · auto") + '</span>' +
       '<select data-projeto-fase class="form-input" style="width:auto; display:inline-block; margin-left:8px; font-size:12px; padding:4px 8px;">' +
       '<option value=""' + (manual ? "" : " selected") + '>Automático</option>' +
-      FASES_ORDEM.map(function(f){ return '<option value="' + f + '"' + (manual && f === p.faseProjetoManual ? " selected" : "") + '>Forçar: ' + FASE_LABEL[f] + '</option>'; }).join("") +
+      FASES_ORDEM_PROJETO.map(function(f){ return '<option value="' + f + '"' + (manual && f === p.faseProjetoManual ? " selected" : "") + '>Forçar: ' + FASE_LABEL[f] + '</option>'; }).join("") +
       '</select>';
   }
 
