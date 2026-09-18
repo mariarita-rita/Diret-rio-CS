@@ -2153,7 +2153,18 @@ async function renomearImplantacaoAcao(req, res, sessao) {
     return erro(res, 400, 'nome_invalido', 'Nome é obrigatório.');
   }
 
-  await atualizarTask(corpo.id, { name: nome });
+  // O painel NUNCA mostra o "name" nativo da task pro usuário — mostra
+  // "cliente" salvo no WaipeState (ver listarImplantacoesAcao/
+  // obterImplantacaoAcao, que preferem estado.cliente de propósito, pra não
+  // herdar o sufixo "— Proposta — <data>" que o nome da task acumula).
+  // Sem atualizar os dois aqui, o "Salvar" parecia funcionar na hora (a UI
+  // atualiza o cache local otimisticamente) mas o nome revertia sozinho ao
+  // reabrir o projeto, porque só o "name" nativo tinha mudado.
+  const estadoAtual = parseWaipeState(tarefa.description);
+  await atualizarTask(corpo.id, {
+    name: nome,
+    markdown_description: stringifyWaipeState(tarefa.description, { ...estadoAtual, cliente: nome }),
+  });
 
   return res.status(200).json({ ok: true, nome });
 }
