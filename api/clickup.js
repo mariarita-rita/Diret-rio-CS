@@ -3736,9 +3736,9 @@ async function criarAtividadeManualCsqAcao(req, res, sessao) {
   if (!taskIdValido(corpo.projetoId)) {
     return erro(res, 400, 'task_invalida', 'projetoId inválido.');
   }
-  const tipo = corpo.tipo === 'churn' || corpo.tipo === 'renovacao' ? corpo.tipo : null;
+  const tipo = corpo.tipo === 'churn' || corpo.tipo === 'renovacao' || corpo.tipo === 'lembrete' ? corpo.tipo : null;
   if (!tipo) {
-    return erro(res, 400, 'tipo_invalido', 'tipo precisa ser "churn" ou "renovacao".');
+    return erro(res, 400, 'tipo_invalido', 'tipo precisa ser "churn", "renovacao" ou "lembrete".');
   }
   const alvoId = Number(corpo.alvoId);
   const pessoaAlvo = PESSOAS_MENCIONAVEIS.find((p) => p.id === alvoId);
@@ -3750,8 +3750,9 @@ async function criarAtividadeManualCsqAcao(req, res, sessao) {
   if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
 
   const observacao = texto(corpo.observacao, 500);
+  const NOME_TIPO_ATIVIDADE = { churn: 'Churn', renovacao: 'Renovação', lembrete: 'Lembrete' };
   const nova = await criarAtividadeCsq({
-    name: `${tipo === 'churn' ? 'Churn' : 'Renovação'}: ${texto(resolvido.projeto.name, 120)}`,
+    name: `${NOME_TIPO_ATIVIDADE[tipo]}: ${texto(resolvido.projeto.name, 120)}`,
     assignees: [alvoId],
     markdown_description: linhasDescricaoAtividade({
       projetoId: resolvido.projeto.id,

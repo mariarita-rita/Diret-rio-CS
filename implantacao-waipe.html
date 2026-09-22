@@ -2059,7 +2059,8 @@
     nao_compareceu: { emoji: "❌", label: "Não compareceu", cor: "#d64545" },
     mencao: { emoji: "💬", label: "Menção", cor: "#4466ff" },
     churn: { emoji: "🚨", label: "Churn", cor: "#d64545" },
-    renovacao: { emoji: "🔄", label: "Renovação", cor: "#008844" }
+    renovacao: { emoji: "🔄", label: "Renovação", cor: "#008844" },
+    lembrete: { emoji: "🔔", label: "Lembrete", cor: "#6b46c1" }
   };
 
   function atividadeDetalheTexto(a){
@@ -2074,7 +2075,7 @@
   function atividadeCardHtml(a){
     var info = ATIVIDADE_TIPO_INFO[a.tipo] || { emoji: "•", label: a.tipo, cor: "var(--muted)" };
     var podeAbrir = !!a.projetoId;
-    var podeResolver = a.id && (a.tipo === "mencao" || a.tipo === "churn" || a.tipo === "renovacao");
+    var podeResolver = a.id && (a.tipo === "mencao" || a.tipo === "churn" || a.tipo === "renovacao" || a.tipo === "lembrete");
     var resolverBtn = podeResolver
       ? '<button type="button" class="btn-flow-secondary" data-resolver-atividade="' + esc(a.id) + '" style="width:auto; padding:4px 10px; font-size:12px; margin-top:8px;">Marcar como resolvida</button>'
       : '';
