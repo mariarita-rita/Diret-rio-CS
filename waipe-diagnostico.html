@@ -1111,6 +1111,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         <button type="button" class="btn-primary" id="btnConfirmarFechamento" style="margin-top:0" disabled>✅ Confirmar fechamento e criar projeto de implantação</button>
       </div>
       <div id="carregarPropostaWrap" role="dialog" aria-modal="true" aria-label="Carregar proposta salva" style="display:none; margin-top:10px;">
+            <button type="button" id="btnFecharCarregarProposta" aria-label="Fechar" style="position:absolute; top:14px; right:14px; width:28px; height:28px; border:none; background:transparent; color:var(--muted); font-size:18px; line-height:1; cursor:pointer; padding:0;">✕</button>
             <div class="load-dialog-title">Carregar proposta salva</div>
             <div class="load-dialog-help">Selecione uma proposta da lista para carregar os dados desta simulação.</div>
             <label>Propostas aguardando fechamento</label>
@@ -3313,6 +3314,26 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       });
   });
 
+  /** "Carregar proposta salva" é um modal via CSS (position:fixed + box-shadow
+   * gigante simulando o fundo escurecido, sem um <div> de overlay de verdade)
+   * — por isso fechar no clique fora precisa checar se o alvo do clique está
+   * fora do próprio wrap, não de um overlay separado. */
+  function fecharCarregarProposta(){
+    document.getElementById("carregarPropostaWrap").style.display = "none";
+  }
+  document.getElementById("btnFecharCarregarProposta").addEventListener("click", fecharCarregarProposta);
+  document.addEventListener("click", function(e){
+    var wrap = document.getElementById("carregarPropostaWrap");
+    if (wrap.style.display === "none") return;
+    if (wrap.contains(e.target) || e.target.id === "btnCarregarProposta") return;
+    fecharCarregarProposta();
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Escape") return;
+    var wrap = document.getElementById("carregarPropostaWrap");
+    if (wrap.style.display !== "none") fecharCarregarProposta();
+  });
+
   document.getElementById("btnCarregarProposta").addEventListener("click", function(){
     limparErroImplantacao();
     var wrap = document.getElementById("carregarPropostaWrap");
@@ -4189,6 +4210,30 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     } catch (e) { /* nunca deixa o log quebrar a geracao da proposta */ }
   }
 
+  /** Download nativo do navegador via Blob + <a download> — funciona em
+   * qualquer navegador comum (Chrome/Edge/Firefox/Safari), sem depender de
+   * nenhuma capability especial. É o caminho de verdade pra quem usa esta
+   * tela pelo Dashboard de Carteiras (navegador normal); capDownloads só
+   * existe quando esta página roda dentro do runtime de Artifact da Claude,
+   * o que nunca é o caso na implantação real — sem esse fallback, "Baixar"
+   * sempre caía direto em copiar HTML pro clipboard. */
+  function baixarViaBlob(html, filename){
+    try{
+      var blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      return true;
+    } catch(e){
+      return false;
+    }
+  }
+
   document.getElementById("btnBaixar").addEventListener("click", function(){
     var html = buildProposalHTML();
     var ctx = getProposalContext();
@@ -4199,8 +4244,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       capDownloads.save({ filename: filename, data: html }).then(function(){
         showToast("Download iniciado");
       }).catch(function(){
-        openFallbackDownload(html);
+        if (!baixarViaBlob(html, filename)) openFallbackDownload(html);
+        else showToast("Download iniciado");
       });
+    } else if (baixarViaBlob(html, filename)){
+      showToast("Download iniciado");
     } else {
       openFallbackDownload(html);
     }
@@ -4217,7 +4265,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   });
 
   function openFallbackDownload(html){
-    // Downloads não disponível neste visualizador: oferece o HTML para copiar e salvar manualmente.
+    // Último recurso — só chega aqui se nem capDownloads nem baixarViaBlob
+    // (Blob + <a download>, que cobre qualquer navegador comum) funcionarem,
+    // o que não deveria acontecer na implantação real: oferece o HTML para
+    // copiar e salvar manualmente.
     copyToClipboard(html).then(function(){
       showToast("Download direto indisponível aqui — HTML da proposta copiado. Cole em um editor e salve como .html");
     }).catch(function(){
