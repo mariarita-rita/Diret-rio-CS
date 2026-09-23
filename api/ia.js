@@ -52,11 +52,33 @@
 //        editável e ele entra no payload de `salvar-proposta-implantacao`
 //        quando o CSM salvar.
 //
+//   POST /api/ia?action=carregar-flow-waipe             {}
+//        Devolve o histórico salvo da conversa do chat de geração de flow
+//        do Waipe Flow por IA (LISTA_FLOWS_IA, ver api/_lib/clickup.js) da
+//        pessoa logada — chamado quando o widget abre, pra restaurar de
+//        onde parou. Array vazio se ela nunca conversou.
+//
+//   POST /api/ia?action=gerar-flow-waipe                { mensagemUsuario }
+//        Chat MULTI-TURNO (única ação desta função que sustenta ida-e-volta
+//        — as outras são todas de um tiro só) pra gerar um flow do Waipe
+//        Flow (produto interno, construtor de automações tipo n8n) pronto
+//        pra importar. O "system" é o guia técnico completo e autossuficiente
+//        em docs/guia-geracao-flows-por-ia.md (schema exato do JSON de
+//        importação, os 21 tipos de node válidos, checklist e erros comuns —
+//        ver o próprio arquivo), carregado uma vez por cold start e cacheado
+//        (cache_control ephemeral, igual o catálogo/instruções estáticas
+//        abaixo). Persiste a cada turno em LISTA_FLOWS_IA (1 task por
+//        pessoa, chave = sessao.nome).
+//
 // Mesmo portão de sessão do resto do painel: consulta fica de fora (é uso
 // pago, mesmo critério de podeEscrever já usado pro ClickUp). O limitador de
 // chamadas por IP é COMPARTILHADO entre todas as ações desta função — é o
-// controle de custo real (uso pontual, sob demanda, nunca em loop).
+// controle de custo real (uso pontual, sob demanda, nunca em loop). O chat
+// multi-turno gasta esse orçamento mais rápido que as ações de um tiro só —
+// se apertar demais no uso real, ajustar MAX_CHAMADAS/JANELA_MS depois.
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { aplicarCors, erro, ipCliente, lerCorpo, taskIdValido, texto, ErroCorpo } from './_lib/http.js';
 import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/auth.js';
 import {
@@ -66,10 +88,12 @@ import {
   listarComentarios,
   listarReservas,
   LISTA_IMPLANTACOES_WAIPE,
+  obterConversaFlowIa,
   obterTask,
   parseWaipeState,
   projetoDaDescricaoReserva,
   reagendadoPorDaDescricaoReserva,
+  salvarConversaFlowIa,
   statusDaDescricaoReserva,
 } from './_lib/clickup.js';
 import { telefoneParaE164, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
@@ -86,6 +110,39 @@ const MAX_TRANSCRICAO = 500000;
 // texto deste marcador sem migrar os comentários já gravados.
 const MARCADOR_RESUMO_CONVERSA = '[Resumo IA - Conversa]';
 const MARCADOR_RESUMO_REUNIAO = '[Resumo IA - Reuniao]';
+
+// Guia técnico completo do Waipe Flow (schema do JSON, 21 tipos de node,
+// checklist, erros comuns) — lido do disco uma vez por cold start (não a
+// cada chamada) e usado como "system" de gerar-flow-waipe, com cache_control
+// ephemeral (mesmo mecanismo de INSTRUCOES_SECOES_PROPOSTA mais abaixo).
+// Atualizar o arquivo em docs/ quando o Waipe Flow mudar — não precisa
+// mexer em código nenhum aqui.
+const GUIA_FLOW_WAIPE_BRUTO = fs.readFileSync(
+  path.join(process.cwd(), 'docs', 'guia-geracao-flows-por-ia.md'),
+  'utf8'
+);
+// O guia em si (abaixo) foi escrito pra um prompt de "gere agora" — aqui
+// precisa de moldura conversacional (fazer perguntas, e sempre entregar o
+// JSON final num bloco ```json fechado) porque o front-end EXTRAI esse
+// bloco por regex pra oferecer "copiar"/"baixar" (ver extrairJsonDoTexto em
+// implantacao-waipe.html) — sem a instrução explícita o Claude tende a
+// devolver o JSON solto ou com comentário dentro do bloco.
+const SYSTEM_FLOW_WAIPE = `Você ajuda a equipe de Customer Success da Londrisoft a estruturar automações do Waipe Flow (produto interno, construtor de automações tipo n8n) a partir da descrição de um cliente: o que ele precisa, qual agente/processo o Waipe Flow deve cobrir, e notas de uma reunião de alinhamento.
+
+Comportamento esperado:
+- Se a descrição do cliente não tiver informação suficiente pra montar um flow correto (ex: não ficou claro qual sistema externo chamar, qual gatilho usar, ou o que fazer com o resultado), FAÇA PERGUNTAS antes de gerar o JSON — não invente detalhes de negócio importantes.
+- Quando tiver informação suficiente, entregue o flow completo. A resposta deve ter um breve resumo em texto do que o flow faz, seguido do JSON completo dentro de um bloco cercado \`\`\`json ... \`\`\` (e SÓ o JSON dentro do bloco — sem comentários, sem reticências, sem "...resto igual"). Depois do bloco, se relevante, liste em texto livre o que o usuário precisa configurar após importar (credenciais, URLs de webhook etc — nunca dentro do JSON).
+- Siga à risca o guia técnico abaixo: os 21 tipos de node são os ÚNICOS válidos, o schema do JSON é exato, e o checklist (Parte 6) e a tabela de erros comuns (Parte 7) existem justamente pra evitar um JSON que a importação rejeita. Confira o checklist antes de responder.
+- Se o usuário pedir um ajuste num flow que você já gerou nesta conversa, devolva o JSON COMPLETO de novo (com o ajuste aplicado), nunca só o trecho alterado — quem for importar precisa do arquivo inteiro.
+
+Guia técnico completo (fonte de verdade — não se desvie dele):
+
+${GUIA_FLOW_WAIPE_BRUTO}`;
+// Cap de mensagens ENVIADAS ao Claude por chamada — a persistência guarda o
+// histórico inteiro, isso só limita o que vai no corpo da requisição, pra
+// não deixar o custo/tempo por turno crescer sem fim numa conversa longa.
+const MAX_MENSAGENS_ENVIADAS = 20;
+const MAX_MENSAGEM_USUARIO = 8000;
 
 /**
  * Mesma resolução de posse usada em api/clickup.js (resolverImplantacao) —
@@ -327,6 +384,46 @@ async function chamarClaudeTexto({ system, mensagem, maxTokens }) {
       thinking: { type: 'disabled' },
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: mensagem }],
+    }),
+  });
+
+  if (!r.ok) {
+    await r.text().catch(() => '');
+    throw new ErroUpstreamIa(r.status);
+  }
+  const corpo = await r.json();
+  const respostaTexto = corpo?.content?.find((b) => b.type === 'text')?.text || '';
+  if (!respostaTexto.trim()) {
+    console.error(`[ia] resposta_vazia (stop_reason=${corpo?.stop_reason})`);
+    throw new Error('resposta_vazia');
+  }
+  return respostaTexto;
+}
+
+/**
+ * Mesma chamada crua acima, mas MULTI-TURNO: manda o histórico inteiro de
+ * mensagens em vez de uma única `mensagem` de usuário — é o que
+ * gerar-flow-waipe usa pra sustentar uma conversa de ida-e-volta (nenhuma
+ * outra ação deste arquivo precisa disso, todas são de um tiro só).
+ * `mensagens` já vem pronta no formato da API (`{ role, content }`).
+ */
+async function chamarClaudeConversa({ system, mensagens, maxTokens }) {
+  const chave = process.env.ANTHROPIC_API_KEY;
+  if (!chave) throw new ErroConfigIa();
+
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': chave,
+      'anthropic-version': ANTHROPIC_VERSION,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODELO,
+      max_tokens: maxTokens,
+      thinking: { type: 'disabled' },
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: mensagens,
     }),
   });
 
@@ -771,12 +868,73 @@ async function gerarSecoesPropostaAcao(req, res) {
   return res.status(200).json({ ok: true, secoes });
 }
 
+// ── Ações: carregar-flow-waipe / gerar-flow-waipe (chat multi-turno) ───────
+// Único par de ações desta função que sustenta uma CONVERSA (as demais são
+// todas de um tiro só) — ver cabeçalho do arquivo e o guia em
+// docs/guia-geracao-flows-por-ia.md.
+
+async function carregarFlowWaipeAcao(req, res, sessao) {
+  const { mensagens } = await obterConversaFlowIa(sessao.nome);
+  return res.status(200).json({ ok: true, mensagens });
+}
+
+/** "Nova conversa" — zera o histórico salvo, sem chamar a IA (não é uma pergunta, não gasta cota). */
+async function limparFlowWaipeAcao(req, res, sessao) {
+  await salvarConversaFlowIa(sessao.nome, []);
+  return res.status(200).json({ ok: true });
+}
+
+async function gerarFlowWaipeAcao(req, res, sessao) {
+  let corpo;
+  try {
+    corpo = await lerCorpo(req);
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+  const mensagemUsuario = texto(corpo.mensagemUsuario, MAX_MENSAGEM_USUARIO);
+  if (!mensagemUsuario) {
+    return erro(res, 400, 'mensagem_invalida', 'Escreva uma mensagem antes de enviar.');
+  }
+
+  const { mensagens: historico } = await obterConversaFlowIa(sessao.nome);
+  const historicoComNova = [...historico, { papel: 'user', texto: mensagemUsuario }];
+
+  // Só o que vai NA CHAMADA é limitado (MAX_MENSAGENS_ENVIADAS) — o que fica
+  // salvo (historicoComNova/historicoFinal) é sempre o histórico completo.
+  const paraEnviar = historicoComNova.slice(-MAX_MENSAGENS_ENVIADAS).map((m) => ({
+    role: m.papel === 'assistant' ? 'assistant' : 'user',
+    content: m.texto,
+  }));
+
+  let respostaTexto;
+  try {
+    respostaTexto = texto(
+      await chamarClaudeConversa({ system: SYSTEM_FLOW_WAIPE, mensagens: paraEnviar, maxTokens: 8192 }),
+      60000
+    );
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
+    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu uma resposta válida.');
+    throw e;
+  }
+  if (!respostaTexto) return erro(res, 502, 'falha_ia', 'A IA não devolveu uma resposta válida.');
+
+  const historicoFinal = [...historicoComNova, { papel: 'assistant', texto: respostaTexto }];
+  await salvarConversaFlowIa(sessao.nome, historicoFinal);
+
+  return res.status(200).json({ ok: true, resposta: respostaTexto });
+}
+
 const ACOES_IA = {
   'analisar-transcricao': analisarTranscricaoAcao,
   'resumir-conversa-umbler': resumirConversaUmblerAcao,
   'analisar-reuniao-implantacao': analisarReuniaoImplantacaoAcao,
   'gerar-relatorio-finalizacao': gerarRelatorioFinalizacaoAcao,
   'gerar-secoes-proposta': gerarSecoesPropostaAcao,
+  'carregar-flow-waipe': carregarFlowWaipeAcao,
+  'gerar-flow-waipe': gerarFlowWaipeAcao,
+  'limpar-flow-waipe': limparFlowWaipeAcao,
 };
 
 export default async function handler(req, res) {

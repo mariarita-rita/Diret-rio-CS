@@ -65,6 +65,16 @@ export const LISTA_MODELOS_MENSAGEM = '901329038100';
  */
 export const LISTA_GOOGLE_TOKENS = '901329032234';
 
+/**
+ * Conversas do chat de geração de flow do Waipe Flow por IA — 1 task por
+ * PESSOA (chave = sessao.nome, mesmo padrão de LISTA_GOOGLE_TOKENS/
+ * obterTokenEmail/salvarTokenEmail logo abaixo), descricao = só o bloco
+ * JSON com o histórico de mensagens, sem texto de contexto antes. Login
+ * compartilhado (ex: AUTH_GESTAO usado por mais de uma pessoa) compartilha
+ * a mesma conversa — limitação conhecida, aceita por ora.
+ */
+export const LISTA_FLOWS_IA = '901329145424';
+
 // Campos da lista Carteira. ALERTAS é EXCEÇÃO: o mesmo campo (mesmo id,
 // confirmado ao vivo via GET /list/{id}/field) também foi anexado à lista
 // Implantação — ver CAMPO_ALERTAS/espelharAlertas mais abaixo.
@@ -1148,6 +1158,60 @@ export async function salvarTokenEmail(chave, refreshToken, emailConectado) {
     body: JSON.stringify({
       name: `Gmail (envio) — ${nomeExibicao}`,
       markdown_description: JSON.stringify(estado),
+    }),
+  });
+}
+
+// ── Conversas do chat de geração de flow do Waipe Flow por IA — mesma
+// chave de tokenDeEmail acima (sessao.nome), mas NUNCA usa parseWaipeState/
+// stringifyWaipeState aqui: as mensagens da IA legitimamente contêm blocos
+// ```json cercados por crase — confirmado ao vivo que o ClickUp CANONIZA o
+// markdown_description (interpreta as crases como marcação real e as some
+// na volta), corrompendo o JSON gravado assim que a task é salva. Descrição
+// vira base64 puro (alfabeto sem nenhum caractere especial de markdown) —
+// o ClickUp não tem o que reinterpretar. ─────────────────────────────────
+
+function codificarConversaFlowIa(estado) {
+  return Buffer.from(JSON.stringify(estado), 'utf8').toString('base64');
+}
+function decodificarConversaFlowIa(description) {
+  try {
+    return JSON.parse(Buffer.from(String(description || '').trim(), 'base64').toString('utf8'));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function listarConversasFlowIa() {
+  return buscarPaginado(LISTA_FLOWS_IA, '', 1);
+}
+
+function conversaDoNome(tasks, nome) {
+  return tasks.find((t) => decodificarConversaFlowIa(t.description)?.nome === nome);
+}
+
+/** Histórico salvo da pessoa, ou array vazio se ela nunca conversou. */
+export async function obterConversaFlowIa(nome) {
+  const tasks = await listarConversasFlowIa();
+  const task = conversaDoNome(tasks, nome);
+  if (!task) return { taskId: null, mensagens: [] };
+  const estado = decodificarConversaFlowIa(task.description);
+  return { taskId: task.id, mensagens: Array.isArray(estado?.mensagens) ? estado.mensagens : [] };
+}
+
+/** Cria ou atualiza a task de conversa dessa pessoa (1 por nome). */
+export async function salvarConversaFlowIa(nome, mensagens) {
+  const corpo = codificarConversaFlowIa({ nome, mensagens, atualizadoEm: Date.now() });
+  const tasks = await listarConversasFlowIa();
+  const existente = conversaDoNome(tasks, nome);
+  if (existente) {
+    return atualizarTask(existente.id, { markdown_description: corpo });
+  }
+  return cu(`/list/${LISTA_FLOWS_IA}/task`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: `Flow IA — ${nome}`,
+      markdown_description: corpo,
     }),
   });
 }
