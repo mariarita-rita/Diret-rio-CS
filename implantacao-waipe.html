@@ -5371,6 +5371,10 @@
 
     var btnValidar = card.querySelector("[data-validar]");
     if (btnValidar) btnValidar.addEventListener("click", function(){
+      // Confirmação — mesmo cuidado que "Cancelar" já tinha: validar entra o
+      // agente na fila de construção de verdade, então clique sem querer
+      // (ex: demonstrando a tela pro ISM) não deveria ter efeito colateral.
+      if (!window.confirm('Marcar "' + a.nome + '" como validado com o cliente? Ele entra na fila de construção.')) return;
       a.validacao = { status: "validado", motivo: "" };
       if (sim.prioridade.indexOf(a.id) === -1) sim.prioridade.push(a.id);
       persistirAgente(a.id, { validacao: a.validacao });
@@ -5417,7 +5421,12 @@
       html += '<h2 class="section-title">Já validados (' + validados.length + ')</h2>' +
         '<div class="agent-pick-grid">' + validados.map(function(a){
           var pos = sim.prioridade.indexOf(a.id);
-          return '<div class="agent-pick on" style="cursor:default"><div class="apname">' + esc(a.nome) + '</div><div class="apmeta">' + (pos + 1) + 'º na fila</div></div>';
+          var jaEntregue = sim.concluidos.indexOf(a.id) !== -1;
+          return '<div class="agent-pick on" style="cursor:default">' +
+            '<div class="apname">' + esc(a.nome) + '</div>' +
+            '<div class="apmeta">' + (pos + 1) + 'º na fila</div>' +
+            (jaEntregue ? '' : '<button type="button" class="btn-reset" data-desfazer-validacao="' + esc(a.id) + '" style="margin-top:6px; font-size:11px; padding:3px 8px;" title="Volta pra pendente — sai da fila de construção">↩️ Desfazer</button>') +
+          '</div>';
         }).join("") + '</div>';
     }
     if (cancelados.length){
@@ -5439,6 +5448,26 @@
       if (!sim.agenteAtual) sim.agenteAtual = sim.prioridade[0];
       persistirProjeto();
       irParaEtapa("construcao");
+    });
+    // "Desfazer" — pra quando "Validar" foi clicado sem querer (ex: demonstrando
+    // a tela pro ISM antes de existir alinhamento de verdade com o cliente):
+    // volta o agente pra pendente e tira ele da fila, sem precisar editar o
+    // estado na mão. Se ele era o agente ativo da Construção, o próximo da
+    // fila assume o lugar (ou ninguém, se a fila ficar vazia).
+    document.querySelectorAll("[data-desfazer-validacao]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-desfazer-validacao");
+        var agente = agentesReais().find(function(x){ return x.id === id; });
+        if (!agente) return;
+        if (!window.confirm('Desfazer a validação de "' + agente.nome + '"? Ele volta pra pendente e sai da fila de construção.')) return;
+        agente.validacao = { status: "pendente", motivo: "" };
+        var pos = sim.prioridade.indexOf(id);
+        if (pos !== -1) sim.prioridade.splice(pos, 1);
+        if (sim.agenteAtual === id) sim.agenteAtual = sim.prioridade[0] || null;
+        persistirAgente(id, { validacao: agente.validacao });
+        persistirProjeto();
+        renderSimulador();
+      });
     });
 
     candidatos.forEach(wireCardAlinhamento);
