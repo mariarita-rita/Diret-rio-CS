@@ -1033,8 +1033,15 @@ const AUTOMACAO_WAIPE_VALIDOS = new Set(['pronta', 'personalizada']);
 // esta é a mesma validação usada pros dois níveis (ver comentário acima).
 // Ao contrário de "cancelado"/"entregue", não finaliza o projeto: fica em
 // "Projetos em Andamento" enquanto o CSM investiga um sinal de desistência.
-const FASES_ITEM_VALIDAS = new Set(['nao_iniciado', 'em_andamento', 'aguardando_cliente', 'aguardando_interno', 'analise_desistencia', 'cancelado', 'entregue']);
+const FASES_ITEM_VALIDAS = new Set(['agendado', 'nao_iniciado', 'em_andamento', 'aguardando_cliente', 'aguardando_interno', 'analise_desistencia', 'cancelado', 'entregue']);
 const FASE_ITEM_PADRAO = 'nao_iniciado';
+
+// Fases de PROJETO (faseProjetoManual) em que o relógio do SLA fica pausado
+// — pedido explícito da usuária: tempo esperando o cliente aparecer/responder
+// (aguardando_cliente) ou esperando a data de um agendamento futuro chegar
+// (agendado) não deveria contar como atraso nosso. Ver pausaSlaDesde/
+// pausaSlaAcumuladaDiasUteis em atualizarImplantacaoAcao.
+const FASES_SLA_PAUSADAS = new Set(['agendado', 'aguardando_cliente']);
 
 // Urgencia do projeto — classificacao manual (CSM/ISM), sem derivacao
 // automatica nenhuma. "normal" e o default quando ainda ninguem classificou,
@@ -1493,6 +1500,11 @@ async function listarImplantacoesAcao(res, sessao) {
       // indicadores sem 1 chamada por projeto.
       dataInicioReal: Number.isFinite(Number(estado.dataInicioReal)) ? Number(estado.dataInicioReal) : null,
       dataFimReal: Number.isFinite(Number(estado.dataFimReal)) ? Number(estado.dataFimReal) : null,
+      // Pausa de SLA (ver FASES_SLA_PAUSADAS/atualizarImplantacaoAcao) — o
+      // front soma isso ao calcular o prazo (slaInfo), pra tempo parado
+      // esperando agendamento/cliente não contar como atraso nosso.
+      pausaSlaDesde: Number.isFinite(Number(estado.pausaSlaDesde)) ? Number(estado.pausaSlaDesde) : null,
+      pausaSlaAcumuladaDiasUteis: Number.isFinite(Number(estado.pausaSlaAcumuladaDiasUteis)) ? Number(estado.pausaSlaAcumuladaDiasUteis) : 0,
       finalizacao: sanearFinalizacao(estado.finalizacao),
       temMensagemNova: temMensagemNovaParaViewer(estado, sessao),
       // Alertas (🚨) — campo NATIVO do ClickUp (ver CAMPO_ALERTAS), não
@@ -1625,6 +1637,12 @@ async function obterImplantacaoAcao(req, res, sessao) {
       faseProjetoManual,
       faseProjetoDerivada: derivarFaseProjeto(fasesItens),
       urgencia: sanearUrgencia(estadoProjeto.urgencia),
+      // Datas reais — precisam vir aqui também (não só na listagem em massa)
+      // pra dar pra calcular o badge de SLA na tela do projeto aberto.
+      dataInicioReal: Number.isFinite(Number(estadoProjeto.dataInicioReal)) ? Number(estadoProjeto.dataInicioReal) : null,
+      dataFimReal: Number.isFinite(Number(estadoProjeto.dataFimReal)) ? Number(estadoProjeto.dataFimReal) : null,
+      pausaSlaDesde: Number.isFinite(Number(estadoProjeto.pausaSlaDesde)) ? Number(estadoProjeto.pausaSlaDesde) : null,
+      pausaSlaAcumuladaDiasUteis: Number.isFinite(Number(estadoProjeto.pausaSlaAcumuladaDiasUteis)) ? Number(estadoProjeto.pausaSlaAcumuladaDiasUteis) : 0,
       // Só relevante enquanto etapaAtual === "proposta" (ou como histórico do
       // que foi proposto, depois de promovido) — arrays vazios/null nos
       // demais casos.
@@ -2001,6 +2019,11 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   const novaFaseProjetoManual = 'faseProjetoManual' in corpo
     ? (FASES_ITEM_VALIDAS.has(corpo.faseProjetoManual) ? corpo.faseProjetoManual : null)
     : (FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null);
+  // Mesma lógica de transição usada pro carimbo de dataFimReal logo abaixo,
+  // mas pra pausa de SLA (ver FASES_SLA_PAUSADAS) — precisa saber se a fase
+  // ANTERIOR e a NOVA estão (ou não) numa fase que pausa o relógio.
+  const estavaPausadoSla = FASES_SLA_PAUSADAS.has(estadoAtual.faseProjetoManual);
+  const estaPausadoSla = FASES_SLA_PAUSADAS.has(novaFaseProjetoManual);
 
   // Só pode ENTRAR em "entregue"/"cancelado" (isso que finaliza o projeto,
   // ver finalizado/jaEntregue em criarProjetoImplantacao) com todo item já
@@ -2071,6 +2094,19 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
             ? null
             : (estadoAtual.dataFimReal ?? null)
         ),
+    // Pausa de SLA — entra em pausa (carimba pausaSlaDesde) na transição pra
+    // "agendado"/"aguardando_cliente"; ao SAIR de uma dessas fases, soma os
+    // dias úteis que passou pausado no acumulador e limpa o carimbo. Ficar
+    // "dentro" da pausa (ex: agendado -> aguardando_cliente, as duas
+    // pausam) não reinicia a contagem, só continua correndo a partir do
+    // mesmo pausaSlaDesde. Ver slaInfo() no front — soma acumulado +
+    // (se ainda pausado agora) o trecho corrente antes de calcular o prazo.
+    pausaSlaDesde: estaPausadoSla
+      ? (estavaPausadoSla ? (estadoAtual.pausaSlaDesde || Date.now()) : Date.now())
+      : null,
+    pausaSlaAcumuladaDiasUteis: (!estaPausadoSla && estavaPausadoSla && estadoAtual.pausaSlaDesde)
+      ? (Number(estadoAtual.pausaSlaAcumuladaDiasUteis) || 0) + diasUteisEntre(estadoAtual.pausaSlaDesde, Date.now())
+      : (Number(estadoAtual.pausaSlaAcumuladaDiasUteis) || 0),
     // Urgencia — mesmo padrao: so muda quando vem no corpo, senao o spread
     // de estadoAtual (logo acima) ja preserva. So repete aqui pra sanear
     // caso venha um valor invalido no corpo. NUNCA usar a chave
@@ -3002,6 +3038,41 @@ async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados })
   return { linkReuniao };
 }
 
+/**
+ * Ao vincular um agendamento a um projeto (criar-reserva direto, sincronizar-
+ * agendamentos-google por CNPJ, ou vincular-agendamento-google manual), avança
+ * a fase sozinha pra "agendado" — SÓ quando o projeto ainda está no ponto de
+ * partida (faseProjetoManual nulo ou "nao_iniciado"). Pedido explícito da
+ * usuária: marcar uma reunião já é sinal de que o projeto saiu do zero. Nunca
+ * mexe num projeto que já avançou (em_andamento, aguardando_*, entregue,
+ * cancelado, análise de desistência) — uma reunião de acompanhamento comum
+ * não deveria "voltar no tempo" a fase de um projeto que já está andando.
+ * Escrita direta (não passa por atualizarImplantacaoAcao), então precisa
+ * replicar aqui o carimbo de pausaSlaDesde que aquele endpoint faria.
+ */
+async function autoDefinirFaseAgendado(projetoId) {
+  if (!projetoId || !taskIdValido(projetoId)) return;
+  try {
+    const resolvido = await resolverImplantacao(projetoId);
+    if (!resolvido) return;
+    const { projeto } = resolvido;
+    const estadoAtual = parseWaipeState(projeto.description);
+    const faseAtual = FASES_ITEM_VALIDAS.has(estadoAtual.faseProjetoManual) ? estadoAtual.faseProjetoManual : null;
+    if (faseAtual !== null && faseAtual !== 'nao_iniciado') return;
+    await atualizarTask(projeto.id, {
+      markdown_description: stringifyWaipeState(projeto.description, {
+        ...estadoAtual,
+        faseProjetoManual: 'agendado',
+        pausaSlaDesde: estadoAtual.pausaSlaDesde || Date.now(),
+      }),
+    });
+  } catch (e) {
+    // Nunca derruba o fluxo de agendamento por causa disso — na pior das
+    // hipóteses, a fase fica pra ser ajustada manualmente depois.
+    console.error('[clickup] falha ao auto-definir fase agendado:', e);
+  }
+}
+
 async function criarReservaAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
   if (!podeEscrever(sessao)) {
@@ -3062,6 +3133,7 @@ async function criarReservaAcao(req, res, sessao) {
     assignees: [ismId],
     markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados, responsavelId: ismId }),
   });
+  await autoDefinirFaseAgendado(projetoId);
   return res.status(200).json({ ok: true, id: nova.id, linkReuniao, convidados });
 }
 
@@ -3240,6 +3312,7 @@ async function reagendarReservaAcao(req, res, sessao) {
     }),
   });
 
+  await autoDefinirFaseAgendado(projetoId);
   return res.status(200).json({ ok: true, id: nova.id, linkReuniao: resultado.linkReuniao });
 }
 
@@ -3508,6 +3581,7 @@ async function sincronizarAgendamentosGoogleAcao(req, res, sessao) {
           assignees: [ismId],
           markdown_description: linhasDescricao.join('\n\n'),
         });
+        await autoDefinirFaseAgendado(projeto.id);
         vinculados.push({ id: nova.id, projetoId: projeto.id, projetoNome: projeto.nome, titulo, ismNome });
       } else {
         naoVinculados.push({ googleEventId: ev.id, ismId, ismNome, titulo, inicio: inicioEvento, fim: fimEvento, linkReuniao, cnpj });
@@ -3572,6 +3646,7 @@ async function vincularAgendamentoGoogleAcao(req, res, sessao) {
     assignees: [ismId],
     markdown_description: linhasDescricao.join('\n\n'),
   });
+  await autoDefinirFaseAgendado(corpo.projetoId);
   return res.status(200).json({ ok: true, id: nova.id });
 }
 
@@ -3713,11 +3788,13 @@ async function listarAtividadesCsqAcao(res, sessao) {
 }
 
 /**
- * POST ?action=criar-atividade-csq { projetoId, tipo: "churn"|"renovacao",
- * alvoId, observacao? } -> registra diagnóstico de cancelamento ou handoff
- * de renovação pro CSM. Entrada sempre MANUAL (webhook do Moskit continua
- * pausado, não é tocado por isso) — vira uma Atividade persistida, o
- * projeto de implantação nunca é alterado por essa ação.
+ * POST ?action=criar-atividade-csq { projetoId, tipo: "churn"|"renovacao"|
+ * "lembrete", alvoId, observacao?, dueDate? } -> registra diagnóstico de
+ * cancelamento, handoff de renovação pro CSM, ou um lembrete genérico
+ * (com prazo opcional, ex: uma régua de SLA). Entrada sempre MANUAL
+ * (webhook do Moskit continua pausado, não é tocado por isso) — vira uma
+ * Atividade persistida, o projeto de implantação nunca é alterado por
+ * essa ação.
  */
 async function criarAtividadeManualCsqAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
@@ -3751,7 +3828,7 @@ async function criarAtividadeManualCsqAcao(req, res, sessao) {
 
   const observacao = texto(corpo.observacao, 500);
   const NOME_TIPO_ATIVIDADE = { churn: 'Churn', renovacao: 'Renovação', lembrete: 'Lembrete' };
-  const nova = await criarAtividadeCsq({
+  const payload = {
     name: `${NOME_TIPO_ATIVIDADE[tipo]}: ${texto(resolvido.projeto.name, 120)}`,
     assignees: [alvoId],
     markdown_description: linhasDescricaoAtividade({
@@ -3759,7 +3836,14 @@ async function criarAtividadeManualCsqAcao(req, res, sessao) {
       tipo,
       alvo: [pessoaAlvo.nome, observacao].filter(Boolean).join(' — '),
     }),
-  });
+  };
+  // Prazo opcional (ex: uma das réguas de SLA por urgência do painel) —
+  // mesmo formato/validação de data usado em atualizarAgenteAcao.
+  if (typeof corpo.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(corpo.dueDate)) {
+    payload.due_date = Date.parse(`${corpo.dueDate}T12:00:00-03:00`);
+    payload.due_date_time = true;
+  }
+  const nova = await criarAtividadeCsq(payload);
   return res.status(200).json({ ok: true, id: nova.id });
 }
 

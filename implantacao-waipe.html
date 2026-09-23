@@ -122,6 +122,8 @@
      de tag)": um 2º bloco :root mais abaixo redefine --tag-*-bg tudo pra
      azul, então variável nova aqui sairia com a cor errada. */
   .tag.alerta{background:#FFEDD5; color:#C2410C;}
+  /* Mesmo motivo da nota acima — cor literal, não var(--tag-*). */
+  .tag.agendado{background:#E0F2FE; color:#0369A1;}
 
   /* Runbook checklist */
   .phase{border:1px solid var(--border); border-radius:16px; margin-bottom:14px; overflow:hidden; background:var(--surface);}
@@ -266,6 +268,14 @@
   .secao-fase-corpo .proj-card{margin-bottom:8px;}
   .secao-fase-corpo .proj-card:last-child{margin-bottom:0;}
   .secao-fase-vazia{font-size:12px; color:var(--muted); padding:2px 0;}
+
+  /* Kanban — só colunas lado a lado, sem arrastar-e-soltar (ver plano). */
+  .kanban-board{display:flex; gap:12px; overflow-x:auto; padding-bottom:6px;}
+  .kanban-col{flex:0 0 270px; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); display:flex; flex-direction:column; max-height:calc(100vh - 260px);}
+  .kanban-col-head{display:flex; align-items:center; gap:8px; padding:10px 12px; font-size:13px; font-weight:700; color:var(--ink); border-top:3px solid var(--muted-2); border-radius:12px 12px 0 0; background:var(--surface);}
+  .kanban-col-body{padding:10px; overflow-y:auto; flex:1;}
+  .kanban-col-body .proj-card{margin-bottom:8px;}
+  .kanban-col-body .proj-card:last-child{margin-bottom:0;}
 
   /* ---- Calendário de disponibilidade (mês -> dia) — mostra dia/horário já
      ocupado antes de tentar registrar, no agendamento e no reagendamento.
@@ -1122,20 +1132,25 @@
   // derivarFaseProjeto em api/clickup.js). Trabalho normal em andamento usa
   // "em_andamento", pra não soar como alarme de bloqueio.
   var FASE_LABEL = {
+    agendado: "Agendado",
     nao_iniciado: "Não iniciado", em_andamento: "Em andamento", aguardando_cliente: "Aguardando cliente",
     aguardando_interno: "Aguardando interno (bloqueio)", analise_desistencia: "Análise de Desistência",
     cancelado: "Cancelado", entregue: "Entregue"
   };
   var FASE_TAG_CLASS = {
+    agendado: "agendado",
     nao_iniciado: "neutro", em_andamento: "londrisoft", aguardando_cliente: "cliente",
     aguardando_interno: "perigo", analise_desistencia: "alerta", cancelado: "perigo", entregue: "ambos"
   };
-  var FASES_ORDEM = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
+  // "Agendado" = data futura já combinada (ex: treinamento marcado), mas o
+  // trabalho ainda não começou — por isso entra ANTES de "não iniciado" na
+  // ordem natural das duas listas abaixo.
+  var FASES_ORDEM = ["agendado", "nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "cancelado", "entregue"];
   // "Análise de Desistência" só existe no nível do PROJETO (seletor "Forçar
   // fase", filtro de fase e visão agrupada da aba Em Andamento) — nunca como
   // opção de fase de item/agente (seletorFase usa FASES_ORDEM puro). Ao
   // contrário de "Cancelado", não finaliza o projeto (fica em Em Andamento).
-  var FASES_ORDEM_PROJETO = ["nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "analise_desistencia", "cancelado", "entregue"];
+  var FASES_ORDEM_PROJETO = ["agendado", "nao_iniciado", "em_andamento", "aguardando_cliente", "aguardando_interno", "analise_desistencia", "cancelado", "entregue"];
 
   // Mesma lista de PRODUTOS_SOLUCAO_VALIDOS em api/clickup.js — usada só pro
   // seletor de "+ Adicionar item"; o servidor valida de novo do lado dele.
@@ -1158,6 +1173,85 @@
   // um array de ids), um conceito totalmente diferente.
   var URGENCIA_LABEL = { urgente: "Urgente", alta: "Alta", normal: "Normal", baixa: "Baixa" };
   var URGENCIA_COR = { urgente: "var(--danger)", alta: "var(--warning)", normal: "var(--azul)", baixa: "var(--muted)" };
+
+  // SLA — régua de dias ÚTEIS por urgência, prazo = dataInicioReal + régua.
+  // Pedido explícito da usuária (ver plano). Cálculo 100% client-side: as
+  // duas datas já vêm em cada projeto de listar-implantacoes, sem precisar
+  // de endpoint novo.
+  var SLA_DIAS_UTEIS = { urgente: 3, alta: 5, normal: 10, baixa: 15 };
+  /** Soma N dias ÚTEIS (pula sáb/dom) a partir de um timestamp — usa a mesma técnica de chave-de-dia em SP de chaveDataSP/chaveInicioSemanaSP pra não sofrer com fuso/DST. */
+  function adicionarDiasUteis(inicioMs, dias){
+    var d = new Date(chaveDataSP(inicioMs) + "T12:00:00Z");
+    var restam = dias;
+    while (restam > 0){
+      d.setUTCDate(d.getUTCDate() + 1);
+      var diaSemana = d.getUTCDay(); // 0=domingo..6=sabado
+      if (diaSemana !== 0 && diaSemana !== 6) restam--;
+    }
+    return d.getTime();
+  }
+  /** Conta quantos dias úteis existem estritamente ENTRE duas datas (exclusive-exclusive), pra "cumpriu o prazo real" nos indicadores. */
+  function diasUteisEntreClient(inicioMs, fimMs){
+    if (!inicioMs || !fimMs || fimMs <= inicioMs) return 0;
+    var d = new Date(chaveDataSP(inicioMs) + "T12:00:00Z");
+    var fim = new Date(chaveDataSP(fimMs) + "T12:00:00Z");
+    var conta = 0;
+    while (d.getTime() < fim.getTime()){
+      d.setUTCDate(d.getUTCDate() + 1);
+      var diaSemana = d.getUTCDay();
+      if (diaSemana !== 0 && diaSemana !== 6) conta++;
+    }
+    return conta;
+  }
+  // Fases de projeto em que o relógio do SLA fica pausado — mesmo Set do
+  // backend (ver FASES_SLA_PAUSADAS em api/clickup.js). Enquanto pausado, o
+  // prazo "anda junto" (desloca pra frente pelo tanto que ficou parado) em
+  // vez de contar como atraso.
+  var FASES_SLA_PAUSADAS = { agendado: true, aguardando_cliente: true };
+  /** Dias úteis já pausados até agora — acumulado (pausas passadas) + o trecho corrente, se ainda pausado. */
+  function diasPausadosSla(p){
+    var acumulado = Number(p.pausaSlaAcumuladaDiasUteis) || 0;
+    if (FASES_SLA_PAUSADAS[p.faseProjetoManual] && p.pausaSlaDesde){
+      acumulado += diasUteisEntreClient(p.pausaSlaDesde, Date.now());
+    }
+    return acumulado;
+  }
+  /**
+   * Situação do SLA de um projeto — null quando já finalizado (entregue/
+   * cancelado, o prazo deixou de importar) ou sem dataInicioReal ainda.
+   * "pausado" = fase Agendado/Aguardando cliente agora — o prazo já reflete
+   * a pausa (empurrado pra frente), mas não é alarmado como atraso enquanto
+   * durar. "proximo" = já dentro de 2 dias úteis do limite, mas ainda não
+   * estourou.
+   */
+  function slaInfo(p){
+    if (!p || !p.dataInicioReal) return null;
+    if (p.faseProjetoManual === "entregue" || p.faseProjetoManual === "cancelado") return null;
+    var regua = SLA_DIAS_UTEIS[p.urgencia || "normal"] || SLA_DIAS_UTEIS.normal;
+    var limiteMs = adicionarDiasUteis(p.dataInicioReal, regua + diasPausadosSla(p));
+    var restantes = diasUteisEntreClient(Date.now(), limiteMs);
+    var atrasado = Date.now() > limiteMs;
+    if (atrasado) restantes = -diasUteisEntreClient(limiteMs, Date.now());
+    return {
+      limiteMs: limiteMs,
+      diasUteisRestantes: restantes,
+      status: FASES_SLA_PAUSADAS[p.faseProjetoManual] ? "pausado" : (atrasado ? "atrasado" : (restantes <= 2 ? "proximo" : "no_prazo")),
+    };
+  }
+  /** Badge de SLA (card da lista e tela do projeto aberto) — "" quando no prazo ou já finalizado. */
+  function slaBadgeHtml(p){
+    var sla = slaInfo(p);
+    if (!sla || sla.status === "no_prazo") return "";
+    var urgencia = p.urgencia || "normal";
+    var regua = SLA_DIAS_UTEIS[urgencia] || SLA_DIAS_UTEIS.normal;
+    if (sla.status === "pausado"){
+      return ' <span class="tag neutro" title="Prazo SLA (' + esc(URGENCIA_LABEL[urgencia] || urgencia) + ': ' + regua + ' dias úteis) pausado enquanto o projeto está em ' + esc(FASE_LABEL[p.faseProjetoManual] || p.faseProjetoManual) + '">⏸️ SLA pausado</span>';
+    }
+    if (sla.status === "atrasado"){
+      return ' <span class="tag perigo" title="Prazo SLA (' + esc(URGENCIA_LABEL[urgencia] || urgencia) + ': ' + regua + ' dias úteis) estourado">🔴 atrasado há ' + Math.abs(sla.diasUteisRestantes) + 'd úteis</span>';
+    }
+    return ' <span class="tag alerta" title="Prazo SLA (' + esc(URGENCIA_LABEL[urgencia] || urgencia) + ': ' + regua + ' dias úteis) perto de vencer">🟡 vence em ' + sla.diasUteisRestantes + 'd úteis</span>';
+  }
 
   // 🚨 Alertas — MESMO campo do ClickUp usado na Carteira CSM (mesmo id de
   // opção, anexado às duas listas). Marcar aqui espelha lá (por ID Núcleo) e
@@ -1210,6 +1304,7 @@
         sessaoNivelAtual = respostaLogin && respostaLogin.nivel || null;
         sessaoNomeAtual = respostaLogin && respostaLogin.nome || null;
         loginPendente = false;
+        carregarPreferenciaVisualizacao();
         renderIdentidadeSessao();
         atualizarVisibilidadeAbaAtividades();
         aterrissarNaAbaCsqSeAplicavel();
@@ -1232,6 +1327,7 @@
     fetch("/api/login", { credentials: "same-origin" }).then(function(r){ return r.json(); }).then(function(j){
       sessaoNivelAtual = j && j.autenticado ? j.nivel : null;
       sessaoNomeAtual = j && j.autenticado ? j.nome : null;
+      carregarPreferenciaVisualizacao();
       renderIdentidadeSessao();
       atualizarVisibilidadeAbaAtividades();
       aterrissarNaAbaCsqSeAplicavel();
@@ -1494,6 +1590,32 @@
       '</div>');
   }
 
+  // Cancelados — ao contrário das 3 seções acima, NÃO exige relatório de
+  // finalização gerado (projeto cancelado às vezes nem chega a ter um,
+  // se cancelado antes da fase de acompanhamento) — olha direto
+  // faseProjetoManual, que sempre existe assim que alguém força a fase.
+  function projetosCanceladosParaIndicadores(projetos){
+    var base = (projetos || []).filter(function(p){ return p.faseProjetoManual === "cancelado"; });
+    return indicadoresFiltroIsm ? base.filter(function(p){ return (p.ism || []).includes(indicadoresFiltroIsm); }) : base;
+  }
+  function secaoCancelados(projetos){
+    var cancelados = projetosCanceladosParaIndicadores(projetos);
+    if (!cancelados.length) return secaoIndicador("Cancelados na implantação", '<div class="sub">Nenhum projeto cancelado ainda.</div>');
+    var ordenados = cancelados.slice().sort(function(a, b){ return (b.dataFimReal || 0) - (a.dataFimReal || 0); });
+    var linhas = ordenados.map(function(p){
+      var data = p.dataFimReal ? new Date(p.dataFimReal).toLocaleDateString("pt-BR") : "—";
+      var motivo = (p.finalizacao && p.finalizacao.causaDaDemora) || "—";
+      return '<tr><td>' + esc(p.cliente) + '</td><td>' + data + '</td><td>' + esc(motivo) + '</td></tr>';
+    }).join("");
+    return secaoIndicador("Cancelados na implantação",
+      '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">' +
+        statIndicador(cancelados.length, "projeto(s) cancelado(s)", { cor: "vermelho" }) +
+      '</div>' +
+      '<div style="max-height:260px;overflow:auto;">' +
+      '<table class="cmp"><thead><tr><th>Cliente</th><th>Data</th><th>Motivo</th></tr></thead><tbody>' + linhas + '</tbody></table>' +
+      '</div>');
+  }
+
   // Único trecho que sobrevive quase intacto da versão anterior (só virou
   // "uma seção" via secaoIndicador, em vez de ser a tela inteira) — a lista
   // detalhada por cliente continua só em trilhas-admin.html.
@@ -1538,6 +1660,29 @@
   function corCss(nomeVar){
     var v = getComputedStyle(document.documentElement).getPropertyValue(nomeVar);
     return (v && v.trim()) || "#8A8FB0";
+  }
+
+  /**
+   * Cor única por fase pro gráfico "Itens criados por mês" e pro header das
+   * colunas do Kanban — pedido explícito da usuária: entregue verde,
+   * cancelado vermelho, em andamento azul, não iniciado amarelo. Resolvida a
+   * cada chamada (não guardada numa var de módulo) pelo mesmo motivo de
+   * corCss ser sempre chamada assim: cor de var(--x) só existe depois do CSS
+   * carregado.
+   */
+  function faseChartCor(){
+    return {
+      nao_iniciado: corCss("--warning"),
+      em_andamento: corCss("--azul"),
+      entregue: corCss("--success"),
+      cancelado: corCss("--danger"),
+    };
+  }
+  /** Reduz qualquer fase (inclusive "agendado", que não tem barra própria neste gráfico) pros 4 buckets acima. */
+  function bucketFaseGrafico(fase){
+    if (fase === "entregue" || fase === "cancelado") return fase;
+    if (fase === "nao_iniciado" || fase === "agendado") return "nao_iniciado";
+    return "em_andamento";
   }
 
   var MESES_ABREV_GRAFICO = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -1593,9 +1738,8 @@
     }
     var porMes = {};
     linhas.forEach(function(l){
-      if (!porMes[l.mesChave]) porMes[l.mesChave] = { entregue: 0, cancelado: 0, em_andamento: 0 };
-      var bucket = l.fase === "entregue" ? "entregue" : (l.fase === "cancelado" ? "cancelado" : "em_andamento");
-      porMes[l.mesChave][bucket]++;
+      if (!porMes[l.mesChave]) porMes[l.mesChave] = { nao_iniciado: 0, entregue: 0, cancelado: 0, em_andamento: 0 };
+      porMes[l.mesChave][bucketFaseGrafico(l.fase)]++;
     });
     var meses = Object.keys(porMes).sort();
     var idCanvas = "chartPorMes";
@@ -1621,19 +1765,20 @@
     if (!linhas.length) return;
     var porMes = {};
     linhas.forEach(function(l){
-      if (!porMes[l.mesChave]) porMes[l.mesChave] = { entregue: 0, cancelado: 0, em_andamento: 0 };
-      var bucket = l.fase === "entregue" ? "entregue" : (l.fase === "cancelado" ? "cancelado" : "em_andamento");
-      porMes[l.mesChave][bucket]++;
+      if (!porMes[l.mesChave]) porMes[l.mesChave] = { nao_iniciado: 0, entregue: 0, cancelado: 0, em_andamento: 0 };
+      porMes[l.mesChave][bucketFaseGrafico(l.fase)]++;
     });
     var meses = Object.keys(porMes).sort();
+    var corFase = faseChartCor();
     chartsIndicadoresAtivos.push(new Chart(canvas, {
       type: "bar",
       data: {
         labels: meses.map(rotuloMes),
         datasets: [
-          { label: "Em andamento", data: meses.map(function(m){ return porMes[m].em_andamento; }), backgroundColor: corCss("--muted-2"), borderRadius: 4 },
-          { label: "Entregue", data: meses.map(function(m){ return porMes[m].entregue; }), backgroundColor: corCss("--tag-ambos"), borderRadius: 4 },
-          { label: "Cancelado", data: meses.map(function(m){ return porMes[m].cancelado; }), backgroundColor: corCss("--danger"), borderRadius: 4 },
+          { label: "Não iniciado", data: meses.map(function(m){ return porMes[m].nao_iniciado; }), backgroundColor: corFase.nao_iniciado, borderRadius: 4 },
+          { label: "Em andamento", data: meses.map(function(m){ return porMes[m].em_andamento; }), backgroundColor: corFase.em_andamento, borderRadius: 4 },
+          { label: "Entregue", data: meses.map(function(m){ return porMes[m].entregue; }), backgroundColor: corFase.entregue, borderRadius: 4 },
+          { label: "Cancelado", data: meses.map(function(m){ return porMes[m].cancelado; }), backgroundColor: corFase.cancelado, borderRadius: 4 },
         ],
       },
       options: {
@@ -1680,6 +1825,38 @@
       '<div class="sub" style="margin-bottom:10px;">Dias corridos entre o início real do projeto e a entrega — só itens já entregues. Sem meta de SLA definida ainda: os números são só o observado.</div>' +
       '<div style="position:relative;height:' + Math.max(160, tipos.length * 46) + 'px;"><canvas id="chartSlaItem"></canvas></div>' +
       motivosHtml);
+  }
+  // SLA por urgência (meta da régua vs. observado) — eixo diferente do
+  // "SLA por tipo de item" acima (aquele é por produto, sem meta; este é
+  // por régua de urgência, com meta fixa: SLA_DIAS_UTEIS).
+  function secaoSlaUrgencia(projetos){
+    var linhas = ["urgente", "alta", "normal", "baixa"].map(function(u){
+      var doGrupo = (projetos || []).filter(function(p){ return (p.urgencia || "normal") === u; });
+      if (indicadoresGraficosFiltroIsm) doGrupo = doGrupo.filter(function(p){ return (p.ism || []).includes(indicadoresGraficosFiltroIsm); });
+      var entregues = doGrupo.filter(function(p){ return p.faseProjetoManual === "entregue" && p.dataInicioReal && p.dataFimReal; });
+      // Desconta os dias úteis pausados (Agendado/Aguardando cliente) do
+      // tempo total decorrido — mesmo espírito de slaInfo(), pra um projeto
+      // que ficou esperando o cliente não ser penalizado no "cumpriu prazo".
+      var dentroDoPrazo = entregues.filter(function(p){
+        var decorrido = diasUteisEntreClient(p.dataInicioReal, p.dataFimReal) - (Number(p.pausaSlaAcumuladaDiasUteis) || 0);
+        return decorrido <= SLA_DIAS_UTEIS[u];
+      }).length;
+      var emAberto = doGrupo.filter(function(p){ return p.faseProjetoManual !== "entregue" && p.faseProjetoManual !== "cancelado"; });
+      var atrasadosAgora = emAberto.filter(function(p){ var s = slaInfo(p); return s && s.status === "atrasado"; }).length;
+      return { u: u, meta: SLA_DIAS_UTEIS[u], total: entregues.length, dentroDoPrazo: dentroDoPrazo, emAberto: emAberto.length, atrasadosAgora: atrasadosAgora };
+    });
+    var linhasHtml = linhas.map(function(l){
+      var pct = l.total ? Math.round((l.dentroDoPrazo / l.total) * 100) : null;
+      return '<tr>' +
+        '<td><span class="tag" style="background:transparent;color:' + (URGENCIA_COR[l.u] || "var(--muted)") + ';border:1px solid currentColor;">' + esc(URGENCIA_LABEL[l.u]) + '</span></td>' +
+        '<td>' + l.meta + ' dias úteis</td>' +
+        '<td>' + (pct === null ? "—" : pct + "% (" + l.dentroDoPrazo + "/" + l.total + ")") + '</td>' +
+        '<td>' + (l.atrasadosAgora ? '<span style="color:var(--danger);font-weight:700;">' + l.atrasadosAgora + '</span>' : "0") + ' de ' + l.emAberto + ' em aberto</td>' +
+      '</tr>';
+    }).join("");
+    return secaoIndicador("SLA por urgência",
+      '<div class="sub" style="margin-bottom:10px;">Meta = régua de dias úteis por urgência (3/5/10/15). "Cumpriu o prazo" olha só projetos já entregues (início real → entrega real); "atrasados agora" olha os que ainda estão em aberto.</div>' +
+      '<table class="cmp"><thead><tr><th>Urgência</th><th>Meta</th><th>Cumpriu o prazo</th><th>Atrasados agora</th></tr></thead><tbody>' + linhasHtml + '</tbody></table>');
   }
   function montarChartSlaItem(projetos){
     var canvas = document.getElementById("chartSlaItem");
@@ -1828,6 +2005,7 @@
     root.innerHTML =
       seletoresGraficos(projetos) +
       secaoGraficoPorMes(projetos) +
+      secaoSlaUrgencia(projetos) +
       secaoSlaPorItem(projetos) +
       secaoReagendamentos(projetos) +
       secaoAtividadeIsm(reservas);
@@ -1863,6 +2041,7 @@
       secaoSatisfacao(finalizados) +
       secaoRisco(finalizados) +
       secaoDuracao(finalizados) +
+      secaoCancelados(projetos) +
       secaoTreinamento(linhasTreinamento);
 
     var selIsm = content.querySelector("#indicadoresFiltroIsmSel");
@@ -1922,6 +2101,24 @@
   // "Em andamento" (Entregues não agrupa por fase: já estão todos
   // "entregue"); agrupado_item existe nas duas abas.
   var modoVisualizacaoProjetos = "lista";
+  var MODOS_VISUALIZACAO_VALIDOS = ["lista", "agrupado_fase", "agrupado_item", "kanban"];
+  // Lembra a última visualização escolhida por pessoa, sem precisar de um
+  // botão de "favoritar" separado (mesmo padrão de localStorage já usado
+  // por waipe_runbook_state) — não sincroniza entre navegadores/aparelhos,
+  // só entre recarregamentos da página no mesmo navegador.
+  function chaveVisualizacaoPref(){
+    return "waipe_view_pref_" + (sessaoNomeAtual || "anonimo");
+  }
+  function carregarPreferenciaVisualizacao(){
+    try{
+      var salvo = localStorage.getItem(chaveVisualizacaoPref());
+      if (salvo && MODOS_VISUALIZACAO_VALIDOS.indexOf(salvo) !== -1) modoVisualizacaoProjetos = salvo;
+    } catch(e){}
+  }
+  function salvarPreferenciaVisualizacao(modo){
+    modoVisualizacaoProjetos = modo;
+    try{ localStorage.setItem(chaveVisualizacaoPref(), modo); } catch(e){}
+  }
   var secoesAbertas = {}; // { [fase]: true } no agrupado por fase — ausente/false = secao fechada (todas comecam fechadas)
   var secoesItemAbertas = {}; // { [nomeItem]: true } no agrupado por item — mesmo espirito de secoesAbertas
   var filtroBuscaProjeto = ""; // texto livre — filtra por SUBSTRING no nome do projeto (que já carrega o nome do cliente e o tipo, ex: "Cliente Novo"); nas duas abas
@@ -2468,6 +2665,7 @@
         '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
         '<button type="button" id="btnModoAgrupadoFase" class="' + (modoVisualizacaoProjetos === "agrupado_fase" ? "ativo" : "") + '">📂 Agrupado por fase</button>' +
         '<button type="button" id="btnModoAgrupadoItem" class="' + (modoVisualizacaoProjetos === "agrupado_item" ? "ativo" : "") + '">🧩 Agrupado por item</button>' +
+        '<button type="button" id="btnModoKanban" class="' + (modoVisualizacaoProjetos === "kanban" ? "ativo" : "") + '">🗂️ Kanban</button>' +
         '</div>'
       : '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Fechados</label>' +
         '<select id="filtroFechamentoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
@@ -2553,6 +2751,7 @@
         : '';
       var urgencia = p.urgencia || "normal";
       var urgenciaFlag = '<span class="urgencia-flag" title="Urgência: ' + esc(URGENCIA_LABEL[urgencia] || urgencia) + '" style="border-left-color:' + (URGENCIA_COR[urgencia] || URGENCIA_COR.normal) + ';"></span>';
+      var slaBadge = slaBadgeHtml(p);
       var sinal = sinalAgendamento(p.id);
       var sinalDot = sinal === "atrasado"
         ? '<span title="Agendamento atrasado — passou da data sem marcar comparecimento" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
@@ -2561,7 +2760,7 @@
         '<div class="proj-card-top">' + urgenciaFlag + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + sinalDot + novaMsgDot + '</div>' +
         '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
         (diasTexto ? ' · ' + diasTexto : "") + '</div>' +
-        (riscoTag || satisfacaoTag ? '<div style="margin-top:6px;">' + riscoTag + satisfacaoTag + '</div>' : "") +
+        (riscoTag || satisfacaoTag || slaBadge ? '<div style="margin-top:6px;">' + riscoTag + satisfacaoTag + slaBadge + '</div>' : "") +
         (p.agentesTotal ? '<div class="phase-progress" style="margin-top:8px;" title="' + p.agentesConcluidos + '/' + p.agentesTotal + ' itens entregues"><div class="bar"><div style="width:' + pct + '%"></div></div><span class="cnt">' + p.agentesConcluidos + '/' + p.agentesTotal + '</span></div>' : "") +
       '</div>';
     }
@@ -2617,6 +2816,29 @@
               : '') +
           '</div>';
         }).join("");
+    } else if (!entregues && modoVisualizacaoProjetos === "kanban"){
+      // Só colunas lado a lado (sem arrastar-e-soltar) — clicar num card abre
+      // o projeto normalmente, mudar a fase continua sendo feito de dentro
+      // dele. Mesmo agrupamento de "agrupado_fase", layout diferente.
+      var porFaseKanban = {};
+      lista.forEach(function(p){
+        var f = faseEfetiva(p) || "";
+        (porFaseKanban[f] = porFaseKanban[f] || []).push(p);
+      });
+      var corFaseKanban = faseChartCor();
+      wrap.innerHTML = filtroHtml +
+        '<div class="kanban-board">' +
+        FASES_ORDEM_PROJETO.map(function(f){
+          var doGrupo = porFaseKanban[f] || [];
+          var corHeader = corFaseKanban[f] || null;
+          return '<div class="kanban-col">' +
+            '<div class="kanban-col-head"' + (corHeader ? ' style="border-top-color:' + corHeader + ';"' : '') + '>' +
+              '<span>' + esc(FASE_LABEL[f] || f) + '</span><span class="secao-fase-count">' + doGrupo.length + '</span>' +
+            '</div>' +
+            '<div class="kanban-col-body">' + (doGrupo.length ? doGrupo.map(cardHtml).join("") : '<div class="secao-fase-vazia">Nenhum projeto</div>') + '</div>' +
+          '</div>';
+        }).join("") +
+        '</div>';
     } else {
       wrap.innerHTML = filtroHtml + lista.map(cardHtml).join("");
     }
@@ -2675,17 +2897,22 @@
     });
     var btnModoLista = wrap.querySelector("#btnModoLista");
     if (btnModoLista) btnModoLista.addEventListener("click", function(){
-      modoVisualizacaoProjetos = "lista";
+      salvarPreferenciaVisualizacao("lista");
       renderListaProjetosWrap();
     });
     var btnModoAgrupadoFase = wrap.querySelector("#btnModoAgrupadoFase");
     if (btnModoAgrupadoFase) btnModoAgrupadoFase.addEventListener("click", function(){
-      modoVisualizacaoProjetos = "agrupado_fase";
+      salvarPreferenciaVisualizacao("agrupado_fase");
       renderListaProjetosWrap();
     });
     var btnModoAgrupadoItem = wrap.querySelector("#btnModoAgrupadoItem");
     if (btnModoAgrupadoItem) btnModoAgrupadoItem.addEventListener("click", function(){
-      modoVisualizacaoProjetos = "agrupado_item";
+      salvarPreferenciaVisualizacao("agrupado_item");
+      renderListaProjetosWrap();
+    });
+    var btnModoKanban = wrap.querySelector("#btnModoKanban");
+    if (btnModoKanban) btnModoKanban.addEventListener("click", function(){
+      salvarPreferenciaVisualizacao("kanban");
       renderListaProjetosWrap();
     });
     var selFechamento = wrap.querySelector("#filtroFechamentoProjetos");
@@ -3121,8 +3348,7 @@
           '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +
           '<button type="button" class="btn-flow-secondary" id="btnCopiarLinkProjeto" title="Copiar link direto deste projeto, pra mandar pra alguém">🔗 Copiar link</button>' +
           (podeUsarAtividadesCsq()
-            ? '<button type="button" class="btn-flow-secondary" id="btnRegistrarChurn">🚨 Registrar churn</button>' +
-              '<button type="button" class="btn-flow-secondary" id="btnHandoffRenovacao">🔄 Handoff renovação</button>'
+            ? '<button type="button" class="btn-flow-secondary" id="btnCriarAtividadeCsq">✍️ Criar atividade</button>'
             : "") +
           (sessaoNivelAtual === "gestao"
             ? '<button type="button" class="btn-flow-secondary" id="btnExcluirProjeto" style="color:var(--danger);border-color:var(--danger);" title="Exclui o projeto inteiro (e os itens dele) — irreversível">🗑️ Excluir projeto</button>'
@@ -3137,14 +3363,26 @@
           (dadosProjeto.projeto.vendedor ? ' · Vendedor: ' + esc(dadosProjeto.projeto.vendedor) : '') + '</div></div>' +
       '</div>' +
       (podeUsarAtividadesCsq() ? '<div id="painelAtividadeCsq" style="display:none; margin-bottom:14px; padding:10px; background:var(--surface-2); border-radius:8px;">' +
-        '<div class="sp-k" id="painelAtividadeCsqTitulo">Registrar atividade</div>' +
+        '<div class="sp-k">✍️ Criar atividade</div>' +
         '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">' +
+          '<select class="form-input" id="atividadeCsqTipo" style="width:auto;">' +
+            '<option value="lembrete">🔔 Lembrete</option>' +
+            '<option value="churn">🚨 Diagnóstico de cancelamento</option>' +
+            '<option value="renovacao">🔄 Handoff de renovação</option>' +
+          '</select>' +
           '<select class="form-input" id="atividadeCsqAlvo" style="width:auto;">' +
             '<option value="">Selecionar responsável…</option>' +
             PESSOAS_MENCIONAVEIS.map(function(p){ return '<option value="' + p.id + '">' + esc(p.nome) + '</option>'; }).join("") +
           '</select>' +
         '</div>' +
         '<textarea class="form-input" id="atividadeCsqObservacao" placeholder="Observação (opcional)" style="width:100%; margin-top:6px; min-height:60px;"></textarea>' +
+        '<div style="margin-top:6px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
+          '<label style="font-size:12px; color:var(--muted);">Prazo (opcional)</label>' +
+          '<input type="date" class="form-input" id="atividadeCsqPrazo" style="width:auto;">' +
+          ["urgente", "alta", "normal", "baixa"].map(function(u){
+            return '<button type="button" class="btn-reset atividade-csq-prazo-atalho" data-prazo-dias="' + SLA_DIAS_UTEIS[u] + '" style="font-size:11px;padding:4px 8px;">' + esc(URGENCIA_LABEL[u]) + ' (' + SLA_DIAS_UTEIS[u] + 'd)</button>';
+          }).join("") +
+        '</div>' +
         '<div style="margin-top:6px; display:flex; gap:8px;">' +
           '<button type="button" class="btn-flow-secondary" id="btnConfirmarAtividadeCsq" style="width:auto;">Registrar</button>' +
           '<button type="button" class="btn-reset" id="btnCancelarAtividadeCsq">Cancelar</button>' +
@@ -3179,37 +3417,40 @@
       });
     });
     if (podeUsarAtividadesCsq()){
-      var atividadeCsqTipoAtual = null;
       var painelAtividadeCsq = document.getElementById("painelAtividadeCsq");
-      var abrirPainelAtividadeCsq = function(tipo, titulo){
-        atividadeCsqTipoAtual = tipo;
-        document.getElementById("painelAtividadeCsqTitulo").textContent = titulo;
+      document.getElementById("btnCriarAtividadeCsq").addEventListener("click", function(){
         document.getElementById("atividadeCsqErro").style.display = "none";
         painelAtividadeCsq.style.display = "block";
         painelAtividadeCsq.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      };
-      document.getElementById("btnRegistrarChurn").addEventListener("click", function(){
-        abrirPainelAtividadeCsq("churn", "Registrar diagnóstico de cancelamento");
-      });
-      document.getElementById("btnHandoffRenovacao").addEventListener("click", function(){
-        abrirPainelAtividadeCsq("renovacao", "Handoff de renovação pro CSM");
       });
       document.getElementById("btnCancelarAtividadeCsq").addEventListener("click", function(){
         painelAtividadeCsq.style.display = "none";
+      });
+      // Atalhos de régua SLA — só preenchem a data, não mandam nada sozinhos.
+      painelAtividadeCsq.querySelectorAll(".atividade-csq-prazo-atalho").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var dias = parseInt(btn.getAttribute("data-prazo-dias"), 10);
+          var limiteMs = adicionarDiasUteis(Date.now(), dias);
+          document.getElementById("atividadeCsqPrazo").value = chaveDataSP(limiteMs);
+        });
       });
       document.getElementById("btnConfirmarAtividadeCsq").addEventListener("click", function(){
         var erroEl = document.getElementById("atividadeCsqErro");
         erroEl.style.display = "none";
         var alvoId = parseInt(document.getElementById("atividadeCsqAlvo").value, 10);
         if (!alvoId){ erroEl.textContent = "Selecione um responsável."; erroEl.style.display = "block"; return; }
+        var tipo = document.getElementById("atividadeCsqTipo").value;
         var observacao = document.getElementById("atividadeCsqObservacao").value.trim();
+        var prazo = document.getElementById("atividadeCsqPrazo").value;
         var btn = document.getElementById("btnConfirmarAtividadeCsq");
         btn.disabled = true;
-        apiPost("criar-atividade-csq", { projetoId: dadosProjeto.projeto.id, tipo: atividadeCsqTipoAtual, alvoId: alvoId, observacao: observacao })
+        apiPost("criar-atividade-csq", { projetoId: dadosProjeto.projeto.id, tipo: tipo, alvoId: alvoId, observacao: observacao, dueDate: prazo || null })
           .then(function(){
             painelAtividadeCsq.style.display = "none";
             document.getElementById("atividadeCsqObservacao").value = "";
             document.getElementById("atividadeCsqAlvo").value = "";
+            document.getElementById("atividadeCsqPrazo").value = "";
+            document.getElementById("atividadeCsqTipo").value = "lembrete";
             btn.disabled = false;
             showSimToast("Registrado na fila de Atividades.");
           }).catch(function(e){
@@ -4557,7 +4798,7 @@
       '<div class="sp-k">Fase do projeto</div>' +
       '<div>' + seletorFaseProjeto(p) + '</div>' +
       '<div class="sp-k" style="margin-top:10px;">Urgência</div>' +
-      '<div>' + seletorUrgenciaProjeto(p) + '</div>' +
+      '<div>' + seletorUrgenciaProjeto(p) + slaBadgeHtml(p) + '</div>' +
       '<div class="sp-k" style="margin-top:10px;">🚨 Alertas <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesmo campo da Carteira CSM)</span></div>' +
       '<div>' + seletorAlertasProjeto(p) + '</div>' +
       '<div class="sp-k">Contexto</div>' +
@@ -4588,10 +4829,16 @@
       '</div>' +
     '</div>' +
     cardDadosTributarios(p) +
-    '<div class="card">' +
-      '<h2>Finalização do projeto</h2>' +
-      (sessaoNivelAtual === "gestao"
-        ? '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
+    // Só a Gestão vê esta seção — o relatório em si é gerado automaticamente
+    // pela rotina diária (api/cron-relatorio-finalizacao.js); esta tela é só
+    // o "on-demand + revisão/correção" da Gestão antes de considerar
+    // definitivo (ver gate de escrita em atualizarImplantacaoAcao). ISM/CSM
+    // não precisam mais ver mensagem nenhuma de espera aqui — a IA roda
+    // sozinha.
+    (sessaoNivelAtual === "gestao"
+      ? '<div class="card">' +
+          '<h2>Finalização do projeto</h2>' +
+          '<div class="sub">Gerado por IA a partir dos resumos de conversa/reunião já registrados como comentário — revise antes de salvar.</div>' +
           '<button type="button" class="btn-flow-secondary" id="btnGerarFinalizacao" style="margin-top:8px;"' +
             (todosItensConcluidos() ? '' : ' disabled title="Só disponível quando todos os itens do projeto estiverem concluídos/cancelados."') +
             '>🤖 Gerar relatório de finalização</button>' +
@@ -4612,22 +4859,9 @@
             '</div>' +
             '<div class="form-field"><label>Causa da demora (se houver)</label><input type="text" class="form-input" id="finCausaDemora" style="width:100%;" value="' + esc((p.finalizacao && p.finalizacao.causaDaDemora) || "") + '"></div>' +
             '<button type="button" class="btn-flow-secondary" id="btnSalvarFinalizacao" style="margin-top:8px;">Salvar</button>' +
-          '</div>'
-        // Fora da Gestão: só leitura — o relatório é gerado automaticamente
-        // pela rotina diária (api/cron-relatorio-finalizacao.js) e a edição
-        // é exclusiva da Gestão, já que os campos são métrica do próprio
-        // desempenho de quem executou o projeto (ver atualizar-implantacao).
-        : (p.finalizacao && p.finalizacao.resumoGeral
-            ? '<div class="sub">Gerado automaticamente — revisão exclusiva da Gestão.</div>' +
-              '<div id="finEstatisticas">' + finEstatisticasHtml(p.finalizacao) + '</div>' +
-              '<div class="form-field" style="margin-top:10px;"><label>Resumo geral</label><div>' + esc(p.finalizacao.resumoGeral) + '</div></div>' +
-              '<div class="form-grid-2">' +
-                '<div class="form-field"><label>Risco percebido</label><div>' + esc(p.finalizacao.riscoPercebido || "—") + '</div></div>' +
-                '<div class="form-field"><label>Satisfação percebida</label><div>' + esc(p.finalizacao.satisfacaoPercebida || "—") + '</div></div>' +
-              '</div>' +
-              (p.finalizacao.causaDaDemora ? '<div class="form-field"><label>Causa da demora</label><div>' + esc(p.finalizacao.causaDaDemora) + '</div></div>' : "")
-            : '<div class="sub">Ainda não gerado — a rotina automática roda todo dia às 07h e preenche assim que o projeto estiver finalizado.</div>')) +
-    '</div>' +
+          '</div>' +
+        '</div>'
+      : "") +
     '<div class="card">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
         '<div><h2 style="margin-bottom:2px;">Itens do projeto</h2><div class="sub">Cada item tem sua própria jornada e checklist — clique para abrir.</div></div>' +
