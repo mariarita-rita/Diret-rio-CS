@@ -1200,6 +1200,29 @@ function sanearDiagnosticoWaipeProposto(d) {
   };
 }
 
+const PACOTES_IMPLANTACAO_VALIDOS = new Set(['padrao', 'intermediario', 'avancado', 'nenhum']);
+const PAGAMENTO_IMPLANTACAO_VALIDOS = new Set(['avista', 'metade', 'parcelado']);
+
+/**
+ * Configuração do card "Implantação Enterprise" (pacote, sistemas externos,
+ * horas adicionais, isenção do setup, forma de pagamento, ganho mensal
+ * estimado pro payback) — nunca ia pro payload de salvar-proposta-implantacao,
+ * então reabrir uma proposta salva sempre voltava pro pacote/isenção padrão
+ * (isento sempre false), mesmo quando o CSM tinha marcado isenção antes de
+ * salvar. Ver waipe-diagnostico.html (montarPayloadProposta).
+ */
+function sanearImplantacaoEnterprise(d) {
+  if (!d || typeof d !== 'object') return null;
+  return {
+    pacoteId: typeof d.pacoteId === 'string' && PACOTES_IMPLANTACAO_VALIDOS.has(d.pacoteId) ? d.pacoteId : 'intermediario',
+    sistemasExternos: inteiroEntre(d.sistemasExternos, 0, 50, 0),
+    horasAdicionais: numeroOuNulo(d.horasAdicionais, 0, 1000) ?? 0,
+    isento: !!d.isento,
+    pagamento: typeof d.pagamento === 'string' && PAGAMENTO_IMPLANTACAO_VALIDOS.has(d.pagamento) ? d.pagamento : 'avista',
+    ganhoMensal: numeroOuNulo(d.ganhoMensal, 0, 9999999),
+  };
+}
+
 // Ids duplicados de proposito do catalogo client-side (waipe-diagnostico.html,
 // CATALOGO_SECOES_PROPOSTA) e do servidor de IA (api/ia.js,
 // IDS_SECOES_PROPOSTA_VALIDAS) — mesmo espirito de resolverImplantacao
@@ -1653,6 +1676,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
         ? estadoProjeto.outrasSolucoesPropostas.map(sanearOutraSolucao).filter(Boolean)
         : [],
       diagnosticoWaipe: sanearDiagnosticoWaipeProposto(estadoProjeto.diagnosticoWaipe) || null,
+      implantacaoEnterprise: sanearImplantacaoEnterprise(estadoProjeto.implantacaoEnterprise) || null,
       secoesPropostaSelecionadas: sanearSecoesPropostaSelecionadas(estadoProjeto.secoesPropostaSelecionadas),
       secoesPropostaGeradas: Array.isArray(estadoProjeto.secoesPropostaGeradas)
         ? estadoProjeto.secoesPropostaGeradas.map(sanearSecaoPropostaGerada).filter(Boolean)
@@ -2653,6 +2677,7 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     ? corpo.outrasSolucoesPropostas.slice(0, MAX_OUTRAS_SOLUCOES).map(sanearOutraSolucao).filter(Boolean)
     : [];
   const diagnosticoWaipe = sanearDiagnosticoWaipeProposto(corpo.diagnosticoWaipe);
+  const implantacaoEnterprise = sanearImplantacaoEnterprise(corpo.implantacaoEnterprise);
   const secoesPropostaSelecionadas = sanearSecoesPropostaSelecionadas(corpo.secoesPropostaSelecionadas);
   const secoesPropostaGeradas = Array.isArray(corpo.secoesPropostaGeradas)
     ? corpo.secoesPropostaGeradas.slice(0, IDS_SECOES_PROPOSTA_VALIDAS.size).map(sanearSecaoPropostaGerada).filter(Boolean)
@@ -2667,7 +2692,7 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     // preenchia "Nome do cliente" com o nome da task já sufixado, e o
     // próximo save colava mais um sufixo em cima (ver obterImplantacaoAcao).
     cliente, etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe,
-    secoesPropostaSelecionadas, secoesPropostaGeradas, ...dadosCliente,
+    implantacaoEnterprise, secoesPropostaSelecionadas, secoesPropostaGeradas, ...dadosCliente,
   };
   const nomeTask = `${cliente} — Proposta — ${dataRotuloHoje()}`;
 
@@ -2808,6 +2833,7 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     agentesPropostos: estadoAtual.agentesPropostos || [],
     outrasSolucoesPropostas: estadoAtual.outrasSolucoesPropostas || [],
     diagnosticoWaipe: estadoAtual.diagnosticoWaipe || null,
+    implantacaoEnterprise: estadoAtual.implantacaoEnterprise || null,
     ...dadosCliente,
   };
   await atualizarTask(projeto.id, {

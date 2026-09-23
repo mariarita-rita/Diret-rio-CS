@@ -3274,7 +3274,20 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         plano: lastDiagnostic.rec.plan,
         motivo: lastDiagnostic.rec.motivo || "",
         valorMensal: computePricing().total
-      } : null
+      } : null,
+      // Faltava nesta lista — o card "Implantação Enterprise" (pacote,
+      // isenção do setup, forma de pagamento etc.) nunca ia pro que era
+      // salvo no ClickUp, então reabrir uma proposta salva sempre voltava
+      // pro pacote/isenção padrão (isento sempre false), mesmo quando o CSM
+      // tinha marcado isenção antes de salvar.
+      implantacaoEnterprise: {
+        pacoteId: implantacao.pacoteId,
+        sistemasExternos: implantacao.sistemasExternos,
+        horasAdicionais: implantacao.horasAdicionais,
+        isento: implantacao.isento,
+        pagamento: implantacao.pagamento,
+        ganhoMensal: implantacao.ganhoMensal
+      }
     };
     if (propostaSalvaId) payload.taskIdExistente = propostaSalvaId;
     return payload;
@@ -3392,6 +3405,27 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           if (diagSalvo.usuarios != null) document.getElementById("f-usuarios").value = diagSalvo.usuarios;
           if (diagSalvo.empresas != null) document.getElementById("f-empresas").value = diagSalvo.empresas;
           if (diagSalvo.plano) aplicarPlano(diagSalvo.plano, { motivo: diagSalvo.motivo || "" });
+        }
+        // Restaura o card "Implantação Enterprise" (pacote, isenção do setup,
+        // forma de pagamento etc.) — faltava aqui, então reabrir uma proposta
+        // salva sempre voltava pro pacote/isenção padrão (isento sempre
+        // false), mesmo quando o CSM tinha marcado isenção antes de salvar.
+        if (projeto.implantacaoEnterprise){
+          var implSalva = projeto.implantacaoEnterprise;
+          implantacao.pacoteId = implSalva.pacoteId;
+          implantacao.sistemasExternos = implSalva.sistemasExternos;
+          implantacao.horasAdicionais = implSalva.horasAdicionais;
+          implantacao.isento = !!implSalva.isento;
+          implantacao.pagamento = implSalva.pagamento;
+          implantacao.ganhoMensal = implSalva.ganhoMensal != null ? implSalva.ganhoMensal : "";
+          document.getElementById("im-pacote").value = implSalva.pacoteId;
+          document.getElementById("im-sistemas").value = implSalva.sistemasExternos;
+          document.getElementById("im-horas").value = implSalva.horasAdicionais;
+          document.getElementById("im-isento").checked = implantacao.isento;
+          document.getElementById("im-pagamento").value = implSalva.pagamento;
+          document.getElementById("im-ganho").value = implantacao.ganhoMensal;
+          updatePacoteHint();
+          renderImplantacaoSim();
         }
         recomendacoesState = (projeto.outrasSolucoesPropostas || []).map(function(o){
           return {
