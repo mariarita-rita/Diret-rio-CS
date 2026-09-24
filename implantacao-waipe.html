@@ -124,6 +124,8 @@
   .tag.alerta{background:#FFEDD5; color:#C2410C;}
   /* Mesmo motivo da nota acima — cor literal, não var(--tag-*). */
   .tag.agendado{background:#E0F2FE; color:#0369A1;}
+  /* Mesmo motivo da nota acima — cor literal, não var(--tag-*). */
+  .tag.ism{background:#D1FAE5; color:#065F46;}
 
   /* Runbook checklist */
   .phase{border:1px solid var(--border); border-radius:16px; margin-bottom:14px; overflow:hidden; background:var(--surface);}
@@ -2854,33 +2856,44 @@
       return true;
     });
     // Só mostra o filtro quando faz diferença — 1 CSM só ou nenhum não precisa.
+    // Fundo amarelo claro (mesmo token de aviso já usado no resto do painel)
+    // no wrapper de cada filtro que estiver de fato aplicado — sem isso, uma
+    // pessoa abrindo a aba não percebia que a lista já estava filtrada de
+    // uma sessão anterior (o filtro persiste, mas visualmente ficava idêntico
+    // a "Todos"/vazio).
+    function filtroWrapStyle(ativo){
+      return 'margin-bottom:12px;display:inline-block;margin-right:16px;' +
+        (ativo ? 'background:var(--warning-bg);border-radius:8px;padding:4px 8px;' : '');
+    }
     var filtroHtml =
-      '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Buscar projeto</label>' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+      '<div>' +
+      '<div style="' + filtroWrapStyle(filtroBuscaProjeto) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Buscar projeto</label>' +
       '<input type="text" id="filtroBuscaProjetoInput" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;" placeholder="Nome do cliente ou do projeto…" value="' + esc(filtroBuscaProjeto) + '">' +
       '</div>' +
       (todosItens.length > 1
-      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por item</label>' +
+      ? '<div style="' + filtroWrapStyle(filtroItemAtivo) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por item</label>' +
         '<select id="filtroItemProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroItemAtivo ? "" : " selected") + '>Todos</option>' +
         todosItens.map(function(i){ return '<option value="' + esc(i) + '"' + (i === filtroItemAtivo ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") +
         '</select></div>'
       : "") +
       (todasCsm.length > 1
-      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por CSM</label>' +
+      ? '<div style="' + filtroWrapStyle(filtroCsmAtivo) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por CSM</label>' +
         '<select id="filtroCsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroCsmAtivo ? "" : " selected") + '>Todos</option>' +
         todasCsm.map(function(c){ return '<option value="' + esc(c) + '"' + (c === filtroCsmAtivo ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") +
         '</select></div>'
       : "") +
       (todasIsm.length > 1
-      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por ISM</label>' +
+      ? '<div style="' + filtroWrapStyle(filtroIsmAtivo) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por ISM</label>' +
         '<select id="filtroIsmProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroIsmAtivo ? "" : " selected") + '>Todos</option>' +
         todasIsm.map(function(i){ return '<option value="' + esc(i) + '"' + (i === filtroIsmAtivo ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") +
         '</select></div>'
       : "") +
       (!entregues
-      ? '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por fase</label>' +
+      ? '<div style="' + filtroWrapStyle(filtroFaseAtiva) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Filtrar por fase</label>' +
         '<select id="filtroFaseProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroFaseAtiva ? "" : " selected") + '>Todas</option>' +
         FASES_ORDEM_PROJETO.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
@@ -2891,7 +2904,7 @@
         '<button type="button" id="btnModoAgrupadoItem" class="' + (modoVisualizacaoProjetos === "agrupado_item" ? "ativo" : "") + '">🧩 Agrupado por item</button>' +
         '<button type="button" id="btnModoKanban" class="' + (modoVisualizacaoProjetos === "kanban" ? "ativo" : "") + '">🗂️ Kanban</button>' +
         '</div>'
-      : '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Fechados</label>' +
+      : '<div style="' + filtroWrapStyle(filtroFechamentoAtivo) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Fechados</label>' +
         '<select id="filtroFechamentoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroFechamentoAtivo ? "" : " selected") + '>Qualquer data</option>' +
         '<option value="hoje"' + (filtroFechamentoAtivo === "hoje" ? " selected" : "") + '>Hoje</option>' +
@@ -2906,17 +2919,17 @@
             '<input type="date" id="filtroFechamentoAte" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;" value="' + esc(filtroFechamentoAte) + '">'
           : "") +
         '</div>' +
-        '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Risco</label>' +
+        '<div style="' + filtroWrapStyle(filtroRiscoAtivo) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Risco</label>' +
         '<select id="filtroRiscoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value="">Todos</option>' +
         ["baixo", "medio", "alto"].map(function(v){ return '<option value="' + v + '"' + (v === filtroRiscoAtivo ? " selected" : "") + '>' + esc(RISCO_LABEL_CURTO[v] || v) + '</option>'; }).join("") +
         '</select></div>' +
-        '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Satisfação</label>' +
+        '<div style="' + filtroWrapStyle(filtroSatisfacaoAtiva) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Satisfação</label>' +
         '<select id="filtroSatisfacaoProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value="">Todas</option>' +
         ["positiva", "neutra", "negativa", "indeterminada"].map(function(v){ return '<option value="' + v + '"' + (v === filtroSatisfacaoAtiva ? " selected" : "") + '>' + esc(SATISFACAO_LABEL_CURTO[v] || v) + '</option>'; }).join("") +
         '</select></div>' +
-        '<div style="margin-bottom:12px;display:inline-block;margin-right:16px;"><label style="font-size:12px; color:var(--muted); margin-right:6px;">🚨 Alertas</label>' +
+        '<div style="' + filtroWrapStyle(filtroAlertaAtivo) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">🚨 Alertas</label>' +
         '<select id="filtroAlertaProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value="">Todos</option>' +
         ALERTAS_OPCOES.map(function(o){ return '<option value="' + o.id + '"' + (o.id === filtroAlertaAtivo ? " selected" : "") + '>' + esc(o.nome) + '</option>'; }).join("") +
@@ -2924,7 +2937,10 @@
         '<div class="modo-visualizacao" style="vertical-align:top;">' +
         '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
         '<button type="button" id="btnModoAgrupadoItem" class="' + (modoVisualizacaoProjetos === "agrupado_item" ? "ativo" : "") + '">🧩 Agrupado por item</button>' +
-        '</div>');
+        '</div>') +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--muted); white-space:nowrap; padding:4px 0;">' + lista.length + ' projeto' + (lista.length === 1 ? "" : "s") + ' nesta lista</div>' +
+      '</div>';
 
     // Atrasado = tem reserva desse projeto que ja passou da hora e ninguem
     // marcou comparecimento/reagendamento — o caso que mais se perde de
@@ -2966,6 +2982,9 @@
       var faseTag = fase
         ? ' <span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span>'
         : "";
+      var ismTag = (p.ism && p.ism.length)
+        ? ' <span class="tag ism" title="ISM responsável">' + esc(p.ism.join(", ")) + '</span>'
+        : "";
       var statusCorTexto = fase === "cancelado" ? "Cancelado" : (STATUS_LABEL[p.status] || p.status || "—");
       var statusCor = fase === "cancelado" ? "var(--danger)" : (p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)"));
       var statusDot = '<span title="Status: ' + esc(statusCorTexto) + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
@@ -2981,7 +3000,7 @@
         ? '<span title="Agendamento atrasado — passou da data sem marcar comparecimento" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--danger); flex-shrink:0;"></span>'
         : (sinal === "em_dia" ? '<span title="Tem agendamento futuro marcado" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--tag-ambos); flex-shrink:0;"></span>' : '');
       return '<div class="proj-card" data-proj="' + esc(p.id) + '">' +
-        '<div class="proj-card-top">' + urgenciaFlag + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + sinalDot + novaMsgDot + '</div>' +
+        '<div class="proj-card-top">' + urgenciaFlag + statusDot + '<h3>' + esc(p.cliente) + '</h3>' + faseTag + ismTag + sinalDot + novaMsgDot + '</div>' +
         '<div class="proj-card-meta">CSM: ' + esc(p.csm || "—") + ' · Etapa: ' + esc(ETAPA_LABEL[p.etapaAtual] || p.etapaAtual) +
         (diasTexto ? ' · ' + diasTexto : "") + '</div>' +
         (riscoTag || satisfacaoTag || slaBadge ? '<div style="margin-top:6px;">' + riscoTag + satisfacaoTag + slaBadge + '</div>' : "") +
