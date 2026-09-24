@@ -124,8 +124,6 @@
   .tag.alerta{background:#FFEDD5; color:#C2410C;}
   /* Mesmo motivo da nota acima — cor literal, não var(--tag-*). */
   .tag.agendado{background:#E0F2FE; color:#0369A1;}
-  /* Mesmo motivo da nota acima — cor literal, não var(--tag-*). */
-  .tag.ism{background:#D1FAE5; color:#065F46;}
 
   /* Runbook checklist */
   .phase{border:1px solid var(--border); border-radius:16px; margin-bottom:14px; overflow:hidden; background:var(--surface);}
@@ -2856,14 +2854,16 @@
       return true;
     });
     // Só mostra o filtro quando faz diferença — 1 CSM só ou nenhum não precisa.
-    // Fundo amarelo claro (mesmo token de aviso já usado no resto do painel)
-    // no wrapper de cada filtro que estiver de fato aplicado — sem isso, uma
-    // pessoa abrindo a aba não percebia que a lista já estava filtrada de
-    // uma sessão anterior (o filtro persiste, mas visualmente ficava idêntico
-    // a "Todos"/vazio).
+    // Fundo amarelo claro no wrapper de cada filtro que estiver de fato
+    // aplicado — sem isso, uma pessoa abrindo a aba não percebia que a lista
+    // já estava filtrada de uma sessão anterior (o filtro persiste, mas
+    // visualmente ficava idêntico a "Todos"/vazio).
+    // Cor LITERAL (não var(--warning-bg)) — ver memória "CSS :root duplicado
+    // (cores de tag)": um 2º bloco :root mais abaixo redefine --warning-bg
+    // pra um azul claro (#F0F4FF), então a variável saía com a cor errada.
     function filtroWrapStyle(ativo){
       return 'margin-bottom:12px;display:inline-block;margin-right:16px;' +
-        (ativo ? 'background:var(--warning-bg);border-radius:8px;padding:4px 8px;' : '');
+        (ativo ? 'background:#ffe5a5;border-radius:8px;padding:4px 8px;' : '');
     }
     var filtroHtml =
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
@@ -2982,9 +2982,9 @@
       var faseTag = fase
         ? ' <span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span>'
         : "";
-      var ismTag = (p.ism && p.ism.length)
-        ? ' <span class="tag ism" title="ISM responsável">' + esc(p.ism.join(", ")) + '</span>'
-        : "";
+      var ismTag = (p.ism || []).map(function(nome){
+        return ' <span class="tag" title="ISM responsável" style="background:' + corIsm(nome) + ';color:#fff;">' + esc(nome) + '</span>';
+      }).join("");
       var statusCorTexto = fase === "cancelado" ? "Cancelado" : (STATUS_LABEL[p.status] || p.status || "—");
       var statusCor = fase === "cancelado" ? "var(--danger)" : (p.status === "concluído" ? "var(--tag-ambos)" : (p.status === "in progress" ? "var(--tag-londrisoft)" : "var(--tag-cliente)"));
       var statusDot = '<span title="Status: ' + esc(statusCorTexto) + '" style="display:inline-block; width:7px; height:7px; border-radius:50%; background:' + statusCor + '; flex-shrink:0;"></span>';
@@ -3300,6 +3300,13 @@
     { id: 118125102, nome: "Bruno Vaz", linkAgenda: "https://calendar.app.google/hJxRUZAzrF6EhPEr8" },
     { id: 48933858, nome: "Erica Fernanda", linkAgenda: null }
   ];
+
+  // Cor própria por pessoa na tag de "ISM responsável" dos cards (ver
+  // cardHtml) — cores literais escolhidas pela usuária, não var(--tag-*)
+  // (mesmo motivo das outras tags literais deste arquivo: um 2º bloco
+  // :root mais abaixo redefine essas variáveis).
+  var ISM_COR = { "Bruno Vaz": "#29b0d5", "Erica Fernanda": "#f18cd4" };
+  function corIsm(nome){ return ISM_COR[nome] || "#065F46"; }
 
   // CSMs que também agendam reunião com cliente (retenção/renovação) — mesmos
   // ids reais do servidor (RESPONSAVEL_IDS_VALIDOS em api/clickup.js), pra
