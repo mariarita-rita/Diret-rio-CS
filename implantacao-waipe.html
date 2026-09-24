@@ -2740,12 +2740,46 @@
     else carregarListaProjetos();
   }
 
-  // Timer do retry automático de "Limite de requisições do ClickUp
-  // atingido" (ver abaixo) — guardado fora da função pra poder cancelar um
-  // countdown anterior se carregarListaProjetos for chamada de novo (troca
+  /**
+   * Trata um erro de carregamento (lista OU projeto aberto): se for
+   * "limite_clickup" (429, cota COMPARTILHADA de 100 chamadas/min de todo o
+   * time — ver erroLimite em api/_lib/http.js), mostra uma contagem
+   * regressiva e tenta `tentarDeNovo` sozinho quando a cota deveria ter
+   * voltado, em vez de só exibir o erro e deixar a pessoa martelar F5 (o
+   * que agrava o problema — cada recarga custa dezenas de chamadas). Senão,
+   * mostra `mensagemGenerica` como erro estático de sempre.
+   * Devolve o timerId do countdown (ou null) — quem chama guarda isso numa
+   * var própria pra poder cancelar se carregar de novo antes do fim.
+   */
+  function tratarErroCarregamento(wrap, e, mensagemGenerica, tentarDeNovo){
+    if (!wrap) return null;
+    if (e && e.code === "limite_clickup" && Number.isFinite(e.esperaSegundos) && e.esperaSegundos > 0){
+      var restante = Math.ceil(e.esperaSegundos);
+      var render = function(){
+        wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Limite de requisições do ClickUp atingido (cota compartilhada por todo o time). Tentando de novo automaticamente em ' + restante + 's — não precisa recarregar a página.</div></div>';
+      };
+      render();
+      var timerId = setInterval(function(){
+        restante -= 1;
+        if (restante <= 0){
+          clearInterval(timerId);
+          tentarDeNovo();
+          return;
+        }
+        render();
+      }, 1000);
+      return timerId;
+    }
+    wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>' + esc(mensagemGenerica) + ' (' + esc(mensagemErro(e)) + ').</div></div>';
+    return null;
+  }
+
+  // Timers dos countdowns acima — guardados fora das funções pra poder
+  // cancelar um countdown anterior se a função for chamada de novo (troca
   // de aba, F5 manual) antes dele terminar, evitando dois countdowns/retries
   // sobrepostos.
   var timerRetryListaProjetos = null;
+  var timerRetryAbrirProjeto = null;
 
   function carregarListaProjetos(){
     if (timerRetryListaProjetos){ clearInterval(timerRetryListaProjetos); timerRetryListaProjetos = null; }
@@ -2762,32 +2796,11 @@
     }).catch(function(e){
       var root = projetosRootAtivo();
       var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
-      if (!wrap) return;
-      // "limite_clickup" (429, ver erroLimite em api/_lib/http.js) é cota
-      // COMPARTILHADA por todo o time (100 chamadas/min) — a pessoa clicar
-      // "recarregar" nesse momento é o que agrava o problema (cada recarga
-      // desta lista custa ~28 chamadas), então em vez de só mostrar o erro e
-      // deixar a pessoa martelar F5, conta o tempo sozinho e tenta de novo
-      // automaticamente quando a cota deveria ter voltado.
-      if (e && e.code === "limite_clickup" && Number.isFinite(e.esperaSegundos) && e.esperaSegundos > 0){
-        var restante = Math.ceil(e.esperaSegundos);
-        var render = function(){
-          wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Limite de requisições do ClickUp atingido (cota compartilhada por todo o time). Tentando de novo automaticamente em ' + restante + 's — não precisa recarregar a página.</div></div>';
-        };
-        render();
-        timerRetryListaProjetos = setInterval(function(){
-          restante -= 1;
-          if (restante <= 0){
-            clearInterval(timerRetryListaProjetos);
-            timerRetryListaProjetos = null;
-            carregarListaProjetos();
-            return;
-          }
-          render();
-        }, 1000);
-        return;
-      }
-      wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para carregar os projetos (' + esc(mensagemErro(e)) + '). Esta aba só funciona publicada no Dashboard de carteiras, com sessão ativa.</div></div>';
+      timerRetryListaProjetos = tratarErroCarregamento(
+        wrap, e,
+        "Não deu para carregar os projetos. Esta aba só funciona publicada no Dashboard de carteiras, com sessão ativa",
+        carregarListaProjetos
+      );
     });
   }
 
@@ -3194,6 +3207,7 @@
   });
 
   function abrirProjeto(id){
+    if (timerRetryAbrirProjeto){ clearInterval(timerRetryAbrirProjeto); timerRetryAbrirProjeto = null; }
     projetoAtualId = id;
     dadosProjeto = null;
     itemAtual = null;
@@ -3217,9 +3231,15 @@
     }).catch(function(e){
       var root = projetosRootAtivo();
       if (!root) return;
-      root.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para abrir este projeto (' + esc(mensagemErro(e)) + ').</div></div>' +
-        '<div class="flow-actions"><button type="button" class="btn-flow-secondary" id="btnVoltarLista2">← Voltar aos projetos</button></div>';
-      document.getElementById("btnVoltarLista2").addEventListener("click", function(){ projetoAtualId = null; renderProjetosPanel(); });
+      timerRetryAbrirProjeto = tratarErroCarregamento(root, e, "Não deu para abrir este projeto", function(){ abrirProjeto(id); });
+      var voltar = document.createElement("div");
+      voltar.className = "flow-actions";
+      voltar.innerHTML = '<button type="button" class="btn-flow-secondary" id="btnVoltarLista2">← Voltar aos projetos</button>';
+      root.appendChild(voltar);
+      document.getElementById("btnVoltarLista2").addEventListener("click", function(){
+        if (timerRetryAbrirProjeto){ clearInterval(timerRetryAbrirProjeto); timerRetryAbrirProjeto = null; }
+        projetoAtualId = null; renderProjetosPanel();
+      });
     });
   }
 
