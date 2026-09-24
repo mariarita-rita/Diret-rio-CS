@@ -2740,7 +2740,15 @@
     else carregarListaProjetos();
   }
 
+  // Timer do retry automático de "Limite de requisições do ClickUp
+  // atingido" (ver abaixo) — guardado fora da função pra poder cancelar um
+  // countdown anterior se carregarListaProjetos for chamada de novo (troca
+  // de aba, F5 manual) antes dele terminar, evitando dois countdowns/retries
+  // sobrepostos.
+  var timerRetryListaProjetos = null;
+
   function carregarListaProjetos(){
+    if (timerRetryListaProjetos){ clearInterval(timerRetryListaProjetos); timerRetryListaProjetos = null; }
     Promise.all([
       apiGet("listar-implantacoes"),
       // Busca 1x, junto — listar-reservas já é a lista inteira (pequena), só
@@ -2754,7 +2762,32 @@
     }).catch(function(e){
       var root = projetosRootAtivo();
       var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
-      if (wrap) wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para carregar os projetos (' + esc(mensagemErro(e)) + '). Esta aba só funciona publicada no Dashboard de carteiras, com sessão ativa.</div></div>';
+      if (!wrap) return;
+      // "limite_clickup" (429, ver erroLimite em api/_lib/http.js) é cota
+      // COMPARTILHADA por todo o time (100 chamadas/min) — a pessoa clicar
+      // "recarregar" nesse momento é o que agrava o problema (cada recarga
+      // desta lista custa ~28 chamadas), então em vez de só mostrar o erro e
+      // deixar a pessoa martelar F5, conta o tempo sozinho e tenta de novo
+      // automaticamente quando a cota deveria ter voltado.
+      if (e && e.code === "limite_clickup" && Number.isFinite(e.esperaSegundos) && e.esperaSegundos > 0){
+        var restante = Math.ceil(e.esperaSegundos);
+        var render = function(){
+          wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Limite de requisições do ClickUp atingido (cota compartilhada por todo o time). Tentando de novo automaticamente em ' + restante + 's — não precisa recarregar a página.</div></div>';
+        };
+        render();
+        timerRetryListaProjetos = setInterval(function(){
+          restante -= 1;
+          if (restante <= 0){
+            clearInterval(timerRetryListaProjetos);
+            timerRetryListaProjetos = null;
+            carregarListaProjetos();
+            return;
+          }
+          render();
+        }, 1000);
+        return;
+      }
+      wrap.innerHTML = '<div class="callout danger"><div class="dot"></div><div>Não deu para carregar os projetos (' + esc(mensagemErro(e)) + '). Esta aba só funciona publicada no Dashboard de carteiras, com sessão ativa.</div></div>';
     });
   }
 

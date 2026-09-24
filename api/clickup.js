@@ -931,6 +931,19 @@ function nomesIsm(assignees) {
   return assignees.map((a) => porId.get(Number(a?.id))).filter(Boolean);
 }
 
+/**
+ * Ids de ISM do projeto: `assignees` nativo quando presente, senão o
+ * `ismIds` gravado no estado (ver comentário em atualizarImplantacaoAcao) —
+ * usar SEMPRE esta função em vez de ler `t.assignees` direto pra listar/
+ * exibir ISM, mesmo raciocínio de responsavelIdDaReserva/assigneeIdDaAtividade,
+ * porque o ClickUp descarta esse assignee em silêncio quando a pessoa não
+ * tem acesso de guest configurado nesta lista.
+ */
+function ismIdsDoProjeto(t, estado) {
+  const doAssignee = sanearAssignees((t.assignees || []).map((a) => a.id));
+  return doAssignee.length ? doAssignee : sanearAssignees(estado.ismIds);
+}
+
 /** Nome de ISM/CSM a partir do id resolvido (ver responsavelIdDaReserva) — '' se não achar. */
 function nomeResponsavel(id) {
   const porId = new Map([...ISM_OPCOES, ...CSM_OPCOES].map((i) => [i.id, i.nome]));
@@ -1497,8 +1510,8 @@ async function listarImplantacoesAcao(res, sessao) {
       status: t.status?.status || '',
       etapaAtual: ETAPAS_VALIDAS.has(estado.etapaAtual) ? estado.etapaAtual : 'escopo',
       csm: csmDaDescricaoImplantacao(t.description),
-      ism: nomesIsm(t.assignees),
-      ismIds: sanearAssignees((t.assignees || []).map((a) => a.id)),
+      ism: nomesIsm(ismIdsDoProjeto(t, estado).map((id) => ({ id }))),
+      ismIds: ismIdsDoProjeto(t, estado),
       // Antes de promovida (etapa "proposta"), ainda não existem subtasks —
       // conta o que foi proposto pra lista não mostrar "0 itens".
       agentesTotal: Number.isFinite(estado.agentesTotal)
@@ -1645,8 +1658,8 @@ async function obterImplantacaoAcao(req, res, sessao) {
       cliente: texto(estadoProjeto.cliente, 120) || limparSufixoProposta(pai.name),
       status: pai.status?.status || '',
       csm,
-      ism: nomesIsm(pai.assignees),
-      ismIds: sanearAssignees((pai.assignees || []).map((a) => a.id)),
+      ism: nomesIsm(ismIdsDoProjeto(pai, estadoProjeto).map((id) => ({ id }))),
+      ismIds: ismIdsDoProjeto(pai, estadoProjeto),
       contexto: contextoSemEstado(pai.description),
       etapaAtual: ETAPAS_VALIDAS.has(estadoProjeto.etapaAtual) ? estadoProjeto.etapaAtual : 'escopo',
       prioridade: sanearListaIds(estadoProjeto.prioridade),
@@ -1800,6 +1813,10 @@ export async function criarProjetoImplantacao({
       // (ver atualizarImplantacaoAcao, que carimba isso sozinho na hora).
       dataInicioReal: dataInicioRealFinal,
       dataFimReal: dataFimRealFinal,
+      // Fallback contra o mesmo descarte silencioso de `assignees` que
+      // atualizarImplantacaoAcao trata (ver comentário lá) — já nasce
+      // preenchido, não só numa edição posterior.
+      ismIds: sanearAssignees(ismProjeto),
       ...dadosCliente,
     }
   );
@@ -2160,6 +2177,16 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
         ? sanearDadosTributarios(corpo.dadosTributarios)
         : sanearDadosTributarios(estadoAtual.dadosTributarios)
     ),
+    // Cópia de segurança do ISM em texto (dentro do próprio JSON de estado,
+    // só números — nenhum risco da corrupção por aspas literais que afeta
+    // campos de texto livre) — o `assignees` nativo do ClickUp às vezes é
+    // descartado em silêncio quando a pessoa não tem acesso de guest
+    // configurado NESTA lista específica (mesmo bug documentado em
+    // responsavelIdDaReserva/assigneeIdDaAtividade, aqui confirmado também
+    // em LISTA_IMPLANTACOES_WAIPE) — sem isso, o painel mostrava "ISM
+    // atualizado" (a chamada em si nunca falha) mas o valor sumia no
+    // próximo carregamento. Só muda quando vem no corpo, senão preserva.
+    ismIds: Array.isArray(corpo.ism) ? sanearAssignees(corpo.ism) : (estadoAtual.ismIds || []),
   };
 
   const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
