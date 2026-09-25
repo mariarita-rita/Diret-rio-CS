@@ -3166,16 +3166,32 @@
       if (filtroFechamentoAtivo !== "personalizado"){ filtroFechamentoDe = ""; filtroFechamentoAte = ""; }
       renderListaProjetosWrap();
     });
+    // "input" mantém a variável em dia a cada tecla/segmento digitado, SEM
+    // re-renderizar — só "change" (valor completo/confirmado) de fato
+    // refiltra a lista. Sem o listener de "input", a variável só era
+    // atualizada no "change" — então o auto-refresh de 45s (autoAtualizarProjetos)
+    // podia disparar no meio da digitação do ano e redesenhar o campo com o
+    // valor antigo (geralmente vazio), fazendo parecer que dava pra digitar
+    // o ano. Mesmo raciocínio do cursor da busca (ver inputBusca acima), mas
+    // sem precisar restaurar foco/seleção — um <input type="date"> não tem
+    // um "selectionStart" simples de segmento pra restaurar depois de
+    // reconstruir o DOM.
     var inputFechamentoDe = wrap.querySelector("#filtroFechamentoDe");
-    if (inputFechamentoDe) inputFechamentoDe.addEventListener("change", function(){
-      filtroFechamentoDe = inputFechamentoDe.value;
-      renderListaProjetosWrap();
-    });
+    if (inputFechamentoDe){
+      inputFechamentoDe.addEventListener("input", function(){ filtroFechamentoDe = inputFechamentoDe.value; });
+      inputFechamentoDe.addEventListener("change", function(){
+        filtroFechamentoDe = inputFechamentoDe.value;
+        renderListaProjetosWrap();
+      });
+    }
     var inputFechamentoAte = wrap.querySelector("#filtroFechamentoAte");
-    if (inputFechamentoAte) inputFechamentoAte.addEventListener("change", function(){
-      filtroFechamentoAte = inputFechamentoAte.value;
-      renderListaProjetosWrap();
-    });
+    if (inputFechamentoAte){
+      inputFechamentoAte.addEventListener("input", function(){ filtroFechamentoAte = inputFechamentoAte.value; });
+      inputFechamentoAte.addEventListener("change", function(){
+        filtroFechamentoAte = inputFechamentoAte.value;
+        renderListaProjetosWrap();
+      });
+    }
     var selRisco = wrap.querySelector("#filtroRiscoProjetos");
     if (selRisco) selRisco.addEventListener("change", function(){
       filtroRiscoAtivo = selRisco.value;
@@ -4745,22 +4761,44 @@
   }
 
   // statusGoogle = { [ismId]: true|false }, vindo de status-google-agenda. ISM
-  // conectado nao precisa de callout nenhum aqui — criar-reserva ja checa a
+  // conectado nao precisa do callout grande aqui — criar-reserva ja checa a
   // agenda real dele e cria o Meet sozinho. So quem ainda nao conectou ve o
   // link manual de hoje (se tiver) + o convite pra conectar de vez.
+  //
+  // "Reconectar" (linha pequena, pra quem já conectou) existe à parte disso:
+  // conectar-agenda-google sempre manda pro consentimento do Google de novo
+  // (prompt=consent, sem trava de "já conectado, pula"), então é o único jeito
+  // de alguém aprovar um escopo novo (ex: drive.readonly da varredura de
+  // reuniões) sem precisar desconectar nada do lado do Google — só reaparecia
+  // um jeito de chegar nesse link antes de existir essa linha.
   function agendaGoogleLinksHtml(statusGoogle){
     var status = statusGoogle || {};
     var naoConectados = ISM_OPCOES.filter(function(o){ return !status[o.id]; });
-    if (!naoConectados.length) return "";
-    return '<div class="callout" style="margin-top:0; margin-bottom:14px;"><div class="dot"></div><div>' +
-      '<b>Conecte a agenda do Google do ISM</b> — depois disso, registrar a reserva aqui embaixo já checa o horário real dele e cria o Meet sozinho, sem precisar sair da tela.<br>' +
-      naoConectados.map(function(o){
-        var manual = o.linkAgenda
-          ? ' (<a href="' + esc(o.linkAgenda) + '" target="_blank" rel="noopener">agendar manualmente por enquanto ↗</a>)'
-          : '';
-        return '<a href="/api/clickup?action=conectar-agenda-google&ismId=' + o.id + '">Conectar agenda do ' + esc(o.nome) + '</a>' + manual;
-      }).join(' · ') +
-      '</div></div>';
+    var conectados = ISM_OPCOES.filter(function(o){ return status[o.id]; });
+
+    var callout = "";
+    if (naoConectados.length) {
+      callout = '<div class="callout" style="margin-top:0; margin-bottom:14px;"><div class="dot"></div><div>' +
+        '<b>Conecte a agenda do Google do ISM</b> — depois disso, registrar a reserva aqui embaixo já checa o horário real dele e cria o Meet sozinho, sem precisar sair da tela.<br>' +
+        naoConectados.map(function(o){
+          var manual = o.linkAgenda
+            ? ' (<a href="' + esc(o.linkAgenda) + '" target="_blank" rel="noopener">agendar manualmente por enquanto ↗</a>)'
+            : '';
+          return '<a href="/api/clickup?action=conectar-agenda-google&ismId=' + o.id + '">Conectar agenda do ' + esc(o.nome) + '</a>' + manual;
+        }).join(' · ') +
+        '</div></div>';
+    }
+
+    var reconectar = "";
+    if (conectados.length) {
+      reconectar = '<div style="font-size:12px; color:var(--muted); margin:-8px 0 14px;">Agenda conectada — ' +
+        conectados.map(function(o){
+          return esc(o.nome) + ' (<a href="/api/clickup?action=conectar-agenda-google&ismId=' + o.id + '">reconectar</a>)';
+        }).join(' · ') +
+        '</div>';
+    }
+
+    return callout + reconectar;
   }
 
   function formNovaReservaHtml(statusGoogle){

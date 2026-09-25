@@ -551,6 +551,38 @@ const INSTRUCOES_RESUMO_REUNIAO = `Você vai ler a transcrição de uma reunião
 
 Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as ferramentas/sistemas que o cliente usa hoje, regras ou processos importantes que ele mencionou, quais agentes, produtos ou funcionalidades foram discutidos como prioridade, e qualquer sinal de satisfação, insatisfação ou risco percebido. Seja objetivo — não invente informação que não está na transcrição.`;
 
+/**
+ * Núcleo de "analisar-reuniao-implantacao", sem req/res — usado tanto pela
+ * ação HTTP (transcrição colada à mão) quanto pela varredura automática
+ * (api/cron-analise-reunioes.js, sem sessão nenhuma, transcrição puxada do
+ * Drive do ISM). Lança `ErroUpstreamIa`/`ErroResumoVazio` em vez de escrever
+ * em `res` — quem chama decide o que fazer com cada erro (a ação HTTP mapeia
+ * pra 502; a varredura só loga e segue pra próxima reunião). Mesmo marcador
+ * `MARCADOR_RESUMO_REUNIAO` nos dois caminhos — o histórico não distingue se
+ * o resumo veio de colar manual ou da varredura.
+ */
+export class ErroResumoVazio extends Error {
+  constructor() {
+    super('A IA não devolveu um resumo válido.');
+    this.name = 'ErroResumoVazio';
+  }
+}
+
+export async function resumirReuniaoEPostar(projetoId, transcricao) {
+  let resumo;
+  try {
+    resumo = texto(await chamarClaudeTexto({ system: INSTRUCOES_RESUMO_REUNIAO, mensagem: transcricao, maxTokens: 900 }), 3000);
+  } catch (e) {
+    if (e instanceof ErroUpstreamIa) throw e;
+    if (e.message === 'resposta_vazia') throw new ErroResumoVazio();
+    throw e;
+  }
+  if (!resumo) throw new ErroResumoVazio();
+
+  await criarComentario(projetoId, `${MARCADOR_RESUMO_REUNIAO}\n${resumo}`);
+  return resumo;
+}
+
 async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
   let corpo;
   try {
@@ -574,15 +606,13 @@ async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
 
   let resumo;
   try {
-    resumo = texto(await chamarClaudeTexto({ system: INSTRUCOES_RESUMO_REUNIAO, mensagem: transcricao, maxTokens: 900 }), 3000);
+    resumo = await resumirReuniaoEPostar(projeto.id, transcricao);
   } catch (e) {
     if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
-    if (e.message === 'resposta_vazia') return erro(res, 502, 'falha_ia', 'A IA não devolveu um resumo válido.');
+    if (e instanceof ErroResumoVazio) return erro(res, 502, 'falha_ia', e.message);
     throw e;
   }
-  if (!resumo) return erro(res, 502, 'falha_ia', 'A IA não devolveu um resumo válido.');
 
-  await criarComentario(projeto.id, `${MARCADOR_RESUMO_REUNIAO}\n${resumo}`);
   return res.status(200).json({ ok: true, resumo });
 }
 

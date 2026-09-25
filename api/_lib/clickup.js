@@ -981,6 +981,37 @@ export function verificarTokenProjeto(token) {
   return p.taskId;
 }
 
+/**
+ * Versão CURTA do token acima — pra link de WhatsApp/SMS, onde tamanho
+ * importa e o destino (formulario-tributario.html) já reaplica a mesma
+ * verificação de sempre (verificarTokenProjeto) depois do redirect; este
+ * código só precisa resistir a adivinhação, não durar uma sessão inteira.
+ * Assinatura truncada em 8 bytes (64 bits) — inviável de forçar por
+ * tentativa num endpoint com rede de por meio, mas bem mais curta que a
+ * assinatura SHA-256 inteira (32 bytes) do token completo. Mesmo segredo
+ * (SESSION_SECRET) e mesmo HMAC de assinarTokenProjeto/verificarTokenProjeto,
+ * só reaproveitados aqui num formato mais compacto.
+ */
+export function assinarLinkCurto(taskId) {
+  const id = String(taskId);
+  const assinatura = hmacToken(id).subarray(0, 8);
+  return `${id}.${b64Token(assinatura)}`;
+}
+
+/** Valida o código curto; devolve o taskId, ou null se inválido/adulterado. */
+export function verificarLinkCurto(codigo) {
+  if (typeof codigo !== 'string' || codigo.length > 100) return null;
+  const ponto = codigo.lastIndexOf('.');
+  if (ponto < 1 || ponto === codigo.length - 1) return null;
+
+  const id = codigo.slice(0, ponto);
+  const assinatura = Buffer.from(codigo.slice(ponto + 1));
+  const esperada = Buffer.from(b64Token(hmacToken(id).subarray(0, 8)));
+  if (assinatura.length !== esperada.length) return null;
+  if (!crypto.timingSafeEqual(assinatura, esperada)) return null;
+  return id;
+}
+
 // ── Segredo cifrado em repouso (senha do certificado digital) ───────────
 // AES-256-GCM com chave derivada de SESSION_SECRET (mesmo segredo usado nos
 // tokens acima — nenhuma variável de ambiente nova). Existe porque a senha
@@ -1472,6 +1503,11 @@ export function linkDaDescricaoReserva(description) {
 export function googleEventIdDaDescricaoReserva(description) {
   const m = /\*{0,2}GoogleEventId:\*{0,2}\s*(\S+)/.exec(String(description || ''));
   return m ? m[1].trim() : '';
+}
+
+/** Idem, marca que a varredura de reunioes (cron-analise-reunioes.js) ja processou essa reserva — nunca reprocessa. */
+export function transcricaoAnalisadaDaDescricaoReserva(description) {
+  return /\*{0,2}TranscricaoAnalisada:\*{0,2}\s*true/.test(String(description || ''));
 }
 
 /** Idem, pros e-mails de convidados do Meet (cliente + outros participantes) — lista separada por virgula, sem espaco. */

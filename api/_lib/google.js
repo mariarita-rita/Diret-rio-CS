@@ -19,6 +19,13 @@ import crypto from 'node:crypto';
 const ESCOPOS_CALENDAR = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.freebusy',
+  // drive.readonly: le o conteudo de arquivos que o ISM nao criou (a
+  // anotacao do Gemini fica no Drive dele, dona = conta do Google Meet,
+  // nao a nossa) — e o escopo minimo que a API do Google oferece pra
+  // isso, nao da pra restringir so a pasta "Google Meet". Quem conectou
+  // antes deste escopo existir so passa a ver anexo de reuniao depois de
+  // reconectar (ver varredura de reunioes/cron-analise-reunioes.js).
+  'https://www.googleapis.com/auth/drive.readonly',
 ].join(' ');
 
 const ESCOPOS_EMAIL = [
@@ -241,11 +248,14 @@ export async function listarEventos(accessToken, inicio, fim) {
 }
 
 /**
- * Cria o evento na agenda primária do ISM com Meet automático. Devolve o
- * hangoutLink (ou null). `attendees`, quando presente, e-mail o cliente/
- * outros participantes como convidados do evento — `sendUpdates=all` faz o
- * Google mandar o convite por e-mail pra eles (sem convidados, mantém o
- * comportamento de sempre: nenhuma notificação).
+ * Cria o evento na agenda primária do ISM com Meet automático. Devolve
+ * `{ id, hangoutLink }` (hangoutLink null se por algum motivo o Google não
+ * criar o Meet). `id` fica gravado na reserva (GoogleEventId) pra depois a
+ * varredura de reuniões (cron-analise-reunioes.js) achar o evento de volta.
+ * `attendees`, quando presente, e-mail o cliente/outros participantes como
+ * convidados do evento — `sendUpdates=all` faz o Google mandar o convite
+ * por e-mail pra eles (sem convidados, mantém o comportamento de sempre:
+ * nenhuma notificação).
  */
 export async function criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees }) {
   const corpo = {
@@ -263,5 +273,35 @@ export async function criarEventoComMeet(accessToken, { titulo, inicio, fim, att
     accessToken,
     { method: 'POST', body: JSON.stringify(corpo) },
   );
-  return r?.hangoutLink || null;
+  return { id: r?.id || null, hangoutLink: r?.hangoutLink || null };
+}
+
+/**
+ * Um evento específico da agenda primária do ISM, pelo id (GoogleEventId
+ * gravado na reserva) — inclui `attachments[]` quando o evento tem algo
+ * vinculado (ex: a anotação do Gemini depois que a reunião termina). Usado
+ * só pela varredura de reuniões (cron-analise-reunioes.js), nunca no fluxo
+ * de agenda normal.
+ */
+export async function obterEvento(accessToken, googleEventId) {
+  return calendarRequest(`/calendars/primary/events/${encodeURIComponent(googleEventId)}`, accessToken);
+}
+
+/**
+ * Exporta o conteúdo em texto puro de um Google Doc que o ISM não criou
+ * (a anotação do Gemini pertence à conta do Google Meet, compartilhada
+ * com ele) — precisa do escopo drive.readonly (ver ESCOPOS_CALENDAR).
+ * Doc é formato nativo do Google, não tem bytes pra baixar direto, por
+ * isso `export` em vez de `files.get?alt=media`.
+ */
+export async function exportarDocGoogle(accessToken, fileId) {
+  const r = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text%2Fplain`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!r.ok) {
+    const corpo = await r.json().catch(() => null);
+    throw new ErroGoogle(r.status, corpo);
+  }
+  return r.text();
 }

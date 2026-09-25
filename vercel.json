@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/formulario-tributario/:codigo", "destination": "/api/formulario-tributario-curto?codigo=:codigo" }
+  ],
   "headers": [
     {
       "source": "/((?!api/).*)",
@@ -8,6 +11,7 @@
     }
   ],
   "crons": [
-    { "path": "/api/cron-relatorio-finalizacao", "schedule": "0 10 * * *" }
+    { "path": "/api/cron-relatorio-finalizacao", "schedule": "0 10 * * *" },
+    { "path": "/api/cron-analise-reunioes", "schedule": "0 0 * * *" }
   ]
 }

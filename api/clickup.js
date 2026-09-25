@@ -126,6 +126,7 @@ import {
   alertasDaTask,
   alvoDaDescricaoAtividade,
   anexarArquivoTask,
+  assinarLinkCurto,
   assinarTokenProjeto,
   assuntoDoModelo,
   atualizarTask,
@@ -1777,9 +1778,57 @@ function dadosTributariosCampos(estadoProjeto, agentes, projetoId) {
  * diferente de Negócios — ver scripts/migrar-moskit-projetos.mjs): evita
  * recriar a mesma task se o script rodar de novo.
  */
+// Origem pública do painel — usada só pra montar link ABSOLUTO em mensagem
+// externa (WhatsApp); dentro do próprio painel os links são sempre
+// relativos. Mesmo domínio já hardcoded em outros lugares (dashboard_
+// carteiras.html, API_ORIGIN_OK em implantacao-waipe.html).
+const SITE_ORIGEM = 'https://diretoriocs.vercel.app';
+
+/**
+ * Dispara o webhook de boas-vindas (flow do Waipe Flow, node trigger_webhook)
+ * pro cliente novo que acabou de ganhar o link do formulário tributário —
+ * SÓ quando `notificarClienteNovo` vem true (ver criarProjetoImplantacao).
+ * Nunca lança: falha aqui não pode derrubar a criação do projeto. Fica
+ * inerte (não faz nada) enquanto WAIPE_FLOW_WEBHOOK_URL_BOAS_VINDAS não
+ * estiver configurada — é assim que "implementar a chamada já" fica seguro
+ * antes do flow existir de verdade no Waipe Flow.
+ */
+async function notificarClienteNovoWaipeFlow({ cliente, telefone, linkFormularioTributario }) {
+  const url = process.env.WAIPE_FLOW_WEBHOOK_URL_BOAS_VINDAS;
+  if (!url || !linkFormularioTributario) return;
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.WAIPE_FLOW_WEBHOOK_TOKEN_BOAS_VINDAS
+          ? { 'X-Waipe-Token': process.env.WAIPE_FLOW_WEBHOOK_TOKEN_BOAS_VINDAS }
+          : {}),
+      },
+      body: JSON.stringify({
+        tipo: 'cliente_novo',
+        cliente,
+        telefone: telefone || '',
+        linkFormularioTributario: `${SITE_ORIGEM}${linkFormularioTributario}`,
+      }),
+    });
+    if (!r.ok) console.error(`[clickup] webhook boas-vindas Waipe Flow respondeu ${r.status}`);
+  } catch (e) {
+    console.error('[clickup] falha ao chamar webhook de boas-vindas do Waipe Flow:', e);
+  }
+}
+
 export async function criarProjetoImplantacao({
   nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome, vendedor,
   origemMoskitDealId, origemMoskitProjetoId, faseProjetoManual, dataInicioReal, dataFimReal,
+  // Só true quando quem chama SABE que é uma criação ao vivo de verdade (a
+  // automação do Moskit, hoje pausada — ver webhook_moskit_pausado) — NUNCA
+  // passar true de um script de migração/backfill: contaria como "cliente
+  // recém-chegado" pra um cliente cuja implantação já é história, e
+  // mandaria uma mensagem de boas-vindas indevida pra um número real.
+  // Default false é o que mantém todo script de migração desta sessão
+  // (e qualquer um futuro que não passe isso explicitamente) inofensivo.
+  notificarClienteNovo = false,
 }) {
   // Projeto que já nasce "Entregue" OU "Cancelado" (ex: migração de um
   // projeto do Moskit que já estava finalizado de verdade, entregue ou não)
@@ -1891,6 +1940,30 @@ export async function criarProjetoImplantacao({
       ),
       status: 'concluído',
     });
+  }
+
+  // Mesmo critério de "precisa de dados tributários" de dadosTributariosCampos
+  // (Moskit + Gestor/Bime), calculado aqui a partir de `solucoes` (o array já
+  // tem `.produto`) porque neste ponto ainda não existe o `agentes` no
+  // formato pós-obterImplantacaoAcao. Projeto que já nasce finalizado
+  // (migração de algo já entregue/cancelado) nunca dispara — não é
+  // "recém-chegado", é história sendo registrada.
+  if (notificarClienteNovo && !finalizado) {
+    const precisaDadosTributarios = !!origemMoskitDealId
+      && solucoes.some((s) => s.produto === 'Gestor' || s.produto === 'Bime');
+    if (precisaDadosTributarios) {
+      // Link CURTO aqui (não o completo de formulario-tributario.html?id=...)
+      // — pedido explícito da usuária pro texto caber melhor na mensagem de
+      // WhatsApp; mantém "/formulario-tributario" no caminho de propósito,
+      // pra quem recebe reconhecer que é o link certo (ver assinarLinkCurto/
+      // api/formulario-tributario-curto.js).
+      const linkFormularioTributario = `/formulario-tributario/${assinarLinkCurto(projeto.id)}`;
+      await notificarClienteNovoWaipeFlow({
+        cliente: texto(cliente, 120),
+        telefone: dadosCliente?.telefone,
+        linkFormularioTributario,
+      });
+    }
   }
 
   return projeto;
@@ -2942,7 +3015,7 @@ function sanearListaEmails(lista) {
  * preservar um campo ao reescrever a description inteira (foi assim que
  * convidados quase se perdeu num reescrita anterior de atualizar-reserva).
  */
-function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId, responsavelId }) {
+function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId, responsavelId, googleEventId }) {
   return [
     projetoId ? `**Projeto:** ${projetoId}` : null,
     // Ver responsavelIdDaReserva: gravado sempre, não só como fallback —
@@ -2953,6 +3026,11 @@ function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, re
     convidados && convidados.length ? `**Convidados:** ${convidados.join(',')}` : null,
     status && status !== 'agendado' ? `**Status:** ${status}` : null,
     reagendadoPor ? `**ReagendadoPor:** ${reagendadoPor}` : null,
+    // GoogleEventId: gravado em toda reserva criada com Meet (nao so nas
+    // importadas por sincronizar-agendamentos-google) — e o que permite a
+    // varredura de reunioes (cron-analise-reunioes.js) achar de volta o
+    // evento do Google e ler o anexo da anotacao do Gemini.
+    googleEventId ? `**GoogleEventId:** ${googleEventId}` : null,
     proximaReservaId ? `**ProximaReservaId:** ${proximaReservaId}` : null,
   ].filter(Boolean).join('\n\n');
 }
@@ -3064,8 +3142,9 @@ async function listarReservasAcao(res, sessao) {
  * que qualquer reserva nova, não um atalho.
  *
  * Devolve `{ erro: { status, corpo } }` em caso de conflito (interno ou do
- * Google) — quem chama só precisa repassar pro `res` — ou `{ linkReuniao }`
- * em caso de sucesso (`linkReuniao` fica `null` se o ISM não conectou).
+ * Google) — quem chama só precisa repassar pro `res` — ou
+ * `{ linkReuniao, googleEventId }` em caso de sucesso (ambos `null` se o
+ * ISM não conectou).
  */
 async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados }) {
   const existentes = await listarReservas();
@@ -3086,6 +3165,7 @@ async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados })
   // com Meet automatico. Sem conexao, comportamento identico ao de sempre —
   // ninguem fica bloqueado por nao ter conectado ainda.
   let linkReuniao = null;
+  let googleEventId = null;
   const tokenGoogle = await obterTokenGoogle(ismId);
   if (tokenGoogle) {
     let accessToken;
@@ -3105,10 +3185,12 @@ async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados })
           },
         };
       }
-      linkReuniao = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados });
+      const evento = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados });
+      linkReuniao = evento.hangoutLink;
+      googleEventId = evento.id;
     }
   }
-  return { linkReuniao };
+  return { linkReuniao, googleEventId };
 }
 
 /**
@@ -3204,7 +3286,7 @@ async function criarReservaAcao(req, res, sessao) {
     due_date: fim,
     due_date_time: true,
     assignees: [ismId],
-    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados, responsavelId: ismId }),
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao, convidados, responsavelId: ismId, googleEventId: resultado.googleEventId }),
   });
   await autoDefinirFaseAgendado(projetoId);
   return res.status(200).json({ ok: true, id: nova.id, linkReuniao, convidados });
@@ -3255,6 +3337,7 @@ async function atualizarReservaAcao(req, res, sessao) {
     markdown_description: linhasDescricaoReserva({
       projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId,
       responsavelId: responsavelIdDaReserva(tarefa),
+      googleEventId: googleEventIdDaDescricaoReserva(tarefa.description),
     }),
   });
   return res.status(200).json({ ok: true });
@@ -3297,6 +3380,7 @@ async function marcarComparecimentoReservaAcao(req, res, sessao) {
       convidados: convidadosDaDescricaoReserva(tarefa.description),
       status,
       responsavelId: responsavelIdDaReserva(tarefa),
+      googleEventId: googleEventIdDaDescricaoReserva(tarefa.description),
     }),
   });
   return res.status(200).json({ ok: true, status });
@@ -3370,7 +3454,7 @@ async function reagendarReservaAcao(req, res, sessao) {
     due_date: novoFim,
     due_date_time: true,
     assignees: [ismId],
-    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao: resultado.linkReuniao, convidados, responsavelId: ismId }),
+    markdown_description: linhasDescricaoReserva({ projetoId, linkReuniao: resultado.linkReuniao, convidados, responsavelId: ismId, googleEventId: resultado.googleEventId }),
   });
 
   await atualizarTask(corpo.id, {
@@ -3382,6 +3466,7 @@ async function reagendarReservaAcao(req, res, sessao) {
       reagendadoPor,
       responsavelId: ismId,
       proximaReservaId: nova.id,
+      googleEventId: googleEventIdDaDescricaoReserva(tarefa.description),
     }),
   });
 
