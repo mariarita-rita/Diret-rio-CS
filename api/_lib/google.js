@@ -24,7 +24,7 @@ const ESCOPOS_CALENDAR = [
   // nao a nossa) — e o escopo minimo que a API do Google oferece pra
   // isso, nao da pra restringir so a pasta "Google Meet". Quem conectou
   // antes deste escopo existir so passa a ver anexo de reuniao depois de
-  // reconectar (ver varredura de reunioes/cron-analise-reunioes.js).
+  // reconectar (ver varredura de reunioes/cron.js (job=analise-reunioes)).
   'https://www.googleapis.com/auth/drive.readonly',
 ].join(' ');
 
@@ -251,7 +251,7 @@ export async function listarEventos(accessToken, inicio, fim) {
  * Cria o evento na agenda primária do ISM com Meet automático. Devolve
  * `{ id, hangoutLink }` (hangoutLink null se por algum motivo o Google não
  * criar o Meet). `id` fica gravado na reserva (GoogleEventId) pra depois a
- * varredura de reuniões (cron-analise-reunioes.js) achar o evento de volta.
+ * varredura de reuniões (cron.js (job=analise-reunioes)) achar o evento de volta.
  * `attendees`, quando presente, e-mail o cliente/outros participantes como
  * convidados do evento — `sendUpdates=all` faz o Google mandar o convite
  * por e-mail pra eles (sem convidados, mantém o comportamento de sempre:
@@ -280,7 +280,7 @@ export async function criarEventoComMeet(accessToken, { titulo, inicio, fim, att
  * Um evento específico da agenda primária do ISM, pelo id (GoogleEventId
  * gravado na reserva) — inclui `attachments[]` quando o evento tem algo
  * vinculado (ex: a anotação do Gemini depois que a reunião termina). Usado
- * só pela varredura de reuniões (cron-analise-reunioes.js), nunca no fluxo
+ * só pela varredura de reuniões (cron.js (job=analise-reunioes)), nunca no fluxo
  * de agenda normal.
  */
 export async function obterEvento(accessToken, googleEventId) {

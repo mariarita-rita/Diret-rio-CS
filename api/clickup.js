@@ -1956,7 +1956,7 @@ export async function criarProjetoImplantacao({
       // — pedido explícito da usuária pro texto caber melhor na mensagem de
       // WhatsApp; mantém "/formulario-tributario" no caminho de propósito,
       // pra quem recebe reconhecer que é o link certo (ver assinarLinkCurto/
-      // api/formulario-tributario-curto.js).
+      // api/formulario-tributario.js).
       const linkFormularioTributario = `/formulario-tributario/${assinarLinkCurto(projeto.id)}`;
       await notificarClienteNovoWaipeFlow({
         cliente: texto(cliente, 120),
@@ -3028,7 +3028,7 @@ function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, re
     reagendadoPor ? `**ReagendadoPor:** ${reagendadoPor}` : null,
     // GoogleEventId: gravado em toda reserva criada com Meet (nao so nas
     // importadas por sincronizar-agendamentos-google) — e o que permite a
-    // varredura de reunioes (cron-analise-reunioes.js) achar de volta o
+    // varredura de reunioes (cron.js (job=analise-reunioes)) achar de volta o
     // evento do Google e ler o anexo da anotacao do Gemini.
     googleEventId ? `**GoogleEventId:** ${googleEventId}` : null,
     proximaReservaId ? `**ProximaReservaId:** ${proximaReservaId}` : null,

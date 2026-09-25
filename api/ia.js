@@ -554,7 +554,7 @@ Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as fe
 /**
  * Núcleo de "analisar-reuniao-implantacao", sem req/res — usado tanto pela
  * ação HTTP (transcrição colada à mão) quanto pela varredura automática
- * (api/cron-analise-reunioes.js, sem sessão nenhuma, transcrição puxada do
+ * (api/cron.js (job=analise-reunioes), sem sessão nenhuma, transcrição puxada do
  * Drive do ISM). Lança `ErroUpstreamIa`/`ErroResumoVazio` em vez de escrever
  * em `res` — quem chama decide o que fazer com cada erro (a ação HTTP mapeia
  * pra 502; a varredura só loga e segue pra próxima reunião). Mesmo marcador

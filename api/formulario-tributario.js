@@ -12,6 +12,16 @@
 // projeto — sem sessão de usuário nenhuma, então sem o token qualquer id
 // de task poderia ser lido/escrito por qualquer um. GET só devolve o nome
 // do cliente e se já foi preenchido (nunca o resto do estado do projeto).
+//
+// GET /api/formulario-tributario?codigo= (via rewrite de
+// /formulario-tributario/:codigo, ver vercel.json) — variante de link CURTO
+// pro WhatsApp: confere a assinatura curta (assinarLinkCurto/
+// verificarLinkCurto, HMAC truncado), reassina com o token COMPLETO de
+// sempre e redireciona pra formulario-tributario.html, que faz a
+// verificação normal — nenhuma segurança nova, só indireção pra encurtar o
+// link visível. Vive NESTE arquivo (não um arquivo próprio) só por causa do
+// teto de 12 Serverless Functions do plano Hobby do Vercel — sem relação de
+// domínio com o resto, além de ambos serem sobre o mesmo formulário.
 
 import { aplicarCors, erro, lerCorpo, taskIdValido, texto, ErroCorpo } from './_lib/http.js';
 import {
@@ -22,6 +32,8 @@ import {
   contextoSemEstado,
   anexarArquivoTask,
   verificarTokenProjeto,
+  verificarLinkCurto,
+  assinarTokenProjeto,
   LISTA_IMPLANTACOES_WAIPE,
 } from './_lib/clickup.js';
 import { sanearDadosTributarios, dadosTributariosParaGravar, lerArquivoAnexo } from './clickup.js';
@@ -38,6 +50,8 @@ export default async function handler(req, res) {
       return erro(res, 403, 'origem_nao_permitida', 'Origem não permitida.');
     }
     if (req.method === 'OPTIONS') return res.status(204).end();
+
+    if (req.query?.codigo !== undefined) return await linkCurtoAcao(res, req.query.codigo);
 
     const id = String(req.query?.id || '');
     const token = String(req.query?.token || '');
@@ -61,6 +75,16 @@ export default async function handler(req, res) {
     console.error('[formulario-tributario] falha:', e?.name, e?.message);
     return erro(res, 500, 'erro_interno', 'Não foi possível carregar o formulário agora — tente de novo em instantes.');
   }
+}
+
+async function linkCurtoAcao(res, codigo) {
+  const taskId = verificarLinkCurto(String(codigo || ''));
+  if (!taskId) {
+    return erro(res, 404, 'link_invalido', 'Link inválido ou expirado.');
+  }
+  const token = assinarTokenProjeto(taskId);
+  res.setHeader('Location', `/formulario-tributario.html?id=${encodeURIComponent(taskId)}&token=${encodeURIComponent(token)}`);
+  return res.status(302).end();
 }
 
 async function lerFormularioAcao(res, projeto) {

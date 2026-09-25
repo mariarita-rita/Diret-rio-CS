@@ -1505,7 +1505,7 @@ export function googleEventIdDaDescricaoReserva(description) {
   return m ? m[1].trim() : '';
 }
 
-/** Idem, marca que a varredura de reunioes (cron-analise-reunioes.js) ja processou essa reserva — nunca reprocessa. */
+/** Idem, marca que a varredura de reunioes (cron.js (job=analise-reunioes)) ja processou essa reserva — nunca reprocessa. */
 export function transcricaoAnalisadaDaDescricaoReserva(description) {
   return /\*{0,2}TranscricaoAnalisada:\*{0,2}\s*true/.test(String(description || ''));
 }
