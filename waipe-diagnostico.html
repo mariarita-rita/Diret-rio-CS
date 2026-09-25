@@ -1120,6 +1120,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           </div>
     </div>
 
+    <div class="card" style="margin-bottom:22px;">
+      <h2>Seções desta proposta</h2>
+      <div class="sub">Desmarque o que não fizer sentido para este cliente — a seção some do documento gerado, mesmo já com conteúdo calculado. Só aparecem quando o Waipe está incluído.</div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin-bottom:8px; cursor:pointer;">
+        <input type="checkbox" id="secao-time-digital" checked style="width:16px; height:16px; accent-color:var(--ink); flex:0 0 auto;">
+        O Time Digital Proposto (fichas dos agentes Waipe)
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; margin-bottom:0; cursor:pointer;">
+        <input type="checkbox" id="secao-tempo-devolvido" checked style="width:16px; height:16px; accent-color:var(--ink); flex:0 0 auto;">
+        Tempo Devolvido à Gestão (tabela de horas)
+      </label>
+    </div>
+
     <div class="prop-grid">
       <!-- FORM -->
       <div class="card">
@@ -3106,7 +3119,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     "waipeIncluidoCheck", "f-usuarios", "f-empresas", "f-motivo", "f-conversas", "f-execucoes",
     "p-desc-tipo", "p-desc-valor", "p-ent-base",
     "im-pacote", "im-sistemas", "im-horas", "im-pagamento", "im-ganho", "im-isento",
-    "campIncluidoCheck", "camp-passe", "camp-cortesia", "camp-desconto-qtd", "camp-desconto-percent", "camp-obs"];
+    "campIncluidoCheck", "camp-passe", "camp-cortesia", "camp-desconto-qtd", "camp-desconto-percent", "camp-obs",
+    "secao-time-digital", "secao-tempo-devolvido"];
 
   function coletarRascunho(){
     var campos = {};
@@ -3287,6 +3301,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         isento: implantacao.isento,
         pagamento: implantacao.pagamento,
         ganhoMensal: implantacao.ganhoMensal
+      },
+      // Checkboxes de "Seções desta proposta" (topo da aba) — sem persistir
+      // isso, reabrir uma proposta salva sempre voltava pras duas seções
+      // marcadas por padrão, mesmo quando o CSM tinha desmarcado uma delas
+      // antes de salvar (mesma classe de bug do implantacaoEnterprise acima).
+      secoesFixasSelecionadas: {
+        timeDigital: document.getElementById("secao-time-digital").checked,
+        tempoDevolvido: document.getElementById("secao-tempo-devolvido").checked
       }
     };
     if (propostaSalvaId) payload.taskIdExistente = propostaSalvaId;
@@ -3426,6 +3448,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
           document.getElementById("im-ganho").value = implantacao.ganhoMensal;
           updatePacoteHint();
           renderImplantacaoSim();
+        }
+        // "Seções desta proposta" (topo da aba) — proposta salva antes dessa
+        // opção existir não tem o campo: mantém as duas marcadas (era o único
+        // comportamento possível antes, então continua sendo o padrão seguro).
+        if (projeto.secoesFixasSelecionadas){
+          document.getElementById("secao-time-digital").checked = projeto.secoesFixasSelecionadas.timeDigital !== false;
+          document.getElementById("secao-tempo-devolvido").checked = projeto.secoesFixasSelecionadas.tempoDevolvido !== false;
         }
         recomendacoesState = (projeto.outrasSolucoesPropostas || []).map(function(o){
           return {
@@ -4097,9 +4126,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       // investimento, implantação Enterprise) só entra no documento quando
       // "Incluir" está marcado no card do Waipe — senão a proposta é feita
       // só das demais soluções.
-      if (waipeIncluido){
+      // "O Time Digital Proposto" e "Tempo Devolvido à Gestão" têm cada uma
+      // seu próprio checkbox em "Seções desta proposta" (topo da aba) — nem
+      // toda proposta com Waipe precisa das duas (ex: cliente já entende o
+      // conceito de agente, só quer o preço; ou o CSM não quer detalhar
+      // horas por não ter validado a estimativa com o cliente ainda).
+      if (waipeIncluido && document.getElementById("secao-time-digital").checked){
         sections.push({ title: "O Time Digital Proposto",
           body: '<p>Cada agente abaixo é um funcionário digital com função fixa: observa o sistema no horário certo, analisa os dados e entrega o resultado pronto para quem precisa agir. Nenhum agente decide sozinho uma ação sensível — ele prepara, e a aprovação final é sempre humana.</p>' + fichasHtml });
+      }
+      if (waipeIncluido && document.getElementById("secao-tempo-devolvido").checked){
         sections.push({ title: "Tempo Devolvido à Gestão",
           body: '<p>Estimativa das horas de trabalho manual eliminadas por mês com o time digital proposto:</p>' + horasHtml });
       }

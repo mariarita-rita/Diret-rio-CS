@@ -1236,6 +1236,23 @@ function sanearImplantacaoEnterprise(d) {
   };
 }
 
+/**
+ * Checkboxes de "Seções desta proposta" (topo da aba Gerar Proposta) — "O
+ * Time Digital Proposto" (fichas dos agentes) e "Tempo Devolvido à Gestão"
+ * (tabela de horas), cada uma com seu próprio "Incluir". Faltava persistir
+ * isso: reabrir uma proposta salva sempre voltava com as duas marcadas,
+ * mesmo quando o CSM tinha desmarcado uma antes de salvar. `null`/ausente
+ * (proposta salva antes dessa opção existir) sempre vira `true` nos dois —
+ * era o único comportamento possível antes.
+ */
+function sanearSecoesFixasSelecionadas(d) {
+  const origem = d && typeof d === 'object' ? d : {};
+  return {
+    timeDigital: origem.timeDigital !== false,
+    tempoDevolvido: origem.tempoDevolvido !== false,
+  };
+}
+
 // Ids duplicados de proposito do catalogo client-side (waipe-diagnostico.html,
 // CATALOGO_SECOES_PROPOSTA) e do servidor de IA (api/ia.js,
 // IDS_SECOES_PROPOSTA_VALIDAS) — mesmo espirito de resolverImplantacao
@@ -1690,6 +1707,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
         : [],
       diagnosticoWaipe: sanearDiagnosticoWaipeProposto(estadoProjeto.diagnosticoWaipe) || null,
       implantacaoEnterprise: sanearImplantacaoEnterprise(estadoProjeto.implantacaoEnterprise) || null,
+      secoesFixasSelecionadas: sanearSecoesFixasSelecionadas(estadoProjeto.secoesFixasSelecionadas),
       secoesPropostaSelecionadas: sanearSecoesPropostaSelecionadas(estadoProjeto.secoesPropostaSelecionadas),
       secoesPropostaGeradas: Array.isArray(estadoProjeto.secoesPropostaGeradas)
         ? estadoProjeto.secoesPropostaGeradas.map(sanearSecaoPropostaGerada).filter(Boolean)
@@ -2705,6 +2723,7 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     : [];
   const diagnosticoWaipe = sanearDiagnosticoWaipeProposto(corpo.diagnosticoWaipe);
   const implantacaoEnterprise = sanearImplantacaoEnterprise(corpo.implantacaoEnterprise);
+  const secoesFixasSelecionadas = sanearSecoesFixasSelecionadas(corpo.secoesFixasSelecionadas);
   const secoesPropostaSelecionadas = sanearSecoesPropostaSelecionadas(corpo.secoesPropostaSelecionadas);
   const secoesPropostaGeradas = Array.isArray(corpo.secoesPropostaGeradas)
     ? corpo.secoesPropostaGeradas.slice(0, IDS_SECOES_PROPOSTA_VALIDAS.size).map(sanearSecaoPropostaGerada).filter(Boolean)
@@ -2719,7 +2738,7 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
     // preenchia "Nome do cliente" com o nome da task já sufixado, e o
     // próximo save colava mais um sufixo em cima (ver obterImplantacaoAcao).
     cliente, etapaAtual: 'proposta', agentesPropostos, outrasSolucoesPropostas, diagnosticoWaipe,
-    implantacaoEnterprise, secoesPropostaSelecionadas, secoesPropostaGeradas, ...dadosCliente,
+    implantacaoEnterprise, secoesFixasSelecionadas, secoesPropostaSelecionadas, secoesPropostaGeradas, ...dadosCliente,
   };
   const nomeTask = `${cliente} — Proposta — ${dataRotuloHoje()}`;
 
@@ -2861,6 +2880,7 @@ async function confirmarFechamentoImplantacaoAcao(req, res, sessao) {
     outrasSolucoesPropostas: estadoAtual.outrasSolucoesPropostas || [],
     diagnosticoWaipe: estadoAtual.diagnosticoWaipe || null,
     implantacaoEnterprise: estadoAtual.implantacaoEnterprise || null,
+    secoesFixasSelecionadas: estadoAtual.secoesFixasSelecionadas || null,
     ...dadosCliente,
   };
   await atualizarTask(projeto.id, {
