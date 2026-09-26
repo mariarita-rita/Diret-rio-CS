@@ -1293,12 +1293,28 @@ function sanearSecoesPropostaSelecionadas(d) {
   return out;
 }
 
+/**
+ * Aspas retas dentro de qualquer texto que vá pro bloco de estado JSON
+ * corrompem o bloco inteiro — o ClickUp remove a barra de escape (`\"` →
+ * `"`) ao salvar o markdown_description, mesmo quando o texto foi montado
+ * com JSON.stringify (confirmado repetidas vezes, ver memória
+ * bug_aspas_waipestate). O HTML das seções de proposta geradas por IA usa
+ * aspas duplas em todo atributo (`class="destaque"`), então SEMPRE tem
+ * aspas — trocar por aspas simples (`class='destaque'`) é válido em HTML e
+ * elimina o caractere problemático antes que ele chegue perto do
+ * JSON.stringify, em vez de tentar escapar certo algo que o ClickUp vai
+ * desescapar de qualquer jeito.
+ */
+function semAspasRetas(s) {
+  return String(s || '').replace(/"/g, "'");
+}
+
 /** Uma seção de análise detalhada já gerada pela IA (e possivelmente editada pelo CSM). */
 function sanearSecaoPropostaGerada(s) {
   if (!s || typeof s !== 'object') return null;
   const id = typeof s.id === 'string' ? s.id : '';
   if (!IDS_SECOES_PROPOSTA_VALIDAS.has(id)) return null;
-  return { id, titulo: texto(s.titulo, 150), html: texto(s.html, 6000) };
+  return { id, titulo: semAspasRetas(texto(s.titulo, 150)), html: semAspasRetas(texto(s.html, 6000)) };
 }
 
 /** ID Núcleo/CNPJ/e-mail/telefone do cliente, saneados — sempre string (nunca null),
