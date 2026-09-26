@@ -5165,6 +5165,7 @@
       '<h2>Resumo do projeto</h2>' +
       '<div class="sp-k">Fase do projeto</div>' +
       '<div>' + seletorFaseProjeto(p) + '</div>' +
+      (p.dataFimReal ? '<div class="sp-v" style="margin-top:4px;">Entregue em: ' + esc(new Date(p.dataFimReal).toLocaleDateString("pt-BR")) + '</div>' : '') +
       '<div class="sp-k" style="margin-top:10px;">Urgência</div>' +
       '<div>' + seletorUrgenciaProjeto(p) + slaBadgeHtml(p) + '</div>' +
       '<div class="sp-k" style="margin-top:10px;">🚨 Alertas <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesmo campo da Carteira CSM)</span></div>' +
