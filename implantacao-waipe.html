@@ -4019,13 +4019,39 @@
     apiPost("atualizar-implantacao", {
       id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
       agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
-      idNucleo: dados.idNucleo, cnpj: dados.cnpj, email: dados.email, telefone: dados.telefone
+      idNucleo: dados.idNucleo, cnpj: dados.cnpj, email: dados.email, telefone: dados.telefone,
+      contatosAdicionais: dados.contatosAdicionais
     }).then(function(){
       Object.assign(dadosProjeto.projeto, dados);
       showSimToast("Dados do cliente salvos.");
       var botao = document.getElementById("btnSalvarDadosCliente");
       if (botao) botao.classList.remove("tem-pendencia");
     }).catch(function(){ showSimToast("Não deu para salvar os dados do cliente."); });
+  }
+
+  // Uma linha de "outros contatos" (nome + telefone + remover) — usada tanto
+  // ao montar o HTML inicial (contatos já salvos) quanto ao adicionar uma
+  // linha nova em branco (ver btnAdicionarContato).
+  function linhaContatoAdicionalHtml(nome, telefone){
+    return '<div class="contato-adicional-row" style="display:flex;gap:8px;margin-top:6px;align-items:center;">' +
+      '<input type="text" class="form-input contato-nome" placeholder="Nome" style="flex:1;" value="' + esc(nome || "") + '">' +
+      '<input type="text" class="form-input contato-telefone" placeholder="Telefone" style="flex:1;" value="' + esc(telefone || "") + '">' +
+      '<button type="button" class="btn-flow-secondary btn-remover-contato" title="Remover contato" style="flex:0 0 auto;">🗑</button>' +
+    '</div>';
+  }
+
+  // Lê as linhas de "outros contatos" do DOM — usado na hora de salvar
+  // (btnSalvarDadosCliente). Descarta linha sem telefone (não serve pra nada
+  // sem telefone pra consultar na Umbler Talk).
+  function coletarContatosAdicionais(){
+    var wrap = document.getElementById("contatosAdicionaisWrap");
+    if (!wrap) return [];
+    return Array.prototype.map.call(wrap.querySelectorAll(".contato-adicional-row"), function(row){
+      return {
+        nome: row.querySelector(".contato-nome").value.trim(),
+        telefone: row.querySelector(".contato-telefone").value.trim()
+      };
+    }).filter(function(c){ return c.telefone; });
   }
 
   // Reenvia SEMPRE o dadosTributarios inteiro, junto com o preenchidoEm que
@@ -4173,16 +4199,61 @@
     '<a href="https://app-utalk.umbler.com" target="_blank" rel="noopener" title="Abrir no Utalk" style="font-size:15px;flex:0 0 auto;">↗</a>' +
   '</div>';
 
-  function renderConversaUmbler(projetoId, container){
+  // Opções de contato pro seletor do card — telefone principal (Resumo do
+  // projeto) + cada contato extra cadastrado ali, cada um com seu próprio
+  // telefone. Entrada sem telefone não entra (não tem o que consultar na
+  // Umbler Talk sem telefone).
+  function opcoesContatoUtalk(p){
+    var opcoes = [];
+    if (p && p.telefone) opcoes.push({ telefone: p.telefone, label: "Contato principal — " + p.telefone });
+    ((p && p.contatosAdicionais) || []).forEach(function(c){
+      if (c.telefone) opcoes.push({ telefone: c.telefone, label: (c.nome || "Contato") + " — " + c.telefone });
+    });
+    return opcoes;
+  }
+
+  // `telefoneForcado` (opcional): mantém o contato já selecionado num
+  // re-render (troca no seletor, ou depois de mandar uma resposta) — sem
+  // ele, sempre volta pro primeiro da lista (comportamento de abrir o
+  // projeto pela primeira vez).
+  function renderConversaUmbler(projetoId, container, telefoneForcado){
     if (!container) return;
-    container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sidebar-loading">Carregando…</div></div>';
-    apiGet("historico-conversa-umbler", { id: projetoId }).then(function(resp){
+    var p = dadosProjeto && dadosProjeto.projeto;
+    var opcoes = opcoesContatoUtalk(p);
+    var telefoneAtivo = telefoneForcado || (opcoes[0] && opcoes[0].telefone) || "";
+    var seletorHtml = opcoes.length > 1
+      ? '<select class="form-input" id="utalkContatoSelect" style="margin:8px 0;">' +
+          opcoes.map(function(o){
+            return '<option value="' + esc(o.telefone) + '"' + (o.telefone === telefoneAtivo ? " selected" : "") + '>' + esc(o.label) + '</option>';
+          }).join("") +
+        '</select>'
+      : "";
+    function cabecalho(){
+      return '<div class="card">' + TITULO_CONVERSA_UTALK + seletorHtml;
+    }
+    function wireSeletor(){
+      var seletor = document.getElementById("utalkContatoSelect");
+      if (seletor) seletor.addEventListener("change", function(){
+        renderConversaUmbler(projetoId, container, seletor.value);
+      });
+    }
+    container.innerHTML = cabecalho() + '<div class="sidebar-loading">Carregando…</div></div>';
+    wireSeletor();
+    if (!telefoneAtivo){
+      container.innerHTML = cabecalho() + '<div class="sub">Cadastre o telefone do cliente (Resumo do projeto) pra ver o histórico aqui.</div></div>';
+      wireSeletor();
+      return;
+    }
+    apiGet("historico-conversa-umbler", { id: projetoId, telefone: telefoneAtivo }).then(function(resp){
+      var contatoTxt = resp.contatoNome ? ('<div class="sp-v">Contato: <strong>' + esc(resp.contatoNome) + '</strong></div>') : "";
       if (resp.semTelefone){
-        container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sub">Cadastre o telefone do cliente (Resumo do projeto) pra ver o histórico aqui.</div></div>';
+        container.innerHTML = cabecalho() + '<div class="sub">Cadastre o telefone do cliente (Resumo do projeto) pra ver o histórico aqui.</div></div>';
+        wireSeletor();
         return;
       }
       if (resp.semConversa){
-        container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sub">Nenhuma conversa iniciada ainda com esse telefone.</div></div>';
+        container.innerHTML = cabecalho() + contatoTxt + '<div class="sub">Nenhuma conversa iniciada ainda com esse telefone.</div></div>';
+        wireSeletor();
         return;
       }
       var statusTxt = resp.aberta ? "Aberta" : "Fechada";
@@ -4194,7 +4265,8 @@
           '<div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;">' + esc(m.texto) + '</div>' +
         '</div>';
       }).join("");
-      container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK +
+      container.innerHTML = cabecalho() +
+        contatoTxt +
         '<div class="sp-v">Status: <strong>' + statusTxt + '</strong>' + setorTxt + '</div>' +
         '<div class="sp-v">Última mensagem: ' + esc(ultimaTxt) + '</div>' +
         (msgsHtml || '<div class="sub" style="margin-top:8px;">Sem mensagens recentes.</div>') +
@@ -4208,6 +4280,7 @@
         '<button type="button" class="btn-flow-secondary" id="btnResponderUtalk" style="margin-top:10px;">↩️ Responder</button> ' +
         '<button type="button" class="btn-flow-secondary" id="btnResumirConversaIa" style="margin-top:10px;">🤖 Resumir com IA</button>' +
       '</div>';
+      wireSeletor();
       var btnResumir = document.getElementById("btnResumirConversaIa");
       if (btnResumir) btnResumir.addEventListener("click", function(){ resumirConversaComIa(btnResumir, projetoId); });
       var btnResponderUtalk = document.getElementById("btnResponderUtalk");
@@ -4227,15 +4300,16 @@
         var texto = document.getElementById("utalkRespTexto").value.trim();
         if (!texto) return;
         btnEnviarRespUtalk.disabled = true;
-        apiPost("iniciar-conversa-umbler", { id: projetoId, mensagem: texto }).then(function(r){
+        apiPost("iniciar-conversa-umbler", { id: projetoId, mensagem: texto, telefone: telefoneAtivo }).then(function(r){
           showSimToast(r.mensagemEnviada ? "Resposta enviada." : (r.mensagemErro || "Mensagem não enviada."));
-          renderConversaUmbler(projetoId, container);
+          renderConversaUmbler(projetoId, container, telefoneAtivo);
         }).catch(function(e){
           showSimToast(mensagemErro(e) || "Não deu para enviar a resposta.");
         }).finally(function(){ btnEnviarRespUtalk.disabled = false; });
       });
     }).catch(function(){
-      container.innerHTML = '<div class="card">' + TITULO_CONVERSA_UTALK + '<div class="sub">Não deu para carregar.</div></div>';
+      container.innerHTML = cabecalho() + '<div class="sub">Não deu para carregar.</div></div>';
+      wireSeletor();
     });
   }
 
@@ -5108,6 +5182,11 @@
         '<div class="form-field"><label>E-mail</label><input type="email" class="form-input" id="cliEmail" value="' + esc(p.email || "") + '"></div>' +
         '<div class="form-field"><label>Telefone</label><input type="text" class="form-input" id="cliTelefone" value="' + esc(p.telefone || "") + '"></div>' +
       '</div>' +
+      '<div class="sp-k" style="margin-top:10px;">Outros contatos <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesma empresa, outra pessoa)</span></div>' +
+      '<div id="contatosAdicionaisWrap">' +
+        (p.contatosAdicionais || []).map(function(c){ return linhaContatoAdicionalHtml(c.nome, c.telefone); }).join("") +
+      '</div>' +
+      '<button type="button" class="btn-flow-secondary" id="btnAdicionarContato" style="margin-top:6px;">+ Adicionar contato</button>' +
       '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosCliente" style="margin-top:6px;">Salvar dados do cliente</button>' +
       (!p.csm ? '<button type="button" class="btn-flow-secondary" id="btnDefinirGerente" style="margin-top:6px;margin-left:8px;">🎯 Definir Gerente de Contas</button>' : '') +
       '<button type="button" class="btn-flow-secondary" id="btnIniciarConversaUmbler" style="margin-top:6px;margin-left:8px;">💬 Iniciar conversa no Utalk</button>' +
@@ -5246,10 +5325,31 @@
         idNucleo: document.getElementById("cliIdNucleo").value.trim(),
         cnpj: document.getElementById("cliCnpj").value.trim(),
         email: document.getElementById("cliEmail").value.trim(),
-        telefone: document.getElementById("cliTelefone").value.trim()
+        telefone: document.getElementById("cliTelefone").value.trim(),
+        contatosAdicionais: coletarContatosAdicionais()
       });
     });
     wireDirty(["cliIdNucleo", "cliCnpj", "cliEmail", "cliTelefone"], "btnSalvarDadosCliente");
+    var contatosAdicionaisWrap = document.getElementById("contatosAdicionaisWrap");
+    if (contatosAdicionaisWrap){
+      // Delegação: linhas são criadas/removidas dinamicamente, então não dá
+      // pra usar wireDirty (que espera ids fixos já presentes no DOM).
+      contatosAdicionaisWrap.addEventListener("input", function(){
+        if (btnSalvarDadosCliente) btnSalvarDadosCliente.classList.add("tem-pendencia");
+      });
+      contatosAdicionaisWrap.addEventListener("click", function(e){
+        if (e.target.classList.contains("btn-remover-contato")){
+          e.target.closest(".contato-adicional-row").remove();
+          if (btnSalvarDadosCliente) btnSalvarDadosCliente.classList.add("tem-pendencia");
+        }
+      });
+    }
+    var btnAdicionarContato = document.getElementById("btnAdicionarContato");
+    if (btnAdicionarContato) btnAdicionarContato.addEventListener("click", function(){
+      if (!contatosAdicionaisWrap) return;
+      contatosAdicionaisWrap.insertAdjacentHTML("beforeend", linhaContatoAdicionalHtml("", ""));
+      if (btnSalvarDadosCliente) btnSalvarDadosCliente.classList.add("tem-pendencia");
+    });
     var btnDefinirGerente = document.getElementById("btnDefinirGerente");
     if (btnDefinirGerente) btnDefinirGerente.addEventListener("click", definirGerenteContas);
     var btnCopiarLinkTributario = document.getElementById("btnCopiarLinkTributario");

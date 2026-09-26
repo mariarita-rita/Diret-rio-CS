@@ -1293,7 +1293,45 @@ export function sanearDadosCliente(d) {
     cnpj: texto(origem.cnpj, 20),
     email: texto(origem.email, 200),
     telefone: texto(origem.telefone, 30),
+    contatosAdicionais: sanearContatosAdicionais(origem.contatosAdicionais),
   };
+}
+
+/**
+ * Outros contatos da mesma empresa (nome + telefone), além do telefone
+ * principal acima — a Umbler Talk não tem noção de "contatos da mesma
+ * empresa" (só telefone por telefone), então essa lista é conceito nosso,
+ * guardada no projeto. Usada pelo seletor de contato do card "Conversa no
+ * Utalk" (ver iniciarConversaUmblerAcao/historicoConversaUmblerAcao).
+ */
+function sanearContatosAdicionais(lista) {
+  if (!Array.isArray(lista)) return [];
+  return lista.slice(0, 8) // teto — nunca precisa de mais que isso na prática
+    .map((c) => ({ nome: texto(c?.nome, 120), telefone: texto(c?.telefone, 30) }))
+    .filter((c) => c.telefone); // sem telefone, a entrada não serve pra nada
+}
+
+/**
+ * Resolve qual contato usar pra Umbler Talk: o telefone informado (comparado
+ * normalizado via telefoneParaE164 contra o principal + contatosAdicionais do
+ * projeto — nunca deixa operar um telefone que não está cadastrado neste
+ * projeto) ou, sem telefone informado, o principal (estado.telefone). Devolve
+ * `null` quando o telefone efetivo não é válido, ou quando o informado não
+ * bate com nenhum contato conhecido do projeto.
+ */
+function resolverContatoConversa(estado, telefoneInformado) {
+  const contatos = [
+    { nome: 'Contato principal', telefone: estado.telefone },
+    ...sanearContatosAdicionais(estado.contatosAdicionais),
+  ];
+  if (telefoneInformado) {
+    const alvo = telefoneParaE164(telefoneInformado);
+    if (!alvo) return null;
+    const achado = contatos.find((c) => telefoneParaE164(c.telefone) === alvo);
+    return achado ? { telefoneE164: alvo, nome: achado.nome } : null;
+  }
+  const principal = telefoneParaE164(estado.telefone);
+  return principal ? { telefoneE164: principal, nome: 'Contato principal' } : null;
 }
 
 const REGIMES_TRIBUTARIOS_VALIDOS = new Set(['Simples Nacional', 'Lucro Presumido', 'Lucro Real']);
@@ -1720,6 +1758,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
       cnpj: texto(estadoProjeto.cnpj, 20),
       email: texto(estadoProjeto.email, 200),
       telefone: texto(estadoProjeto.telefone, 30),
+      contatosAdicionais: sanearContatosAdicionais(estadoProjeto.contatosAdicionais),
       // Vendedor do negócio no Moskit (quem fechou a venda) — separado do CSM
       // de propósito: CSM aqui é o gerente de contas que assume a partir da
       // implantação, um papel diferente.
@@ -2248,7 +2287,7 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     // Dados de identificação do cliente — só muda quando vem no corpo (edição
     // vinda do "Resumo do projeto"), senão preserva o que já estava gravado,
     // mesmo padrão de faseProjetoManual logo acima.
-    ...(('idNucleo' in corpo || 'cnpj' in corpo || 'email' in corpo || 'telefone' in corpo)
+    ...(('idNucleo' in corpo || 'cnpj' in corpo || 'email' in corpo || 'telefone' in corpo || 'contatosAdicionais' in corpo)
       ? sanearDadosCliente(corpo)
       : sanearDadosCliente(estadoAtual)),
     // Relatório de finalização — mesmo padrão de faseProjetoManual/dadosCliente:
@@ -2494,12 +2533,13 @@ async function iniciarConversaUmblerAcao(req, res, sessao) {
   }
 
   const estado = parseWaipeState(projeto.description);
-  const telefoneE164 = telefoneParaE164(estado.telefone);
-  if (!telefoneE164) {
+  const contato = resolverContatoConversa(estado, corpo.telefone);
+  if (!contato) {
     return erro(res, 400, 'telefone_invalido', 'Cadastre um telefone válido do cliente (Resumo do projeto) antes de iniciar a conversa.');
   }
+  const { telefoneE164, nome: contatoNome } = contato;
 
-  const contactId = await garantirContato(telefoneE164, projeto.name);
+  const contactId = await garantirContato(telefoneE164, contatoNome === 'Contato principal' ? projeto.name : contatoNome);
   if (!contactId) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu o contato criado.');
   const conversa = await garantirConversa(contactId);
   if (!conversa) return erro(res, 502, 'erro_umbler', 'Umbler Talk não devolveu a conversa criada.');
@@ -2526,6 +2566,7 @@ async function iniciarConversaUmblerAcao(req, res, sessao) {
     contactId,
     chatId: conversa.id,
     telefone: telefoneE164,
+    contatoNome,
     chatNovo: conversa.criadaAgora,
     setor: conversa.setor,
     mensagemEnviada,
@@ -2555,16 +2596,17 @@ async function historicoConversaUmblerAcao(req, res, sessao) {
   }
 
   const estado = parseWaipeState(projeto.description);
-  const telefoneE164 = telefoneParaE164(estado.telefone);
-  if (!telefoneE164) {
+  const contato = resolverContatoConversa(estado, req.query?.telefone);
+  if (!contato) {
     return res.status(200).json({ ok: true, semTelefone: true });
   }
+  const { telefoneE164, nome: contatoNome } = contato;
 
   const historico = await buscarHistoricoConversa(telefoneE164);
   if (!historico) {
-    return res.status(200).json({ ok: true, semConversa: true });
+    return res.status(200).json({ ok: true, semConversa: true, contatoNome });
   }
-  return res.status(200).json({ ok: true, ...historico });
+  return res.status(200).json({ ok: true, contatoNome, ...historico });
 }
 
 /**
