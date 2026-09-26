@@ -897,7 +897,7 @@ const STATUS_IMPLANTACAO_VALIDOS = new Set(['pendente', 'in progress', 'concluí
 
 function sanearListaTexto(v, maxItens, maxLen) {
   if (!Array.isArray(v)) return [];
-  return v.filter((x) => typeof x === 'string').slice(0, maxItens).map((x) => texto(x, maxLen)).filter(Boolean);
+  return v.filter((x) => typeof x === 'string').slice(0, maxItens).map((x) => textoLivre(x, maxLen)).filter(Boolean);
 }
 
 function sanearListaIds(v) {
@@ -1000,14 +1000,14 @@ function sanearValidacao(v) {
 /** Um agente do backlog, saneado a partir do corpo enviado por criar-implantacao. */
 function sanearAgente(a) {
   if (!a || typeof a !== 'object') return null;
-  const nome = texto(a.nome, 120);
+  const nome = textoLivre(a.nome, 120);
   if (!nome) return null;
   return {
     nome,
-    frente: texto(a.frente, 120),
-    frequencia: texto(a.frequencia, 120),
-    canal: texto(a.canal, 120),
-    publico: texto(a.publico, 200),
+    frente: textoLivre(a.frente, 120),
+    frequencia: textoLivre(a.frequencia, 120),
+    canal: textoLivre(a.canal, 120),
+    publico: textoLivre(a.publico, 200),
     entrega: sanearListaTexto(a.entrega, 20, 200),
     sistemas: sanearListaTexto(a.sistemas, 20, 80),
     prereq: sanearListaTexto(a.prereq, 20, 200),
@@ -1183,9 +1183,9 @@ function jornadaPara(produto, ambienteMuda) {
 /** Um agente proposto (pré-alinhamento) — só nome/frente/entrega; o resto da estrutura se preenche no Alinhamento, como já acontece hoje. */
 function sanearAgenteProposto(a) {
   if (!a || typeof a !== 'object') return null;
-  const nome = texto(a.nome, 120);
+  const nome = textoLivre(a.nome, 120);
   if (!nome) return null;
-  return { nome, frente: texto(a.frente, 120), entrega: sanearListaTexto(a.entrega, 20, 200) };
+  return { nome, frente: textoLivre(a.frente, 120), entrega: sanearListaTexto(a.entrega, 20, 200) };
 }
 
 /** Uma "outra solução" (Gestor/Simplaz/Unique/BIME APP/Treinamento/Outro) proposta pelo simulador. */
@@ -1195,10 +1195,10 @@ export function sanearOutraSolucao(o) {
   if (!produto) return null;
   return {
     produto,
-    planoSugerido: texto(o.planoSugerido, 80),
+    planoSugerido: textoLivre(o.planoSugerido, 80),
     variante: typeof o.variante === 'string' && VARIANTES_SOLUCAO_VALIDAS.has(o.variante) ? o.variante : null,
-    motivo: texto(o.motivo, 400),
-    observacoes: texto(o.observacoes, 500),
+    motivo: textoLivre(o.motivo, 400),
+    observacoes: textoLivre(o.observacoes, 500),
     ambienteMuda: !!o.ambienteMuda,
     quantidade: inteiroEntre(o.quantidade, 1, 500, 1),
     valorTabela: numeroOuNulo(o.valorTabela, 0, 999999),
@@ -1225,8 +1225,8 @@ function sanearDiagnosticoWaipeProposto(d) {
     auditoria: typeof d.auditoria === 'string' && GOV_WAIPE_VALIDOS.has(d.auditoria) ? d.auditoria : 'nao',
     automacao: typeof d.automacao === 'string' && AUTOMACAO_WAIPE_VALIDOS.has(d.automacao) ? d.automacao : 'pronta',
     enterprisePorVolume: typeof d.enterprisePorVolume === 'string' && GOV_WAIPE_VALIDOS.has(d.enterprisePorVolume) ? d.enterprisePorVolume : 'nao',
-    plano: texto(d.plano, 40),
-    motivo: texto(d.motivo, 400),
+    plano: textoLivre(d.plano, 40),
+    motivo: textoLivre(d.motivo, 400),
     valorMensal: numeroOuNulo(d.valorMensal, 0, 999999),
   };
 }
@@ -1309,6 +1309,15 @@ function semAspasRetas(s) {
   return String(s || '').replace(/"/g, "'");
 }
 
+/** `texto()` + `semAspasRetas()` — pro texto livre digitado por pessoa (motivo,
+ * observações, contexto, nome de agente/contato...) que vai pro bloco de
+ * estado. Mesma defesa do HTML de proposta acima, agora pra qualquer campo
+ * assim: elimina a aspa reta antes dela virar risco de corromper o JSON,
+ * em vez de confiar em escapar certo (o ClickUp desescapa de qualquer jeito). */
+function textoLivre(v, max) {
+  return semAspasRetas(texto(v, max));
+}
+
 /** Uma seção de análise detalhada já gerada pela IA (e possivelmente editada pelo CSM). */
 function sanearSecaoPropostaGerada(s) {
   if (!s || typeof s !== 'object') return null;
@@ -1340,7 +1349,7 @@ export function sanearDadosCliente(d) {
 function sanearContatosAdicionais(lista) {
   if (!Array.isArray(lista)) return [];
   return lista.slice(0, 8) // teto — nunca precisa de mais que isso na prática
-    .map((c) => ({ nome: texto(c?.nome, 120), telefone: texto(c?.telefone, 30) }))
+    .map((c) => ({ nome: textoLivre(c?.nome, 120), telefone: texto(c?.telefone, 30) }))
     .filter((c) => c.telefone); // sem telefone, a entrada não serve pra nada
 }
 
@@ -1456,9 +1465,9 @@ function sanearFinalizacao(d) {
   const origem = d && typeof d === 'object' ? d : {};
   const numeroOuZero = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : 0);
   return {
-    resumoGeral: texto(origem.resumoGeral, 2000),
+    resumoGeral: textoLivre(origem.resumoGeral, 2000),
     riscoPercebido: RISCO_VALIDOS.has(origem.riscoPercebido) ? origem.riscoPercebido : '',
-    causaDaDemora: texto(origem.causaDaDemora, 500),
+    causaDaDemora: textoLivre(origem.causaDaDemora, 500),
     satisfacaoPercebida: SATISFACAO_VALIDOS.has(origem.satisfacaoPercebida) ? origem.satisfacaoPercebida : '',
     geradoEm: Number.isFinite(Number(origem.geradoEm)) ? Number(origem.geradoEm) : null,
     // Fatos objetivos calculados no momento em que o relatório foi gerado
@@ -2055,11 +2064,11 @@ async function criarImplantacaoAcao(req, res, sessao) {
     throw e;
   }
 
-  const cliente = texto(corpo.cliente, 120);
+  const cliente = textoLivre(corpo.cliente, 120);
   if (!cliente) {
     return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
   }
-  const contexto = texto(corpo.contexto, 6000);
+  const contexto = textoLivre(corpo.contexto, 6000);
 
   // Criação direta (sem passar pela proposta) já é "virar projeto de
   // implantação de verdade" — os 4 campos são obrigatórios aqui, mesmo
@@ -2852,11 +2861,11 @@ async function salvarPropostaImplantacaoAcao(req, res, sessao) {
   // preenchido a partir de um projeto salvo antes de existir o campo "cliente"
   // separado (ver limparSufixoProposta), o que faria o próximo save colar
   // mais um sufixo em cima do que já tinha.
-  const cliente = limparSufixoProposta(texto(corpo.cliente, 120));
+  const cliente = limparSufixoProposta(textoLivre(corpo.cliente, 120));
   if (!cliente) {
     return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
   }
-  const contexto = texto(corpo.contexto, 6000);
+  const contexto = textoLivre(corpo.contexto, 6000);
   // CSM responsável: o campo "CSM / gerente de contas" do formulário é a
   // fonte preferida (a proposta pode ser preenchida por outra pessoa em
   // nome do CSM que de fato atende o cliente) — cai pra sessão só se vier
