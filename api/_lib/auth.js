@@ -14,17 +14,27 @@ export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism', 'csq'];
  * Perfis de acesso. A senha de cada perfil vive apenas na variável de ambiente
  * correspondente, sempre como hash scrypt (ver scripts/gerar-hash.js).
  *
- * Nível "ism": só implantação — sem carteira/metas/cliente (dados financeiros),
- * e dentro da implantação só os projetos onde a pessoa está entre os ISMs
- * atribuídos (ver pertenceAoIsm). `ismId` precisa bater com um dos ids em
- * ISM_OPCOES (api/_lib/clickup.js) — são o mesmo id em ambos os lugares.
+ * Nível "ism": vê TODOS os projetos de implantação (igual "gestao" dentro
+ * da implantação, ver comentário em listarImplantacoesAcao/api/clickup.js —
+ * não é restrito aos próprios projetos, decisão deliberada), lê carteira/
+ * metas/cliente no mesmo nível de "consulta" (só leitura, valor financeiro
+ * sempre zerado/oculto), e pode gerenciar reserva/agenda de qualquer ISM
+ * (não só a própria). A única restrição por `ismId` que sobra é conectar a
+ * PRÓPRIA conta Google (conectarAgendaGoogleAcao) — isso é ligado à
+ * identidade OAuth de verdade, não dá pra abrir sem deixar alguém logar a
+ * própria conta Google no lugar de outro ISM. Sem acesso a: escrita em
+ * carteira (set-field/log-proposta), pipeline de proposta, exclusão de
+ * projeto/comentário (tudo isso é trabalho de CSM/gestão). `ismId` precisa
+ * bater com um dos ids em ISM_OPCOES (api/_lib/clickup.js) — são o mesmo id
+ * em ambos os lugares.
  *
- * Nível "csq": papel de coordenação da Daiane/Aline (implantação + agenda de
- * CSM + fila de Atividades) — mesma visibilidade de implantação que "ism"
- * (ver ACOES_PROIBIDAS_ISM em api/clickup.js, que cobre os dois níveis), mais
- * acesso exclusivo à fila de Atividades (ACOES_SOMENTE_CSQ). Não é uma
- * variação de "ism": tem allowlist e endpoints próprios, por isso é nível
- * irmão, não uma flag dentro de "ism".
+ * Nível "csq": papel de coordenação da Daiane/Aline — hoje funcionalmente
+ * igual a "ism" em tudo (mesma allowlist ACOES_PROIBIDAS_ISM, mesma leitura
+ * de carteira/metas/cliente, mesmo NIVEIS_FILA_ATIVIDADES/
+ * NIVEIS_CRIAR_ATIVIDADE em api/clickup.js), só que sem `ismId` nenhum (nunca
+ * teve a restrição de "só a própria agenda", nem no connect do Google). Não
+ * é uma variação de "ism" no código (é nível irmão, com allowlist própria em
+ * NIVEIS/PERFIS) — mas na prática as permissões são equivalentes hoje.
  */
 export const PERFIS = [
   { env: 'AUTH_CONSULTA', nivel: 'consulta', csm: null, ismId: null, nome: 'Consulta Geral' },

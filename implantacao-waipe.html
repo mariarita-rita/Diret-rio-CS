@@ -922,20 +922,19 @@
     });
   });
 
-  // Quem pode registrar diagnóstico de churn / handoff de renovação num
-  // projeto — csq/gestao (coordenação) e csm (dono da carteira/retenção).
-  // ISM não participa desse fluxo (fora do escopo dele).
+  // Quem pode registrar diagnóstico de churn / handoff de renovação /
+  // lembrete num projeto — csq/gestao (coordenação), csm (dono da
+  // carteira/retenção) e ism (responsável pelo próprio projeto).
   function podeUsarAtividadesCsq(){
-    return sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao" || sessaoNivelAtual === "csm";
+    return sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao" || sessaoNivelAtual === "csm" || sessaoNivelAtual === "ism";
   }
 
-  // Aba "Atividades" (fila CSQ) só existe pra quem coordena entre fluxos
-  // (Daiane/Aline, nível "csq") e Gestão — ISM/CSM continuam vendo/agindo
-  // nos próprios projetos normalmente, só não têm essa fila agregada.
+  // Aba "Atividades" (fila agregada) — csq/gestao/ism. CSM continua vendo/
+  // agindo nos próprios projetos normalmente, só não tem essa fila agregada.
   function atualizarVisibilidadeAbaAtividades(){
     var tab = document.getElementById("tabAtividades");
     if (!tab) return;
-    var visivel = sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao";
+    var visivel = sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao" || sessaoNivelAtual === "ism";
     tab.style.display = visivel ? "" : "none";
     // Se a sessão caiu pra um nível sem acesso enquanto essa aba estava
     // ativa (ex: expirou e logou de novo com outro perfil), volta pra

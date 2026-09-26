@@ -250,14 +250,18 @@ function mapearAnexos(attachments) {
     .filter((a) => a.url);
 }
 
-// Nivel "ism" nao acessa dados financeiros (carteira/metas/cliente/set-field/
-// log-proposta, que e o log de propostas ligado a carteira) nem o pipeline de
-// proposta de implantacao (criar/salvar-proposta/confirmar-fechamento — isso
-// e trabalho de CSM/gestao; o ISM so entra depois, quando o projeto ja existe)
-// nem exclusao de projeto/comentario (so Gestao — o handler de cada uma ja
+// Nivel "ism"/"csq" LEEM carteira/metas/cliente (dados financeiros) no mesmo
+// nivel que "consulta" — so leitura, MRR sempre zerado (ver lerCarteira/
+// lerMetas/lerCliente) — nunca ESCREVEM nesses dados: set-field/log-proposta
+// continuam bloqueados aqui mesmo os dois passando por podeEscrever (que so
+// olha "e escritor em algum lugar do sistema", nao "pode escrever ISSO").
+// Tambem nao acessam o pipeline de proposta de implantacao
+// (criar/salvar-proposta/confirmar-fechamento — isso e trabalho de
+// CSM/gestao; o ISM so entra depois, quando o projeto ja existe) nem
+// exclusao de projeto/comentario (so Gestao — o handler de cada uma ja
 // checa isso de novo, aqui e so a primeira barreira, mesmo padrao das outras).
 const ACOES_PROIBIDAS_ISM = new Set([
-  'carteira', 'metas', 'cliente', 'set-field', 'log-proposta',
+  'set-field', 'log-proposta',
   'criar-implantacao', 'salvar-proposta-implantacao', 'confirmar-fechamento-implantacao',
   'excluir-implantacao', 'excluir-comentario-implantacao',
 ]);
@@ -268,12 +272,17 @@ const ACOES_PROIBIDAS_ISM = new Set([
 // conectado, só sem Meet automático).
 const ACOES_PROIBIDAS_CSM = new Set(['conectar-agenda-google']);
 
-// Fila CSQ (Atividades) — só quem coordena entre fluxos (Daiane/Aline) e
-// Gestão. ISM/CSM continuam vendo/agindo nos próprios projetos normalmente,
-// só não têm a fila agregada.
+// Fila AGREGADA de Atividades (ver todas, de todo projeto, e fechar
+// qualquer uma) — csq/gestao/ism. Registrar uma atividade NUM projeto
+// específico (botão "Criar atividade" dentro do projeto) é ainda mais
+// amplo: csq/gestao/csm/ism (csm é quem diagnostica churn/handoff de
+// renovação da própria carteira) — ver NIVEIS_CRIAR_ATIVIDADE logo abaixo.
+// CSM nunca tem a fila agregada, só continua agindo nos próprios projetos.
+const NIVEIS_FILA_ATIVIDADES = new Set(['csq', 'gestao', 'ism']);
 const ACOES_SOMENTE_CSQ = new Set([
-  'listar-atividades-csq', 'criar-atividade-csq', 'resolver-atividade-csq',
+  'listar-atividades-csq', 'resolver-atividade-csq',
 ]);
+const NIVEIS_CRIAR_ATIVIDADE = new Set(['csq', 'gestao', 'csm', 'ism']);
 
 export default async function handler(req, res) {
   // req.query, como req.body, e getter lazy no runtime da Vercel: fica dentro
@@ -293,17 +302,21 @@ export default async function handler(req, res) {
     const sessao = exigirSessao(req, res);
     if (!sessao) return undefined;
 
-    // Nivel "ism" e so implantacao: nada de carteira/metas/cliente (dados
-    // financeiros) nem do pipeline de proposta (isso e trabalho de CSM/gestao).
-    // Bloqueado aqui, ANTES de rotear pra funcao — nao depende de cada acao
-    // lembrar de checar sozinha.
+    // Nivel "ism"/"csq": sem escrita em carteira (set-field/log-proposta) nem
+    // no pipeline de proposta (isso e trabalho de CSM/gestao) — leitura de
+    // carteira/metas/cliente e permitida (mesmo nivel de "consulta", ver
+    // lerCarteira/lerMetas/lerCliente). Bloqueado aqui, ANTES de rotear pra
+    // funcao — nao depende de cada acao lembrar de checar sozinha.
     if ((sessao.nivel === 'ism' || sessao.nivel === 'csq') && ACOES_PROIBIDAS_ISM.has(acao)) {
       return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
     }
     if (sessao.nivel === 'csm' && ACOES_PROIBIDAS_CSM.has(acao)) {
       return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
     }
-    if (ACOES_SOMENTE_CSQ.has(acao) && sessao.nivel !== 'csq' && sessao.nivel !== 'gestao') {
+    if (ACOES_SOMENTE_CSQ.has(acao) && !NIVEIS_FILA_ATIVIDADES.has(sessao.nivel)) {
+      return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso à fila de Atividades.');
+    }
+    if (acao === 'criar-atividade-csq' && !NIVEIS_CRIAR_ATIVIDADE.has(sessao.nivel)) {
       return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso à fila de Atividades.');
     }
 
@@ -424,9 +437,10 @@ async function lerCarteira(res, sessao) {
   // Filtro por CSM ANTES de responder — a carteira dos outros nunca chega ao navegador.
   let visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.gerente, sessao.csm)) : linhas;
 
-  // consulta nao ve valores financeiros. O front tambem os esconde, mas quem
+  // consulta/ism/csq nao veem valores financeiros — mesmo nivel de acesso
+  // dos tres (ver ACOES_PROIBIDAS_ISM). O front tambem os esconde, mas quem
   // decide e o servidor: editar `session` no console nao revela MRR.
-  if (sessao.nivel === 'consulta') {
+  if (sessao.nivel === 'consulta' || sessao.nivel === 'ism' || sessao.nivel === 'csq') {
     visiveis = visiveis.map((l) => ({ ...l, mrr: 0 }));
   }
 
@@ -498,7 +512,8 @@ async function lerCliente(req, res, sessao) {
     return erro(res, 403, 'fora_da_carteira', 'Este cliente não está na sua carteira.');
   }
 
-  return res.status(200).json({ task: sessao.nivel === 'consulta' ? { ...linha, mrr: 0 } : linha });
+  const semValorFinanceiro = sessao.nivel === 'consulta' || sessao.nivel === 'ism' || sessao.nivel === 'csq';
+  return res.status(200).json({ task: semValorFinanceiro ? { ...linha, mrr: 0 } : linha });
 }
 
 const MESES_ROTULO = [
@@ -523,11 +538,13 @@ async function lerMetas(res, sessao) {
 
   const { periodos, periodoAtual, avisosGerais } = resolverPeriodos(linhas, individuais);
 
-  // consulta nao recebe valor financeiro nenhum, nem individual (lerCarteira zera o
-  // mrr) nem agregado. Agregado nao identifica o resultado de ninguem, mas continua
-  // sendo numero financeiro — e o README define consulta como perfil sem acesso a
-  // valor financeiro. Vale para os periodos, que carregam os limiares da equipe.
-  if (sessao.nivel === 'consulta') {
+  // consulta/ism/csq nao recebem valor financeiro nenhum, nem individual
+  // (lerCarteira zera o mrr) nem agregado. Agregado nao identifica o
+  // resultado de ninguem, mas continua sendo numero financeiro — e o README
+  // define consulta (e agora ism/csq, mesmo nivel) como perfil sem acesso a
+  // valor financeiro. Vale para os periodos, que carregam os limiares da
+  // equipe.
+  if (sessao.nivel === 'consulta' || sessao.nivel === 'ism' || sessao.nivel === 'csq') {
     res.setHeader('Cache-Control', CACHE_LEITURA);
     return res.status(200).json({
       tasks: [], periodos: [], periodoAtual: null, avisosGerais: [],
@@ -3291,10 +3308,6 @@ async function criarReservaAcao(req, res, sessao) {
   if (!RESPONSAVEL_IDS_VALIDOS.has(ismId)) {
     return erro(res, 400, 'ism_invalido', 'Selecione um responsável válido.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && Number(sessao.ismId) !== ismId) {
-    return erro(res, 403, 'fora_do_escopo', 'Você só pode registrar reserva na própria agenda.');
-  }
-
   const inicio = epocaOuNula(corpo.inicio);
   const fim = epocaOuNula(corpo.fim);
   if (inicio === null || fim === null || fim <= inicio) {
@@ -3356,10 +3369,6 @@ async function atualizarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
-    return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
-  }
-
   const projetoId = projetoDaDescricaoReserva(tarefa.description);
   const linkReuniao = texto(corpo.linkReuniao, 300);
   // Convidados so muda quando vem explicito no corpo — senao preserva o que
@@ -3411,10 +3420,6 @@ async function marcarComparecimentoReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
-    return erro(res, 403, 'fora_do_escopo', 'Você só pode alterar reservas da própria agenda.');
-  }
-
   await atualizarTask(corpo.id, {
     markdown_description: linhasDescricaoReserva({
       projetoId: projetoDaDescricaoReserva(tarefa.description),
@@ -3469,9 +3474,6 @@ async function reagendarReservaAcao(req, res, sessao) {
   const tarefa = await obterTask(corpo.id);
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
-  }
-  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
-    return erro(res, 403, 'fora_do_escopo', 'Você só pode reagendar reservas da própria agenda.');
   }
   const statusAtual = statusDaDescricaoReserva(tarefa.description);
   if (statusAtual !== 'agendado') {
@@ -3675,10 +3677,6 @@ async function cancelarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
-  if (sessao.nivel === 'ism' && sessao.ismId && responsavelIdDaReserva(tarefa) !== Number(sessao.ismId)) {
-    return erro(res, 403, 'fora_do_escopo', 'Você só pode cancelar reservas da própria agenda.');
-  }
-
   await excluirTask(corpo.id);
   return res.status(200).json({ ok: true });
 }
@@ -3815,9 +3813,6 @@ async function vincularAgendamentoGoogleAcao(req, res, sessao) {
   const ismId = Number(corpo.ismId);
   if (!ISM_OPCOES.some((i) => i.id === ismId)) {
     return erro(res, 400, 'ism_invalido', 'ISM inválido.');
-  }
-  if (sessao.nivel === 'ism' && sessao.ismId && Number(sessao.ismId) !== ismId) {
-    return erro(res, 403, 'fora_do_escopo', 'Você só pode vincular agendamentos da própria agenda.');
   }
   const googleEventId = texto(corpo.googleEventId, 200);
   if (!googleEventId) {

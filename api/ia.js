@@ -740,6 +740,13 @@ export async function montarRelatorioFinalizacao(projeto) {
 }
 
 async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
+  // Só Gestão — mesma trava de quem pode SALVAR (`finalizacao` em
+  // atualizarImplantacaoAcao, api/clickup.js); antes só o botão era
+  // escondido no front pra quem não é Gestão, sem trava correspondente
+  // aqui (quem chamasse a API direto gastava uma chamada de IA à toa).
+  if (sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'nivel_nao_permitido', 'Só o perfil Gestão pode gerar o relatório de finalização.');
+  }
   let corpo;
   try {
     corpo = await lerCorpo(req);
