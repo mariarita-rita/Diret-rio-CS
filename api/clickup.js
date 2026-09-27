@@ -3194,6 +3194,7 @@ function atividadeCsqParaFora(t) {
     status: statusDaDescricaoAtividade(t.description),
     resolucao: resolucaoDaDescricaoAtividade(t.description) || '',
     criadaEm: Number(t.date_created) || null,
+    dueDate: Number(t.due_date) || null,
   };
 }
 

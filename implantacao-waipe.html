@@ -3668,7 +3668,7 @@
           '<div id="stepContent"></div>' +
         '</main>' +
         '<aside class="project-detail-sidebar project-detail-sidebar-ops" aria-label="Acompanhamento do projeto">' +
-          '<div id="agendaProjetoWrap"></div>' + '<div id="anexosProjetoWrap"></div>' + '<div id="comentariosProjetoWrap"></div>' +
+          '<div id="agendaProjetoWrap"></div>' + '<div id="atividadesCsqProjetoWrap"></div>' + '<div id="anexosProjetoWrap"></div>' + '<div id="comentariosProjetoWrap"></div>' +
         '</aside>' +
         '<aside class="project-detail-sidebar project-detail-sidebar-comunicacao" aria-label="Comunicação do projeto">' +
           '<div id="analiseReuniaoWrap"></div>' + '<div id="conversaUmblerWrap"></div>' + '<div id="emailProjetoWrap"></div>' +
@@ -3778,6 +3778,7 @@
     renderConversaUmbler(dadosProjeto.projeto.id, document.getElementById("conversaUmblerWrap"));
     renderAnaliseReuniao(dadosProjeto.projeto.id, document.getElementById("analiseReuniaoWrap"));
     renderAgenda(dadosProjeto.projeto.id, document.getElementById("agendaProjetoWrap"));
+    renderAtividadesCsq(dadosProjeto.projeto.id, document.getElementById("atividadesCsqProjetoWrap"));
     renderEmailProjeto(dadosProjeto.projeto.id, document.getElementById("emailProjetoWrap"));
     renderConteudoProjeto();
   }
@@ -5084,6 +5085,37 @@
       wireAgenda(projetoId, container);
     }).catch(function(){
       container.innerHTML = '<div class="card"><h2>📅 Agenda</h2><div class="sub">Não deu para carregar a agenda.</div></div>';
+    });
+  }
+
+  var ROTULO_TIPO_ATIVIDADE_CSQ = { churn: "Churn", renovacao: "Renovação", lembrete: "Lembrete" };
+
+  // Mostra, direto na tela do projeto, se existe algum Churn/Renovação/
+  // Lembrete pendente pra ele — antes só dava pra ver abrindo a aba
+  // "Atividades" (fila agregada de todos os projetos) e procurando manualmente.
+  // Só csq/gestao/ism têm acesso à listagem agregada no servidor (mesmo
+  // corte de atualizarVisibilidadeAbaAtividades) — CSM nem tenta a chamada.
+  function renderAtividadesCsq(projetoId, container){
+    if (!container) return;
+    if (!(sessaoNivelAtual === "csq" || sessaoNivelAtual === "gestao" || sessaoNivelAtual === "ism")){
+      container.innerHTML = "";
+      return;
+    }
+    container.innerHTML = '<div class="card"><h2>📌 Lembretes e atividades</h2><div class="sub">Carregando…</div></div>';
+    apiGet("listar-atividades-csq").then(function(resp){
+      var atividades = (resp.atividades || []).filter(function(a){ return a.projetoId === projetoId; });
+      container.innerHTML = '<div class="card"><h2>📌 Lembretes e atividades</h2>' +
+        '<div class="sub">Churn, renovação ou lembrete pendente vinculado a este projeto.</div>' +
+        (atividades.length ? atividades.map(function(a){
+          return '<div class="apmeta" style="margin-top:8px; display:flex; flex-direction:column; gap:2px;">' +
+            '<div><strong>' + esc(ROTULO_TIPO_ATIVIDADE_CSQ[a.tipo] || a.tipo || "Atividade") + '</strong>' +
+            (a.dueDate ? ' — prazo ' + esc(fmtDataHora(a.dueDate)) : "") + '</div>' +
+            '<div style="color:var(--muted); font-size:12px;">' + esc(a.alvo || "") + '</div>' +
+          '</div>';
+        }).join("") : '<div class="sub" style="margin-top:8px;">Nenhuma atividade pendente pra este projeto.</div>') +
+      '</div>';
+    }).catch(function(){
+      container.innerHTML = "";
     });
   }
 
