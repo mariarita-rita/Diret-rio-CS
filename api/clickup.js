@@ -138,6 +138,8 @@ import {
   corpoDoModelo,
   criarAtividadeCsq,
   criarClienteCarteira,
+  atualizarGerenteCarteira,
+  localizarCarteiraPorIdNucleo,
   atualizarComentario,
   criarComentario,
   criarModeloMensagem,
@@ -2176,12 +2178,21 @@ async function definirGerenteContasAcao(req, res, sessao) {
     ),
   });
 
-  await criarClienteCarteira({
-    nome: texto(estadoAtual.cliente, 120) || projeto.name,
-    idNucleo,
-    cnpj: texto(estadoAtual.cnpj, 20),
-    gerenteOpcaoId: gerente.id,
-  });
+  // Cliente com esse ID Núcleo já cadastrado na Carteira (ex: outro
+  // projeto de implantação do mesmo cliente já passou por este fluxo
+  // antes) — só atualiza o gerente ali, não cria uma segunda entrada
+  // duplicada pro mesmo cliente.
+  const carteiraExistenteId = await localizarCarteiraPorIdNucleo(idNucleo);
+  if (carteiraExistenteId) {
+    await atualizarGerenteCarteira(carteiraExistenteId, gerente.id);
+  } else {
+    await criarClienteCarteira({
+      nome: texto(estadoAtual.cliente, 120) || projeto.name,
+      idNucleo,
+      cnpj: texto(estadoAtual.cnpj, 20),
+      gerenteOpcaoId: gerente.id,
+    });
+  }
 
   return res.status(200).json({ ok: true, gerente: gerente.nome });
 }

@@ -926,6 +926,18 @@ export async function criarClienteCarteira({ nome, idNucleo, cnpj, gerenteOpcaoI
   return criado;
 }
 
+/**
+ * Atualiza só o Gerente de Contas de um cliente que JÁ existe na Carteira
+ * (mesmo ID Núcleo) — usado por definir-gerente-contas quando
+ * localizarCarteiraPorIdNucleo acha uma entrada existente, pra não criar
+ * uma segunda task duplicada pro mesmo cliente (ex: outro projeto de
+ * implantação do mesmo ID Núcleo já passou por este fluxo antes).
+ */
+export async function atualizarGerenteCarteira(taskId, gerenteOpcaoId) {
+  await gravarCampo(taskId, CF.GERENTE, gerenteOpcaoId);
+  invalidarCarteira();
+}
+
 // ── Token assinado de projeto ────────────────────────────────────────────
 // Mesmo esquema HMAC de assinarEstadoGoogle/verificarEstadoGoogle
 // (api/_lib/google.js) — payload base64url + HMAC-SHA256 com
