@@ -2274,6 +2274,7 @@
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
   var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM); só existe na aba "Em andamento"
+  var filtroSlaAtiva = ""; // "" = todas | "atrasado" | "vencendo" | "pausado" | "nao_iniciado" — só existe na aba "Em andamento"
   // "lista" | "agrupado_fase" | "agrupado_item" — agrupado_fase só existe em
   // "Em andamento" (Entregues não agrupa por fase: já estão todos
   // "entregue"); agrupado_item existe nas duas abas.
@@ -2833,6 +2834,17 @@
     // visão rápida, não substitui abrir o projeto), mas bate o comportamento
     // padrão do resto do app e nunca deixa um projeto sumir da tela.
     function faseEfetiva(p){ return p.faseProjetoManual || p.faseProjetoDerivada || "nao_iniciado"; }
+    // "nao_iniciado" não vem de slaInfo (projeto sem dataInicioReal ainda
+    // devolve null ali) — é a única opção deste filtro checada pela fase,
+    // não pelo prazo; as outras três batem com o status que o badge de SLA
+    // já usa (ver slaInfo/slaBadgeHtml), só que aqui pra filtrar a lista.
+    function situacaoSlaBate(p, alvo){
+      if (alvo === "nao_iniciado") return faseEfetiva(p) === "nao_iniciado";
+      var sla = slaInfo(p);
+      if (!sla) return false;
+      if (alvo === "vencendo") return sla.status === "proximo";
+      return sla.status === alvo;
+    }
     var lista = (projetosCache || []).filter(function(p){
       // Proposta ainda nao fechada nao e projeto de implantacao de verdade
       // ainda — so aparece/edita pelo simulador ("Carregar proposta salva"),
@@ -2846,6 +2858,7 @@
       // Fase só existe como filtro em "Em andamento" — em Entregues todo
       // projeto já está "entregue", filtrar por fase não faz sentido.
       if (!entregues && filtroFaseAtiva && faseEfetiva(p) !== filtroFaseAtiva) return false;
+      if (!entregues && filtroSlaAtiva && !situacaoSlaBate(p, filtroSlaAtiva)) return false;
       if (entregues && !dataFechamentoBate(p.dataFimReal)) return false;
       if (entregues && filtroRiscoAtivo && (!p.finalizacao || p.finalizacao.riscoPercebido !== filtroRiscoAtivo)) return false;
       if (entregues && filtroSatisfacaoAtiva && (!p.finalizacao || p.finalizacao.satisfacaoPercebida !== filtroSatisfacaoAtiva)) return false;
@@ -2896,6 +2909,12 @@
         '<select id="filtroFaseProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
         '<option value=""' + (filtroFaseAtiva ? "" : " selected") + '>Todas</option>' +
         FASES_ORDEM_PROJETO.map(function(f){ return '<option value="' + esc(f) + '"' + (f === filtroFaseAtiva ? " selected" : "") + '>' + esc(FASE_LABEL[f] || f) + '</option>'; }).join("") +
+        '</select></div>' +
+        '<div style="' + filtroWrapStyle(filtroSlaAtiva) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Situação de SLA</label>' +
+        '<select id="filtroSlaProjetos" class="form-input" style="width:auto; display:inline-block; font-size:12px; padding:4px 8px;">' +
+        '<option value=""' + (filtroSlaAtiva ? "" : " selected") + '>Todas</option>' +
+        [["atrasado", "🔴 Atrasado"], ["vencendo", "🟡 SLA vencendo"], ["pausado", "⏸️ SLA pausado"], ["nao_iniciado", "Não iniciado"]]
+          .map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === filtroSlaAtiva ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") +
         '</select></div>' +
         '<div class="modo-visualizacao" style="vertical-align:top;">' +
         '<button type="button" id="btnModoLista" class="' + (modoVisualizacaoProjetos === "lista" ? "ativo" : "") + '">📋 Lista</button>' +
@@ -3007,7 +3026,7 @@
       '</div>';
     }
 
-    var temFiltroAtivo = filtroCsmAtivo || filtroIsmAtivo || filtroFaseAtiva || filtroBuscaProjeto || filtroItemAtivo
+    var temFiltroAtivo = filtroCsmAtivo || filtroIsmAtivo || filtroFaseAtiva || filtroSlaAtiva || filtroBuscaProjeto || filtroItemAtivo
       || filtroFechamentoAtivo || filtroRiscoAtivo || filtroSatisfacaoAtiva || filtroAlertaAtivo;
     if (!lista.length){
       wrap.innerHTML = filtroHtml + '<div class="callout"><div class="dot"></div><div>' +
@@ -3135,6 +3154,11 @@
     var selFase = wrap.querySelector("#filtroFaseProjetos");
     if (selFase) selFase.addEventListener("change", function(){
       filtroFaseAtiva = selFase.value;
+      renderListaProjetosWrap();
+    });
+    var selSla = wrap.querySelector("#filtroSlaProjetos");
+    if (selSla) selSla.addEventListener("change", function(){
+      filtroSlaAtiva = selSla.value;
       renderListaProjetosWrap();
     });
     var btnModoLista = wrap.querySelector("#btnModoLista");
