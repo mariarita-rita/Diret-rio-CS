@@ -1657,7 +1657,13 @@ export function cnpjDoAgendamentoGoogle(description) {
   for (const bloco of blocos) {
     const linhas = bloco.split('\n').map((l) => l.trim()).filter(Boolean);
     if (!linhas.length || !/cnpj/i.test(linhas[0])) continue;
-    const digitos = soDigitos(linhas.slice(1).join(''));
+    // A resposta pode vir em linha(s) separada(s) da pergunta ("CNPJ\n123...")
+    // ou colada na mesma linha ("CNPJ (sem pontuação): 123...", formato real
+    // confirmado — a página de agendamento do Google nem sempre quebra
+    // pergunta/resposta em linhas diferentes). O rótulo em si nunca tem
+    // dígito, então ler o bloco inteiro cobre os dois formatos sem risco de
+    // pegar dígito da pergunta por engano.
+    const digitos = soDigitos(linhas.join(''));
     if (digitos) return digitos;
   }
   return null;
