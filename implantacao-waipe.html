@@ -2288,6 +2288,24 @@
   var MIN_INTERVALO_SYNC_MS = 300000; // 5min — agenda/agendamentos não precisam de tempo real
   var agendamentosSemProjetoUltimaBuscaEm = 0;
   var compromissosHojeUltimaBuscaEm = 0;
+  // listar-atividades-csq é chamada de dois lugares (a aba Atividades E o
+  // card "Lembretes e atividades" de qualquer projeto aberto) — sem cache,
+  // ir de um pro outro repetia a mesma busca cara (2026-09-28: junto com o
+  // auto-refresh, era o maior consumo de chamadas ao ClickUp do painel).
+  var atividadesCsqCache = null;
+  var atividadesCsqCacheEm = 0;
+  var ATIVIDADES_CSQ_CACHE_MS = 60000;
+  function buscarAtividadesCsq(){
+    var agora = Date.now();
+    if (atividadesCsqCache && agora - atividadesCsqCacheEm < ATIVIDADES_CSQ_CACHE_MS){
+      return Promise.resolve({ atividades: atividadesCsqCache });
+    }
+    return apiGet("listar-atividades-csq").then(function(resp){
+      atividadesCsqCache = resp.atividades || [];
+      atividadesCsqCacheEm = Date.now();
+      return resp;
+    });
+  }
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" | "atividades" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
@@ -2513,7 +2531,7 @@
       '<div data-atividades-wrap><div class="sub">Carregando…</div></div>';
     renderCompromissosHoje(root.querySelector("#compromissosHojeWrap"));
     var wrap = root.querySelector("[data-atividades-wrap]");
-    apiGet("listar-atividades-csq").then(function(resp){
+    buscarAtividadesCsq().then(function(resp){
       var lista = (resp && resp.atividades) || [];
       if (!lista.length){
         wrap.innerHTML = '<div class="callout"><div class="dot"></div><div>Nenhuma atividade pendente agora.</div></div>';
@@ -5232,7 +5250,7 @@
       return;
     }
     container.innerHTML = '<div class="card"><h2>📌 Lembretes e atividades</h2><div class="sub">Carregando…</div></div>';
-    apiGet("listar-atividades-csq").then(function(resp){
+    buscarAtividadesCsq().then(function(resp){
       var atividades = (resp.atividades || []).filter(function(a){ return a.projetoId === projetoId; });
       container.innerHTML = '<div class="card"><h2>📌 Lembretes e atividades</h2>' +
         '<div class="sub">Churn, renovação ou lembrete pendente vinculado a este projeto.</div>' +
