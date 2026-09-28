@@ -2279,7 +2279,7 @@
   // de aba e voltar algumas vezes. Agora só busca de novo depois de
   // MIN_INTERVALO_SYNC_MS — uma chamada de filtro/troca de aba no meio
   // desse intervalo só redesenha com o que já tem na tela.
-  var MIN_INTERVALO_SYNC_MS = 60000;
+  var MIN_INTERVALO_SYNC_MS = 300000; // 5min — agenda/agendamentos não precisam de tempo real
   var agendamentosSemProjetoUltimaBuscaEm = 0;
   var compromissosHojeUltimaBuscaEm = 0;
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" | "atividades" — qual aba de projetos esta ativa
@@ -3266,7 +3266,7 @@
   // ativa E a tela mostrada é a LISTA — nunca em cima do assistente de
   // novo projeto nem de um projeto aberto, onde o estado é local (sim,
   // dadosProjeto) e um refresh por baixo derrubaria edição em curso.
-  var AUTO_REFRESH_PROJETOS_MS = 45000;
+  var AUTO_REFRESH_PROJETOS_MS = 60000; // 1min — status/ISM/CSM do projeto merece ficar mais fresco que a agenda
   function podeAutoAtualizarProjetos(){
     if (document.hidden) return false; // aba do navegador em segundo plano
     if (wizard || projetoAtualId) return false;
