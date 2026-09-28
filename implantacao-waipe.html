@@ -2877,7 +2877,14 @@
       return 'margin-bottom:12px;display:inline-block;margin-right:16px;' +
         (ativo ? 'background:#ffe5a5;border-radius:8px;padding:4px 8px;' : '');
     }
+    // Botão só pra Gestão, só em "Em andamento" — primeira versão, sem
+    // rodar sozinho nem por ISM: a usuária pediu pra testar assim antes de
+    // decidir se abre pros ISMs ou vira rotina automática.
+    var atencaoEquipeHtml = (!entregues && sessaoNivelAtual === "gestao")
+      ? '<div style="margin-bottom:12px;"><button type="button" class="btn-flow-secondary" id="btnAnaliseAtencaoEquipe">🔎 O que precisa de atenção da equipe</button></div>'
+      : "";
     var filtroHtml =
+      atencaoEquipeHtml +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
       '<div>' +
       '<div style="' + filtroWrapStyle(filtroBuscaProjeto) + '"><label style="font-size:12px; color:var(--muted); margin-right:6px;">Buscar projeto</label>' +
@@ -3160,6 +3167,10 @@
     if (selSla) selSla.addEventListener("change", function(){
       filtroSlaAtiva = selSla.value;
       renderListaProjetosWrap();
+    });
+    var btnAnaliseAtencaoEquipe = wrap.querySelector("#btnAnaliseAtencaoEquipe");
+    if (btnAnaliseAtencaoEquipe) btnAnaliseAtencaoEquipe.addEventListener("click", function(){
+      rodarAnaliseAtencaoEquipe(btnAnaliseAtencaoEquipe);
     });
     var btnModoLista = wrap.querySelector("#btnModoLista");
     if (btnModoLista) btnModoLista.addEventListener("click", function(){
@@ -4391,6 +4402,43 @@
     }).catch(function(){
       container.innerHTML = '<div class="card"><h2>📧 E-mail</h2><div class="sub">Não deu para carregar.</div></div>';
     });
+  }
+
+  // Análise sob demanda (não roda sozinha, não é diária) do que precisa de
+  // atenção em TODA a carteira — Gestão clica quando achar necessário, não
+  // por ISM. Reaproveita os mesmos 3 fetches que já alimentam a fila CSQ
+  // (implantações/reservas/atividades); o cruzamento de SLA/sem-ISM/possível
+  // esquecimento é feito no servidor (ver analise-atencao-equipe, api/ia.js).
+  function rodarAnaliseAtencaoEquipe(botao){
+    var textoOriginal = botao.textContent;
+    botao.disabled = true; botao.textContent = "Analisando…";
+    apiPostIa("analise-atencao-equipe", {}).then(function(r){
+      abrirModalAtencaoEquipe(r.analise);
+    }).catch(function(e){
+      showSimToast(mensagemErro(e) || "Não deu para gerar a análise.");
+    }).then(function(){
+      botao.disabled = false; botao.textContent = textoOriginal;
+    });
+  }
+
+  function abrirModalAtencaoEquipe(texto){
+    var overlay = document.getElementById("modalAtencaoEquipeOverlay");
+    if (!overlay){
+      overlay = document.createElement("div");
+      overlay.id = "modalAtencaoEquipeOverlay";
+      overlay.style.cssText = "position:fixed;inset:0;background:rgba(16,16,51,.45);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;";
+      document.body.appendChild(overlay);
+      overlay.addEventListener("click", function(e){ if (e.target === overlay) overlay.style.display = "none"; });
+    }
+    overlay.innerHTML =
+      '<div class="card" style="max-width:640px;width:100%;max-height:85vh;overflow:auto;">' +
+        '<h2 style="margin-bottom:10px;">🔎 O que precisa de atenção da equipe</h2>' +
+        '<div class="sub" style="margin-bottom:10px;">Gerado agora, com base nos dados atuais do painel — não fica salvo em lugar nenhum.</div>' +
+        '<div style="white-space:pre-wrap; font-size:13px; line-height:1.5;">' + esc(texto) + '</div>' +
+        '<div style="margin-top:14px;"><button type="button" class="btn-reset" id="btnFecharModalAtencaoEquipe">Fechar</button></div>' +
+      '</div>';
+    overlay.style.display = "flex";
+    document.getElementById("btnFecharModalAtencaoEquipe").onclick = function(){ overlay.style.display = "none"; };
   }
 
   // Modal de composição, no mesmo padrão do abrirModalModelos: em vez de

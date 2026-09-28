@@ -3192,7 +3192,7 @@ function assigneeIdDaAtividade(t, alvo) {
   return pessoa?.id || null;
 }
 
-function atividadeCsqParaFora(t) {
+export function atividadeCsqParaFora(t) {
   const alvo = alvoDaDescricaoAtividade(t.description) || '';
   return {
     id: t.id,
@@ -3929,7 +3929,7 @@ const DIAS_UTEIS_PARADO_MIN = 3;
  * Projeto já fechado (Closed/concluído) não entra: parado não faz sentido
  * pra algo que já terminou.
  */
-function atividadesVirtuaisParadas(projetos, reservas) {
+export function atividadesVirtuaisParadas(projetos, reservas) {
   const agora = Date.now();
   return projetos
     .filter((t) => t.status?.status !== 'Closed' && t.status?.status !== 'concluído')
@@ -3962,7 +3962,7 @@ function atividadesVirtuaisParadas(projetos, reservas) {
  * VIRTUAL, lido direto de listarReservas() (marcarComparecimentoReservaAcao
  * já existe, só nunca tinha sido lido como fila de trabalho).
  */
-function atividadesVirtuaisNaoComparecimento(reservas, projetosValidosIds) {
+export function atividadesVirtuaisNaoComparecimento(reservas, projetosValidosIds) {
   return reservas
     .filter((r) => statusDaDescricaoReserva(r.description) === 'nao_compareceu')
     .filter((r) => !proximaReservaIdDaDescricaoReserva(r.description))

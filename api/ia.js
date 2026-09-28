@@ -84,8 +84,11 @@ import { exigirSessao, podeEscrever, pertenceAoCsm, ErroConfig } from './_lib/au
 import {
   criarComentario,
   csmDaDescricaoImplantacao,
+  diasUteisEntre,
   ISM_OPCOES,
+  listarAtividadesCsq,
   listarComentarios,
+  listarImplantacoes,
   listarReservas,
   LISTA_IMPLANTACOES_WAIPE,
   obterConversaFlowIa,
@@ -96,6 +99,7 @@ import {
   salvarConversaFlowIa,
   statusDaDescricaoReserva,
 } from './_lib/clickup.js';
+import { atividadeCsqParaFora, atividadesVirtuaisNaoComparecimento, atividadesVirtuaisParadas } from './clickup.js';
 import { telefoneParaE164, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 const MODELO = 'claude-sonnet-5';
@@ -776,6 +780,125 @@ async function gerarRelatorioFinalizacaoAcao(req, res, sessao) {
   return res.status(200).json(relatorio);
 }
 
+// ── Ação: analise-atencao-equipe ────────────────────────────────────────────
+//
+// Primeira versão, só pra Gestão (nunca automática, sob demanda — a usuária
+// quer testar antes de decidir se abre pra ISM ou vira rotina diária). Todo
+// o cruzamento (SLA/sem-ISM/possível esquecimento/parado/não comparecimento/
+// lembretes) é calculado aqui, em código — a IA só recebe os fatos já prontos
+// e escreve um resumo priorizado, nunca infere nem inventa nada. Reaproveita
+// os 3 mesmos fetches que já alimentam listar-atividades-csq (nenhuma
+// chamada nova ao ClickUp por projeto).
+
+const SLA_DIAS_UTEIS_IA = { urgente: 3, alta: 5, normal: 10, baixa: 15 };
+const FASES_SLA_PAUSADAS_IA = new Set(['agendado', 'aguardando_cliente']);
+
+const INSTRUCOES_ATENCAO_EQUIPE = `Você ajuda a Gestão de Sucesso do Cliente da Londrisoft a decidir onde focar a atenção da equipe de implantação, entre todos os projetos em aberto.
+
+Você recebe fatos objetivos, já calculados por código (nada aqui foi inferido por você), organizados em categorias:
+- semIsm: projeto aberto sem nenhum ISM responsável atribuído.
+- slaAtrasado / slaVencendo / slaPausado: situação do prazo de SLA de cada projeto (diasAtraso/diasRestantes em dias úteis).
+- possivelEsquecimento: todos os itens do projeto já foram marcados entregues/cancelados, mas o projeto em si nunca foi fechado — provável esquecimento do ISM.
+- projetosParados: sem nenhuma interação registrada há vários dias úteis, sem agendamento futuro.
+- naoComparecimento: reunião marcada como "não compareceu" e nunca reagendada.
+- lembretes: lembrete/churn/renovação já registrado manualmente, ainda pendente.
+
+Escreva em português, direto e acionável, pra quem gerencia a equipe (não pra um ISM individual sobre o próprio dia). Organize por prioridade (mais urgente primeiro) e agrupe por ISM responsável quando fizer sentido. Seja conciso — liste os projetos, não escreva parágrafos longos. Se uma categoria vier vazia, não a mencione. Nunca invente um fato que não esteja nos dados — só reorganize e priorize o que foi dado.`;
+
+async function analiseAtencaoEquipeAcao(req, res, sessao) {
+  if (sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'somente_gestao', 'Só o perfil Gestão pode gerar essa análise.');
+  }
+
+  const [tasks, reservas, registradas] = await Promise.all([
+    listarImplantacoes(),
+    listarReservas(),
+    listarAtividadesCsq(),
+  ]);
+  const projetos = tasks.filter((t) => !t.parent);
+  const abertos = projetos.filter((t) => t.status?.status !== 'concluído');
+  const projetosValidosIds = new Set(projetos.map((t) => t.id));
+  const nomeIsm = (id) => ISM_OPCOES.find((i) => i.id === Number(id))?.nome || null;
+  const agora = Date.now();
+
+  const semIsm = [];
+  const slaAtrasado = [];
+  const slaVencendo = [];
+  const slaPausado = [];
+  const possivelEsquecimento = [];
+
+  for (const t of abertos) {
+    const estado = parseWaipeState(t.description);
+    if (estado.etapaAtual === 'proposta') continue;
+
+    const ismIds = t.assignees?.length
+      ? t.assignees.map((a) => Number(a.id))
+      : (Array.isArray(estado.ismIds) ? estado.ismIds.map(Number) : []);
+    const ismNomes = ismIds.map(nomeIsm).filter(Boolean);
+    const cliente = texto(estado.cliente, 120) || t.name;
+    const fase = estado.faseProjetoManual || null;
+
+    if (!ismIds.length) {
+      semIsm.push({ cliente, projetoId: t.id });
+    }
+
+    const agentesTotal = Number(estado.agentesTotal) || 0;
+    const concluidos = Array.isArray(estado.concluidos) ? estado.concluidos.length : 0;
+    if (agentesTotal > 0 && concluidos >= agentesTotal && fase !== 'entregue' && fase !== 'cancelado') {
+      possivelEsquecimento.push({ cliente, projetoId: t.id, ism: ismNomes.join(', ') || null });
+    }
+
+    if (Number.isFinite(Number(estado.dataInicioReal)) && fase !== 'entregue' && fase !== 'cancelado') {
+      const urgencia = estado.urgencia || 'normal';
+      const regua = SLA_DIAS_UTEIS_IA[urgencia] || SLA_DIAS_UTEIS_IA.normal;
+      const pausadoAgora = FASES_SLA_PAUSADAS_IA.has(fase);
+      let diasPausados = Number(estado.pausaSlaAcumuladaDiasUteis) || 0;
+      if (pausadoAgora && estado.pausaSlaDesde) {
+        diasPausados += diasUteisEntre(Number(estado.pausaSlaDesde), agora);
+      }
+      const diasDecorridos = diasUteisEntre(Number(estado.dataInicioReal), agora) - diasPausados;
+      const restantes = regua - diasDecorridos;
+      const item = { cliente, projetoId: t.id, ism: ismNomes.join(', ') || null, urgencia };
+      if (pausadoAgora) slaPausado.push(item);
+      else if (restantes < 0) slaAtrasado.push({ ...item, diasAtraso: -restantes });
+      else if (restantes <= 2) slaVencendo.push({ ...item, diasRestantes: restantes });
+    }
+  }
+
+  const projetosParados = atividadesVirtuaisParadas(projetos, reservas)
+    .map((a) => ({ cliente: a.cliente, projetoId: a.projetoId, diasUteis: a.diasUteis }));
+  const naoComparecimento = atividadesVirtuaisNaoComparecimento(reservas, projetosValidosIds)
+    .map((a) => ({ cliente: a.cliente, projetoId: a.projetoId }));
+
+  const nomeProjeto = new Map(projetos.map((t) => [t.id, t.name]));
+  const lembretes = registradas
+    .map(atividadeCsqParaFora)
+    .filter((a) => a.status !== 'resolvida' && projetosValidosIds.has(a.projetoId))
+    .map((a) => ({
+      cliente: nomeProjeto.get(a.projetoId) || '',
+      tipo: a.tipo,
+      alvo: a.alvo,
+      prazo: a.dueDate ? new Date(a.dueDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null,
+    }));
+
+  const fatos = { semIsm, slaAtrasado, slaVencendo, slaPausado, possivelEsquecimento, projetosParados, naoComparecimento, lembretes };
+  const totalAchados = Object.values(fatos).reduce((n, arr) => n + arr.length, 0);
+  if (!totalAchados) {
+    return res.status(200).json({
+      ok: true,
+      analise: 'Nada precisando de atenção agora — todos os projetos em aberto estão dentro do prazo, com ISM atribuído e sem pendências detectadas.',
+    });
+  }
+
+  const analise = await chamarClaudeTexto({
+    system: INSTRUCOES_ATENCAO_EQUIPE,
+    mensagem: JSON.stringify(fatos),
+    maxTokens: 2000,
+  });
+
+  return res.status(200).json({ ok: true, analise: texto(analise, 6000) });
+}
+
 const RISCO_PERCEBIDO_VALIDOS = new Set(['baixo', 'medio', 'alto']);
 const SATISFACAO_PERCEBIDA_VALIDOS = new Set(['positiva', 'neutra', 'negativa', 'indeterminada']);
 
@@ -968,6 +1091,7 @@ const ACOES_IA = {
   'resumir-conversa-umbler': resumirConversaUmblerAcao,
   'analisar-reuniao-implantacao': analisarReuniaoImplantacaoAcao,
   'gerar-relatorio-finalizacao': gerarRelatorioFinalizacaoAcao,
+  'analise-atencao-equipe': analiseAtencaoEquipeAcao,
   'gerar-secoes-proposta': gerarSecoesPropostaAcao,
   'carregar-flow-waipe': carregarFlowWaipeAcao,
   'gerar-flow-waipe': gerarFlowWaipeAcao,
