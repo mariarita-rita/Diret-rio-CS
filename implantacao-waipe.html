@@ -914,6 +914,10 @@
       // pra lista (não fica preso num projeto/wizard aberto na aba errada).
       if (tab === "projetos" || tab === "entregues" || tab === "atividades"){
         filtroProjetosAtivo = tab === "projetos" ? "andamento" : tab;
+        if (tab === "entregues" && !filtroFechamentoDefaultAplicado){
+          filtroFechamentoDefaultAplicado = true;
+          filtroFechamentoAtivo = "mes";
+        }
         projetoAtualId = null;
         wizard = null;
         if (typeof renderProjetosPanel === "function") renderProjetosPanel();
@@ -1479,6 +1483,7 @@
         sessaoNivelAtual = respostaLogin && respostaLogin.nivel || null;
         sessaoNomeAtual = respostaLogin && respostaLogin.nome || null;
         loginPendente = false;
+        aplicarFiltroIsmPadrao();
         carregarPreferenciaVisualizacao();
         renderIdentidadeSessao();
         atualizarVisibilidadeAbaAtividades();
@@ -1503,6 +1508,7 @@
     fetch("/api/login", { credentials: "same-origin" }).then(function(r){ return r.json(); }).then(function(j){
       sessaoNivelAtual = j && j.autenticado ? j.nivel : null;
       sessaoNomeAtual = j && j.autenticado ? j.nome : null;
+      aplicarFiltroIsmPadrao();
       carregarPreferenciaVisualizacao();
       renderIdentidadeSessao();
       atualizarVisibilidadeAbaAtividades();
@@ -2285,6 +2291,19 @@
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" | "atividades" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
+  /**
+   * ISM loga já filtrado pro próprio nome (pedido explícito da usuária,
+   * 2026-09-28 — reduz o que a tela desenha logo de cara pra quem só
+   * acompanha os próprios projetos). Só define uma vez, na identificação
+   * da sessão — se o ISM trocar pra "Todos" depois, essa escolha manual
+   * nunca é sobrescrita de novo (não reroda em cada re-render).
+   */
+  var filtroIsmPadraoAplicado = false;
+  function aplicarFiltroIsmPadrao(){
+    if (filtroIsmPadraoAplicado) return;
+    filtroIsmPadraoAplicado = true;
+    if (sessaoNivelAtual === "ism" && sessaoNomeAtual) filtroIsmAtivo = sessaoNomeAtual;
+  }
   var filtroFaseAtiva = ""; // "" = todas — filtro por fase (FASES_ORDEM); só existe na aba "Em andamento"
   var filtroSlaAtiva = ""; // "" = todas | "atrasado" | "vencendo" | "pausado" | "nao_iniciado" — só existe na aba "Em andamento"
   // "lista" | "agrupado_fase" | "agrupado_item" — agrupado_fase só existe em
@@ -2315,6 +2334,13 @@
   var filtroItemAtivo = ""; // "" = todos — filtro por item do projeto (p.itens); nas duas abas
   // Filtros exclusivos da aba "Entregues" — nenhum deles existe/filtra nada em "Em andamento".
   var filtroFechamentoAtivo = ""; // "" | "hoje" | "ontem" | "semana" | "mes" | "personalizado"
+  // 1ª vez que a aba Entregues abre nesta sessão, já entra filtrada em
+  // "Este mês" (a lista só cresce — pedido explícito da usuária,
+  // 2026-09-28, pra não carregar/rolar por todo o histórico à toa). Só
+  // uma vez: se a pessoa trocar pra "Qualquer data" ou outro período, a
+  // escolha dela fica valendo o resto da sessão, não reseta a cada troca
+  // de aba.
+  var filtroFechamentoDefaultAplicado = false;
   var filtroFechamentoDe = "";  // "YYYY-MM-DD", só quando personalizado
   var filtroFechamentoAte = ""; // "YYYY-MM-DD", só quando personalizado
   var filtroRiscoAtivo = ""; // "" | "baixo" | "medio" | "alto" (finalizacao.riscoPercebido)
@@ -3275,11 +3301,25 @@
   }
   function autoAtualizarProjetos(){
     if (!podeAutoAtualizarProjetos()) return;
+    // apenasAbertos=true: pula o histórico de Entregue/Cancelado (não muda
+    // de status/ISM/CSM sozinho) — só refaz a página inteira de paginação
+    // quando o usuário recarrega (F5) ou entra na aba pela 1ª vez na
+    // sessão. Sem isso, cada tick de 1min pagina o histórico TODO de novo,
+    // e esse histórico só cresce (2026-09-28: foi o que estourou a cota
+    // compartilhada de 100/min do ClickUp numa demonstração ao vivo).
     Promise.all([
-      apiGet("listar-implantacoes"),
+      apiGet("listar-implantacoes", { apenasAbertos: "true" }),
       apiGet("listar-reservas").catch(function(){ return { reservas: [] }; })
     ]).then(function(resultados){
-      projetosCache = resultados[0].tasks || [];
+      var abertosFrescos = resultados[0].tasks || [];
+      var idsAbertos = {};
+      abertosFrescos.forEach(function(p){ idsAbertos[p.id] = true; });
+      // Preserva os já-fechados que já estavam em cache (vieram do
+      // carregamento inicial completo) — só substitui o conjunto aberto.
+      var fechadosEmCache = (projetosCache || []).filter(function(p){
+        return p.status === "concluído" && !idsAbertos[p.id];
+      });
+      projetosCache = abertosFrescos.concat(fechadosEmCache);
       reservasCache = resultados[1].reservas || [];
       // Confere de novo: a resposta pode chegar depois de o usuário ter
       // aberto um projeto ou o assistente enquanto a chamada estava no ar.
