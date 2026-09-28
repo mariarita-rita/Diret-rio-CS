@@ -3110,7 +3110,7 @@ function sanearListaEmails(lista) {
  * preservar um campo ao reescrever a description inteira (foi assim que
  * convidados quase se perdeu num reescrita anterior de atualizar-reserva).
  */
-function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId, responsavelId, googleEventId }) {
+export function linhasDescricaoReserva({ projetoId, linkReuniao, convidados, status, reagendadoPor, proximaReservaId, responsavelId, googleEventId }) {
   return [
     projetoId ? `**Projeto:** ${projetoId}` : null,
     // Ver responsavelIdDaReserva: gravado sempre, não só como fallback —

@@ -16,7 +16,10 @@ import {
   listarReservas, listarTokensGoogle, projetoDaDescricaoReserva,
   googleEventIdDaDescricaoReserva, responsavelDaDescricaoReserva,
   transcricaoAnalisadaDaDescricaoReserva, ISM_OPCOES,
+  linkDaDescricaoReserva, convidadosDaDescricaoReserva, statusDaDescricaoReserva,
+  reagendadoPorDaDescricaoReserva, proximaReservaIdDaDescricaoReserva,
 } from './_lib/clickup.js';
+import { linhasDescricaoReserva } from './clickup.js';
 import { renovarAccessToken, obterEvento, exportarDocGoogle, ErroGoogle } from './_lib/google.js';
 import {
   montarRelatorioFinalizacao, ErroSemRegistros, ErroRelatorioNaoJson, ErroUpstreamIa,
@@ -200,12 +203,28 @@ async function jobAnaliseReunioes(res) {
         throw new Error('anotacao_vazia');
       }
 
-      await resumirReuniaoEPostar(projetoId, transcricao);
+      const { comparecimento } = await resumirReuniaoEPostar(projetoId, transcricao, { nomeReserva: reserva.name });
 
-      await atualizarTask(reserva.id, {
-        markdown_description: `${reserva.description}\n\n**TranscricaoAnalisada:** true`,
+      // "indeterminado" (transcrição vazia/teste/sem relação com a reunião)
+      // nunca sobrescreve o status já registrado — só "compareceu"/
+      // "nao_compareceu" de verdade mexem nisso (ver parsearRespostaResumoReuniao
+      // em api/ia.js).
+      const statusAtual = statusDaDescricaoReserva(reserva.description);
+      const novoStatus = comparecimento === 'indeterminado' ? statusAtual : comparecimento;
+      const descricaoAtualizada = linhasDescricaoReserva({
+        projetoId,
+        linkReuniao: linkDaDescricaoReserva(reserva.description),
+        convidados: convidadosDaDescricaoReserva(reserva.description),
+        status: novoStatus,
+        reagendadoPor: reagendadoPorDaDescricaoReserva(reserva.description),
+        proximaReservaId: proximaReservaIdDaDescricaoReserva(reserva.description),
+        responsavelId: ismId,
+        googleEventId,
       });
-      processados.push({ id: reserva.id, projetoId, ok: true });
+      await atualizarTask(reserva.id, {
+        markdown_description: `${descricaoAtualizada}\n\n**TranscricaoAnalisada:** true`,
+      });
+      processados.push({ id: reserva.id, projetoId, ok: true, comparecimento });
     } catch (e) {
       const motivo = e instanceof ErroGoogle ? `google_${e.status}`
         : e instanceof ErroUpstreamIa ? 'ia_upstream'

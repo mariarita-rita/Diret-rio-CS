@@ -22,8 +22,10 @@
 //
 //   POST /api/ia?action=analisar-reuniao-implantacao    { id, transcricao }
 //        Mesma ideia, pra transcrição de reunião (kickoff, diagnóstico etc)
-//        — resume com a IA e grava como comentário marcado
-//        (MARCADOR_RESUMO_REUNIAO).
+//        — resume com a IA e grava como comentário marcado "[Resumo IA -
+//        Reuniao ...]" (ver resumirReuniaoEPostar). Também identifica
+//        comparecimento (compareceu/nao_compareceu/indeterminado) — a
+//        varredura automática (api/cron.js) usa isso pra marcar a reserva.
 //
 //   POST /api/ia?action=gerar-relatorio-finalizacao     { id }
 //        Gera o RASCUNHO do relatório de finalização do projeto, lendo TODO
@@ -113,7 +115,6 @@ const MAX_TRANSCRICAO = 500000;
 // gerar-relatorio-finalizacao acha os resumos já registrados. Nunca muda o
 // texto deste marcador sem migrar os comentários já gravados.
 const MARCADOR_RESUMO_CONVERSA = '[Resumo IA - Conversa]';
-const MARCADOR_RESUMO_REUNIAO = '[Resumo IA - Reuniao]';
 
 // Guia técnico completo do Waipe Flow (schema do JSON, 21 tipos de node,
 // checklist, erros comuns) — lido do disco uma vez por cold start (não a
@@ -553,7 +554,19 @@ async function resumirConversaUmblerAcao(req, res, sessao) {
 
 const INSTRUCOES_RESUMO_REUNIAO = `Você vai ler a transcrição de uma reunião entre o time de Implantação da Londrisoft e um cliente, durante um projeto de implantação de soluções do ecossistema Londrisoft (Waipe, Gestor, Simplaz, Unique, BIME APP, entre outros — o projeto pode envolver só um desses sistemas, não necessariamente o Waipe).
 
-Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as ferramentas/sistemas que o cliente usa hoje, regras ou processos importantes que ele mencionou, quais agentes, produtos ou funcionalidades foram discutidos como prioridade, e qualquer sinal de satisfação, insatisfação ou risco percebido. Seja objetivo — não invente informação que não está na transcrição.`;
+Sua resposta precisa ter EXATAMENTE este formato, nesta ordem:
+
+COMPARECIMENTO: <compareceu|nao_compareceu|indeterminado>
+RESUMO: <o resumo>
+
+Regras pra "COMPARECIMENTO":
+- "compareceu": a transcrição mostra o cliente (ou alguém da empresa dele) participando de verdade da conversa com o time da Londrisoft.
+- "nao_compareceu": a transcrição indica claramente que só o time da Londrisoft falou (esperando, ligando, comentando a ausência) e o cliente nunca apareceu/respondeu.
+- "indeterminado": a transcrição não permite concluir isso com segurança — por exemplo, é vazia, curta demais, claramente um teste, ou não tem relação nenhuma com uma reunião de implantação real. Nesse caso NÃO adivinhe; use "indeterminado".
+
+Regras pro "RESUMO" (texto simples, sem markdown, sem título, até 250 palavras): as ferramentas/sistemas que o cliente usa hoje, regras ou processos importantes que ele mencionou, quais agentes, produtos ou funcionalidades foram discutidos como prioridade, e qualquer sinal de satisfação, insatisfação ou risco percebido. Seja objetivo — não invente informação que não está na transcrição. Se a transcrição não corresponder a uma reunião real de implantação, diga isso claramente no resumo em vez de inventar conteúdo.`;
+
+const COMPARECIMENTO_VALIDOS = new Set(['compareceu', 'nao_compareceu', 'indeterminado']);
 
 /**
  * Núcleo de "analisar-reuniao-implantacao", sem req/res — usado tanto pela
@@ -561,9 +574,19 @@ Resuma em texto simples (sem markdown, sem título), em até 250 palavras: as fe
  * (api/cron.js (job=analise-reunioes), sem sessão nenhuma, transcrição puxada do
  * Drive do ISM). Lança `ErroUpstreamIa`/`ErroResumoVazio` em vez de escrever
  * em `res` — quem chama decide o que fazer com cada erro (a ação HTTP mapeia
- * pra 502; a varredura só loga e segue pra próxima reunião). Mesmo marcador
- * `MARCADOR_RESUMO_REUNIAO` nos dois caminhos — o histórico não distingue se
- * o resumo veio de colar manual ou da varredura.
+ * pra 502; a varredura só loga e segue pra próxima reunião).
+ *
+ * `nomeReserva` (opcional — só a varredura automática tem, o botão manual não
+ * tem reserva nenhuma vinculada) entra no cabeçalho do comentário pra quem lê
+ * saber de qual compromisso da agenda veio aquele resumo, sem precisar abrir
+ * a aba de Agenda. O texto do cabeçalho não é mais um marcador fixo (não há
+ * nenhuma busca programática por ele hoje — conferido antes desta mudança),
+ * só precisa continuar reconhecível como "resumo gerado por IA" pra quem lê.
+ *
+ * Devolve `{ resumo, comparecimento }` — quem chama (a varredura) decide se e
+ * como usar `comparecimento` pra marcar a reserva (ver jobAnaliseReunioes em
+ * api/cron.js). "indeterminado" nunca deve virar uma marcação de comparecimento
+ * — é o sinal explícito de "a IA não teve confiança pra decidir".
  */
 export class ErroResumoVazio extends Error {
   constructor() {
@@ -572,19 +595,28 @@ export class ErroResumoVazio extends Error {
   }
 }
 
-export async function resumirReuniaoEPostar(projetoId, transcricao) {
-  let resumo;
+function parsearRespostaResumoReuniao(resposta) {
+  const m = /COMPARECIMENTO:\s*(compareceu|nao_compareceu|indeterminado)\s*\n+RESUMO:\s*([\s\S]+)/i.exec(resposta || '');
+  if (!m) return { comparecimento: 'indeterminado', resumo: texto(resposta, 3000) };
+  const comparecimento = COMPARECIMENTO_VALIDOS.has(m[1].toLowerCase()) ? m[1].toLowerCase() : 'indeterminado';
+  return { comparecimento, resumo: texto(m[2], 3000) };
+}
+
+export async function resumirReuniaoEPostar(projetoId, transcricao, { nomeReserva = null } = {}) {
+  let resposta;
   try {
-    resumo = texto(await chamarClaudeTexto({ system: INSTRUCOES_RESUMO_REUNIAO, mensagem: transcricao, maxTokens: 900 }), 3000);
+    resposta = await chamarClaudeTexto({ system: INSTRUCOES_RESUMO_REUNIAO, mensagem: transcricao, maxTokens: 1000 });
   } catch (e) {
     if (e instanceof ErroUpstreamIa) throw e;
     if (e.message === 'resposta_vazia') throw new ErroResumoVazio();
     throw e;
   }
+  const { comparecimento, resumo } = parsearRespostaResumoReuniao(resposta);
   if (!resumo) throw new ErroResumoVazio();
 
-  await criarComentario(projetoId, `${MARCADOR_RESUMO_REUNIAO}\n${resumo}`);
-  return resumo;
+  const cabecalho = `[Resumo IA - Reuniao${nomeReserva ? ' ' + texto(nomeReserva, 200) : ''} - análise feita a partir da transcrição do meet feita pelo Gemini]`;
+  await criarComentario(projetoId, `${cabecalho}\n${resumo}`);
+  return { resumo, comparecimento };
 }
 
 async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
@@ -610,7 +642,7 @@ async function analisarReuniaoImplantacaoAcao(req, res, sessao) {
 
   let resumo;
   try {
-    resumo = await resumirReuniaoEPostar(projeto.id, transcricao);
+    ({ resumo } = await resumirReuniaoEPostar(projeto.id, transcricao));
   } catch (e) {
     if (e instanceof ErroUpstreamIa) return erro(res, 502, 'falha_ia', 'A IA não respondeu — tente novamente em instantes.');
     if (e instanceof ErroResumoVazio) return erro(res, 502, 'falha_ia', e.message);
