@@ -3997,8 +3997,15 @@ const PRIORIDADE_ATIVIDADE_PERSISTIDA = { churn: 95, mencao: 85, renovacao: 75 }
  */
 async function listarAtividadesCsqAcao(res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
+  // listarImplantacoesAbertas() (não a versão completa): atividadesVirtuaisParadas
+  // já descarta projeto Closed/concluído sozinha (só ativo pode estar "parado"),
+  // então buscar o histórico inteiro de Entregue/Cancelado aqui era pura perda —
+  // essa ação é chamada TODA VEZ que a aba Atividades OU o card "Lembretes e
+  // atividades" de qualquer projeto aberto renderiza (2026-09-28: identificado
+  // como o maior custo restante de chamadas ao ClickUp, maior que o próprio
+  // auto-refresh da lista).
   const [tasks, reservas, registradas] = await Promise.all([
-    listarImplantacoes(),
+    listarImplantacoesAbertas(),
     listarReservas(),
     listarAtividadesCsq(),
   ]);
