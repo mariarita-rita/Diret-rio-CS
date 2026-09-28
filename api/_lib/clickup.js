@@ -1653,16 +1653,23 @@ export function soDigitos(v) {
  * a propria pergunta assim ao criar a pagina) e devolve so os digitos.
  */
 export function cnpjDoAgendamentoGoogle(description) {
-  const blocos = String(description || '').split(/\n\s*\n/);
+  // Formato real confirmado ao vivo (evento de teste, 2026-09-28): a
+  // descrição não usa linha em branco nenhuma pra separar pergunta de
+  // pergunta — vem tudo num texto só, com "<br>" marcando cada nova
+  // pergunta e o rótulo embrulhado em "<b>...</b>":
+  //   "<b>Reservado por</b>\nMaria Rita\n...\n<br><b>CNPJ (sem pontuação)</b>\n02564645235687\n<br>..."
+  // Normaliza <br> pra quebra de bloco (\n\n) e tira as tags <b>/</b> antes
+  // de procurar o rótulo — sem isso, cada evento virava um bloco só e o
+  // sincronismo nunca achava o CNPJ de jeito nenhum.
+  const texto = String(description || '').replace(/<br\s*\/?>/gi, '\n\n');
+  const blocos = texto.split(/\n\s*\n/);
   for (const bloco of blocos) {
-    const linhas = bloco.split('\n').map((l) => l.trim()).filter(Boolean);
+    const linhas = bloco.replace(/<\/?b>/gi, '').split('\n').map((l) => l.trim()).filter(Boolean);
     if (!linhas.length || !/cnpj/i.test(linhas[0])) continue;
-    // A resposta pode vir em linha(s) separada(s) da pergunta ("CNPJ\n123...")
-    // ou colada na mesma linha ("CNPJ (sem pontuação): 123...", formato real
-    // confirmado — a página de agendamento do Google nem sempre quebra
-    // pergunta/resposta em linhas diferentes). O rótulo em si nunca tem
-    // dígito, então ler o bloco inteiro cobre os dois formatos sem risco de
-    // pegar dígito da pergunta por engano.
+    // A resposta pode vir em linha(s) separada(s) da pergunta ou colada na
+    // mesma linha ("CNPJ (sem pontuação): 123...") — o rótulo em si nunca
+    // tem dígito, então ler o bloco inteiro cobre os dois formatos sem
+    // risco de pegar dígito da pergunta por engano.
     const digitos = soDigitos(linhas.join(''));
     if (digitos) return digitos;
   }
