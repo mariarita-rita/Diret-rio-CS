@@ -1309,6 +1309,35 @@ export async function listarImplantacoes() {
 }
 
 /**
+ * Só os projetos (e itens) ainda ABERTOS — usada pelo auto-refresh de
+ * 1min da lista de projetos (ver implantacao-waipe.html). A versão
+ * completa pagina o histórico inteiro (todo projeto Entregue/Cancelado já
+ * existente) a cada chamada — sem custo hoje, mas cresce todo santo dia
+ * (2026-09-28: a usuária notou isso numa demonstração ao vivo, cota
+ * compartilhada de 100/min estourando só de trocar de aba algumas vezes).
+ * O tick recorrente não precisa reler esse histórico — só o que pode ter
+ * mudado de status/ISM/CSM de verdade, que é sempre um conjunto pequeno e
+ * estável (os projetos em andamento). Quem chama funde o resultado com o
+ * que já tinha em cache pros já-fechados, em vez de substituir tudo.
+ *
+ * `include_closed=false` sozinho NÃO funciona aqui — testado ao vivo
+ * (2026-09-28): combinado com `subtasks=true`, o ClickUp devolve os
+ * mesmos 243 registros com ou sem a flag, apesar de "concluído" ser um
+ * status do tipo "done" na lista. `statuses[]` filtrando pelo nome exato
+ * dos status abertos é o que de fato reduz (243 → 179 no teste). Só tem
+ * dois hoje ("pendente" e "in progress" — "concluído" é o terceiro e
+ * único fechado); se um novo status for criado na lista, ele PRECISA
+ * entrar aqui também, senão os projetos nele somem do auto-refresh.
+ */
+export async function listarImplantacoesAbertas() {
+  return buscarPaginado(
+    LISTA_IMPLANTACOES_WAIPE,
+    'include_custom_fields=true&subtasks=true&statuses%5B%5D=pendente&statuses%5B%5D=in%20progress',
+    1
+  );
+}
+
+/**
  * Uma task-pai (projeto) e suas subtasks (agentes), cada uma com a descricao
  * completa. `include_subtasks=true` no GET devolve os IDS das subtasks; o
  * conteudo de cada uma (description) so vem confiavel buscando-a de novo —
