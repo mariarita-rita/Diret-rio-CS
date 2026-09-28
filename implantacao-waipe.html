@@ -2270,6 +2270,18 @@
 
   // ---- Estado ----
   var projetosCache = null;   // lista de listar-implantacoes (nao filtrada — a mesma pras 2 abas)
+  // Throttle dos dois widgets da lista de projetos que fazem sincronismo
+  // pesado (Google Calendar de cada ISM + leituras extras no ClickUp):
+  // renderListaProjetosWrap roda em toda troca de filtro/aba e a cada tick
+  // do auto-refresh de 45s, e SEM isso os dois refaziam o sincronismo
+  // inteiro toda vez — foi isso que estourou a cota compartilhada de
+  // 100/min do ClickUp numa demonstração real (2026-09-28), só de trocar
+  // de aba e voltar algumas vezes. Agora só busca de novo depois de
+  // MIN_INTERVALO_SYNC_MS — uma chamada de filtro/troca de aba no meio
+  // desse intervalo só redesenha com o que já tem na tela.
+  var MIN_INTERVALO_SYNC_MS = 60000;
+  var agendamentosSemProjetoUltimaBuscaEm = 0;
+  var compromissosHojeUltimaBuscaEm = 0;
   var filtroProjetosAtivo = "andamento"; // "andamento" | "entregues" | "atividades" — qual aba de projetos esta ativa
   var filtroCsmAtivo = ""; // "" = todos — filtro por CSM na lista de projetos
   var filtroIsmAtivo = ""; // "" = todos — filtro por ISM na lista de projetos (todo mundo ve tudo por padrao; filtra so se quiser)
@@ -2562,6 +2574,9 @@
   // já viraram reserva sozinhos — ver sincronizar-agendamentos-google).
   function renderAgendamentosSemProjeto(container){
     if (!container) return;
+    var agora = Date.now();
+    if (agora - agendamentosSemProjetoUltimaBuscaEm < MIN_INTERVALO_SYNC_MS) return;
+    agendamentosSemProjetoUltimaBuscaEm = agora;
     apiPost("sincronizar-agendamentos-google", {}).then(function(resp){
       if (resp.vinculados && resp.vinculados.length){
         showSimToast(resp.vinculados.length + " agendamento(s) do Google vinculado(s) automaticamente por CNPJ.");
@@ -2622,6 +2637,9 @@
         '<div class="today-agenda-head"><div class="today-agenda-title" id="todayAgendaTitle">Compromissos do dia</div><div class="today-agenda-date">' + rotuloHoje + '</div></div>' +
         '<div class="sidebar-loading">Carregando agenda…</div></section>';
     }
+    var agora2 = Date.now();
+    if (!primeiraVez && agora2 - compromissosHojeUltimaBuscaEm < MIN_INTERVALO_SYNC_MS) return;
+    compromissosHojeUltimaBuscaEm = agora2;
     apiGet("compromissos-hoje").then(function(resp){
       var nomes = {};
       (projetosCache || []).forEach(function(p){ nomes[String(p.id)] = p.cliente || "Projeto"; });
