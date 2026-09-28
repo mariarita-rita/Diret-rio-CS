@@ -175,6 +175,7 @@ import {
   listarAtividadesCsq,
   listarComentarios,
   listarImplantacoes,
+  listarImplantacoesAbertas,
   listarModelosMensagem,
   listarReservas,
   listarTokensGoogle,
@@ -328,7 +329,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && acao === 'cliente') return await lerCliente(req, res, sessao);
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
     if (req.method === 'POST' && acao === 'log-proposta') return await logProposta(req, res, sessao);
-    if (req.method === 'GET' && acao === 'listar-implantacoes') return await listarImplantacoesAcao(res, sessao);
+    if (req.method === 'GET' && acao === 'listar-implantacoes') return await listarImplantacoesAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'obter-implantacao') return await obterImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'criar-implantacao') return await criarImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'definir-gerente-contas') {
@@ -1562,9 +1563,16 @@ async function resolverImplantacao(taskId) {
   return { tarefa, projeto };
 }
 
-async function listarImplantacoesAcao(res, sessao) {
+async function listarImplantacoesAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
-  const tasks = await listarImplantacoes();
+  // ?apenasAbertos=true — usado pelo auto-refresh de 1min da lista de
+  // projetos (ver listarImplantacoesAbertas em _lib/clickup.js): pula o
+  // histórico de Entregues/Cancelados, que não muda de status/ISM/CSM
+  // sozinho. O carregamento inicial da tela (sem esse parâmetro) sempre
+  // busca tudo, igual antes — Indicadores/Atividades/a aba Entregues
+  // continuam precisando do histórico completo.
+  const apenasAbertos = req.query?.apenasAbertos === 'true';
+  const tasks = apenasAbertos ? await listarImplantacoesAbertas() : await listarImplantacoes();
   // listarImplantacoes() agora traz subtasks (agentes/soluções) junto na
   // mesma lista (ver subtasks=true, em _lib/clickup.js) — separa os
   // projetos (sem parent) das subtasks (com parent), e usa as subtasks só
