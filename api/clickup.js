@@ -204,7 +204,7 @@ import {
   stringifyWaipeState,
   tipoDaDescricaoAtividade,
 } from './_lib/clickup.js';
-import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, listarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, listarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, excluirEventoGoogle, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -3211,6 +3211,32 @@ function responsavelIdDaReserva(t) {
   return Number(t.assignees?.[0]?.id) || Number(responsavelDaDescricaoReserva(t.description)) || null;
 }
 
+/**
+ * Cancela na agenda REAL do Google o evento por trás de uma reserva, se
+ * existir (GoogleEventId + ISM com Google conectado) — usado por
+ * cancelar-reserva e reagendar-reserva, senão o evento fica "fantasma" na
+ * agenda do ISM depois que a reserva já não existe/mudou aqui (bug real,
+ * 2026-09-29). Falha aqui (token expirado, ISM desconectou o Google depois
+ * de criar o evento etc.) nunca deve impedir o cancelamento/reagendamento
+ * em si — só loga e segue, mesmo espírito de todo outro ponto que trata
+ * ErroGoogle como algo pra contornar, não pra propagar como 500.
+ */
+async function cancelarEventoGoogleDaReserva(tarefa) {
+  const googleEventId = googleEventIdDaDescricaoReserva(tarefa.description);
+  if (!googleEventId) return;
+  const ismId = responsavelIdDaReserva(tarefa);
+  if (!ismId) return;
+  const tokenGoogle = await obterTokenGoogle(ismId);
+  if (!tokenGoogle) return;
+  try {
+    const accessToken = await renovarAccessToken(tokenGoogle.refreshToken);
+    await excluirEventoGoogle(accessToken, googleEventId);
+  } catch (e) {
+    if (!(e instanceof ErroGoogle)) throw e;
+    console.error(`[clickup] falha ao cancelar evento do Google (reserva ${tarefa.id}, evento ${googleEventId}):`, e.status);
+  }
+}
+
 function reservaParaFora(t) {
   return {
     id: t.id,
@@ -3621,6 +3647,12 @@ async function reagendarReservaAcao(req, res, sessao) {
     }),
   });
 
+  // A reserva antiga vira só um registro histórico ("reagendado") — o
+  // horário de verdade agora é o da `nova`. Sem isso, o evento do horário
+  // antigo ficava pra sempre na agenda do Google do ISM (mesmo bug do
+  // cancelar-reserva, 2026-09-29).
+  await cancelarEventoGoogleDaReserva(tarefa);
+
   await autoDefinirFaseAgendado(projetoId);
   return res.status(200).json({ ok: true, id: nova.id, linkReuniao: resultado.linkReuniao });
 }
@@ -3784,6 +3816,7 @@ async function cancelarReservaAcao(req, res, sessao) {
   if (!tarefa || String(tarefa.list?.id || '') !== LISTA_RESERVAS_AGENDA) {
     return erro(res, 404, 'nao_encontrado', 'Reserva não encontrada.');
   }
+  await cancelarEventoGoogleDaReserva(tarefa);
   await excluirTask(corpo.id);
   return res.status(200).json({ ok: true });
 }

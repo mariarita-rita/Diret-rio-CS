@@ -288,6 +288,24 @@ export async function obterEvento(accessToken, googleEventId) {
 }
 
 /**
+ * Cancela (deleta) o evento na agenda primária do ISM — usado ao cancelar ou
+ * reagendar uma reserva no painel, senão o evento fica "fantasma" na agenda
+ * do Google depois que a reserva já não existe mais aqui (bug real,
+ * 2026-09-29: Daiane cancelou uma reserva da Erica no painel e o evento
+ * continuou aparecendo na agenda do Google dela). 404/410 (evento já não
+ * existe mais — ex: apagado manualmente na própria agenda) não é erro pra
+ * quem chama: o resultado prático já é o desejado, o evento sumiu.
+ */
+export async function excluirEventoGoogle(accessToken, googleEventId) {
+  try {
+    await calendarRequest(`/calendars/primary/events/${encodeURIComponent(googleEventId)}`, accessToken, { method: 'DELETE' });
+  } catch (e) {
+    if (e instanceof ErroGoogle && (e.status === 404 || e.status === 410)) return;
+    throw e;
+  }
+}
+
+/**
  * Exporta o conteúdo em texto puro de um Google Doc que o ISM não criou
  * (a anotação do Gemini pertence à conta do Google Meet, compartilhada
  * com ele) — precisa do escopo drive.readonly (ver ESCOPOS_CALENDAR).
