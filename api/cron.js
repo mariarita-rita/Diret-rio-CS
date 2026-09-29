@@ -19,7 +19,8 @@ import {
   linkDaDescricaoReserva, convidadosDaDescricaoReserva, statusDaDescricaoReserva,
   reagendadoPorDaDescricaoReserva, proximaReservaIdDaDescricaoReserva,
 } from './_lib/clickup.js';
-import { linhasDescricaoReserva } from './clickup.js';
+import { linhasDescricaoReserva, construirLinhasImplantacoes } from './clickup.js';
+import { salvarSnapshotIndicadores } from './_lib/clickup.js';
 import { renovarAccessToken, obterEvento, exportarDocGoogle, ErroGoogle } from './_lib/google.js';
 import {
   montarRelatorioFinalizacao, ErroSemRegistros, ErroRelatorioNaoJson, ErroUpstreamIa,
@@ -54,6 +55,7 @@ export default async function handler(req, res) {
     const job = String(req.query?.job || 'relatorio-finalizacao');
     if (job === 'analise-reunioes') return await jobAnaliseReunioes(res);
     if (job === 'relatorio-finalizacao') return await jobRelatorioFinalizacao(res);
+    if (job === 'snapshot-indicadores') return await jobSnapshotIndicadores(res);
     return erro(res, 400, 'job_invalido', 'job inválido.');
   } catch (e) {
     console.error('[cron] erro inesperado:', e);
@@ -241,4 +243,21 @@ async function jobAnaliseReunioes(res) {
 
   console.log(`[cron/analise-reunioes] ${processados.length}/${alvos.length} processado(s) (limite ${MAX_REUNIOES_POR_EXECUCAO}).`);
   return res.status(200).json({ ok: true, encontrados: alvos.length, processados });
+}
+
+// ── Job: snapshot-indicadores ──────────────────────────────────────────────
+//
+// Roda ~10min depois do relatorio-finalizacao (que preenche `finalizacao` de
+// todo projeto recém-fechado). Recalcula as linhas de TODOS os projetos
+// (aberto+fechado, mesmo custo de `listar-implantacoes` sem apenasAbertos) e
+// salva num snapshot único (obterSnapshotIndicadores/salvarSnapshotIndicadores,
+// api/_lib/clickup.js) — a aba Indicadores do painel passa a ler esse
+// snapshot em vez de recalcular a cada F5, só recarregando ao vivo quando o
+// usuário clicar em "Recarregar agora" (?forcar=true na action correspondente).
+async function jobSnapshotIndicadores(res) {
+  const tasks = await listarImplantacoes();
+  const linhas = construirLinhasImplantacoes(tasks, {});
+  await salvarSnapshotIndicadores(linhas);
+  console.log(`[cron/snapshot-indicadores] snapshot salvo com ${linhas.length} linha(s).`);
+  return res.status(200).json({ ok: true, total: linhas.length });
 }

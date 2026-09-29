@@ -181,6 +181,8 @@ import {
   listarTokensGoogle,
   localizarCliente,
   localizarTask,
+  obterSnapshotIndicadores,
+  salvarSnapshotIndicadores,
   obterTask,
   obterTaskComSubtasks,
   obterTokenEmail,
@@ -330,6 +332,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && acao === 'set-field') return await escreverCampo(req, res, sessao);
     if (req.method === 'POST' && acao === 'log-proposta') return await logProposta(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-implantacoes') return await listarImplantacoesAcao(req, res, sessao);
+    if (req.method === 'GET' && acao === 'listar-indicadores-snapshot') return await listarIndicadoresSnapshotAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'obter-implantacao') return await obterImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'criar-implantacao') return await criarImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'definir-gerente-contas') {
@@ -407,7 +410,7 @@ export default async function handler(req, res) {
 
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
-      'listar-implantacoes', 'obter-implantacao', 'criar-implantacao',
+      'listar-implantacoes', 'listar-indicadores-snapshot', 'obter-implantacao', 'criar-implantacao',
       'definir-gerente-contas',
       'atualizar-implantacao', 'renomear-implantacao', 'adicionar-item-implantacao',
       'atualizar-agente', 'comentar-implantacao',
@@ -1451,7 +1454,11 @@ export function dadosClienteFaltando(dados) {
 function temMensagemNovaParaViewer(estado, sessao) {
   const ultima = Number(estado.ultimaMensagemClienteEm);
   if (!Number.isFinite(ultima) || ultima <= 0) return false;
-  const visto = Number(estado.vistoPor?.[sessao.nome]);
+  // sessao vem null/incompleta quando construirLinhasImplantacoes roda fora
+  // de uma requisição HTTP (cron do snapshot de Indicadores) — sem "viewer"
+  // de verdade, sempre marca "true" quando já houve mensagem; campo não
+  // usado nos Indicadores, só no card de projeto de verdade.
+  const visto = Number(estado.vistoPor?.[sessao?.nome]);
   return !Number.isFinite(visto) || ultima > visto;
 }
 
@@ -1563,16 +1570,17 @@ async function resolverImplantacao(taskId) {
   return { tarefa, projeto };
 }
 
-async function listarImplantacoesAcao(req, res, sessao) {
-  res.setHeader('Cache-Control', 'no-store');
-  // ?apenasAbertos=true — usado pelo auto-refresh de 1min da lista de
-  // projetos (ver listarImplantacoesAbertas em _lib/clickup.js): pula o
-  // histórico de Entregues/Cancelados, que não muda de status/ISM/CSM
-  // sozinho. O carregamento inicial da tela (sem esse parâmetro) sempre
-  // busca tudo, igual antes — Indicadores/Atividades/a aba Entregues
-  // continuam precisando do histórico completo.
-  const apenasAbertos = req.query?.apenasAbertos === 'true';
-  const tasks = apenasAbertos ? await listarImplantacoesAbertas() : await listarImplantacoes();
+/**
+ * Monta as "linhas" (1 por projeto, resumo pra listagem em massa/dashboard)
+ * a partir do array cru de tasks (projetos + subtasks juntos, como
+ * listarImplantacoes()/listarImplantacoesAbertas() devolvem). Extraído de
+ * listarImplantacoesAcao pra ser reaproveitado pelo snapshot de Indicadores
+ * (gerado 1x/dia pelo cron, sem sessão HTTP nenhuma) — por isso `sessao` é
+ * opcional aqui: sem ela, `temMensagemNovaParaViewer` sempre marca "true"
+ * quando o cliente já mandou alguma mensagem (campo não usado nos
+ * Indicadores, só importa pro card de projeto de verdade).
+ */
+export function construirLinhasImplantacoes(tasks, sessao) {
   // listarImplantacoes() agora traz subtasks (agentes/soluções) junto na
   // mesma lista (ver subtasks=true, em _lib/clickup.js) — separa os
   // projetos (sem parent) das subtasks (com parent), e usa as subtasks só
@@ -1663,10 +1671,58 @@ async function listarImplantacoesAcao(req, res, sessao) {
       itensStatus: itensStatusPorProjeto.get(t.id) || [],
     };
   });
-  // "ism" ve tudo igual "gestao" dentro de implantacao — a unica diferenca
-  // de nivel fica nos dados financeiros (carteira/metas/cliente), nunca aqui.
-  const visiveis = sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
+  return linhas;
+}
+
+/** Só a fatia de `linhas` que esse nível de sessão pode ver — mesmo corte
+ * usado por listarImplantacoesAcao e pelo snapshot de Indicadores. "ism" ve
+ * tudo igual "gestao" dentro de implantacao — a unica diferenca de nivel
+ * fica nos dados financeiros (carteira/metas/cliente), nunca aqui. */
+function linhasVisiveisPara(linhas, sessao) {
+  return sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
+}
+
+async function listarImplantacoesAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  // ?apenasAbertos=true — usado pelo auto-refresh de 1min da lista de
+  // projetos (ver listarImplantacoesAbertas em _lib/clickup.js): pula o
+  // histórico de Entregues/Cancelados, que não muda de status/ISM/CSM
+  // sozinho. O carregamento inicial da tela (sem esse parâmetro) sempre
+  // busca tudo, igual antes — a aba Entregues continua precisando do
+  // histórico completo (Indicadores agora lê o snapshot pré-calculado,
+  // ver listarIndicadoresSnapshotAcao).
+  const apenasAbertos = req.query?.apenasAbertos === 'true';
+  const tasks = apenasAbertos ? await listarImplantacoesAbertas() : await listarImplantacoes();
+  const linhas = construirLinhasImplantacoes(tasks, sessao);
+  const visiveis = linhasVisiveisPara(linhas, sessao);
   return res.status(200).json({ tasks: visiveis, total: visiveis.length });
+}
+
+/**
+ * GET ?action=listar-indicadores-snapshot[&forcar=true] — mesma "linhas"
+ * de listar-implantacoes, mas lida de um snapshot pré-calculado (cron
+ * job=snapshot-indicadores, ~10min depois do relatório de finalização das
+ * 7h) em vez de paginar o histórico inteiro toda vez que a aba Indicadores
+ * abre. `forcar=true` (botão "🔄 Recarregar agora" na tela) ignora o
+ * snapshot, calcula na hora, E atualiza o snapshot salvo — assim quem
+ * clicar deixa o resultado fresco pra todo mundo, não só pra si.
+ * Sem snapshot ainda (1ª vez, nunca rodou o cron) também cai pro cálculo
+ * ao vivo, do mesmo jeito.
+ */
+async function listarIndicadoresSnapshotAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  const forcar = req.query?.forcar === 'true';
+  if (!forcar) {
+    const snap = await obterSnapshotIndicadores();
+    if (snap) {
+      return res.status(200).json({ tasks: linhasVisiveisPara(snap.linhas, sessao), geradoEm: snap.geradoEm });
+    }
+  }
+  const tasks = await listarImplantacoes();
+  const linhas = construirLinhasImplantacoes(tasks, sessao);
+  const geradoEm = Date.now();
+  await salvarSnapshotIndicadores(linhas);
+  return res.status(200).json({ tasks: linhasVisiveisPara(linhas, sessao), geradoEm });
 }
 
 async function obterImplantacaoAcao(req, res, sessao) {

@@ -1205,6 +1205,60 @@ export async function salvarTokenEmail(chave, refreshToken, emailConectado) {
   });
 }
 
+// ── Snapshot pré-calculado da aba Indicadores — mesma lista
+// LISTA_GOOGLE_TOKENS (`tipo:'indicadores_snapshot'`, distinto de token de
+// calendar/e-mail pela ausência/diferença de `tipo`, mesmo convívio já usado
+// pelos tokens de e-mail acima). Gerado 1x/dia pelo cron (job=snapshot-
+// indicadores, ~10min depois do relatório de finalização das 7h) — antes
+// disso, a aba Indicadores reaproveitava projetosCache, que só existia se
+// alguém já tivesse aberto a lista de projetos primeiro (buscando o
+// histórico INTEIRO de Entregue/Cancelado, que só cresce). Base64 (não
+// JSON puro em markdown_description) pelo mesmo motivo da conversa do Flow
+// IA logo abaixo: o resumo de finalização gerado por IA pode conter
+// caractere de markdown que o ClickUp canoniza e corrompe o JSON salvo. ──
+
+function codificarSnapshotIndicadores(estado) {
+  return Buffer.from(JSON.stringify(estado), 'utf8').toString('base64');
+}
+function decodificarSnapshotIndicadores(description) {
+  try {
+    return JSON.parse(Buffer.from(String(description || '').trim(), 'base64').toString('utf8'));
+  } catch (e) {
+    return null;
+  }
+}
+
+function taskDoSnapshotIndicadores(tasks) {
+  return tasks.find((t) => decodificarSnapshotIndicadores(t.description)?.tipo === 'indicadores_snapshot');
+}
+
+/** `{ linhas, geradoEm }` do último snapshot salvo, ou null se nunca rodou. */
+export async function obterSnapshotIndicadores() {
+  const tasks = await listarTokensGoogle();
+  const task = taskDoSnapshotIndicadores(tasks);
+  if (!task) return null;
+  const estado = decodificarSnapshotIndicadores(task.description);
+  if (!estado || !Array.isArray(estado.linhas)) return null;
+  return { linhas: estado.linhas, geradoEm: Number(estado.geradoEm) || null };
+}
+
+/** Cria ou atualiza a task única do snapshot (1 no total, não 1 por pessoa). */
+export async function salvarSnapshotIndicadores(linhas) {
+  const corpo = codificarSnapshotIndicadores({ tipo: 'indicadores_snapshot', linhas, geradoEm: Date.now() });
+  const tasks = await listarTokensGoogle();
+  const existente = taskDoSnapshotIndicadores(tasks);
+  if (existente) {
+    return atualizarTask(existente.id, { markdown_description: corpo });
+  }
+  return cu(`/list/${LISTA_GOOGLE_TOKENS}/task`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'Snapshot — Indicadores',
+      markdown_description: corpo,
+    }),
+  });
+}
+
 // ── Conversas do chat de geração de flow do Waipe Flow por IA — mesma
 // chave de tokenDeEmail acima (sessao.nome), mas NUNCA usa parseWaipeState/
 // stringifyWaipeState aqui: as mensagens da IA legitimamente contêm blocos

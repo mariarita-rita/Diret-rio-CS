@@ -920,7 +920,16 @@
         }
         projetoAtualId = null;
         wizard = null;
-        if (typeof renderProjetosPanel === "function") renderProjetosPanel();
+        if (tab === "entregues" && typeof garantirHistoricoProjetosCarregado === "function"){
+          // Só falta histórico na 1ª vez — nas próximas, resolve na hora
+          // (depois() roda síncrono quando historicoProjetosCarregado já é true).
+          var root = projetosRootAtivo();
+          var wrap = root ? root.querySelector("[data-lista-wrap]") : null;
+          if (wrap && !historicoProjetosCarregado) wrap.innerHTML = '<div class="sub">Carregando…</div>';
+          garantirHistoricoProjetosCarregado(function(){
+            if (typeof renderProjetosPanel === "function") renderProjetosPanel();
+          });
+        } else if (typeof renderProjetosPanel === "function") renderProjetosPanel();
       }
       if (tab === "indicadores" && typeof carregarIndicadores === "function") carregarIndicadores();
     });
@@ -1631,23 +1640,30 @@
   // ---- Indicadores (satisfação, risco e duração de implantação, mais
   // engajamento de treinamento — treinamento é UMA métrica aqui, não o
   // resumo da tela toda) ----
-  function carregarIndicadores(){
+  // `geradoEm` (ms) do snapshot mostrado agora — null enquanto carrega ou se
+  // o snapshot ainda não existe (1ª vez, antes do cron rodar às 7h10).
+  var indicadoresGeradoEm = null;
+  function carregarIndicadores(forcar){
     var root = document.getElementById("indicadoresRoot");
     if (!root) return;
     root.innerHTML = '<div class="sub">Carregando...</div>';
     Promise.all([
       fetch("/api/trilhas-admin?recurso=indicadores", { credentials: "same-origin" }).then(tratarRespostaApi),
-      // Reaproveita projetosCache se a aba Projetos/Entregues já tiver
-      // carregado nesta sessão — senão busca 1x aqui mesmo, mesma chamada
-      // que carregarListaProjetos já usa.
-      projetosCache ? Promise.resolve({ tasks: projetosCache }) : apiGet("listar-implantacoes"),
+      // Lê um snapshot pré-calculado (cron job=snapshot-indicadores, ~10min
+      // depois do relatório de finalização das 7h) em vez de recalcular o
+      // histórico inteiro toda vez que a aba abre — projetosCache não serve
+      // mais aqui, porque o carregamento inicial da lista agora só traz
+      // projetos abertos (apenasAbertos=true, ver carregarListaProjetos).
+      // forcar=true ("🔄 Recarregar agora") ignora o snapshot, recalcula na
+      // hora e atualiza o snapshot salvo pra todo mundo.
+      apiGet("listar-indicadores-snapshot", forcar ? { forcar: "true" } : undefined),
       // Agenda dos ISMs (reservas) — só usada pela sub-aba Gráficos
       // (atividade do ISM no dia/semana), mas a lista é pequena e busca
       // 1x junto custa bem menos que buscar sob demanda depois.
       apiGet("listar-reservas").catch(function(){ return { reservas: [] }; }),
     ]).then(function(resultados){
-      if (!projetosCache) projetosCache = resultados[1].tasks || [];
-      renderIndicadores(root, resultados[0].indicadores || [], projetosCache, resultados[2].reservas || []);
+      indicadoresGeradoEm = resultados[1].geradoEm || null;
+      renderIndicadores(root, resultados[0].indicadores || [], resultados[1].tasks || [], resultados[2].reservas || []);
     }).catch(function(e){
       // Sessão inválida nunca cai aqui: tratarRespostaApi devolve uma promise
       // que fica pendente pra sempre nesse caso, e mostrarLoginNoPainel já
@@ -2245,7 +2261,19 @@
   }
 
   function renderIndicadores(root, linhasTreinamento, projetos, reservas){
+    // "Última atualização" reflete o snapshot pré-calculado (cron
+    // job=snapshot-indicadores, ~7h10 da manhã) — sem geradoEm, ou o cron
+    // ainda não rodou nenhuma vez, ou a sessão acabou de forçar um recálculo
+    // ao vivo (mesma coisa: o snapshot salvo É o "ao vivo" nesse instante).
+    var infoAtualizacaoHtml =
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' +
+        '<div class="sub" style="margin:0;">' +
+          (indicadoresGeradoEm ? ("Última atualização: " + fmtDataHora(indicadoresGeradoEm)) : "Ainda sem atualização automática registrada") +
+        '</div>' +
+        '<button type="button" id="btnRecarregarIndicadores" class="btn-flow-secondary" style="width:auto;padding:4px 10px;font-size:12px;">🔄 Recarregar agora</button>' +
+      '</div>';
     root.innerHTML =
+      infoAtualizacaoHtml +
       '<div class="modo-visualizacao" style="margin-bottom:14px;">' +
         '<button type="button" id="btnIndicadoresResumo" class="' + (indicadoresSubAba === "resumo" ? "ativo" : "") + '">📋 Resumo</button>' +
         '<button type="button" id="btnIndicadoresGraficos" class="' + (indicadoresSubAba === "graficos" ? "ativo" : "") + '">📈 Gráficos</button>' +
@@ -2263,6 +2291,9 @@
       indicadoresSubAba = "graficos";
       renderIndicadores(root, linhasTreinamento, projetos, reservas);
     });
+    root.querySelector("#btnRecarregarIndicadores").addEventListener("click", function(){
+      carregarIndicadores(true);
+    });
   }
 
   // ---- Capability `sample` (extração de agentes por IA) ----
@@ -2276,6 +2307,13 @@
 
   // ---- Estado ----
   var projetosCache = null;   // lista de listar-implantacoes (nao filtrada — a mesma pras 2 abas)
+  // Carregamento inicial (carregarListaProjetos) agora busca só abertos
+  // (apenasAbertos=true) — mesma otimização do auto-refresh de 1min, só que
+  // pro F5/1º carregamento da página também, que antes sempre paginava o
+  // histórico inteiro de Entregues/Cancelados de novo (2026-09-28). Entregues
+  // busca o histórico completo sob demanda, 1x, na 1ª vez que a aba abre
+  // nesta sessão (ver garantirHistoricoProjetosCarregado).
+  var historicoProjetosCarregado = false;
   // Throttle dos dois widgets da lista de projetos que fazem sincronismo
   // pesado (Google Calendar de cada ISM + leituras extras no ClickUp):
   // renderListaProjetosWrap roda em toda troca de filtro/aba e a cada tick
@@ -2845,8 +2883,9 @@
 
   function carregarListaProjetos(){
     if (timerRetryListaProjetos){ clearInterval(timerRetryListaProjetos); timerRetryListaProjetos = null; }
+    historicoProjetosCarregado = false; // 1º carregamento é sempre só abertos — ver nota acima
     Promise.all([
-      apiGet("listar-implantacoes"),
+      apiGet("listar-implantacoes", { apenasAbertos: "true" }),
       // Busca 1x, junto — listar-reservas já é a lista inteira (pequena), só
       // pra calcular o sinal de agendamento/atraso de cada card, sem chamada
       // extra por projeto.
@@ -2864,6 +2903,24 @@
         carregarListaProjetos
       );
     });
+  }
+
+  /**
+   * Entregues precisa do histórico completo (Entregue/Cancelado), que o
+   * carregamento inicial agora pula (apenasAbertos=true, ver
+   * carregarListaProjetos). Busca 1x, na 1ª vez que a aba abre nesta sessão
+   * — depois disso fica em projetosCache normalmente (o auto-refresh de
+   * 1min já preserva os fechados em cache, ver autoAtualizarProjetos).
+   * `depois` roda sempre (com ou sem erro) — erro aqui não deve travar a
+   * tela, só deixa os fechados de fora até a próxima tentativa.
+   */
+  function garantirHistoricoProjetosCarregado(depois){
+    if (historicoProjetosCarregado){ depois(); return; }
+    apiGet("listar-implantacoes").then(function(resultado){
+      projetosCache = resultado.tasks || [];
+      historicoProjetosCarregado = true;
+      depois();
+    }).catch(function(){ depois(); });
   }
 
   function renderListaProjetosWrap(){
