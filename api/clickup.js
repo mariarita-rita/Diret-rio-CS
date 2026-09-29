@@ -3337,8 +3337,14 @@ async function listarReservasAcao(res, sessao) {
  * Google) — quem chama só precisa repassar pro `res` — ou
  * `{ linkReuniao, googleEventId }` em caso de sucesso (ambos `null` se o
  * ISM não conectou).
+ *
+ * `projetoId`/`observacao` (opcionais) só entram na DESCRIÇÃO do evento do
+ * Google — link do projeto no painel + observação livre pra quem abre o
+ * compromisso direto na agenda (pedido da Erica, 2026-09-29). Nenhum dos
+ * dois é lido de volta ou fica exposto na tela do painel; existem só pra
+ * esse propósito.
  */
-async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados }) {
+async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados, projetoId, observacao }) {
   const existentes = await listarReservas();
   const conflito = existentes
     .filter((t) => responsavelIdDaReserva(t) === ismId)
@@ -3377,7 +3383,11 @@ async function criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados })
           },
         };
       }
-      const evento = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados });
+      const descricaoEvento = [
+        projetoId ? `Projeto no painel: ${SITE_ORIGEM}/implantacao-waipe.html?projeto=${projetoId}` : null,
+        observacao ? `Observação: ${observacao}` : null,
+      ].filter(Boolean).join('\n\n') || undefined;
+      const evento = await criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees: convidados, descricao: descricaoEvento });
       linkReuniao = evento.hangoutLink;
       googleEventId = evento.id;
     }
@@ -3459,8 +3469,9 @@ async function criarReservaAcao(req, res, sessao) {
   }
 
   const convidados = sanearListaEmails(corpo.convidados);
+  const observacao = textoLivre(corpo.observacao, 500);
 
-  const resultado = await criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados });
+  const resultado = await criarReservaComGoogle({ titulo, ismId, inicio, fim, convidados, projetoId, observacao });
   if (resultado.erro) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(resultado.erro.status).json(resultado.erro.corpo);
@@ -3618,7 +3629,7 @@ async function reagendarReservaAcao(req, res, sessao) {
   const projetoId = projetoDaDescricaoReserva(tarefa.description);
   const convidados = convidadosDaDescricaoReserva(tarefa.description);
 
-  const resultado = await criarReservaComGoogle({ titulo, ismId, inicio: novoInicio, fim: novoFim, convidados });
+  const resultado = await criarReservaComGoogle({ titulo, ismId, inicio: novoInicio, fim: novoFim, convidados, projetoId });
   if (resultado.erro) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(resultado.erro.status).json(resultado.erro.corpo);

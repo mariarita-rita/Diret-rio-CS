@@ -257,13 +257,17 @@ export async function listarEventos(accessToken, inicio, fim) {
  * por e-mail pra eles (sem convidados, mantém o comportamento de sempre:
  * nenhuma notificação).
  */
-export async function criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees }) {
+export async function criarEventoComMeet(accessToken, { titulo, inicio, fim, attendees, descricao }) {
   const corpo = {
     summary: titulo,
     start: { dateTime: new Date(inicio).toISOString() },
     end: { dateTime: new Date(fim).toISOString() },
     conferenceData: { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } },
   };
+  // Link do projeto no painel + observação livre (pedido da Erica,
+  // 2026-09-29) — só aparece pra quem abre o evento direto na agenda do
+  // Google, não é lido de volta em nenhum lugar do painel.
+  if (descricao) corpo.description = descricao;
   const temConvidados = Array.isArray(attendees) && attendees.length > 0;
   if (temConvidados) {
     corpo.attendees = attendees.map((email) => ({ email }));

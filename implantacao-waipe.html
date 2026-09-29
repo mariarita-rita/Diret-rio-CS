@@ -5120,6 +5120,12 @@
         ) + '</div>' +
         '<input type="text" class="form-input" id="novaReservaConvidados" value="' + esc(emailCliente) + '" placeholder="E-mails dos convidados, separados por vírgula" style="width:100%; margin-top:4px;">' +
       '</div>' +
+      '<div style="margin-top:8px;">' +
+        '<div class="sp-k" style="display:flex; align-items:center;">Observação (opcional)' + infoTip(
+          "Só aparece pra quem abrir esse compromisso direto na agenda do Google — não fica registrada aqui no painel."
+        ) + '</div>' +
+        '<textarea class="form-textarea" id="novaReservaObservacao" rows="2" placeholder="Ex: cliente prefere falar sobre o módulo financeiro primeiro" style="width:100%; margin-top:4px;"></textarea>' +
+      '</div>' +
       '<div id="reservaErro" style="display:none; color:var(--danger); font-size:12px; margin-top:8px;"></div>' +
     '</div>';
   }
@@ -5247,8 +5253,9 @@
       var fim = new Date(data + "T" + horaFim + ":00").getTime();
       var convidadosRaw = container.querySelector("#novaReservaConvidados").value.trim();
       var convidados = convidadosRaw ? convidadosRaw.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
+      var observacao = container.querySelector("#novaReservaObservacao").value.trim();
       btnReservar.disabled = true;
-      apiPost("criar-reserva", { projetoId: projetoId, titulo: titulo, ismId: ismId, inicio: inicio, fim: fim, convidados: convidados })
+      apiPost("criar-reserva", { projetoId: projetoId, titulo: titulo, ismId: ismId, inicio: inicio, fim: fim, convidados: convidados, observacao: observacao })
         .then(function(resp){
           if (resp && resp.linkReuniao){
             var msg = "Reservado! Meet criado automático: " + resp.linkReuniao;
