@@ -1493,11 +1493,17 @@ function sanearFinalizacao(d) {
 
 /** Descrição legível de uma "outra solução" (pra quem abre a subtask direto no ClickUp). */
 function descricaoSolucao(o) {
-  const valor = o.valorTabela != null ? o.valorTabela : o.valorManual;
+  // `valorTabela`/`valorManual`/`quantidade` só vêm garantidos quando o
+  // objeto passou por sanearOutraSolucao (fluxo normal do painel) — um
+  // script de migração que monta `solucoes` na mão (ver
+  // scripts/migrar-moskit-projetos.mjs e migrações avulsas) pode legitimamente
+  // não preencher valor nenhum (serviço sem cobrança à parte), então trata
+  // ausência como 0 em vez de estourar aqui.
+  const valor = Number(o.valorTabela != null ? o.valorTabela : o.valorManual) || 0;
   const linhas = [
     `**Produto:** ${o.produto}${o.planoSugerido ? ' — ' + o.planoSugerido : ''}${o.variante ? ' (' + o.variante + ')' : ''}`,
     o.motivo ? `**Como ajuda o cliente:** ${o.motivo}` : null,
-    `**Quantidade:** ${o.quantidade}`,
+    `**Quantidade:** ${o.quantidade ?? 1}`,
     `**Valor unitário:** R$ ${valor.toFixed(2)}`,
     o.descontoPercent ? `**Desconto:** ${o.descontoPercent}%` : null,
     o.vigenciaMeses ? `**Vigência:** ${o.vigenciaMeses} meses${o.isencaoSetup ? ' (setup dos produtos contratados isento)' : ''}` : null,
