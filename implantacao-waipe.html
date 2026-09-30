@@ -4225,6 +4225,22 @@
   // Reenvia SEMPRE o dadosTributarios inteiro, junto com o preenchidoEm que
   // já estava salvo — uma edição manual do CSM nunca pode apagar sozinha o
   // registro de que o cliente já respondeu o formulário.
+  // Só Gestão edita — o servidor também trava isso (atualizar-implantacao
+  // recusa "contexto" fora do nível "gestao"), pedido explícito da usuária
+  // (2026-09-30): antes só dava pra definir o contexto na criação/migração,
+  // sem nenhuma tela de edição depois.
+  function persistirContextoProjeto(contexto){
+    if (!dadosProjeto) return;
+    apiPost("atualizar-implantacao", {
+      id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
+      agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
+      contexto: contexto
+    }).then(function(){
+      dadosProjeto.projeto.contexto = contexto;
+      showSimToast("Contexto salvo.");
+    }).catch(function(e){ showSimToast(mensagemErro(e) || "Não deu para salvar o contexto."); });
+  }
+
   function persistirDadosTributarios(dados){
     if (!dadosProjeto) return;
     var atual = dadosProjeto.projeto.dadosTributarios || {};
@@ -5415,7 +5431,10 @@
       '<div class="sp-k" style="margin-top:10px;">🚨 Alertas <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesmo campo da Carteira CSM)</span></div>' +
       '<div>' + seletorAlertasProjeto(p) + '</div>' +
       '<div class="sp-k">Contexto</div>' +
-      '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>' +
+      (sessaoNivelAtual === "gestao"
+        ? '<textarea id="contextoProjetoEdit" class="form-textarea" rows="4" style="white-space:pre-wrap;">' + esc(p.contexto || "") + '</textarea>' +
+          '<button type="button" class="btn-flow-secondary" id="btnSalvarContexto" style="margin-top:6px;">Salvar contexto</button>'
+        : '<div class="sp-v" style="white-space:pre-wrap;">' + esc(p.contexto || "—") + '</div>') +
       '<div id="ismProjetoWrap"></div>' +
       '<div class="sp-k" style="margin-top:14px;">Dados do cliente</div>' +
       '<div class="form-grid-2">' +
@@ -5606,6 +5625,10 @@
     if (btnMostrarSenhaCertificado) btnMostrarSenhaCertificado.addEventListener("click", function(){
       var campo = document.getElementById("tribSenhaCertificado");
       campo.type = campo.type === "password" ? "text" : "password";
+    });
+    var btnSalvarContexto = document.getElementById("btnSalvarContexto");
+    if (btnSalvarContexto) btnSalvarContexto.addEventListener("click", function(){
+      persistirContextoProjeto(document.getElementById("contextoProjetoEdit").value);
     });
     var btnSalvarDadosTributarios = document.getElementById("btnSalvarDadosTributarios");
     if (btnSalvarDadosTributarios) btnSalvarDadosTributarios.addEventListener("click", function(){

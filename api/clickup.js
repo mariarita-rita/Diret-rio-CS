@@ -2332,6 +2332,14 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
   if ('finalizacao' in corpo && sessao.nivel !== 'gestao') {
     return erro(res, 403, 'somente_gestao', 'Só a Gestão pode editar o relatório de finalização.');
   }
+  // Contexto do projeto — só Gestão edita (pedido explícito da usuária,
+  // 2026-09-30): o contexto normalmente vem de uma migração/criação e não
+  // tinha nenhuma tela de edição depois; só existe o risco de perder a
+  // linha "**CSM:**" (texto livre, fora do JSON de estado) se reescrever
+  // sem preservá-la — ver montagem de novoTextoLivre logo abaixo.
+  if ('contexto' in corpo && sessao.nivel !== 'gestao') {
+    return erro(res, 403, 'somente_gestao', 'Só a Gestão pode editar o contexto do projeto.');
+  }
 
   const estadoAtual = parseWaipeState(tarefa.description);
   // Calculada antes do objeto pra poder decidir o carimbo de dataFimReal
@@ -2468,7 +2476,18 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     ismIds: Array.isArray(corpo.ism) ? sanearAssignees(corpo.ism) : (estadoAtual.ismIds || []),
   };
 
-  const payload = { markdown_description: stringifyWaipeState(tarefa.description, novoEstado) };
+  // Texto livre (CSM + contexto, fora do JSON de estado) — só reescrito
+  // quando "contexto" vem no corpo (edição de Gestão, já validada acima);
+  // caso contrário preserva tarefa.description como sempre. Reconstrói a
+  // linha "**CSM:**" a partir do CSM já lido (csmDaDescricaoImplantacao
+  // aceita com ou sem os asteriscos) — nunca reaproveitar o texto livre
+  // antigo puro aqui, senão a linha do CSM se perde quando ele foi
+  // salvo sem os "**" (toda leitura de volta do ClickUp vem assim).
+  const textoLivreParaGravar = 'contexto' in corpo
+    ? [csm ? `**CSM:** ${csm}` : null, textoLivre(corpo.contexto, 6000)].filter(Boolean).join('\n\n')
+    : tarefa.description;
+
+  const payload = { markdown_description: stringifyWaipeState(textoLivreParaGravar, novoEstado) };
   if (typeof corpo.status === 'string' && STATUS_IMPLANTACAO_VALIDOS.has(corpo.status)) {
     payload.status = corpo.status;
   } else if (novaFaseProjetoManual === 'entregue' || novaFaseProjetoManual === 'cancelado') {
