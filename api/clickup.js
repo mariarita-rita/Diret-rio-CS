@@ -948,6 +948,28 @@ function sanearAssignees(ids) {
   return out;
 }
 
+/**
+ * `assignees` no PUT /task do ClickUp exige `{ add, rem }` (a diferença
+ * entre o que já está e o que deveria ficar) — mandar um array plano (ex:
+ * `assignees: []` pra desatribuir todo mundo) é aceito sem erro pela API,
+ * mas NÃO faz nada: o assignee antigo continua lá, silenciosamente (bug
+ * real, 2026-09-29 — usuária tentou tirar o ISM da AZTEC, o painel avisou
+ * "responsável alterado" mas o nome antigo voltava a aparecer no reload).
+ * Confirmado ao vivo contra a API antes de corrigir: `assignees: []` não
+ * mexeu em nada; `assignees: { rem: [id] }` removeu de verdade. Só usado em
+ * UPDATE (atualizarTask) — CRIAÇÃO de task (criarTaskImplantacao/
+ * criarReserva/criarSubtaskAgente) aceita array plano normalmente, isso
+ * nunca teve o problema.
+ */
+function diffAssignees(atuais, novos) {
+  const atuaisSet = new Set((atuais || []).map(Number));
+  const novosSet = new Set(novos);
+  return {
+    add: novos.filter((id) => !atuaisSet.has(id)),
+    rem: (atuais || []).map(Number).filter((id) => !novosSet.has(id)),
+  };
+}
+
 /** Nomes de ISM/CSM a partir do array `assignees` que o ClickUp devolve na task. */
 function nomesIsm(assignees) {
   if (!Array.isArray(assignees)) return [];
@@ -2473,7 +2495,7 @@ async function atualizarImplantacaoAcao(req, res, sessao) {
     payload.status = 'in progress';
   }
   if (Array.isArray(corpo.ism)) {
-    payload.assignees = sanearAssignees(corpo.ism);
+    payload.assignees = diffAssignees(tarefa.assignees?.map((a) => a.id), sanearAssignees(corpo.ism));
   }
 
   await atualizarTask(corpo.id, payload);
@@ -2860,7 +2882,7 @@ async function atualizarAgenteAcao(req, res, sessao) {
     payload.due_date = Date.parse(`${corpo.dueDate}T12:00:00-03:00`);
   }
   if (Array.isArray(corpo.ism)) {
-    payload.assignees = sanearAssignees(corpo.ism);
+    payload.assignees = diffAssignees(tarefa.assignees?.map((a) => a.id), sanearAssignees(corpo.ism));
   }
 
   await atualizarTask(corpo.taskId, payload);
