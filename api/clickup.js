@@ -1554,7 +1554,11 @@ export async function criarSubtasksSolucao(projetoId, solucoes, faseInicial) {
     const checklist = jornadaPara(o.produto, o.ambienteMuda);
     const fase = FASES_ITEM_VALIDAS.has(faseInicial) ? faseInicial : FASE_ITEM_PADRAO;
     const subtask = await criarSubtaskAgente(projetoId, {
-      name: o.produto + (o.planoSugerido ? ` — ${o.planoSugerido}` : ''),
+      // Variante (Nuvem/Local) entra no nome — sem isso o item ficava
+      // ambíguo na lista (o dado ficava só no corpo/JSON, nunca visível
+      // sem abrir o item — a usuária reportou não dar pra saber se um
+      // "Gestor — Intermediário" era Nuvem ou Local, 2026-09-29).
+      name: o.produto + (o.planoSugerido ? ` — ${o.planoSugerido}` : '') + (o.variante ? ` (${o.variante})` : ''),
       markdown_description: stringifyWaipeState(descricaoSolucao(o), {
         tipo: 'solucao',
         produto: o.produto,
