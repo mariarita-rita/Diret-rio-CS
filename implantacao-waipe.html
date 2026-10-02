@@ -1344,7 +1344,8 @@
   // seletor de "+ Adicionar item"; o servidor valida de novo do lado dele.
   var PRODUTOS_SOLUCAO_OPCOES = [
     "Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Bime",
-    "Deploy", "Treinamento", "Migração Nuvem", "Homologação de Boleto", "Nota de Serviço", "Waipe Individual", "Waipe Team", "Waipe Enterprise",
+    "Deploy", "Treinamento", "Migração Nuvem", "Homologação de Boleto", "Nota de Serviço",
+    "Londrisoft Camp 2026", "Waipe Individual", "Waipe Team", "Waipe Enterprise",
     "Cadastro Inteligente", "Analytics", "Outro"
   ];
 
@@ -3591,6 +3592,45 @@
       ' <button type="button" class="btn-reset" data-destacar-comentario="' + esc(id) + '" data-destaque-atual="' + (destaque ? "1" : "0") + '" title="' + (destaque ? "Remover destaque" : "Destacar (fundo diferenciado)") + '" style="margin-left:4px;' + (destaque ? "border-color:var(--warning);color:var(--warning);" : "") + '">🖍️</button>';
   }
 
+  // Markdown leve SÓ pra exibir comentários (negrito, itálico, código, links
+  // http(s), títulos, listas, parágrafos). O texto é escapado por esc() ANTES
+  // de qualquer transformação — nenhuma tag chega do usuário, só as que este
+  // código monta; link só vira <a> com http(s):// (nunca javascript:).
+  function inlineRico(s){
+    return s
+      .replace(/`([^`\n]+)`/g, '<code style="background:var(--surface-2);padding:1px 4px;border-radius:4px;font-size:12px;">$1</code>')
+      .replace(/\*\*([^*\n]+?)\*\*/g, "<b>$1</b>")
+      .replace(/(^|[\s(])\*([^*\s][^*\n]*?)\*(?=[\s).,;:!?]|$)/g, "$1<i>$2</i>")
+      .replace(/(^|[\s(])_([^_\s][^_\n]*?)_(?=[\s).,;:!?]|$)/g, "$1<i>$2</i>")
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)<]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/(^|[\s(])(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+  }
+  function formatarTextoRico(bruto){
+    var linhas = esc(String(bruto || "").trim()).replace(/\r\n?/g, "\n").split("\n");
+    var out = [];
+    var lista = null; // "ul" | "ol" enquanto houver itens seguidos
+    function fecharLista(){ if (lista){ out.push("</" + lista + ">"); lista = null; } }
+    function abrirLista(tipo){
+      if (lista === tipo) return;
+      fecharLista();
+      out.push("<" + tipo + ' style="margin:4px 0 4px 18px;padding:0;">');
+      lista = tipo;
+    }
+    linhas.forEach(function(linha){
+      var m = /^\s*[-*•]\s+(.*)$/.exec(linha);
+      if (m){ abrirLista("ul"); out.push("<li>" + inlineRico(m[1]) + "</li>"); return; }
+      m = /^\s*\d+[.)]\s+(.*)$/.exec(linha);
+      if (m){ abrirLista("ol"); out.push("<li>" + inlineRico(m[1]) + "</li>"); return; }
+      fecharLista();
+      m = /^\s*#{1,3}\s+(.*)$/.exec(linha);
+      if (m){ out.push('<div style="font-weight:700;margin-top:6px;">' + inlineRico(m[1]) + "</div>"); return; }
+      if (!linha.trim()){ out.push('<div style="height:6px;"></div>'); return; }
+      out.push("<div>" + inlineRico(linha) + "</div>");
+    });
+    fecharLista();
+    return out.join("");
+  }
+
   function comentarioHtml(c){
     var meta = metaComentarioTexto(c.texto);
     var textoBruto = meta.texto;
@@ -3613,7 +3653,16 @@
     var imagemHtml = m
       ? '<div style="margin-top:6px;"><img src="' + esc(m[0]) + '" data-lightbox-imagem="' + esc(m[0]) + '" alt="print anexado" style="max-width:240px;max-height:240px;border-radius:8px;display:block;cursor:zoom-in;"></div>'
       : "";
-    return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '<b>' + esc(c.autor) + '</b>' + (textoSemImagem ? " — " + esc(textoSemImagem) : "") +
+    // Uma linha só: continua "Autor — texto" compacto (com formatação inline);
+    // várias linhas: o corpo desce pra um bloco abaixo do autor, com parágrafos
+    // e listas preservados (antes tudo virava um bloco corrido só).
+    var corpoHtml = "";
+    if (textoSemImagem){
+      corpoHtml = /\n/.test(textoSemImagem.trim())
+        ? '<div style="margin-top:2px;">' + formatarTextoRico(textoSemImagem) + '</div>'
+        : " — " + inlineRico(esc(textoSemImagem));
+    }
+    return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '<b>' + esc(c.autor) + '</b>' + corpoHtml +
       imagemHtml +
       '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span>' + botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
   }
@@ -3640,7 +3689,7 @@
           '<button type="button" class="btn-flow-secondary" id="btnComentar">Comentar</button>' +
         '</div>' +
         '<div id="comentarioPreview" style="display:none;margin-top:10px;"></div>' +
-        '<div class="sub" style="margin-top:6px;">Enter comenta · Shift+Enter ou Ctrl+Enter pula linha · Ctrl+V cola um print · 🎤 dita por voz.</div>' +
+        '<div class="sub" style="margin-top:6px;">Enter comenta · Shift+Enter ou Ctrl+Enter pula linha · Ctrl+V cola um print · 🎤 dita por voz · Formatação: **negrito**, *itálico*, - lista, # título.</div>' +
         '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">' + listaHtml + '</div></div>';
       container.querySelectorAll("[data-copiar-flow]").forEach(function(btn){
         btn.addEventListener("click", function(){
@@ -6306,6 +6355,10 @@
           prereq: Array.isArray(a.prereq) ? a.prereq.join("\n") : ""
         };
       }),
+      // Vazio por padrão (diferente de agentes) — a IA não extrai solução
+      // nenhuma, só existe aqui o que a pessoa adicionar manualmente na
+      // tela de revisão, então toda linha que existir foi intencional.
+      solucoes: [],
       erro: "", salvando: false
     };
     if (!wizard.agentes.length) wizard.agentes.push({ nome:"", frente:"", frequencia:"", canal:"", publico:"", entrega:"", sistemas:"", prereq:"" });
@@ -6331,6 +6384,8 @@
       '</div>' +
       '<div id="agentesEditorWrap"></div>' +
       '<div style="margin:10px 0 18px;"><button type="button" class="btn-flow-secondary" id="btnAddAgente">+ Adicionar agente</button></div>' +
+      '<div id="solucoesEditorWrap"></div>' +
+      '<div style="margin:10px 0 18px;"><button type="button" class="btn-flow-secondary" id="btnAddSolucao">+ Adicionar solução</button></div>' +
       (wizard.erro ? '<div class="callout danger"><div class="dot"></div><div>' + esc(wizard.erro) + '</div></div>' : "") +
       '<div class="flow-actions">' +
         '<button type="button" class="btn-flow-secondary" id="btnVoltarColar">← Voltar</button>' +
@@ -6372,6 +6427,45 @@
     }
     renderAgentesEditor();
 
+    // Mesmos campos que "Adicionar item" (num projeto já existente) já tem
+    // hoje — Produto/Plano/Ambiente/Observações — só que repetível, pra dar
+    // pra incluir Gestor+Simplaz+etc de uma vez já na criação do projeto.
+    function renderSolucoesEditor(){
+      var wrap = document.getElementById("solucoesEditorWrap");
+      wrap.innerHTML = wizard.solucoes.map(function(s, i){
+        return '<div class="card agent-editor-card">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;"><h2>Solução ' + (i + 1) + '</h2>' +
+            '<button type="button" class="btn-reset" data-remove-solucao="' + i + '">Remover</button>' +
+          '</div>' +
+          '<div class="form-grid-2">' +
+            '<div class="form-field"><label>Produto</label><select class="form-input" data-f="produto" data-i="' + i + '">' +
+              PRODUTOS_SOLUCAO_OPCOES.map(function(v){ return '<option value="' + esc(v) + '"' + (s.produto === v ? " selected" : "") + '>' + esc(v) + '</option>'; }).join("") +
+            '</select></div>' +
+            '<div class="form-field"><label>Plano/variação (opcional)</label><input type="text" class="form-input" data-f="planoSugerido" data-i="' + i + '" value="' + esc(s.planoSugerido) + '" placeholder="ex: Básico, NFe Cloud, Sicoob"></div>' +
+          '</div>' +
+          '<div class="form-field"><label>Ambiente (opcional)</label><select class="form-input" data-f="variante" data-i="' + i + '">' +
+            '<option value=""' + (s.variante ? "" : " selected") + '>—</option>' +
+            '<option value="Nuvem"' + (s.variante === "Nuvem" ? " selected" : "") + '>Nuvem</option>' +
+            '<option value="Local"' + (s.variante === "Local" ? " selected" : "") + '>Local</option>' +
+          '</select></div>' +
+          '<div class="form-field"><label>Observações (opcional)</label><textarea class="form-textarea" rows="2" data-f="observacoes" data-i="' + i + '">' + esc(s.observacoes) + '</textarea></div>' +
+        '</div>';
+      }).join("");
+      wrap.querySelectorAll("[data-f]").forEach(function(el){
+        var evento = el.tagName === "SELECT" ? "change" : "input";
+        el.addEventListener(evento, function(){
+          wizard.solucoes[parseInt(el.getAttribute("data-i"), 10)][el.getAttribute("data-f")] = el.value;
+        });
+      });
+      wrap.querySelectorAll("[data-remove-solucao]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          wizard.solucoes.splice(parseInt(btn.getAttribute("data-remove-solucao"), 10), 1);
+          renderSolucoesEditor();
+        });
+      });
+    }
+    renderSolucoesEditor();
+
     document.getElementById("rvCliente").addEventListener("input", function(e){ wizard.cliente = e.target.value; });
     document.getElementById("rvContexto").addEventListener("input", function(e){ wizard.contexto = e.target.value; });
     document.getElementById("rvIdNucleo").addEventListener("input", function(e){ wizard.idNucleo = e.target.value; });
@@ -6381,6 +6475,10 @@
     document.getElementById("btnAddAgente").addEventListener("click", function(){
       wizard.agentes.push({ nome:"", frente:"", frequencia:"", canal:"", publico:"", entrega:"", sistemas:"", prereq:"" });
       renderAgentesEditor();
+    });
+    document.getElementById("btnAddSolucao").addEventListener("click", function(){
+      wizard.solucoes.push({ produto: PRODUTOS_SOLUCAO_OPCOES[0], planoSugerido: "", variante: "", observacoes: "" });
+      renderSolucoesEditor();
     });
     document.getElementById("btnVoltarColar").addEventListener("click", function(){ wizard.step = "colar"; renderProjetosPanel(); });
     document.getElementById("btnCriarProjeto").addEventListener("click", API_ORIGIN_OK ? criarProjetoConfirmado : copiarDadosProjeto);
@@ -6413,9 +6511,24 @@
         };
       })
       .filter(function(a){ return a.nome; });
-    if (!agentesValidos.length){ wizard.erro = "Informe pelo menos um agente com nome."; renderProjetosPanel(); return null; }
+    // Toda linha de wizard.solucoes foi adicionada de propósito (começa
+    // vazio, ver iniciarRevisao) — não filtra por campo vazio, só sanea.
+    var solucoesValidas = wizard.solucoes.map(function(s){
+      return {
+        produto: s.produto || "", planoSugerido: (s.planoSugerido || "").trim(),
+        variante: s.variante || null, observacoes: (s.observacoes || "").trim()
+      };
+    });
+    // Projeto não precisa mais nascer de um agente Waipe — mesma regra que
+    // o backend já aplica (criarImplantacaoAcao), só que avisando na tela
+    // em vez de esperar o 400 do servidor.
+    if (!agentesValidos.length && !solucoesValidas.length){
+      wizard.erro = "Informe pelo menos um agente ou uma solução.";
+      renderProjetosPanel();
+      return null;
+    }
     wizard.erro = "";
-    return { cliente: cliente, contexto: wizard.contexto || "", idNucleo: idNucleo, cnpj: cnpj, email: email, telefone: telefone, agentes: agentesValidos };
+    return { cliente: cliente, contexto: wizard.contexto || "", idNucleo: idNucleo, cnpj: cnpj, email: email, telefone: telefone, agentes: agentesValidos, solucoes: solucoesValidas };
   }
 
   function criarProjetoConfirmado(){

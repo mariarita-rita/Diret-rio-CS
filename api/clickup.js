@@ -2194,8 +2194,13 @@ async function criarImplantacaoAcao(req, res, sessao) {
 
   const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
 
+  // "Waipe" só entra no nome quando o projeto de fato nasce com agente
+  // Waipe — um projeto só de soluções (Gestor/Simplaz/etc, sem agente
+  // nenhum) chamado de "Implantação Waipe" seria enganoso.
+  const nomeProjeto = agentes.length ? `${cliente} — Implantação Waipe` : `${cliente} — Implantação`;
+
   const projeto = await criarProjetoImplantacao({
-    nomeProjeto: `${cliente} — Implantação Waipe`, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
+    nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
   });
 
   return res.status(200).json({ ok: true, id: projeto.id });
