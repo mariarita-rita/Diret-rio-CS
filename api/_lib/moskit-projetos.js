@@ -97,6 +97,17 @@ export async function listarTodosCamposPersonalizados() {
   return listarTudo('/customFields');
 }
 
+/**
+ * Opções de um campo SINGLE_OPTION/MULTIPLE_OPTION (`GET
+ * /customFields/{id}/options`) — endpoint separado, não embutido na listagem
+ * de `/customFields` (confirmado ao vivo). TAMBÉM pagina por cursor, 10 por
+ * vez, mesmo esquema de `listarTudo` — "💠 Plano(s) Contratado(s)" tem 20
+ * opções reais e só devolvia 10 sem seguir o `nextPageToken`.
+ */
+export async function listarOpcoesCampo(campoId) {
+  return listarTudo(`/customFields/${campoId}/options`);
+}
+
 export async function buscarContato(id) {
   const r = await moskitFetchCru(`/contacts/${id}`);
   return r.json().catch(() => null);
@@ -216,6 +227,17 @@ export const CF_PROJETO = {
   OBSERVACOES_CS: 'CF_QJXmAZHjCNKQND25', // "Observações adicionais para o CS" — texto livre, geralmente o mais longo
   OBSERVACOES_CSQ: 'CF_gPpD7rHkCd0Jlmvo',
   PRODUTOS_CONTRATADOS: 'CF_42Ama1HZCXRa8mjl',
+  // Campos novos usados pelo webhook de criação automática (gatilho = Projeto
+  // criado no board Implantação) — ids confirmados via GET /customFields,
+  // module=PROJECT. Todos SINGLE_OPTION/MULTIPLE_OPTION: o valor vem em
+  // `options` (array de ids), não em textValue/numericValue/dateValue — ver
+  // listarOpcoesCampo acima pra resolver o rótulo de cada id.
+  TIPO_IMPLANTACAO: 'CF_eZYm9AHKiyNXAm47', // "Tipo de Implantação" (SINGLE_OPTION)
+  PLANOS_CONTRATADOS: 'CF_0WGqoyHbiaP7GmnP', // "💠 Plano(s) Contratado(s)" (MULTIPLE_OPTION)
+  MIGRACAO_DE_BASE: 'CF_E79MrKHLiazkbmZJ', // "💠 Migração de base?" (SINGLE_OPTION, Sim/Não)
+  OUTRO_CNPJ_CONOSCO: 'CF_8P5q4RH6iAkYwmRJ', // "💠 Outro CNPJ conosco?" (SINGLE_OPTION, Sim/Não)
+  DUPLICACAO_DE_DADOS: 'CF_YXoDkYHPiKxBbMGE', // "💠Duplicação de dados?" (SINGLE_OPTION, Sim/Não)
+  IMPORTACAO_DE_OUTRO_SISTEMA: 'CF_3LvDvpH1iG8e7M6a', // "💠 Importação de outro sistema?" (SINGLE_OPTION, Sim/Não)
   // Dados tributários — mesmos conceitos que o painel já grava em
   // persistirDadosTributarios (implantacao-waipe.html).
   REGIME_TRIBUTARIO: 'CF_gPpD7rHnidwPvmvo',
@@ -235,4 +257,86 @@ export const CF_PROJETO = {
   DOC_CSM_OU_COMERCIAL: 'CF_x1kq69HnC6vB9DzY',
   DOC_INICIAL_IMPLANTACAO: 'CF_KaZmKBHOCEoQvMJk',
   DOC_FINAL_IMPLANTACAO: 'CF_G5rMeyHNCXxk5Myj',
+};
+
+// Catálogo de opções de "Tipo de Implantação" (CF_PROJETO.TIPO_IMPLANTACAO),
+// id -> rótulo — enumerado ao vivo via listarOpcoesCampo (2026-10-01), usado
+// pra montar o prefixo do nome do projeto ("{rótulo} - {razão social}").
+export const TIPO_IMPLANTACAO_OPCOES = {
+  760358: 'Cliente Novo',
+  760359: 'Migração',
+  760361: 'Waipe',
+  766550: 'Reativação',
+  777784: 'Troca de Titularidade',
+  777785: 'Treinamento',
+  779676: 'Cadastro Inteligente',
+  780074: 'Simplaz - Contador',
+  780075: 'Simplaz - Empresário',
+  780239: 'Analytics',
+  780501: 'SERPRO',
+  781064: 'Bime APP',
+  791921: 'Homologação de Boleto',
+  793502: 'Importa Facil',
+};
+
+// Catálogo de "💠 Plano(s) Contratado(s)" (CF_PROJETO.PLANOS_CONTRATADOS),
+// id -> { produto, planoSugerido } já no formato de sanearOutraSolucao
+// (api/clickup.js) — ids enumerados ao vivo via listarOpcoesCampo
+// (2026-10-01, 20 opções, paginado 10 a 10). `produto: 'Simplaz'` é um
+// marcador interno (não é um valor válido de PRODUTOS_SOLUCAO_VALIDOS) —
+// resolverProdutoSimplaz, no webhook, decide entre "Simplaz Gestor"/"Simplaz
+// Unique" conforme o resto dos planos contratados no mesmo projeto antes de
+// gravar.
+export const PLANOS_CONTRATADOS_OPCOES = {
+  // 🔵 Gestor (Cloud/Local já no nome do plano, não em `variante` — pedido
+  // repetido da usuária em várias migrações manuais desta sessão).
+  759777: { produto: 'Gestor', planoSugerido: 'Básico Cloud' },
+  759778: { produto: 'Gestor', planoSugerido: 'Básico Local' },
+  759779: { produto: 'Gestor', planoSugerido: 'NFe Cloud' },
+  759780: { produto: 'Gestor', planoSugerido: 'NFe Local' },
+  759781: { produto: 'Gestor', planoSugerido: 'Intermediário Cloud' },
+  759782: { produto: 'Gestor', planoSugerido: 'Intermediário Local' },
+  759783: { produto: 'Gestor', planoSugerido: 'Avançado Cloud' },
+  759784: { produto: 'Gestor', planoSugerido: 'Avançado Local' },
+  // 🟣 Unique.
+  759785: { produto: 'Unique', planoSugerido: 'Light' },
+  759786: { produto: 'Unique', planoSugerido: 'Plus' },
+  759787: { produto: 'Unique', planoSugerido: 'Premium' },
+  // 🟠 Simplaz — base (Gestor/Unique) resolvida em tempo de execução.
+  759788: { produto: 'Simplaz', planoSugerido: 'Bronze' },
+  759789: { produto: 'Simplaz', planoSugerido: 'Prata' },
+  759790: { produto: 'Simplaz', planoSugerido: 'Ouro' },
+  // 🔸 Waipe — "Entreprise" é o próprio typo do Moskit; corrigido aqui pro
+  // nome certo do produto ("Waipe Enterprise").
+  759791: { produto: 'Waipe Individual', planoSugerido: '' },
+  759792: { produto: 'Waipe Team', planoSugerido: '' },
+  783919: { produto: 'Waipe Enterprise', planoSugerido: '' },
+  // 🔹⚫💠 Demais produtos de primeira classe do catálogo.
+  779675: { produto: 'Cadastro Inteligente', planoSugerido: '' },
+  780240: { produto: 'Analytics', planoSugerido: '' },
+  781063: { produto: 'BIME APP', planoSugerido: '' },
+};
+
+// Os 4 campos Sim/Não do projeto — mesmas duas opções em todos (texto
+// idêntico "Não ❌"/"Sim ✅", só o id da opção "Sim" muda por campo,
+// confirmado ao vivo via listarOpcoesCampo). Usado pra transformar resposta
+// crua (SIM/NÃO) em frase de contexto legível (ver fraseCampoSimNao no
+// webhook) em vez de só colar "Sim ✅"/"Não ❌" cru.
+export const CAMPOS_SIM_NAO = {
+  [CF_PROJETO.OUTRO_CNPJ_CONOSCO]: {
+    idSim: 569713,
+    frases: { sim: 'Já é cliente da Londrisoft em outro CNPJ.', nao: 'Não tem outro CNPJ conosco.' },
+  },
+  [CF_PROJETO.DUPLICACAO_DE_DADOS]: {
+    idSim: 569715,
+    frases: { sim: 'Vai precisar de duplicação de dados.', nao: 'Não vai precisar de duplicação de dados.' },
+  },
+  [CF_PROJETO.MIGRACAO_DE_BASE]: {
+    idSim: 569711,
+    frases: { sim: 'Vai precisar de migração de base.', nao: 'Não vai precisar de migração de base.' },
+  },
+  [CF_PROJETO.IMPORTACAO_DE_OUTRO_SISTEMA]: {
+    idSim: 569719,
+    frases: { sim: 'Vai importar dados de outro sistema.', nao: 'Não precisa importar dados de outro sistema.' },
+  },
 };

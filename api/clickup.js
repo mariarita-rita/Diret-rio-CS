@@ -1074,7 +1074,7 @@ function numeroOuNulo(v, min, max) {
   return n;
 }
 
-const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Nota de Serviço', 'Londrisoft Camp 2026', 'Outro']);
+const PRODUTOS_SOLUCAO_VALIDOS = new Set(['Gestor', 'Simplaz Gestor', 'Simplaz Unique', 'Unique', 'BIME APP', 'Bime', 'Deploy', 'Treinamento', 'Migração Nuvem', 'Homologação de Boleto', 'Nota de Serviço', 'Londrisoft Camp 2026', 'Waipe Individual', 'Waipe Team', 'Waipe Enterprise', 'Cadastro Inteligente', 'Analytics', 'Outro']);
 const VARIANTES_SOLUCAO_VALIDAS = new Set(['Nuvem', 'Local']);
 // 'vigencia': desconto do item vem da vigência contratada (3/6/12 meses,
 // Londrisoft Deploy), não de alçada negociável — ver VIGENCIAS_DEPLOY_VALIDAS.

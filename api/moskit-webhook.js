@@ -1,45 +1,43 @@
 // POST /api/moskit-webhook?token=...
 //
-// Recebe o evento "Edição no status de negócio" (metadata.event =
-// "deal-statusChanged") do Moskit/Ollow e, quando o negócio muda pra GANHO
-// (status WON), cria o projeto de implantação no ClickUp automaticamente —
-// puxando cliente, CNPJ, contato, notas, produtos e anexos (ex: certificado
-// digital) direto do negócio, em vez de alguém preencher tudo de novo à
-// mão. O "criar projeto automático" nativo do Moskit existe mas não copia
-// nenhum campo personalizado, por isso esta automação bypassa ele e cria
-// direto no painel de implantação em ClickUp (ver plano: o Projeto nativo
-// do Moskit deixa de ser usado).
+// Recebe o evento de PROJETO criado no Moskit/Ollow e, quando o projeto cai
+// no board "Implantação" (id 37484, módulo Projetos — ver BOARD_IMPLANTACAO
+// em _lib/moskit-projetos.js), cria o projeto de implantação correspondente
+// no ClickUp automaticamente — puxando cliente, CNPJ, contato(s), notas,
+// planos contratados e anexos direto do Projeto do Moskit.
 //
-// Nome do projeto: "Cliente Novo - {nome do negócio}" — o nome do cliente é
-// o nome do PRÓPRIO negócio no Moskit (é assim que o Comercial já trabalha),
-// não o cadastro da empresa/contato. CSM fica em branco (é o gerente de
-// contas, atribuído depois — automação ainda não existe); o responsável
-// pelo negócio no Moskit vira o campo separado `vendedor`.
+// REESCRITO EM 2026-10-01 (a pedido da usuária, "vamos mudar praticamente
+// tudo"): a versão anterior disparava em "Negócio ganho" (módulo Deal) — o
+// gatilho agora é a CRIAÇÃO de um Projeto (módulo Projetos), não mais um
+// negócio. Preserva só a casca HTTP de antes (CORS, token, sempre responde
+// 200) — todo o miolo de parsing/regras de negócio é novo.
+//
+// FORMATO DO PAYLOAD — AINDA NÃO CONFIRMADO COM UM EVENTO REAL: a API do
+// Moskit não lista webhooks configurados (GET /webhooks -> 404), então o
+// shape exato de um evento "projeto criado" (nome dos campos de
+// metadata.entity/operation, se vem `contacts`/`companies` como array igual
+// à API REST ou como `contact`/`company` singular igual o webhook de
+// negócio antigo, etc.) só pode ser confirmado quando a usuária configurar
+// esse evento na UI do Moskit e disparar um projeto de teste de verdade.
+// `extrairProjetoDoEvento` abaixo tenta aceitar os dois formatos possíveis
+// (REST e webhook) ao mesmo tempo, mas isso é uma suposição até ser
+// confirmado pelos logs do Vercel do primeiro evento real — por isso
+// `WEBHOOK_PAUSADO` continua `true`: o payload cru é sempre logado
+// (evento autenticado, token já validado), mesmo pausado, pra dar pra
+// inspecionar e fechar o parser em definitivo antes de ativar de vez. Mesma
+// metodologia já usada pro webhook de negócio (ver header antigo, confirmado
+// com evento real em 2026-09-11).
 //
 // Protegido por token compartilhado na query (mesmo esquema de
 // UMBLER_WEBHOOK_TOKEN em api/umbler-webhook.js). Sem sessão de usuário:
-// quem chama é o Moskit, não uma pessoa logada — por isso os dados de
-// identificação do cliente vêm inteiros do próprio negócio/contato/empresa
-// no Moskit, nunca do corpo recebido "cru".
-//
-// FORMATO DO PAYLOAD (confirmado com um evento real, 2026-09-11):
-//   { metadata: { entity:"deal", operation:"statusChanged", hash, actor },
-//     before: {...negócio antes}, after: {...negócio depois} }
-// O negócio inteiro já vem embutido em `after` — não precisa (nem deve)
-// buscar via GET /deals/{id} de novo. MAS o formato aqui difere da API REST
-// (`_lib/moskit.js`, usada só para contato/empresa/notas/produto):
-//   - campos personalizados vêm em `customFieldValues`, com `numberValue`
-//     (não `numericValue` como no GET /deals/{id});
-//   - `contact`/`company` são OBJETOS únicos ({id}), não arrays.
-// `extrairNegocioDoEvento` normaliza isso pro mesmo shape que o resto do
-// código (valorCampoPersonalizado etc.) já espera.
+// quem chama é o Moskit, não uma pessoa logada.
 //
 // Sempre responde 200 (exceto token inválido): o Moskit descarta o webhook
 // depois de 3 retentativas com falha — não vale a pena arriscar isso por um
 // erro nosso.
 
 import { aplicarCors, erro, lerCorpo, ErroCorpo } from './_lib/http.js';
-import { listarImplantacoes, parseWaipeState, anexarArquivoTask } from './_lib/clickup.js';
+import { listarImplantacoes, parseWaipeState, anexarArquivoTask, criarComentario } from './_lib/clickup.js';
 import {
   criarProjetoImplantacao,
   sanearDadosCliente,
@@ -48,17 +46,31 @@ import {
   MIME_ANEXOS_VALIDOS,
   MAX_ANEXO_BYTES,
 } from './clickup.js';
+import { buscarUsuario } from './_lib/moskit.js';
 import {
   buscarContato,
-  buscarEmpresa,
-  buscarNotasNegocio,
-  buscarProduto,
-  buscarUsuario,
-  buscarAnexosNegocio,
-  CF_NEGOCIO,
-  valorCampoPersonalizado,
-  mapearProdutoSolucao,
-} from './_lib/moskit.js';
+  listarNotasProjeto,
+  listarAnexosProjeto,
+  listarTodosSteps,
+  BOARD_IMPLANTACAO,
+  CF_PROJETO,
+  TIPO_IMPLANTACAO_OPCOES,
+  PLANOS_CONTRATADOS_OPCOES,
+  CAMPOS_SIM_NAO,
+} from './_lib/moskit-projetos.js';
+
+// Quem cria o Projeto no Moskit e é só do time Comercial: ainda não tem CSM
+// definido (fica em branco — NUNCA um texto literal tipo "a definir", isso
+// quebra o botão "Definir Gerente de Contas" no painel, ver memória
+// csm_nao_definido_omitir_nao_literal). Quem cria e já É CSM: o próprio
+// criador vira CSM e vendedor ao mesmo tempo. Qualquer outro criador (fora
+// das duas listas) cai no mesmo default seguro de CSM em branco.
+const CSM_CRIADOR_IDS = new Set([
+  155181, // Guilherme Camargo
+  144977, // Gian Luca
+  153658, // Lucineia Felix
+  156549, // Patrícia Carvalho
+]);
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -81,19 +93,11 @@ export default async function handler(req, res) {
       return erro(res, 403, 'token_invalido', 'Token inválido.');
     }
 
-    // PAUSADO (2026-09-15, a pedido da usuária): ela está migrando manualmente
-    // os projetos que já existiam só no Moskit, um a um, e não quer que a
-    // criação automática entre em cena até terminar — depois disso, ela quer
-    // reativar com filtros que ainda serão definidos (quais negócios devem ou
-    // não criar projeto automático). Responde 200 sem processar, pra o Moskit
-    // não ficar retentando — mas isso significa que TODO negócio que ganhar
-    // enquanto isso estiver true NÃO gera projeto sozinho (fica só nesse log
-    // de function do Vercel, sem fila de retomada) — reative assim que puder.
+    // PAUSADO: o gatilho e o parsing acabaram de ser reescritos (ver cabeçalho)
+    // e ainda não foram confirmados contra um evento real de "projeto
+    // criado" — continua só logando o payload cru até a usuária disparar um
+    // projeto de teste e o formato ser validado pelos logs do Vercel.
     const WEBHOOK_PAUSADO = true;
-    if (WEBHOOK_PAUSADO) {
-      console.log('[moskit-webhook] evento recebido, mas o webhook está PAUSADO (ver comentário no código) — ignorado.');
-      return res.status(200).json({ ok: true, ignorado: 'webhook_pausado' });
-    }
 
     let corpo;
     try {
@@ -103,10 +107,15 @@ export default async function handler(req, res) {
       throw e;
     }
 
-    // Formato real do payload ainda em confirmação (ver cabeçalho) — loga TODO
-    // evento autenticado (token já validado acima) até o parsing ser fechado
-    // em definitivo; depois disso vira só um log pontual de depuração.
+    // Formato do payload ainda em confirmação (ver cabeçalho) — loga TODO
+    // evento autenticado, pausado ou não, até o parsing ser fechado em
+    // definitivo; depois disso vira só um log pontual de depuração.
     console.log('[moskit-webhook] evento recebido:', JSON.stringify(corpo).slice(0, 2000));
+
+    if (WEBHOOK_PAUSADO) {
+      console.log('[moskit-webhook] webhook PAUSADO (ver comentário no código) — evento só logado, não processado.');
+      return res.status(200).json({ ok: true, ignorado: 'webhook_pausado' });
+    }
 
     await processarEvento(corpo);
     return res.status(200).json({ ok: true });
@@ -117,155 +126,270 @@ export default async function handler(req, res) {
   }
 }
 
-/** `customFieldValues` (formato do webhook, campo `numberValue`) -> mesmo
- * shape de `entityCustomFields` (formato da API REST, campo `numericValue`)
- * que `valorCampoPersonalizado` já sabe ler. */
-function normalizarCustomFields(customFieldValues) {
-  if (!Array.isArray(customFieldValues)) return [];
-  return customFieldValues.map((c) => ({
+/** `customFieldValues` (formato de webhook, visto no evento de negócio antigo,
+ * campo `numberValue`) OU `entityCustomFields` (formato da API REST, campo
+ * `numericValue`) -> sempre o mesmo shape que valorCampoPersonalizado/os
+ * resolvedores de opção abaixo esperam. Aceita os dois porque o formato real
+ * do evento de Projeto ainda não foi confirmado (ver cabeçalho). */
+function normalizarCustomFields(campos) {
+  if (!Array.isArray(campos)) return [];
+  return campos.map((c) => ({
     id: c.id,
     textValue: c.textValue,
-    numericValue: c.numberValue,
+    numericValue: c.numericValue != null ? c.numericValue : c.numberValue,
     dateValue: c.dateValue,
-    options: c.options,
+    options: Array.isArray(c.options) ? c.options : [],
   }));
 }
 
+// As funções puras abaixo são exportadas (além do handler default) só pra
+// dar pra testar o parsing isoladamente contra um projeto real, sem criar
+// nada no ClickUp (ver verificação ao vivo feita em 2026-10-01, antes de
+// ativar o webhook). Não mudam o comportamento do handler em nada.
+
+/** Valor de um campo de texto/número pelo id — '' se ausente. */
+export function valorCampoPersonalizado(entityCustomFields, id) {
+  const campo = entityCustomFields.find((c) => c.id === id);
+  if (!campo) return '';
+  if (campo.textValue != null) return String(campo.textValue);
+  if (campo.numericValue != null) return String(campo.numericValue);
+  if (campo.dateValue != null) return String(campo.dateValue);
+  return '';
+}
+
+/** Id da opção selecionada de um campo SINGLE_OPTION — null se nenhuma. */
+export function opcaoUnicaSelecionada(entityCustomFields, id) {
+  const campo = entityCustomFields.find((c) => c.id === id);
+  return campo?.options?.[0] ?? null;
+}
+
+/** Ids das opções selecionadas de um campo MULTIPLE_OPTION — [] se nenhuma. */
+export function opcoesMultiplasSelecionadas(entityCustomFields, id) {
+  const campo = entityCustomFields.find((c) => c.id === id);
+  return Array.isArray(campo?.options) ? campo.options : [];
+}
+
 /**
- * Extrai o negócio do payload do webhook (evento deal-statusChanged), já
- * normalizado: `after` é o estado pós-mudança — é ele que interessa (`before`
- * só serve de fallback se `after` vier ausente, o que não deveria acontecer
- * neste evento). Retorna null se não achar um negócio com id válido.
+ * Extrai o Projeto do payload do webhook, já normalizado: `after` é o estado
+ * pós-criação (interessa esse); `before` só serve de fallback se `after`
+ * vier ausente. Aceita `contacts`/`companies` como array (formato REST) OU
+ * `contact`/`company` como objeto único (formato visto no webhook de
+ * negócio antigo) — ver cabeçalho sobre o formato ainda não confirmado.
+ * Retorna null se não achar um projeto com id válido.
  */
-function extrairNegocioDoEvento(corpo) {
-  const negocio = corpo?.after || corpo?.before;
-  if (!negocio || !Number.isFinite(Number(negocio.id))) return null;
+export function extrairProjetoDoEvento(corpo) {
+  const projeto = corpo?.after || corpo?.before;
+  if (!projeto || !Number.isFinite(Number(projeto.id))) return null;
+  const contatosBrutos = Array.isArray(projeto.contacts)
+    ? projeto.contacts
+    : projeto.contact
+      ? [projeto.contact]
+      : [];
   return {
-    id: Number(negocio.id),
-    nome: typeof negocio.name === 'string' ? negocio.name : '',
-    status: negocio.status,
-    contatoId: negocio.contact?.id ?? null,
-    empresaId: negocio.company?.id ?? null,
-    responsavelId: negocio.responsible?.id ?? null,
-    dealProducts: Array.isArray(negocio.dealProducts) ? negocio.dealProducts : [],
-    entityCustomFields: normalizarCustomFields(negocio.customFieldValues),
+    id: Number(projeto.id),
+    nome: typeof projeto.name === 'string' ? projeto.name : '',
+    stepId: projeto.step?.id ?? null,
+    criadorId: projeto.createdBy?.id ?? null,
+    contatoIds: contatosBrutos.map((c) => Number(c?.id)).filter((id) => Number.isFinite(id)),
+    entityCustomFields: normalizarCustomFields(projeto.entityCustomFields || projeto.customFieldValues),
   };
 }
 
-function telefoneDe(entidade) {
-  if (!entidade) return '';
-  const principal = entidade.phones?.find((p) => p.id === entidade.primaryPhone?.id);
-  return principal?.number || entidade.phones?.[0]?.number || '';
+function telefoneDe(contato) {
+  if (!contato) return '';
+  const principal = contato.phones?.find((p) => p.id === contato.primaryPhone?.id);
+  return principal?.number || contato.phones?.[0]?.number || '';
 }
 
-function emailDe(entidade) {
-  if (!entidade) return '';
-  const principal = entidade.emails?.find((e) => e.id === entidade.primaryEmail?.id);
-  return principal?.address || entidade.emails?.[0]?.address || '';
+function emailDe(contato) {
+  if (!contato) return '';
+  const principal = contato.emails?.find((e) => e.id === contato.primaryEmail?.id);
+  return principal?.address || contato.emails?.[0]?.address || '';
+}
+
+/**
+ * Frase de contexto pros 4 campos Sim/Não (Outro CNPJ conosco?/Duplicação de
+ * dados?/Migração de base?/Importação de outro sistema?) — NUNCA a resposta
+ * crua ("Sim ✅"/"Não ❌"): puxar só a resposta não faz sentido fora do
+ * contexto da pergunta (pedido explícito da usuária). Sem resposta
+ * selecionada, a frase é omitida (ausência de resposta não é o mesmo que
+ * "Não").
+ */
+export function fraseCampoSimNao(entityCustomFields, campoId) {
+  const config = CAMPOS_SIM_NAO[campoId];
+  if (!config) return null;
+  const idSelecionado = opcaoUnicaSelecionada(entityCustomFields, campoId);
+  if (idSelecionado == null) return null;
+  return idSelecionado === config.idSim ? config.frases.sim : config.frases.nao;
+}
+
+/**
+ * Planos contratados ("💠 Plano(s) Contratado(s)") -> array de { produto,
+ * planoSugerido } já resolvido, incluindo a desambiguação de Simplaz (o
+ * campo não diz se é Simplaz-Gestor ou Simplaz-Unique — decide pela base
+ * (Gestor/Unique) que também está selecionada no mesmo projeto; sem
+ * nenhuma das duas, cai no default "Simplaz Gestor" com um aviso nas
+ * observações do item).
+ */
+export function resolverPlanosContratados(entityCustomFields) {
+  const idsSelecionados = opcoesMultiplasSelecionadas(entityCustomFields, CF_PROJETO.PLANOS_CONTRATADOS);
+  const entradas = idsSelecionados
+    .map((id) => PLANOS_CONTRATADOS_OPCOES[id])
+    .filter(Boolean);
+
+  const temGestor = entradas.some((e) => e.produto === 'Gestor');
+  const temUnique = entradas.some((e) => e.produto === 'Unique');
+  const temWaipe = entradas.some((e) => e.produto.startsWith('Waipe'));
+
+  const planos = entradas.map((e) => {
+    if (e.produto !== 'Simplaz') return { produto: e.produto, planoSugerido: e.planoSugerido, observacoes: '' };
+    if (temGestor) return { produto: 'Simplaz Gestor', planoSugerido: e.planoSugerido, observacoes: '' };
+    if (temUnique) return { produto: 'Simplaz Unique', planoSugerido: e.planoSugerido, observacoes: '' };
+    return {
+      produto: 'Simplaz Gestor',
+      planoSugerido: e.planoSugerido,
+      observacoes: 'Base (Gestor/Unique) não identificada entre os planos contratados — confirmar com o Comercial.',
+    };
+  });
+
+  return { planos, temGestor, temUnique, temWaipe };
 }
 
 async function processarEvento(corpo) {
-  const negocio = extrairNegocioDoEvento(corpo);
-  if (!negocio) return;
-  const dealId = negocio.id;
+  const projeto = extrairProjetoDoEvento(corpo);
+  if (!projeto) return;
+  const projetoMoskitId = projeto.id;
 
-  // O mesmo evento cobre qualquer mudança de status, não só "ganhou" — só
-  // interessa aqui o instante em que vira WON (ignora OPEN/LOST).
-  if (negocio.status !== 'WON') return;
+  // Só interessa um Projeto do board "Implantação" — qualquer outro board
+  // do módulo Projetos (ex: Renovação, Pós-venda) é ignorado aqui.
+  const steps = await listarTodosSteps();
+  const step = steps.find((s) => s.id === projeto.stepId);
+  if (!step || step.board?.id !== BOARD_IMPLANTACAO) return;
 
   // Idempotência: o webhook pode reenviar o mesmo evento (retentativa) ou
-  // disparar de novo em uma edição posterior do mesmo negócio já ganho.
-  const projetos = await listarImplantacoes();
-  const jaExiste = projetos.some((t) => Number(parseWaipeState(t.description)?.origemMoskitDealId) === dealId);
+  // disparar de novo numa edição posterior do mesmo projeto já criado.
+  const projetosClickUp = await listarImplantacoes();
+  const jaExiste = projetosClickUp.some(
+    (t) => Number(parseWaipeState(t.description)?.origemMoskitProjetoId) === projetoMoskitId
+  );
   if (jaExiste) return;
 
-  const [contato, empresa, notas, vendedorUsuario] = await Promise.all([
-    negocio.contatoId ? buscarContato(negocio.contatoId).catch(() => null) : Promise.resolve(null),
-    negocio.empresaId ? buscarEmpresa(negocio.empresaId).catch(() => null) : Promise.resolve(null),
-    buscarNotasNegocio(dealId).catch(() => []),
-    negocio.responsavelId ? buscarUsuario(negocio.responsavelId).catch(() => null) : Promise.resolve(null),
-  ]);
+  const ecf = projeto.entityCustomFields;
 
-  const dealProducts = Array.isArray(negocio.dealProducts) ? negocio.dealProducts : [];
-  const produtos = await Promise.all(
-    dealProducts.map((dp) => (dp?.product?.id ? buscarProduto(dp.product.id).catch(() => null) : Promise.resolve(null)))
-  );
+  const tipoImplantacaoId = opcaoUnicaSelecionada(ecf, CF_PROJETO.TIPO_IMPLANTACAO);
+  const tipoImplantacaoLabel = TIPO_IMPLANTACAO_OPCOES[tipoImplantacaoId] || 'Implantação';
+  const razaoSocial = valorCampoPersonalizado(ecf, CF_PROJETO.RAZAO_SOCIAL) || projeto.nome || 'Cliente sem nome';
+  const cliente = semAspasRetas(`${tipoImplantacaoLabel} - ${razaoSocial}`);
 
-  // O nome do cliente é o nome do PRÓPRIO negócio (é assim que o Comercial já
-  // trabalha — o negócio nasce com o nome do cliente), não o cadastro da
-  // empresa/contato (que pode ser um registro-pai incompleto ou diferente).
-  const cliente = texto200(negocio.nome) || texto200(empresa?.name) || texto200(contato?.name) || 'Cliente sem nome';
-  const vendedor = texto200(vendedorUsuario?.name);
-  // O Comercial preenche o CNPJ no próprio negócio, não no cadastro da
-  // empresa (esse fica em branco na prática) — por isso prioriza o campo
-  // personalizado do negócio, só cai pro da empresa se aquele vier vazio.
-  const cnpj = valorCampoPersonalizado(negocio.entityCustomFields, CF_NEGOCIO.CNPJ) || texto200(empresa?.cnpj);
-  const telefone = telefoneDe(contato) || telefoneDe(empresa);
-  const email = emailDe(contato) || emailDe(empresa);
-  const idNucleo = valorCampoPersonalizado(negocio.entityCustomFields, CF_NEGOCIO.ID_NUCLEO);
-  const observacao = valorCampoPersonalizado(negocio.entityCustomFields, CF_NEGOCIO.OBSERVACAO);
-  const notasTexto = (Array.isArray(notas) ? notas : [])
-    .map((n) => n.description)
-    .filter(Boolean)
-    .join('\n\n');
-  const contexto = [observacao, notasTexto].filter(Boolean).join('\n\n').slice(0, 6000);
+  const cnpj = valorCampoPersonalizado(ecf, CF_PROJETO.CNPJ) || valorCampoPersonalizado(ecf, CF_PROJETO.CNPJ_RELACIONADO);
+  // Vazio nunca bloqueia a criação — a usuária pediu explicitamente pra não
+  // travar por falta de ID Núcleo (projeto criado pelo Comercial ainda não
+  // tem esse dado); preenche com '0' e segue.
+  const idNucleo = valorCampoPersonalizado(ecf, CF_PROJETO.ID_NUCLEO) || '0';
 
-  const dadosCliente = sanearDadosCliente({ idNucleo, cnpj, email, telefone });
+  const criadorId = projeto.criadorId;
+  const criadorUsuario = criadorId ? await buscarUsuario(criadorId).catch(() => null) : null;
+  const vendedor = semAspasRetas(texto200(criadorUsuario?.name) || 'Não identificado');
+  const csmNome = criadorId && CSM_CRIADOR_IDS.has(criadorId) ? vendedor : '';
+
+  const contatos = (
+    await Promise.all(projeto.contatoIds.map((id) => buscarContato(id).catch(() => null)))
+  ).filter(Boolean);
+  const contatoPrincipal = contatos[0] || null;
+  const telefone = telefoneDe(contatoPrincipal);
+  const email = emailDe(contatoPrincipal);
+  // Nenhum contato perdido: TODOS entram em contatosAdicionais, incluindo o
+  // principal — o schema de dadosCliente não tem campo pra "nome do contato
+  // principal" separado (limitação de dados já existente, não introduzida
+  // agora).
+  const contatosAdicionais = contatos.map((c) => ({ nome: texto200(c?.name), telefone: telefoneDe(c) })).filter((c) => c.telefone);
+
+  const dadosCliente = sanearDadosCliente({ idNucleo, cnpj, email, telefone, contatosAdicionais });
   const faltando = dadosClienteFaltando(dadosCliente);
   if (faltando.length) {
-    console.error(`[moskit-webhook] negócio ${dealId} sem dados suficientes (${faltando.join(', ')}) — projeto não criado`);
+    console.error(`[moskit-webhook] projeto ${projetoMoskitId} sem dados suficientes (${faltando.join(', ')}) — projeto não criado`);
     return;
   }
 
-  const solucoes = dealProducts
-    .map((dp, i) => {
-      const { produto, nomeOriginal } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
-      return sanearOutraSolucao({
-        produto,
-        planoSugerido: nomeOriginal,
-        quantidade: dp?.quantity,
-        valorManual: dp?.finalPrice ? dp.finalPrice / 100 : 0,
-        observacoes: produto === 'Outro' && nomeOriginal ? `Produto original no Moskit: ${nomeOriginal}` : '',
-        incluir: true,
-      });
-    })
+  // Contexto: necessidades do cliente + observações pro CS, sem duplicar
+  // quando os dois campos vêm com o mesmo texto (acontece na prática) — mais
+  // as 4 frases de Sim/Não (nunca a resposta crua, ver fraseCampoSimNao).
+  const necessidades = valorCampoPersonalizado(ecf, CF_PROJETO.NECESSIDADES_CLIENTE).trim();
+  const observacoesCs = valorCampoPersonalizado(ecf, CF_PROJETO.OBSERVACOES_CS).trim();
+  const textosLivres = necessidades.toLowerCase() === observacoesCs.toLowerCase()
+    ? [necessidades]
+    : [necessidades, observacoesCs];
+  const frasesSimNao = [
+    CF_PROJETO.OUTRO_CNPJ_CONOSCO,
+    CF_PROJETO.DUPLICACAO_DE_DADOS,
+    CF_PROJETO.MIGRACAO_DE_BASE,
+    CF_PROJETO.IMPORTACAO_DE_OUTRO_SISTEMA,
+  ].map((campoId) => fraseCampoSimNao(ecf, campoId));
+  const contexto = semAspasRetas([...textosLivres, ...frasesSimNao].filter(Boolean).join('\n\n')).slice(0, 6000);
+
+  const { planos, temGestor, temUnique, temWaipe } = resolverPlanosContratados(ecf);
+
+  // "Cliente Novo": sempre entra o item base (Gestor/Unique) + 3 treinamentos
+  // nomeados a partir dessa mesma base, mais 1 treinamento Waipe quando
+  // algum plano Waipe também foi contratado.
+  const itensExtras = [];
+  if (tipoImplantacaoId === 760358) {
+    const baseTreinamento = temGestor ? 'Gestor' : temUnique ? 'Unique' : null;
+    if (baseTreinamento) {
+      for (let i = 1; i <= 3; i++) {
+        itensExtras.push({ produto: 'Treinamento', planoSugerido: `${baseTreinamento} ${i}`, observacoes: '' });
+      }
+    } else {
+      console.error(`[moskit-webhook] projeto ${projetoMoskitId}: Cliente Novo sem Gestor nem Unique entre os planos contratados — treinamentos padrão não adicionados.`);
+    }
+    if (temWaipe) {
+      itensExtras.push({ produto: 'Treinamento', planoSugerido: 'Waipe', observacoes: '' });
+    }
+  }
+
+  const solucoes = [...planos, ...itensExtras]
+    .map((p) => sanearOutraSolucao({
+      produto: p.produto,
+      planoSugerido: p.planoSugerido,
+      observacoes: p.observacoes || '',
+      quantidade: 1,
+      valorManual: 0,
+      incluir: true,
+    }))
     .filter(Boolean);
 
   if (!solucoes.length) {
-    console.error(`[moskit-webhook] negócio ${dealId} ganho sem produtos vinculados — projeto não criado`);
+    console.error(`[moskit-webhook] projeto ${projetoMoskitId} criado sem nenhum plano contratado reconhecido — projeto não criado`);
     return;
   }
 
-  const projeto = await criarProjetoImplantacao({
-    nomeProjeto: `Cliente Novo - ${cliente}`,
+  const projetoClickUp = await criarProjetoImplantacao({
+    nomeProjeto: cliente,
     cliente,
     contexto,
     dadosCliente,
     agentes: [],
     solucoes,
     ismProjeto: [],
-    // CSM fica em branco de propósito: é o gerente de contas que assume a
-    // partir da implantação (papel ainda sem automação de atribuição) — não
-    // confundir com o vendedor, que é quem fechou o negócio no Comercial.
-    csmNome: '',
+    csmNome,
     vendedor,
-    origemMoskitDealId: dealId,
+    origemMoskitProjetoId: projetoMoskitId,
   });
 
-  await copiarAnexosDoNegocio(projeto.id, dealId);
+  await copiarAnexosDoProjeto(projetoClickUp.id, projetoMoskitId);
+  await migrarNotasComoComentarios(projetoClickUp.id, projetoMoskitId);
 
-  console.log(`[moskit-webhook] projeto ${projeto.id} criado a partir do negócio ${dealId} (${cliente})`);
+  console.log(`[moskit-webhook] projeto ${projetoClickUp.id} criado a partir do Projeto Moskit ${projetoMoskitId} (${cliente})`);
 }
 
 /**
- * Copia pro projeto todo arquivo já anexado ao negócio no Moskit (ex:
- * certificado digital + senha, mencionados na nota do negócio). Cada arquivo
- * passa pela MESMA allowlist de MIME/tamanho do upload manual — um anexo que
- * não passa é só ignorado (logado), nunca derruba a criação do projeto.
+ * Copia pro projeto todo arquivo já anexado ao Projeto no Moskit. Cada
+ * arquivo passa pela MESMA allowlist de MIME/tamanho do upload manual — um
+ * anexo que não passa é só ignorado (logado), nunca derruba a criação.
  */
-async function copiarAnexosDoNegocio(projetoId, dealId) {
-  const anexos = await buscarAnexosNegocio(dealId).catch((e) => {
-    console.error(`[moskit-webhook] falha ao listar anexos do negócio ${dealId}:`, e?.message);
+async function copiarAnexosDoProjeto(projetoClickUpId, projetoMoskitId) {
+  const anexos = await listarAnexosProjeto(projetoMoskitId).catch((e) => {
+    console.error(`[moskit-webhook] falha ao listar anexos do projeto ${projetoMoskitId}:`, e?.message);
     return [];
   });
   for (const anexo of Array.isArray(anexos) ? anexos : []) {
@@ -273,26 +397,81 @@ async function copiarAnexosDoNegocio(projetoId, dealId) {
     try {
       const mimeType = String(anexo?.mimeType || '').toLowerCase();
       if (!MIME_ANEXOS_VALIDOS.has(mimeType)) {
-        console.error(`[moskit-webhook] anexo "${nomeArquivo}" do negócio ${dealId} ignorado: tipo "${mimeType}" não permitido.`);
+        console.error(`[moskit-webhook] anexo "${nomeArquivo}" do projeto ${projetoMoskitId} ignorado: tipo "${mimeType}" não permitido.`);
         continue;
       }
       if (Number(anexo?.size) > MAX_ANEXO_BYTES) {
-        console.error(`[moskit-webhook] anexo "${nomeArquivo}" do negócio ${dealId} ignorado: maior que o limite (${anexo.size} bytes).`);
+        console.error(`[moskit-webhook] anexo "${nomeArquivo}" do projeto ${projetoMoskitId} ignorado: maior que o limite (${anexo.size} bytes).`);
         continue;
       }
       const resposta = await fetch(anexo.url);
       if (!resposta.ok) {
-        console.error(`[moskit-webhook] falha ao baixar anexo "${nomeArquivo}" do negócio ${dealId}: ${resposta.status}`);
+        console.error(`[moskit-webhook] falha ao baixar anexo "${nomeArquivo}" do projeto ${projetoMoskitId}: ${resposta.status}`);
         continue;
       }
       const buffer = Buffer.from(await resposta.arrayBuffer());
-      await anexarArquivoTask(projetoId, { nomeArquivo, mimeType, base64: buffer.toString('base64') });
+      await anexarArquivoTask(projetoClickUpId, { nomeArquivo, mimeType, base64: buffer.toString('base64') });
     } catch (e) {
-      console.error(`[moskit-webhook] falha ao copiar anexo "${nomeArquivo}" do negócio ${dealId}:`, e?.message);
+      console.error(`[moskit-webhook] falha ao copiar anexo "${nomeArquivo}" do projeto ${projetoMoskitId}:`, e?.message);
+    }
+  }
+}
+
+/**
+ * Cada Nota do Projeto no Moskit vira o SEU PRÓPRIO comentário nativo no
+ * ClickUp (não um só consolidado) — formatado com data/hora real e o nome de
+ * quem comentou, resolvido via buscarUsuario. Autores repetidos são
+ * cacheados num Map pra não buscar o mesmo usuário várias vezes.
+ */
+async function migrarNotasComoComentarios(projetoClickUpId, projetoMoskitId) {
+  const notas = await listarNotasProjeto(projetoMoskitId).catch((e) => {
+    console.error(`[moskit-webhook] falha ao listar notas do projeto ${projetoMoskitId}:`, e?.message);
+    return [];
+  });
+  const nomesPorAutor = new Map();
+  async function nomeDoAutor(id) {
+    if (!id) return 'Moskit';
+    if (nomesPorAutor.has(id)) return nomesPorAutor.get(id);
+    const usuario = await buscarUsuario(id).catch(() => null);
+    const nome = texto200(usuario?.name) || `Usuário ${id}`;
+    nomesPorAutor.set(id, nome);
+    return nome;
+  }
+  // Ordem cronológica real (a API devolve mais recente primeiro) — comentário
+  // mais antigo entra primeiro, igual ao protocolo de migração manual.
+  const ordenadas = [...(Array.isArray(notas) ? notas : [])].sort(
+    (a, b) => Date.parse(a.dateCreated || 0) - Date.parse(b.dateCreated || 0)
+  );
+  for (const nota of ordenadas) {
+    const texto = String(nota?.description || '').trim();
+    if (!texto) continue;
+    try {
+      const autor = await nomeDoAutor(nota?.user?.id);
+      const dataHora = nota.dateCreated
+        ? new Date(nota.dateCreated).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+        : '';
+      const prefixo = dataHora ? `${dataHora} — ${autor}:` : `${autor}:`;
+      await criarComentario(projetoClickUpId, `${prefixo} ${texto}`);
+    } catch (e) {
+      console.error(`[moskit-webhook] falha ao migrar nota do projeto ${projetoMoskitId} como comentário:`, e?.message);
     }
   }
 }
 
 function texto200(v) {
   return typeof v === 'string' ? v.trim().slice(0, 200) : '';
+}
+
+/**
+ * Aspas retas corrompem o bloco de estado JSON embutido no description (o
+ * ClickUp remove a barra de escape ao salvar, ver memória
+ * bug_aspas_waipestate) — `cliente`/`vendedor`/`csmNome` vão direto pro JSON
+ * de estado (criarProjetoImplantacao usa `texto()`, que só trunca, nunca
+ * sanitiza) e `contexto` é texto digitado por cliente/comercial no Moskit,
+ * então pode perfeitamente conter uma aspa reta. Mesma defesa já usada em
+ * api/clickup.js (semAspasRetas/textoLivre): troca por aspas simples em vez
+ * de tentar escapar certo algo que o ClickUp vai desescapar de qualquer jeito.
+ */
+function semAspasRetas(s) {
+  return String(s || '').replace(/"/g, "'");
 }
