@@ -255,7 +255,7 @@ export function resolverPlanosContratados(entityCustomFields) {
   return { planos, temGestor, temUnique, temWaipe };
 }
 
-async function processarEvento(corpo) {
+export async function processarEvento(corpo) {
   const projeto = extrairProjetoDoEvento(corpo);
   if (!projeto) return;
   const projetoMoskitId = projeto.id;
@@ -306,8 +306,13 @@ async function processarEvento(corpo) {
 
   const dadosCliente = sanearDadosCliente({ idNucleo, cnpj, email, telefone, contatosAdicionais });
   const faltando = dadosClienteFaltando(dadosCliente);
-  if (faltando.length) {
-    console.error(`[moskit-webhook] projeto ${projetoMoskitId} sem dados suficientes (${faltando.join(', ')}) — projeto não criado`);
+  const ausentesNaoBloqueantes = faltando.filter((f) => f === 'E-mail' || f === 'Telefone');
+  if (ausentesNaoBloqueantes.length) {
+    console.error(`[moskit-webhook] projeto ${projetoMoskitId} criado sem ${ausentesNaoBloqueantes.join(', ')} (contato do Moskit sem esse dado)`);
+  }
+  const bloqueantes = faltando.filter((f) => !ausentesNaoBloqueantes.includes(f));
+  if (bloqueantes.length) {
+    console.error(`[moskit-webhook] projeto ${projetoMoskitId} sem dados suficientes (${bloqueantes.join(', ')}) — projeto não criado`);
     return;
   }
 
@@ -327,7 +332,14 @@ async function processarEvento(corpo) {
   ].map((campoId) => fraseCampoSimNao(ecf, campoId));
   const contexto = semAspasRetas([...textosLivres, ...frasesSimNao].filter(Boolean).join('\n\n')).slice(0, 6000);
 
-  const { planos, temGestor, temUnique, temWaipe } = resolverPlanosContratados(ecf);
+  const resolvidos = resolverPlanosContratados(ecf);
+  const { temGestor, temUnique, temWaipe } = resolvidos;
+  // "Treinamento": o cliente já tem o produto e só precisa aprender a usar —
+  // cada plano vira um item de Treinamento ("Treinamento — Gestor Básico
+  // Cloud"), nunca a inclusão do plano em si (pedido da usuária, 2026-10-02).
+  const planos = tipoImplantacaoId === 777785
+    ? resolvidos.planos.map((p) => ({ ...p, planoSugerido: [p.produto, p.planoSugerido].filter(Boolean).join(' '), produto: 'Treinamento' }))
+    : resolvidos.planos;
 
   // "Cliente Novo": sempre entra o item base (Gestor/Unique) + 3 treinamentos
   // nomeados a partir dessa mesma base, mais 1 treinamento Waipe quando

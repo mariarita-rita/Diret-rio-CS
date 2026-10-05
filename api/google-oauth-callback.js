@@ -17,11 +17,16 @@
 // pessoa "presa" numa tela de callback.
 
 import { aplicarCors, erro } from './_lib/http.js';
-import { verificarEstadoGoogle, trocarCodigoPorToken, obterEmailConectado, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import {
+  verificarEstadoGoogle, trocarCodigoPorToken, obterEmailConectado, obterPerfilGoogle,
+  dominioLoginPermitido, retornoLoginValido, ErroGoogle, ErroConfigGoogle,
+} from './_lib/google.js';
+import { assinarSessao, cookieSessao } from './_lib/auth.js';
 import { salvarTokenGoogle, salvarTokenEmail } from './_lib/clickup.js';
 
 const DESTINOS_OK = { calendar: '/implantacao-waipe.html?googleConectado=1', email: '/implantacao-waipe.html?emailConectado=1' };
 const DESTINOS_ERRO = { calendar: '/implantacao-waipe.html?googleErro=1', email: '/implantacao-waipe.html?emailErro=1' };
+const DESTINO_LOGIN_ERRO = '/implantacao-waipe.html?loginGoogleErro=1';
 const DESTINO_ERRO = '/implantacao-waipe.html?googleErro=1'; // fallback quando nem o `state` deu pra validar (nao sabemos a finalidade)
 
 function redirecionar(res, destino) {
@@ -50,7 +55,29 @@ export default async function handler(req, res) {
 
     const estado = verificarEstadoGoogle(state);
     if (!estado) return redirecionar(res, destinoErro);
-    destinoErro = DESTINOS_ERRO[estado.finalidade] || DESTINO_ERRO;
+    destinoErro = estado.finalidade === 'login' ? DESTINO_LOGIN_ERRO : (DESTINOS_ERRO[estado.finalidade] || DESTINO_ERRO);
+
+    // Login do perfil "vendedor": só identidade. O domínio do e-mail é checado
+    // AQUI, no servidor (o `hd` enviado ao Google é só dica de tela), e o
+    // e-mail precisa estar verificado. Nada é guardado do Google (sem refresh token).
+    if (estado.finalidade === 'login') {
+      let tokensLogin;
+      try {
+        tokensLogin = await trocarCodigoPorToken(code);
+      } catch (e) {
+        if (e instanceof ErroGoogle) return redirecionar(res, destinoErro);
+        throw e;
+      }
+      const perfil = await obterPerfilGoogle(tokensLogin.access_token);
+      if (!perfil.emailVerificado || !dominioLoginPermitido(perfil.email)) {
+        console.error('[google-oauth-callback] login recusado (dominio/verificacao):', perfil.email.split('@')[1] || '?');
+        return redirecionar(res, destinoErro);
+      }
+      const email = perfil.email.trim().toLowerCase();
+      const token = assinarSessao({ nivel: 'vendedor', nome: perfil.nome || email, email });
+      res.setHeader('Set-Cookie', cookieSessao(token));
+      return redirecionar(res, retornoLoginValido(estado.alvo));
+    }
 
     let tokens;
     try {

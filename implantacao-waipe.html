@@ -550,6 +550,9 @@
   .chat-flow-waipe-msg .chat-flow-waipe-json-acoes{margin-top:6px;display:flex;gap:6px;}
   .chat-flow-waipe-input{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);}
   .chat-flow-waipe-input textarea{flex:1;resize:none;font-family:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--border-strong);border-radius:8px;}
+  /* Janela pequena aberta da tela do negocio no Moskit (?negocio=ID): so o formulario. */
+  body.modo-negocio nav.tabs, body.modo-negocio .header-title p, body.modo-negocio .header-meta:not(#sessaoIdentidade){display:none;}
+  body.modo-negocio .page{padding-left:10px;padding-right:10px;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
@@ -965,7 +968,7 @@
   // sessão que não seja "consulta" (só leitura) pode usar, mesmo critério
   // de acesso a IA paga do resto do painel (ver podeEscrever no backend).
   function podeUsarChatFlowWaipe(){
-    return !!sessaoNivelAtual && sessaoNivelAtual !== "consulta";
+    return !!sessaoNivelAtual && sessaoNivelAtual !== "consulta" && sessaoNivelAtual !== "vendedor";
   }
   function atualizarVisibilidadeChatFlowWaipe(){
     var btn = document.getElementById("chatFlowWaipeBtn");
@@ -1463,6 +1466,12 @@
   // Agora: qualquer chamada que voltar 401/sessao_invalida mostra o login bem
   // aqui, dentro do painel de projetos — sem depender de mais nada.
   var loginPendente = false;
+  // Login Google (perfil "vendedor"): volta pra mesma tela, preservando ?negocio=ID.
+  function urlLoginGoogle(){
+    var neg = new URLSearchParams(window.location.search).get("negocio");
+    var retorno = neg && /^\d{1,12}$/.test(neg) ? "/implantacao-waipe.html?negocio=" + neg : "/implantacao-waipe.html";
+    return "/api/login?action=google&retorno=" + encodeURIComponent(retorno);
+  }
 
   function mostrarLoginNoPainel(){
     if (loginPendente) return;
@@ -1475,6 +1484,8 @@
         '<p class="sub" style="margin-bottom:16px;">Faça login para acessar os projetos de implantação.</p>' +
         '<input type="password" id="loginSenhaInput" class="form-input" placeholder="Senha de acesso" style="width:100%;margin-bottom:10px;">' +
         '<button type="button" class="btn-flow" id="btnLoginEntrar" style="width:100%;">Entrar</button>' +
+        '<div style="text-align:center;margin:14px 0 8px;color:var(--muted);font-size:12px;">ou</div>' +
+        '<a class="btn-flow-secondary" href="' + urlLoginGoogle() + '" style="display:block;text-align:center;text-decoration:none;">Entrar com Google (vendedores)</a>' +
         '<div id="loginErro" style="color:var(--danger);font-size:13px;margin-top:8px;min-height:18px;"></div>' +
       '</div>';
     var input = document.getElementById("loginSenhaInput");
@@ -2407,7 +2418,7 @@
   var reservasCache = null; // lista de listar-reservas — buscada 1x junto com listar-implantacoes, pro sinal de agendamento no card
   var sessaoNivelAtual = null; // preenchido no login (POST) ou ao carregar a página (GET /api/login) — só "gestao" vê os botões de excluir
   var sessaoNomeAtual = null; // idem — mostrado em #sessaoIdentidade, pra evitar confusão tipo "logou com a senha errada e nem percebeu"
-  var NIVEL_LABEL = { consulta: "Consulta (só leitura)", gestao: "Gestão", csm: "CSM", ism: "ISM", csq: "CSQ" };
+  var NIVEL_LABEL = { consulta: "Consulta (só leitura)", gestao: "Gestão", csm: "CSM", ism: "ISM", csq: "CSQ", vendedor: "Vendedor" };
   function renderIdentidadeSessao(){
     var el = document.getElementById("sessaoIdentidade");
     if (!el) return;
@@ -2829,7 +2840,7 @@
       : "Lista de projetos de implantação em andamento — agentes Waipe e outras soluções do ecossistema (Gestor, Simplaz, Unique, BIME APP) fechadas junto. Clique num projeto para abrir o fluxo (escopo → alinhamento → construção → testes → entrega).";
     root.innerHTML =
       '<div class="callout"><div class="dot"></div><div>' + introTexto + ' Os dados ficam salvos no ClickUp, compartilhados com o time.</div></div>' +
-      (entregues ? "" : '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>') +
+      (entregues || sessaoNivelAtual === "vendedor" ? "" : '<div style="display:flex; justify-content:flex-end; margin-bottom:14px;"><button type="button" class="btn-flow" id="btnNovoProjeto">+ Novo projeto</button></div>') +
       (!entregues ? '<div id="agendamentosSemProjetoWrap"></div>' : '') +
       (!entregues ? '<div id="compromissosHojeWrap"></div>' : '') +
       '<div data-lista-wrap><div class="sub">Carregando…</div></div>';
@@ -3587,7 +3598,7 @@
   }
 
   function botoesFixarDestacar(id, pin, destaque){
-    if (sessaoNivelAtual === "consulta" || !id) return "";
+    if (sessaoNivelAtual === "consulta" || sessaoNivelAtual === "vendedor" || !id) return "";
     return ' <button type="button" class="btn-reset" data-fixar-comentario="' + esc(id) + '" data-pin-atual="' + (pin ? "1" : "0") + '" title="' + (pin ? "Desafixar" : "Fixar no topo, pra todo mundo ver primeiro") + '" style="margin-left:6px;' + (pin ? "border-color:var(--profundo);color:var(--profundo);" : "") + '">📌</button>' +
       ' <button type="button" class="btn-reset" data-destacar-comentario="' + esc(id) + '" data-destaque-atual="' + (destaque ? "1" : "0") + '" title="' + (destaque ? "Remover destaque" : "Destacar (fundo diferenciado)") + '" style="margin-left:4px;' + (destaque ? "border-color:var(--warning);color:var(--warning);" : "") + '">🖍️</button>';
   }
@@ -6516,7 +6527,10 @@
     var solucoesValidas = wizard.solucoes.map(function(s){
       return {
         produto: s.produto || "", planoSugerido: (s.planoSugerido || "").trim(),
-        variante: s.variante || null, observacoes: (s.observacoes || "").trim()
+        variante: s.variante || null, observacoes: (s.observacoes || "").trim(),
+        // Vindos do negócio do Moskit (iniciarRevisaoDoNegocio); itens digitados à mão não têm.
+        quantidade: s.quantidade || undefined,
+        valorManual: typeof s.valorManual === "number" ? s.valorManual : undefined
       };
     });
     // Projeto não precisa mais nascer de um agente Waipe — mesma regra que
@@ -6528,7 +6542,7 @@
       return null;
     }
     wizard.erro = "";
-    return { cliente: cliente, contexto: wizard.contexto || "", idNucleo: idNucleo, cnpj: cnpj, email: email, telefone: telefone, agentes: agentesValidos, solucoes: solucoesValidas };
+    return { cliente: cliente, contexto: wizard.contexto || "", idNucleo: idNucleo, cnpj: cnpj, email: email, telefone: telefone, nomeContato: (wizard.nomeContato || "").trim(), agentes: agentesValidos, solucoes: solucoesValidas, origemMoskitDealId: wizard.origemMoskitDealId || undefined };
   }
 
   function criarProjetoConfirmado(){
@@ -6570,6 +6584,8 @@
       showSimToast("Gmail conectado!");
     } else if (params.has("emailErro")){
       showSimToast("Não deu para conectar o Gmail — tenta de novo.");
+    } else if (params.has("loginGoogleErro")){
+      showSimToast("Não deu para entrar com o Google. Use o e-mail da empresa (@londrisoft.londrina.br).");
     } else {
       return;
     }
@@ -6577,6 +6593,7 @@
     params.delete("googleErro");
     params.delete("emailConectado");
     params.delete("emailErro");
+    params.delete("loginGoogleErro");
     var resto = params.toString();
     window.history.replaceState(null, "", window.location.pathname + (resto ? "?" + resto : ""));
   })();
@@ -6585,8 +6602,62 @@
   // topo do projeto) — abre direto nele em vez de cair na lista. abrirProjeto
   // já chama renderProjetosPanel() sozinho (antes e depois do fetch), então
   // não precisa duplicar a chamada aqui embaixo.
+  // Formulário aberto da tela do negócio no Moskit (extensão/favorito):
+  // ?negocio=ID — pré-preenche o assistente de novo projeto com o negócio ganho.
+  function iniciarRevisaoDoNegocio(r){
+    wizard = {
+      step: "revisao",
+      origemMoskitDealId: r.id,
+      cliente: r.cliente || "",
+      contexto: r.contexto || "",
+      // Vendedor não conhece o ID Núcleo (cliente acabou de fechar): "0" é o
+      // placeholder que o Comercial já usa; CS/gestão preenchem o real.
+      idNucleo: r.idNucleo || (sessaoNivelAtual === "vendedor" ? "0" : ""),
+      cnpj: r.cnpj || "", nomeContato: r.nomeContato || "", telefone: r.telefone || "", email: r.email || "",
+      agentes: [],
+      solucoes: (r.solucoes || []).map(function(s){
+        return { produto: s.produto, planoSugerido: s.planoSugerido || "", variante: s.variante || "", observacoes: s.observacoes || "", quantidade: s.quantidade, valorManual: s.valorManual };
+      }),
+      erro: "", salvando: false
+    };
+    renderProjetosPanel();
+  }
+  function iniciarFluxoNegocio(idNegocio){
+    document.body.classList.add("modo-negocio");
+    var root = document.getElementById("projetosRoot");
+    function cartao(titulo, html){
+      root.innerHTML = '<div class="card" style="max-width:460px;margin:30px auto;"><h2>' + esc(titulo) + '</h2>' + html + '</div>';
+    }
+    cartao("Criar projeto de implantação", '<p class="sub">Lendo o negócio no Moskit…</p>');
+    fetch("/api/login", { credentials: "same-origin" }).then(function(r){
+      return r.json().catch(function(){ return null; }).then(function(j){ return r.ok ? j : null; });
+    }).then(function(sessao){
+      if (!sessao || !sessao.autenticado){
+        window.location.href = "/api/login?action=google&retorno=" + encodeURIComponent("/implantacao-waipe.html?negocio=" + idNegocio);
+        return new Promise(function(){});
+      }
+      sessaoNivelAtual = sessao.nivel; sessaoNomeAtual = sessao.nome;
+      renderIdentidadeSessao();
+      return apiGet("obter-negocio-moskit", { negocio: idNegocio });
+    }).then(function(resp){
+      if (!resp) return;
+      if (resp.jaExiste){
+        cartao("Este negócio já virou projeto",
+          '<p class="sub">Já existe o projeto <b>' + esc(resp.jaExiste.nome) + '</b>.</p>' +
+          '<a class="btn-flow" style="display:inline-block;text-decoration:none;" href="/implantacao-waipe.html?projeto=' + encodeURIComponent(resp.jaExiste.id) + '">Abrir projeto</a>');
+        return;
+      }
+      iniciarRevisaoDoNegocio(resp.rascunho);
+    }).catch(function(e){
+      cartao("Não deu para ler o negócio", '<p class="sub">' + esc(mensagemErro(e)) + '</p>');
+    });
+  }
+
+  var idNegocioNaUrl = new URLSearchParams(window.location.search).get("negocio");
   var idProjetoNaUrl = new URLSearchParams(window.location.search).get("projeto");
-  if (idProjetoNaUrl){
+  if (idNegocioNaUrl && /^\d{1,12}$/.test(idNegocioNaUrl)){
+    iniciarFluxoNegocio(idNegocioNaUrl);
+  } else if (idProjetoNaUrl){
     abrirProjeto(idProjetoNaUrl);
   } else {
     renderProjetosPanel();

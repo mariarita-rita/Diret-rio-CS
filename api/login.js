@@ -11,6 +11,7 @@ import {
   lerCorpo,
   ErroCorpo,
 } from './_lib/http.js';
+import { urlAutorizacaoGoogle, retornoLoginValido, ErroConfigGoogle } from './_lib/google.js';
 import {
   PERFIS,
   ErroConfig,
@@ -72,6 +73,14 @@ export default async function handler(req, res) {
 
     const acao = String(req.query?.action || '');
 
+    // Login Google (perfil "vendedor"): redireciona pro consentimento; a volta é
+    // em /api/google-oauth-callback, que valida o domínio e emite a sessão.
+    if (req.method === 'GET' && acao === 'google') {
+      const destino = urlAutorizacaoGoogle('login', retornoLoginValido(req.query?.retorno));
+      res.setHeader('Location', destino);
+      return res.status(302).end();
+    }
+
     if (req.method === 'GET') return sessaoAtual(req, res);
     if (req.method !== 'POST') {
       return erro(res, 405, 'metodo_nao_permitido', 'Método não permitido.');
@@ -83,7 +92,7 @@ export default async function handler(req, res) {
 
     return await autenticar(req, res);
   } catch (e) {
-    if (e instanceof ErroConfig) {
+    if (e instanceof ErroConfig || e instanceof ErroConfigGoogle) {
       console.error('[login] configuracao:', e.message);
       return erro(res, 500, 'nao_configurado', 'Autenticação não configurada no servidor.');
     }
@@ -114,6 +123,7 @@ function sessaoAtual(req, res) {
     csm: sessao.csm,
     ismId: sessao.ismId,
     nome: sessao.nome,
+    email: sessao.email,
   });
 }
 

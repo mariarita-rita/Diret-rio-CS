@@ -33,6 +33,10 @@ const ESCOPOS_EMAIL = [
   'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ');
 
+// Login (finalidade "login"): só identidade, sem acesso a dado nenhum do Google
+// — nada de refresh token, nada guardado. Usado pelo perfil "vendedor".
+const ESCOPOS_LOGIN = 'openid email profile';
+
 const ESTADO_TTL_MS = 10 * 60 * 1000; // 10min — so precisa durar o consentimento no Google
 
 export class ErroConfigGoogle extends Error {
@@ -106,7 +110,7 @@ export function verificarEstadoGoogle(token) {
   } catch {
     return null;
   }
-  if (!p || (p.finalidade !== 'calendar' && p.finalidade !== 'email')) return null;
+  if (!p || (p.finalidade !== 'calendar' && p.finalidade !== 'email' && p.finalidade !== 'login')) return null;
   if (p.alvo === undefined || p.alvo === null || typeof p.iat !== 'number') return null;
   if (Date.now() - p.iat > ESTADO_TTL_MS) return null;
   return { finalidade: p.finalidade, alvo: p.alvo };
@@ -119,11 +123,20 @@ export function urlAutorizacaoGoogle(finalidade, alvo) {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: finalidade === 'email' ? ESCOPOS_EMAIL : ESCOPOS_CALENDAR,
-    access_type: 'offline',
-    prompt: 'consent',
+    scope: finalidade === 'login' ? ESCOPOS_LOGIN : finalidade === 'email' ? ESCOPOS_EMAIL : ESCOPOS_CALENDAR,
     state: assinarEstadoGoogle(finalidade, alvo),
   });
+  if (finalidade === 'login') {
+    // select_account: deixa trocar de conta se o navegador tiver várias logadas.
+    // `hd` é só dica de UI — a checagem de verdade do domínio é no servidor
+    // (ver dominioLoginPermitido).
+    params.set('prompt', 'select_account');
+    const dominio = dominiosLoginPermitidos()[0];
+    if (dominio) params.set('hd', dominio);
+  } else {
+    params.set('access_type', 'offline');
+    params.set('prompt', 'consent');
+  }
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
@@ -165,6 +178,37 @@ async function googleApiRequest(url, accessToken, init = {}) {
 
 async function calendarRequest(path, accessToken, init = {}) {
   return googleApiRequest(`https://www.googleapis.com/calendar/v3${path}`, accessToken, init);
+}
+
+/** Domínios de e-mail aceitos no login Google (env GOOGLE_LOGIN_DOMINIOS, lista separada por vírgula). */
+export function dominiosLoginPermitidos() {
+  return String(process.env.GOOGLE_LOGIN_DOMINIOS || 'londrisoft.londrina.br')
+    .split(',')
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
+}
+
+/** true só se o e-mail termina em @dominio de um dos domínios aceitos (comparação exata do trecho após o último @). */
+export function dominioLoginPermitido(email) {
+  const e = String(email || '').trim().toLowerCase();
+  const i = e.lastIndexOf('@');
+  if (i < 1) return false;
+  return dominiosLoginPermitidos().includes(e.slice(i + 1));
+}
+
+/**
+ * Destino pós-login: só a página do painel, opcionalmente com ?negocio=<id>.
+ * Allowlist rígida — o `retorno` viaja pelo state e nunca pode virar open redirect.
+ */
+export function retornoLoginValido(retorno) {
+  const r = String(retorno || '');
+  return /^\/implantacao-waipe\.html(\?negocio=\d{1,12})?$/.test(r) ? r : '/implantacao-waipe.html';
+}
+
+/** { email, emailVerificado, nome } da conta que acabou de logar. */
+export async function obterPerfilGoogle(accessToken) {
+  const r = await googleApiRequest('https://www.googleapis.com/oauth2/v2/userinfo', accessToken);
+  return { email: r?.email || '', emailVerificado: r?.verified_email === true, nome: r?.name || '' };
 }
 
 /** Endereco de e-mail da conta que acabou de autorizar (usado logo apos trocar

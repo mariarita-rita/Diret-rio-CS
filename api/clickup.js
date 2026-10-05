@@ -205,6 +205,7 @@ import {
   tipoDaDescricaoAtividade,
 } from './_lib/clickup.js';
 import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, listarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, excluirEventoGoogle, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
+import { montarRascunhoDoNegocio, buscarAnexosNegocio, ErroUpstreamMoskit, ErroConfigMoskit } from './_lib/moskit.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -277,6 +278,15 @@ const ACOES_PROIBIDAS_ISM = new Set([
 // conectado, só sem Meet automático).
 const ACOES_PROIBIDAS_CSM = new Set(['conectar-agenda-google']);
 
+// Nivel "vendedor" (login Google, sem senha): painel de implantacao so de
+// LEITURA + criar projeto a partir de um negocio ganho do Moskit. Allowlist
+// (nao denylist): qualquer acao nova fica fechada pra ele ate ser liberada
+// aqui de proposito. Nada de carteira/IA/conversa do cliente/agenda.
+const ACOES_VENDEDOR = new Set([
+  'listar-implantacoes', 'obter-implantacao', 'listar-comentarios',
+  'obter-negocio-moskit', 'criar-implantacao',
+]);
+
 // Fila AGREGADA de Atividades (ver todas, de todo projeto, e fechar
 // qualquer uma) — csq/gestao/ism. Registrar uma atividade NUM projeto
 // específico (botão "Criar atividade" dentro do projeto) é ainda mais
@@ -315,6 +325,9 @@ export default async function handler(req, res) {
     if ((sessao.nivel === 'ism' || sessao.nivel === 'csq') && ACOES_PROIBIDAS_ISM.has(acao)) {
       return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
     }
+    if (sessao.nivel === 'vendedor' && !ACOES_VENDEDOR.has(acao)) {
+      return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
+    }
     if (sessao.nivel === 'csm' && ACOES_PROIBIDAS_CSM.has(acao)) {
       return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta ação.');
     }
@@ -334,6 +347,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && acao === 'listar-implantacoes') return await listarImplantacoesAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-indicadores-snapshot') return await listarIndicadoresSnapshotAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'obter-implantacao') return await obterImplantacaoAcao(req, res, sessao);
+    if (req.method === 'GET' && acao === 'obter-negocio-moskit') return await obterNegocioMoskitAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'criar-implantacao') return await criarImplantacaoAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'definir-gerente-contas') {
       return await definirGerenteContasAcao(req, res, sessao);
@@ -411,7 +425,7 @@ export default async function handler(req, res) {
     const ACOES_VALIDAS = [
       'carteira', 'busca', 'metas', 'cliente', 'set-field', 'log-proposta',
       'listar-implantacoes', 'listar-indicadores-snapshot', 'obter-implantacao', 'criar-implantacao',
-      'definir-gerente-contas',
+      'obter-negocio-moskit', 'definir-gerente-contas',
       'atualizar-implantacao', 'renomear-implantacao', 'adicionar-item-implantacao',
       'atualizar-agente', 'comentar-implantacao',
       'listar-comentarios', 'excluir-comentario-implantacao', 'marcar-comentario-implantacao', 'excluir-implantacao',
@@ -1913,7 +1927,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
       // direto de pai.custom_fields; ver alertasDaTask/CAMPO_ALERTAS. É o
       // MESMO campo da Carteira: gravar aqui espelha lá, e vice-versa.
       ...alertasDaTask(pai),
-      ...dadosTributariosCampos(estadoProjeto, agentes, pai.id),
+      ...dadosTributariosCampos(estadoProjeto, agentes, pai.id, pai.name),
     },
     agentes,
   });
@@ -1926,9 +1940,16 @@ async function obterImplantacaoAcao(req, res, sessao) {
  * não passam pelo processo de coleta tributária. `agentes` é a lista já
  * montada por obterImplantacaoAcao (agentes + soluções da task).
  */
-function dadosTributariosCampos(estadoProjeto, agentes, projetoId) {
+function dadosTributariosCampos(estadoProjeto, agentes, projetoId, nomeProjeto) {
   const dadosTributarios = sanearDadosTributarios(estadoProjeto.dadosTributarios);
-  const precisaDadosTributarios = !!estadoProjeto.origemMoskitDealId
+  // "Cliente Novo" do Moskit: nasceu de um NEGÓCIO (origemMoskitDealId) OU de um
+  // PROJETO do Moskit (origemMoskitProjetoId — migração e webhook de Projeto,
+  // que não têm negócio). No segundo caso só vale quando o tipo é Cliente Novo,
+  // identificado pelo prefixo do nome ("Cliente Novo - ...") — Migração,
+  // Treinamento etc. não passam pela coleta tributária.
+  const clienteNovoDoMoskit = !!estadoProjeto.origemMoskitDealId
+    || (!!estadoProjeto.origemMoskitProjetoId && /^Cliente Novo/i.test(String(nomeProjeto || '')));
+  const precisaDadosTributarios = clienteNovoDoMoskit
     && agentes.some((a) => a.tipo === 'solucao' && (a.produto === 'Gestor' || a.produto === 'Bime'));
   const linkFormularioTributario = precisaDadosTributarios && !dadosTributarios.preenchidoEm
     ? `/formulario-tributario.html?id=${projetoId}&token=${assinarTokenProjeto(projetoId)}`
@@ -2148,9 +2169,99 @@ export async function criarProjetoImplantacao({
   return projeto;
 }
 
+/**
+ * Projeto de implantacao ja criado a partir de um negocio do Moskit (marca
+ * `origemMoskitDealId` no estado) — impede criar dois projetos do mesmo
+ * negocio. null se nenhum.
+ */
+async function projetoDoNegocio(dealId) {
+  const tasks = await listarImplantacoes();
+  const t = tasks.find((x) => !x.parent && Number(parseWaipeState(x.description)?.origemMoskitDealId) === dealId);
+  return t ? { id: t.id, nome: t.name } : null;
+}
+
+/** Traduz falha do Moskit (rascunho do negocio) em resposta HTTP; null se nao for erro do Moskit. */
+function erroMoskitParaResposta(res, e) {
+  if (e instanceof ErroConfigMoskit) {
+    console.error('[clickup] configuracao Moskit:', e.message);
+    return erro(res, 500, 'nao_configurado', 'Integração com o Moskit não está configurada no servidor.');
+  }
+  if (e instanceof ErroUpstreamMoskit) {
+    if (e.status === 404) return erro(res, 404, 'negocio_nao_encontrado', 'Negócio não encontrado no Moskit.');
+    return erro(res, 502, 'erro_moskit', 'Falha ao ler o negócio no Moskit. Tente de novo em instantes.');
+  }
+  return null;
+}
+
+/**
+ * GET ?action=obter-negocio-moskit&negocio=<id> — rascunho (cliente, contato,
+ * produtos, contexto...) lido do negocio GANHO, pra pre-preencher o assistente
+ * de novo projeto. Abre pro perfil "vendedor" (login Google) e pra quem ja
+ * pode escrever; "consulta" nao.
+ */
+async function obterNegocioMoskitAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao) && sessao.nivel !== 'vendedor') {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+  const dealId = Number(req.query?.negocio);
+  if (!Number.isInteger(dealId) || dealId <= 0) {
+    return erro(res, 400, 'negocio_invalido', 'Id de negócio inválido.');
+  }
+  let rascunho;
+  try {
+    rascunho = await montarRascunhoDoNegocio(dealId);
+  } catch (e) {
+    const resposta = erroMoskitParaResposta(res, e);
+    if (resposta) return resposta;
+    throw e;
+  }
+  if (rascunho.status !== 'WON') {
+    return erro(res, 409, 'negocio_nao_ganho', 'Este negócio ainda não foi marcado como ganho no Moskit.');
+  }
+  const existente = await projetoDoNegocio(dealId);
+  return res.status(200).json({ ok: true, rascunho, jaExiste: existente });
+}
+
+/**
+ * Copia pro projeto todo arquivo ja anexado ao negocio no Moskit (ex:
+ * certificado digital). Mesma allowlist de MIME/tamanho do upload manual —
+ * anexo que nao passa e so ignorado (logado), nunca derruba a criacao.
+ */
+async function copiarAnexosDoNegocio(projetoId, dealId) {
+  const anexos = await buscarAnexosNegocio(dealId).catch((e) => {
+    console.error(`[clickup] falha ao listar anexos do negocio ${dealId}:`, e?.message);
+    return [];
+  });
+  for (const anexo of Array.isArray(anexos) ? anexos : []) {
+    const nomeArquivo = texto(anexo?.filename, 200) || 'arquivo';
+    try {
+      const mimeType = String(anexo?.mimeType || '').toLowerCase();
+      if (!MIME_ANEXOS_VALIDOS.has(mimeType)) {
+        console.error(`[clickup] anexo ${nomeArquivo} do negocio ${dealId} ignorado: tipo ${mimeType} nao permitido.`);
+        continue;
+      }
+      if (Number(anexo?.size) > MAX_ANEXO_BYTES) {
+        console.error(`[clickup] anexo ${nomeArquivo} do negocio ${dealId} ignorado: maior que o limite.`);
+        continue;
+      }
+      const resposta = await fetch(anexo.url);
+      if (!resposta.ok) {
+        console.error(`[clickup] falha ao baixar anexo ${nomeArquivo} do negocio ${dealId}: ${resposta.status}`);
+        continue;
+      }
+      const buffer = Buffer.from(await resposta.arrayBuffer());
+      await anexarArquivoTask(projetoId, { nomeArquivo, mimeType, base64: buffer.toString('base64') });
+    } catch (e) {
+      console.error(`[clickup] falha ao copiar anexo ${nomeArquivo} do negocio ${dealId}:`, e?.message);
+    }
+  }
+}
+
 async function criarImplantacaoAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
-  if (!podeEscrever(sessao)) {
+  const ehVendedor = sessao.nivel === 'vendedor';
+  if (!podeEscrever(sessao) && !ehVendedor) {
     return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
   }
 
@@ -2161,6 +2272,38 @@ async function criarImplantacaoAcao(req, res, sessao) {
     if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
     throw e;
   }
+
+  // Projeto nascido de um negocio ganho do Moskit: o SERVIDOR rebusca o negocio
+  // (nao confia no corpo) pra conferir que e ganho, que ainda nao virou projeto,
+  // e pra fixar o vendedor (= responsavel do negocio).
+  const dealId = Number.isInteger(Number(corpo.origemMoskitDealId)) && Number(corpo.origemMoskitDealId) > 0
+    ? Number(corpo.origemMoskitDealId)
+    : null;
+  if (ehVendedor && !dealId) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil só cria projeto a partir de um negócio ganho do Moskit.');
+  }
+  let vendedorDoNegocio = '';
+  if (dealId) {
+    let rascunho;
+    try {
+      rascunho = await montarRascunhoDoNegocio(dealId);
+    } catch (e) {
+      const resposta = erroMoskitParaResposta(res, e);
+      if (resposta) return resposta;
+      throw e;
+    }
+    if (rascunho.status !== 'WON') {
+      return erro(res, 409, 'negocio_nao_ganho', 'Este negócio ainda não foi marcado como ganho no Moskit.');
+    }
+    const existente = await projetoDoNegocio(dealId);
+    if (existente) {
+      return res.status(409).json({ error: 'Este negócio já virou projeto.', code: 'negocio_ja_virou_projeto', projetoId: existente.id });
+    }
+    vendedorDoNegocio = rascunho.vendedor;
+  }
+  // Vendedor nao conhece o ID Nucleo (o cliente acabou de fechar) — mesmo "0" de
+  // placeholder que o Comercial ja usa (ver definirGerenteContasAcao).
+  if (ehVendedor && !String(corpo.idNucleo || '').trim()) corpo.idNucleo = '0';
 
   const cliente = textoLivre(corpo.cliente, 120);
   if (!cliente) {
@@ -2192,16 +2335,25 @@ async function criarImplantacaoAcao(req, res, sessao) {
   }
   const ismProjeto = sanearAssignees(corpo.ismProjeto);
 
-  const csmNome = texto(sessao.nome, 120) || sessao.csm || sessao.nivel;
+  // Vendedor nao e CSM: o projeto nasce SEM gerente de contas (campo omitido,
+  // nunca texto literal — ver definir-gerente-contas); o responsavel pelo
+  // negocio vira `vendedor`.
+  const csmNome = ehVendedor ? '' : (texto(sessao.nome, 120) || sessao.csm || sessao.nivel);
 
   // "Waipe" só entra no nome quando o projeto de fato nasce com agente
   // Waipe — um projeto só de soluções (Gestor/Simplaz/etc, sem agente
-  // nenhum) chamado de "Implantação Waipe" seria enganoso.
-  const nomeProjeto = agentes.length ? `${cliente} — Implantação Waipe` : `${cliente} — Implantação`;
+  // nenhum) chamado de "Implantação Waipe" seria enganoso. Projeto vindo de
+  // negocio do Moskit segue o padrao "Cliente Novo - {cliente}" do webhook.
+  const nomeProjeto = dealId
+    ? `Cliente Novo - ${cliente}`
+    : (agentes.length ? `${cliente} — Implantação Waipe` : `${cliente} — Implantação`);
 
   const projeto = await criarProjetoImplantacao({
     nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
+    ...(dealId ? { vendedor: textoLivre(vendedorDoNegocio, 120), origemMoskitDealId: dealId } : {}),
   });
+
+  if (dealId) await copiarAnexosDoNegocio(projeto.id, dealId);
 
   return res.status(200).json({ ok: true, id: projeto.id });
 }

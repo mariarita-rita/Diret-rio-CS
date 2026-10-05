@@ -8,7 +8,10 @@ export const COOKIE_NOME = 'cs_sessao';
 export const SESSAO_TTL_MS = 12 * 60 * 60 * 1000; // 12h
 const TOLERANCIA_FUTURO_MS = 60 * 1000;
 
-export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism', 'csq'];
+// 'vendedor': entra por login Google do domínio da empresa (sem senha, ver
+// api/google-oauth-callback.js) — painel só de leitura + criar projeto a partir
+// de um negócio ganho. Não existe em PERFIS (identidade vem do e-mail).
+export const NIVEIS = ['consulta', 'gestao', 'csm', 'ism', 'csq', 'vendedor'];
 
 /**
  * Perfis de acesso. A senha de cada perfil vive apenas na variável de ambiente
@@ -79,8 +82,8 @@ function hmac(dados) {
 const b64 = (buf) => Buffer.from(buf).toString('base64url');
 
 /** Gera o token de sessão: base64url(payload).base64url(hmac). */
-export function assinarSessao({ nivel, csm, ismId, nome }) {
-  const corpo = b64(JSON.stringify({ nivel, csm: csm || null, ismId: ismId || null, nome, iat: Date.now() }));
+export function assinarSessao({ nivel, csm, ismId, nome, email }) {
+  const corpo = b64(JSON.stringify({ nivel, csm: csm || null, ismId: ismId || null, nome, email: email || null, iat: Date.now() }));
   return `${corpo}.${b64(hmac(corpo))}`;
 }
 
@@ -112,8 +115,10 @@ export function verificarSessao(token) {
   if (p.nivel !== 'csm' && p.csm) return null;
   if (p.nivel === 'ism' && !PERFIS.some((x) => x.nivel === 'ism' && x.ismId === p.ismId)) return null;
   if (p.nivel !== 'ism' && p.ismId) return null;
+  if (p.nivel === 'vendedor' && (typeof p.email !== 'string' || !p.email.includes('@'))) return null;
+  if (p.nivel !== 'vendedor' && p.email) return null;
 
-  return { nivel: p.nivel, csm: p.csm || null, ismId: p.ismId || null, nome: String(p.nome || ''), iat: p.iat };
+  return { nivel: p.nivel, csm: p.csm || null, ismId: p.ismId || null, nome: String(p.nome || ''), email: p.email || null, iat: p.iat };
 }
 
 // ── Cookie ────────────────────────────────────────────────────────────────

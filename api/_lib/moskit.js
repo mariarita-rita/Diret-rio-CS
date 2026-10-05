@@ -28,9 +28,19 @@ async function moskitGet(caminho) {
   const chave = process.env.MOSKIT_API_KEY;
   if (!chave) throw new ErroConfigMoskit();
 
-  const r = await fetch(BASE + caminho, {
-    headers: { Accept: 'application/json', apikey: chave },
-  });
+  let r;
+  // 429 (limite de taxa da API): até 3 retentativas com espera curta — o
+  // rascunho de negócio dispara várias leituras em paralelo e não deve falhar
+  // por um pico momentâneo.
+  for (let tentativa = 0; ; tentativa++) {
+    r = await fetch(BASE + caminho, {
+      headers: { Accept: 'application/json', apikey: chave },
+    });
+    if (r.status !== 429 || tentativa >= 3) break;
+    const retryAfterS = Number(r.headers.get('retry-after'));
+    const esperaMs = Number.isFinite(retryAfterS) && retryAfterS > 0 ? Math.min(retryAfterS, 5) * 1000 : 1000 * 2 ** tentativa;
+    await new Promise((resolve) => setTimeout(resolve, esperaMs));
+  }
   if (!r.ok) {
     const detalhe = await r.text().catch(() => '');
     console.error(`[moskit-lib] GET ${caminho} -> ${r.status}: ${detalhe.slice(0, 500)}`);
@@ -81,7 +91,9 @@ export const CF_NEGOCIO = {
   // empresas") tinha este id — NÃO é o mesmo campo de CF_DEAL.OBSERVACAO em
   // api/moskit.js (aquele é de outro pipeline, Renovações). Ainda precisa
   // confirmar o nome exato do campo com a usuária.
-  OBSERVACAO: 'CF_POEMywieC5JWdDdk',
+  OBSERVACAO: 'CF_POEMywieC5JWdDdk', // confirmado ao vivo (2026-10-02): "Observações para a implantação"
+  RAZAO_SOCIAL: 'CF_oJZmP1iKCQaRzDgv', // "Razão Social"
+  OBSERVACAO_NEGOCIO: 'CF_0WGqoEiKCad6GmnP', // "Observação do negócio"
 };
 
 /** Valor de um campo personalizado pelo id, já como texto — '' se ausente. */
@@ -149,4 +161,84 @@ export const MAPA_PRODUTO_MOSKIT = new Map([
 export function mapearProdutoSolucao(produtoMoskit) {
   const mapeado = produtoMoskit?.id != null ? MAPA_PRODUTO_MOSKIT.get(produtoMoskit.id) : null;
   return { produto: mapeado || 'Outro', nomeOriginal: produtoMoskit?.name || '' };
+}
+
+function telefoneDe(entidade) {
+  if (!entidade) return '';
+  const principal = entidade.phones?.find((p) => p.id === entidade.primaryPhone?.id);
+  return principal?.number || entidade.phones?.[0]?.number || '';
+}
+
+function emailDe(entidade) {
+  if (!entidade) return '';
+  const principal = entidade.emails?.find((e) => e.id === entidade.primaryEmail?.id);
+  return principal?.address || entidade.emails?.[0]?.address || '';
+}
+
+/**
+ * Lê um NEGÓCIO do Moskit (REST, GET /deals/{id}) e monta o rascunho que
+ * pré-preenche o assistente de novo projeto (botão na tela do negócio →
+ * formulário do painel). Só leitura. Formato REST confirmado ao vivo
+ * (2026-10-02): `contacts`/`companies` são ARRAYS ({id}), campos
+ * personalizados em `entityCustomFields`, `dealProducts[].price` em centavos
+ * (valor unitário) e `finalPrice` = quantidade × price.
+ *
+ * Quem decide se pode virar projeto (status WON, duplicidade) é quem chama —
+ * aqui só se devolve o que o negócio tem.
+ */
+export async function montarRascunhoDoNegocio(dealId) {
+  const negocio = await buscarNegocio(dealId);
+  const cf = Array.isArray(negocio.entityCustomFields) ? negocio.entityCustomFields : [];
+  const contatoId = negocio.contacts?.[0]?.id ?? null;
+  const empresaId = negocio.companies?.[0]?.id ?? null;
+  const responsavelId = negocio.responsible?.id ?? null;
+  const dealProducts = Array.isArray(negocio.dealProducts) ? negocio.dealProducts : [];
+
+  const [contato, empresa, notas, responsavel, anexos, produtos] = await Promise.all([
+    contatoId ? buscarContato(contatoId).catch(() => null) : null,
+    empresaId ? buscarEmpresa(empresaId).catch(() => null) : null,
+    buscarNotasNegocio(dealId).catch(() => []),
+    responsavelId ? buscarUsuario(responsavelId).catch(() => null) : null,
+    buscarAnexosNegocio(dealId).catch(() => []),
+    Promise.all(dealProducts.map((dp) => (dp?.product?.id ? buscarProduto(dp.product.id).catch(() => null) : null))),
+  ]);
+
+  const solucoes = dealProducts.map((dp, i) => {
+    const { produto, nomeOriginal } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
+    const quantidade = Number(dp?.quantity) > 0 ? Number(dp.quantity) : 1;
+    const unitarioCentavos = Number.isFinite(Number(dp?.price)) ? Number(dp.price) : 0;
+    return {
+      produto,
+      planoSugerido: nomeOriginal,
+      variante: '',
+      observacoes: produto === 'Outro' && nomeOriginal ? `Produto original no Moskit: ${nomeOriginal}` : '',
+      quantidade,
+      valorManual: Math.round(unitarioCentavos) / 100,
+    };
+  });
+
+  const textos = [
+    valorCampoPersonalizado(cf, CF_NEGOCIO.OBSERVACAO),
+    valorCampoPersonalizado(cf, CF_NEGOCIO.OBSERVACAO_NEGOCIO),
+  ].map((t) => t.trim()).filter(Boolean);
+  const textosUnicos = textos.filter((t, i) => textos.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i);
+  // Nota que só repete (ou já está contida em) uma observação do negócio não entra de novo.
+  const jaDito = (t) => textosUnicos.some((o) => o.toLowerCase().includes(t.trim().toLowerCase()));
+  const notasTexto = (Array.isArray(notas) ? notas : []).map((n) => n.description).filter((t) => t && !jaDito(t));
+
+  return {
+    id: Number(dealId),
+    status: negocio.status,
+    nomeNegocio: negocio.name || '',
+    cliente: (valorCampoPersonalizado(cf, CF_NEGOCIO.RAZAO_SOCIAL) || empresa?.name || negocio.name || contato?.name || '').trim(),
+    idNucleo: valorCampoPersonalizado(cf, CF_NEGOCIO.ID_NUCLEO),
+    cnpj: valorCampoPersonalizado(cf, CF_NEGOCIO.CNPJ) || empresa?.cnpj || '',
+    nomeContato: contato?.name || '',
+    telefone: telefoneDe(contato) || telefoneDe(empresa),
+    email: emailDe(contato) || emailDe(empresa),
+    contexto: [...textosUnicos, ...notasTexto].join('\n\n').slice(0, 6000),
+    solucoes,
+    vendedor: responsavel?.name || '',
+    totalAnexos: Array.isArray(anexos) ? anexos.length : 0,
+  };
 }

@@ -1,0 +1,21 @@
+EXTENSÃO "CRIAR PROJETO DE IMPLANTAÇÃO" (Chrome e Edge)
+
+O que faz: na tela de um negócio no Moskit aparece o botão "Criar projeto de
+implantação" (canto inferior direito). Ao clicar, abre uma janela pequena com o
+formulário do painel já preenchido com os dados do negócio. Funciona só com
+negócio GANHO. O primeiro acesso pede "Entrar com Google" (e-mail da empresa).
+
+INSTALAR (uma vez por computador)
+1. Descompacte a pasta "extensao-moskit" em algum lugar fixo (ex.: Documentos).
+   Não apague a pasta depois — o navegador usa os arquivos dela.
+2. Chrome: abra chrome://extensions   |   Edge: abra edge://extensions
+3. Ative "Modo do desenvolvedor".
+4. Clique em "Carregar sem compactação" (Chrome) / "Carregar sem pacote" (Edge)
+   e escolha a pasta "extensao-moskit".
+5. Abra um negócio no Moskit: o botão aparece no canto da tela.
+
+Se o botão não aparecer: confirme que o endereço da tela do negócio tem
+"/deal/<número>" (ou "/deals/<número>"). Se for diferente, ajuste a linha
+PADRAO_URL_NEGOCIO em content.js e clique em "Recarregar" na página de extensões.
+
+Sem poder instalar a extensão? Use o favorito: https://diretoriocs.vercel.app/favorito.html

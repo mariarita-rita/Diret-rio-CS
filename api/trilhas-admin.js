@@ -108,6 +108,10 @@ export default async function handler(req, res) {
 
     const sessao = exigirSessao(req, res);
     if (!sessao) return undefined;
+    // "vendedor" (login Google) só enxerga/cria projeto de implantação — nada de trilhas.
+    if (sessao.nivel === 'vendedor') {
+      return erro(res, 403, 'nivel_nao_permitido', 'Este perfil não tem acesso a esta área.');
+    }
 
     if (req.method === 'GET') {
       const recurso = String(req.query?.recurso || 'trilhas');

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Londrisoft - Criar projeto de implantação",
+  "version": "1.0.0",
+  "description": "Na tela de um negócio ganho no Moskit, abre o formulário de criação do projeto de implantação já preenchido com os dados do negócio.",
+  "content_scripts": [
+    {
+      "matches": ["https://app.moskitcrm.com/*", "https://app.ollow.com.br/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

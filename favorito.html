@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Criar projeto de implantação - atalho</title>
+<style>
+  :root { --bg:#f6f7fb; --card:#fff; --ink:#1b2333; --muted:#5b6578; --brand:#0A41B4; --border:#dfe3ee; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1420; --card:#171d2c; --ink:#e8ecf5; --muted:#9aa6bd; --brand:#6d9bff; --border:#2a3350; }
+  }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:32px 16px 60px; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  p.sub { color:var(--muted); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
+  h2 { font-size:16px; margin:0 0 8px; }
+  ol { margin:8px 0 0 18px; padding:0; }
+  li { margin:4px 0; }
+  a.atalho { display:inline-block; margin:8px 0; padding:10px 16px; border-radius:8px; background:var(--brand); color:#fff; font-weight:600; text-decoration:none; cursor:grab; }
+  a.baixar { color:var(--brand); font-weight:600; }
+  code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Criar projeto de implantação a partir do negócio</h1>
+  <p class="sub">Na tela de um negócio <b>ganho</b> no Moskit, abre o formulário do painel já preenchido com os dados do negócio.</p>
+
+  <div class="card">
+    <h2>Opção 1 — Favorito (não instala nada)</h2>
+    <ol>
+      <li>Mostre a barra de favoritos do navegador (<code>Ctrl+Shift+B</code>).</li>
+      <li><b>Arraste o botão abaixo</b> para a barra de favoritos.</li>
+      <li>Abra um negócio ganho no Moskit e clique no favorito.</li>
+    </ol>
+    <a class="atalho" href="javascript:(function(){var m=location.pathname.match(/\/deals?\/(\d{5,})/);if(!m){alert('Abra a tela de um negócio ganho no Moskit e clique no favorito de novo.');return;}window.open('https://diretoriocs.vercel.app/implantacao-waipe.html?negocio='+m[1],'projetoLondrisoft','popup,width=520,height=820');})();">Criar projeto de implantação</a>
+  </div>
+
+  <div class="card">
+    <h2>Opção 2 — Extensão do Chrome / Edge</h2>
+    <p>Mostra um botão direto na tela do negócio. <a class="baixar" href="/extensao-moskit.zip">Baixar a extensão (.zip)</a> e siga o <code>LEIA-ME.txt</code> que vem dentro (instalação manual, uma vez por computador).</p>
+  </div>
+
+  <p class="sub">No primeiro uso, entre com o Google usando o e-mail da empresa.</p>
+</main>
+</body>
+</html>
