@@ -4334,7 +4334,9 @@
     }
     apiPost("definir-gerente-contas", { id: p.id }).then(function(resp){
       p.csm = resp.gerente;
-      showSimToast("Gerente de contas definido: " + resp.gerente + ".");
+      showSimToast(resp.mantido
+        ? "Este cliente já tem gerente de contas na Carteira — mantido: " + resp.gerente + "."
+        : "Gerente de contas definido: " + resp.gerente + ".");
       renderProjetosPanel();
     }).catch(function(e){ showSimToast(mensagemErro(e)); });
   }
@@ -5458,14 +5460,14 @@
         '<div class="form-field"><label>Regime tributário</label><select class="form-input" id="tribRegime">' +
           regimes.map(function(v){ return '<option value="' + v + '"' + (t.regimeTributario === v ? " selected" : "") + '>' + (v || "—") + '</option>'; }).join("") +
         '</select></div>' +
-        '<div class="form-field"><label>CST ICMS / CSOSN</label><input type="text" class="form-input" id="tribCst" value="' + esc(t.cstIcmsCsosn || "") + '"></div>' +
+        '<div class="form-field"><label>CST ICMS / CSOSN</label><input type="text" class="form-input" id="tribCst" autocomplete="off" value="' + esc(t.cstIcmsCsosn || "") + '"></div>' +
       '</div>' +
       '<div class="form-grid-2">' +
-        '<div class="form-field"><label>PIS e COFINS</label><input type="text" class="form-input" id="tribPisCofins" value="' + esc(t.pisCofins || "") + '"></div>' +
-        '<div class="form-field"><label>CFOP de vendas</label><input type="text" class="form-input" id="tribCfop" value="' + esc(t.cfopVendas || "") + '"></div>' +
+        '<div class="form-field"><label>PIS e COFINS</label><input type="text" class="form-input" id="tribPisCofins" autocomplete="off" value="' + esc(t.pisCofins || "") + '"></div>' +
+        '<div class="form-field"><label>CFOP de vendas</label><input type="text" class="form-input" id="tribCfop" autocomplete="off" value="' + esc(t.cfopVendas || "") + '"></div>' +
       '</div>' +
       '<div class="form-grid-2">' +
-        '<div class="form-field"><label>Nº da última NF emitida</label><input type="text" class="form-input" id="tribNf" value="' + esc(t.numeroUltimaNf || "") + '"></div>' +
+        '<div class="form-field"><label>Nº da última NF emitida</label><input type="text" class="form-input" id="tribNf" autocomplete="off" value="' + esc(t.numeroUltimaNf || "") + '"></div>' +
         '<div class="form-field"><label>Certificado digital</label><select class="form-input" id="tribCertificado">' +
           '<option value="nao"' + (!t.temCertificadoDigital ? " selected" : "") + '>Não</option>' +
           '<option value="sim"' + (t.temCertificadoDigital ? " selected" : "") + '>Sim</option>' +
@@ -5474,7 +5476,7 @@
       '<div class="form-field">' +
         '<label>Senha do certificado</label>' +
         '<div style="display:flex;gap:6px;align-items:center;">' +
-          '<input type="password" class="form-input" id="tribSenhaCertificado" value="' + esc(t.senhaCertificado || "") + '" style="flex:1;">' +
+          '<input type="password" class="form-input" id="tribSenhaCertificado" autocomplete="new-password" value="' + esc(t.senhaCertificado || "") + '" style="flex:1;">' +
           '<button type="button" class="btn-reset" id="btnMostrarSenhaCertificado" title="Mostrar/ocultar senha">👁</button>' +
         '</div>' +
         '<div class="hint">Usada só pra vincular o certificado ao sistema e fazer a parametrização fiscal — não é compartilhada com terceiros.</div>' +

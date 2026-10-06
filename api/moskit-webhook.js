@@ -308,6 +308,10 @@ export async function processarEvento(corpo) {
     .filter((c) => c.telefone);
 
   const dadosCliente = sanearDadosCliente({ idNucleo, cnpj, email, telefone, nomeContato, contatosAdicionais });
+  // Só o CNPJ barra a criação: e-mail/telefone ausentes no contato do Moskit
+  // são lacuna de cadastro, e perder o projeto em silêncio por isso é pior
+  // que criá-lo e completar depois (2 dos 5 projetos da 1ª migração não
+  // tinham e-mail).
   const faltando = dadosClienteFaltando(dadosCliente);
   const ausentesNaoBloqueantes = faltando.filter((f) => f === 'E-mail' || f === 'Telefone');
   if (ausentesNaoBloqueantes.length) {

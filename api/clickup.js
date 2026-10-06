@@ -139,7 +139,7 @@ import {
   criarAtividadeCsq,
   criarClienteCarteira,
   atualizarGerenteCarteira,
-  localizarCarteiraPorIdNucleo,
+  localizarLinhaCarteiraPorIdNucleo,
   atualizarComentario,
   criarComentario,
   criarModeloMensagem,
@@ -2418,6 +2418,22 @@ async function definirGerenteContasAcao(req, res, sessao) {
     return erro(res, 400, 'id_nucleo_pendente', 'Preencha o ID Núcleo antes de definir o gerente de contas.');
   }
 
+  // Cliente já na Carteira (mesmo ID Núcleo) COM gerente de contas preenchido:
+  // mantém o gerente que já está lá — não sorteia outro e não sobrescreve. O
+  // projeto só herda esse nome no "CSM". O rodízio não avança (não grava
+  // rodizioIndex/rodizioEm), então a ordem da fila não é consumida à toa.
+  const linhaCarteira = await localizarLinhaCarteiraPorIdNucleo(idNucleo);
+  const gerenteExistente = texto(linhaCarteira?.gerente, 120);
+  if (gerenteExistente) {
+    await atualizarTask(projeto.id, {
+      markdown_description: stringifyWaipeState(
+        [`**CSM:** ${gerenteExistente}`, contextoSemEstado(projeto.description)].filter(Boolean).join('\n\n'),
+        { ...estadoAtual }
+      ),
+    });
+    return res.status(200).json({ ok: true, gerente: gerenteExistente, mantido: true });
+  }
+
   // Rodízio: acha, entre os projetos que já passaram por este fluxo, o de
   // rodizioEm mais recente, e soma 1 (mod N) ao índice dele. Sem nenhum
   // ainda, começa do primeiro da lista (índice 0).
@@ -2447,9 +2463,10 @@ async function definirGerenteContasAcao(req, res, sessao) {
   // projeto de implantação do mesmo cliente já passou por este fluxo
   // antes) — só atualiza o gerente ali, não cria uma segunda entrada
   // duplicada pro mesmo cliente.
-  const carteiraExistenteId = await localizarCarteiraPorIdNucleo(idNucleo);
-  if (carteiraExistenteId) {
-    await atualizarGerenteCarteira(carteiraExistenteId, gerente.id);
+  // (Aqui a linha existente, se houver, está SEM gerente — o caso "com gerente"
+  // já retornou acima.)
+  if (linhaCarteira) {
+    await atualizarGerenteCarteira(linhaCarteira.id, gerente.id);
   } else {
     await criarClienteCarteira({
       nome: texto(estadoAtual.cliente, 120) || projeto.name,

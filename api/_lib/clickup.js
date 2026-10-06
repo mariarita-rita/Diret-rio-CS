@@ -1871,13 +1871,18 @@ export function refletirEscrita(taskId, fieldId, valor) {
 // obterImplantacaoAcao, api/clickup.js) — inclusive projetos migrados do
 // Moskit que não têm CNPJ preenchido de forma confiável.
 
-/** Task da Carteira com este ID Núcleo, ou null se não existir (ainda). */
-export async function localizarCarteiraPorIdNucleo(idNucleo) {
+/** Linha da Carteira (com `id` e `gerente`) com este ID Núcleo, ou null se não existir (ainda). */
+export async function localizarLinhaCarteiraPorIdNucleo(idNucleo) {
   const chave = String(idNucleo || '').trim();
   if (!chave || chave === '0') return null;
   const { linhas } = await getCarteira();
-  const achada = linhas.find((l) => String(l.idNucleo || '').trim() === chave);
-  return achada ? achada.id : null;
+  return linhas.find((l) => String(l.idNucleo || '').trim() === chave) || null;
+}
+
+/** Task da Carteira com este ID Núcleo, ou null se não existir (ainda). */
+export async function localizarCarteiraPorIdNucleo(idNucleo) {
+  const linha = await localizarLinhaCarteiraPorIdNucleo(idNucleo);
+  return linha ? linha.id : null;
 }
 
 /**
