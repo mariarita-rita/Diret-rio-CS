@@ -3271,6 +3271,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       cnpj: ctx.cnpj,
       email: ctx.email,
       telefone: ctx.telefone,
+      // "Contato (A/C)" do formulário = nome de quem atende o telefone/e-mail
+      // acima (vira o nome do contato principal no projeto de implantação).
+      nomeContato: ctx.contato,
       agentesPropostos: waipeIncluido ? montarAgentesPropostos() : [],
       outrasSolucoesPropostas: recomendacoesState,
       // Mapa completo (não só os marcados) — pra reabrir a proposta sem
@@ -3414,6 +3417,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
         document.getElementById("p-cnpj").value = projeto.cnpj || "";
         document.getElementById("p-email").value = projeto.email || "";
         document.getElementById("p-telefone").value = projeto.telefone || "";
+        document.getElementById("p-contato").value = projeto.nomeContato || "";
         // Se a proposta foi salva sem diagnóstico Waipe, o CSM não incluiu o
         // Waipe naquela rodada — o toggle já carrega refletindo isso.
         waipeIncluido = !!projeto.diagnosticoWaipe;

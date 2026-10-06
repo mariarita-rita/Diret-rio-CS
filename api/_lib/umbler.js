@@ -132,6 +132,9 @@ export async function buscarHistoricoConversa(telefoneE164) {
   const mensagens = (detalhe?.latestMessages || [])
     .filter((m) => m._t === 'MessageModel' || m._t === 'SentMessageModel')
     .map((m) => ({
+      // Nome de quem da equipe mandou (vazio quando foi o contato) — o front
+      // mostra no lugar do rótulo genérico "Equipe".
+      autor: nomeDoMembro(m.sentByOrganizationMember),
       texto: m.content || '',
       // `sentByOrganizationMember` vem preenchido quando quem mandou foi a
       // equipe, e null quando foi o contato — é esse campo que a API
@@ -148,6 +151,23 @@ export async function buscarHistoricoConversa(telefoneE164) {
     aberta: !!detalhe?.open,
     setor: detalhe?.sector?.name || null,
     ultimaMensagemEm: Date.parse(detalhe?.eventAtUTC || '') || null,
+    // Nome do contato como está cadastrado na Umbler — só fallback pra
+    // quando o projeto não tem nome de contato próprio.
+    contatoNomeUmbler: typeof contato.name === 'string' ? contato.name.trim() : '',
     mensagens,
   };
+}
+
+/**
+ * Nome do membro da equipe que enviou a mensagem. O formato exato do objeto
+ * `sentByOrganizationMember` não é documentado publicamente, então tenta os
+ * campos mais prováveis; sem nome reconhecível devolve '' (o front cai no
+ * rótulo "Equipe") e registra as chaves no log pra ajustar depois.
+ */
+function nomeDoMembro(membro) {
+  if (!membro || typeof membro !== 'object') return '';
+  const candidato = membro.name || membro.displayName || membro.fullName || membro.user?.name || membro.member?.name || '';
+  if (typeof candidato === 'string' && candidato.trim()) return candidato.trim();
+  console.warn('[umbler] membro sem nome reconhecivel; chaves:', Object.keys(membro).join(','));
+  return '';
 }

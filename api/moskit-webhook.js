@@ -298,13 +298,16 @@ export async function processarEvento(corpo) {
   const contatoPrincipal = contatos[0] || null;
   const telefone = telefoneDe(contatoPrincipal);
   const email = emailDe(contatoPrincipal);
-  // Nenhum contato perdido: TODOS entram em contatosAdicionais, incluindo o
-  // principal — o schema de dadosCliente não tem campo pra "nome do contato
-  // principal" separado (limitação de dados já existente, não introduzida
-  // agora).
-  const contatosAdicionais = contatos.map((c) => ({ nome: texto200(c?.name), telefone: telefoneDe(c) })).filter((c) => c.telefone);
+  // O principal tem nome próprio (nomeContato, junto do telefone/e-mail
+  // dele); os demais contatos do Moskit entram em contatosAdicionais —
+  // nenhum se perde, e o principal não aparece duplicado no seletor de
+  // contatos da conversa do Utalk.
+  const nomeContato = semAspasRetas(texto200(contatoPrincipal?.name));
+  const contatosAdicionais = contatos.slice(1)
+    .map((c) => ({ nome: semAspasRetas(texto200(c?.name)), telefone: telefoneDe(c) }))
+    .filter((c) => c.telefone);
 
-  const dadosCliente = sanearDadosCliente({ idNucleo, cnpj, email, telefone, contatosAdicionais });
+  const dadosCliente = sanearDadosCliente({ idNucleo, cnpj, email, telefone, nomeContato, contatosAdicionais });
   const faltando = dadosClienteFaltando(dadosCliente);
   const ausentesNaoBloqueantes = faltando.filter((f) => f === 'E-mail' || f === 'Telefone');
   if (ausentesNaoBloqueantes.length) {

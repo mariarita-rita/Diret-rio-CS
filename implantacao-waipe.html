@@ -4249,6 +4249,7 @@
       id: dadosProjeto.projeto.id, etapaAtual: sim.etapa, prioridade: sim.prioridade,
       agenteAtualId: sim.agenteAtual, concluidos: sim.concluidos, camada1Checks: sim.camada1Checks,
       idNucleo: dados.idNucleo, cnpj: dados.cnpj, email: dados.email, telefone: dados.telefone,
+      nomeContato: dados.nomeContato,
       contatosAdicionais: dados.contatosAdicionais
     }).then(function(){
       Object.assign(dadosProjeto.projeto, dados);
@@ -4450,7 +4451,7 @@
   // Umbler Talk sem telefone).
   function opcoesContatoUtalk(p){
     var opcoes = [];
-    if (p && p.telefone) opcoes.push({ telefone: p.telefone, label: "Contato principal — " + p.telefone });
+    if (p && p.telefone) opcoes.push({ telefone: p.telefone, label: (p.nomeContato || "Contato principal") + " — " + p.telefone });
     ((p && p.contatosAdicionais) || []).forEach(function(c){
       if (c.telefone) opcoes.push({ telefone: c.telefone, label: (c.nome || "Contato") + " — " + c.telefone });
     });
@@ -4504,9 +4505,13 @@
       var statusTxt = resp.aberta ? "Aberta" : "Fechada";
       var setorTxt = resp.setor ? (" · " + esc(resp.setor)) : "";
       var ultimaTxt = resp.ultimaMensagemEm ? fmtDataHoraSim(resp.ultimaMensagemEm) : "—";
+      // Nome no lugar do rótulo genérico: o do contato (cadastrado no projeto
+      // ou, sem isso, o da Umbler) e o de quem da equipe respondeu — caem em
+      // "Cliente"/"Equipe" só quando o nome não está disponível.
+      var rotuloCliente = resp.clienteNome || "Cliente";
       var msgsHtml = (resp.mensagens || []).slice(-5).map(function(m){
         return '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:' + (m.deCliente ? "var(--surface-2)" : "var(--tag-londrisoft-bg)") + ';">' +
-          '<div style="font-size:11px;color:var(--muted);margin-bottom:2px;">' + (m.deCliente ? "Cliente" : "Equipe") + ' · ' + fmtDataHoraSim(m.dataMs) + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:2px;">' + esc(m.deCliente ? rotuloCliente : (m.autor || "Equipe")) + ' · ' + fmtDataHoraSim(m.dataMs) + '</div>' +
           '<div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;">' + esc(m.texto) + '</div>' +
         '</div>';
       }).join("");
@@ -5503,9 +5508,10 @@
         '<div class="form-field"><label>CNPJ</label><input type="text" class="form-input" id="cliCnpj" value="' + esc(p.cnpj || "") + '"></div>' +
       '</div>' +
       '<div class="form-grid-2">' +
-        '<div class="form-field"><label>E-mail</label><input type="email" class="form-input" id="cliEmail" value="' + esc(p.email || "") + '"></div>' +
+        '<div class="form-field"><label>Nome do contato</label><input type="text" class="form-input" id="cliNomeContato" value="' + esc(p.nomeContato || "") + '" placeholder="Quem atende pelo telefone abaixo"></div>' +
         '<div class="form-field"><label>Telefone</label><input type="text" class="form-input" id="cliTelefone" value="' + esc(p.telefone || "") + '"></div>' +
       '</div>' +
+      '<div class="form-field"><label>E-mail</label><input type="email" class="form-input" id="cliEmail" value="' + esc(p.email || "") + '"></div>' +
       '<div class="sp-k" style="margin-top:10px;">Outros contatos <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesma empresa, outra pessoa)</span></div>' +
       '<div id="contatosAdicionaisWrap">' +
         (p.contatosAdicionais || []).map(function(c){ return linhaContatoAdicionalHtml(c.nome, c.telefone); }).join("") +
@@ -5650,10 +5656,11 @@
         cnpj: document.getElementById("cliCnpj").value.trim(),
         email: document.getElementById("cliEmail").value.trim(),
         telefone: document.getElementById("cliTelefone").value.trim(),
+        nomeContato: document.getElementById("cliNomeContato").value.trim(),
         contatosAdicionais: coletarContatosAdicionais()
       });
     });
-    wireDirty(["cliIdNucleo", "cliCnpj", "cliEmail", "cliTelefone"], "btnSalvarDadosCliente");
+    wireDirty(["cliIdNucleo", "cliCnpj", "cliEmail", "cliTelefone", "cliNomeContato"], "btnSalvarDadosCliente");
     var contatosAdicionaisWrap = document.getElementById("contatosAdicionaisWrap");
     if (contatosAdicionaisWrap){
       // Delegação: linhas são criadas/removidas dinamicamente, então não dá
@@ -6389,9 +6396,10 @@
           '<div class="form-field"><label>CNPJ</label><input type="text" id="rvCnpj" class="form-input" value="' + esc(wizard.cnpj || "") + '"></div>' +
         '</div>' +
         '<div class="form-grid-2">' +
-          '<div class="form-field"><label>E-mail</label><input type="email" id="rvEmail" class="form-input" value="' + esc(wizard.email || "") + '"></div>' +
+          '<div class="form-field"><label>Nome do contato (opcional)</label><input type="text" id="rvNomeContato" class="form-input" value="' + esc(wizard.nomeContato || "") + '"></div>' +
           '<div class="form-field"><label>Telefone</label><input type="text" id="rvTelefone" class="form-input" value="' + esc(wizard.telefone || "") + '"></div>' +
         '</div>' +
+        '<div class="form-field"><label>E-mail</label><input type="email" id="rvEmail" class="form-input" value="' + esc(wizard.email || "") + '"></div>' +
       '</div>' +
       '<div id="agentesEditorWrap"></div>' +
       '<div style="margin:10px 0 18px;"><button type="button" class="btn-flow-secondary" id="btnAddAgente">+ Adicionar agente</button></div>' +
@@ -6483,6 +6491,7 @@
     document.getElementById("rvCnpj").addEventListener("input", function(e){ wizard.cnpj = e.target.value; });
     document.getElementById("rvEmail").addEventListener("input", function(e){ wizard.email = e.target.value; });
     document.getElementById("rvTelefone").addEventListener("input", function(e){ wizard.telefone = e.target.value; });
+    document.getElementById("rvNomeContato").addEventListener("input", function(e){ wizard.nomeContato = e.target.value; });
     document.getElementById("btnAddAgente").addEventListener("click", function(){
       wizard.agentes.push({ nome:"", frente:"", frequencia:"", canal:"", publico:"", entrega:"", sistemas:"", prereq:"" });
       renderAgentesEditor();
