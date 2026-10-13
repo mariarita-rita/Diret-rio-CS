@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento Atendimento — Setembro 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2; --branco:#FFFFFF;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .back-link{ display:inline-block; font-size:12px; color:rgba(255,255,255,.55); text-decoration:none; margin-bottom:16px; }
+  .back-link:hover{ color:#fff; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:44px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:30px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.azul { color:var(--azul2); }
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); } .chip-ok { background:var(--verde-cl); color:var(--verde); } .chip-info { background:var(--azul-cl); color:var(--azul2); }
+  .motivos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .motivo-item { background:#fff; border:1px solid var(--brd); border-radius:8px; padding:12px 14px; display:flex; align-items:center; gap:14px; }
+  .motivo-num { font-size:28px; font-weight:800; min-width:36px; line-height:1; }
+  .motivo-txt b { font-size:13px; font-weight:700; display:block; margin-bottom:1px; }
+  .motivo-txt span { font-size:11px; color:var(--cinza); }
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:170px repeat(3,1fr); }
+  .hist-cell { padding:10px 14px; font-size:12px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:11px; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-junho { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+  .chip { display:inline-block; font-size:9px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; vertical-align:middle; }
+  .chip-laranja{ background:var(--lar-cl); color:var(--laranja); }
+  .chip-verm{ background:var(--verm-cl); color:var(--verm); }
+  .chip-alta{ background:var(--verm-cl); color:var(--verm); }
+  .chip-media{ background:var(--lar-cl); color:var(--laranja); }
+  .chip-baixa{ background:var(--azul-cl); color:var(--azul2); }
+  .evento-box{ margin-top:12px; padding:10px 12px; background:var(--lar-cl); border-left:3px solid var(--laranja); border-radius:6px; font-size:11.5px; color:#78350F; line-height:1.5; }
+  .reco-check{ width:16px; height:16px; cursor:pointer; accent-color: var(--azul2); }
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+  /* --- ranking bars (novo para Atendimento) --- */
+  .rank-box{ background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px 18px; }
+  .rank-box-titulo{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--cinza); margin-bottom:12px; }
+  .rank-row{ display:grid; grid-template-columns:98px 1fr 56px; align-items:center; gap:10px; margin-bottom:9px; }
+  .rank-row:last-child{ margin-bottom:0; }
+  .rank-nome{ font-size:12px; font-weight:600; color:var(--preto); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rank-track{ background:var(--cinza-cl); border-radius:4px; height:10px; overflow:hidden; }
+  .rank-fill{ height:100%; border-radius:4px; background:linear-gradient(90deg,var(--azul2),#6366F1); }
+  .rank-fill.verm{ background:linear-gradient(90deg,#DC2626,#F87171); }
+  .rank-val{ text-align:right; font-size:12px; font-weight:700; color:var(--preto); font-variant-numeric:tabular-nums; }
+  .rank-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  /* --- quote cards --- */
+  .quote-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .quote-card{ background:#fff; border:1px solid var(--brd); border-radius:10px; padding:13px 16px; border-left:3px solid var(--azul2); }
+  .quote-card.satisfeito{ border-left-color:var(--verde); }
+  .quote-card.insatisfeito{ border-left-color:var(--verm); }
+  .quote-autor{ font-size:12px; font-weight:700; color:var(--azul2); margin-bottom:5px; }
+  .quote-card.satisfeito .quote-autor{ color:var(--verde); }
+  .quote-card.insatisfeito .quote-autor{ color:var(--verm); }
+  .quote-texto{ font-size:12.5px; color:var(--preto); line-height:1.55; }
+  /* --- bar chart vertical --- */
+  .bar-chart{ display:flex; align-items:flex-end; gap:10px; height:150px; padding:16px 8px 0; border-bottom:1px solid var(--brd); background:#fff; border:1px solid var(--brd); border-top:none; border-radius:0 0 10px 10px; }
+  .bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .bar-fill{ width:100%; max-width:34px; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#6366F1,var(--azul2)); }
+  .bar-val{ font-size:10px; font-weight:700; color:var(--preto); margin-bottom:4px; }
+  .bar-wrap{ background:linear-gradient(90deg,var(--azul1),var(--azul2)); border-radius:10px 10px 0 0; padding:8px 14px; }
+  .bar-wrap-titulo{ font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; letter-spacing:.06em; }
+  .bar-labels{ display:flex; gap:10px; padding:6px 8px 0; }
+  .bar-label-col{ flex:1; text-align:center; font-size:10px; color:var(--cinza); }
+  @media(max-width:700px) {
+    .hist-row { grid-template-columns:100px repeat(3,1fr); font-size:11px; }
+    .hist-cell { padding:8px 8px; }
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .motivos-grid { grid-template-columns:1fr; }
+    .rank-grid2 { grid-template-columns:1fr; }
+    .quote-grid { grid-template-columns:1fr; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:30px; }
+  }
+</style>
+<style>
+.tag-inst{display:inline-block;padding:2px 7px;border-radius:4px;font-size:7.5pt;font-weight:700;background:#FEE2E2;color:#7B1010;margin-right:3px}
+.tag-aus{display:inline-block;padding:2px 7px;border-radius:4px;font-size:7.5pt;font-weight:700;background:#FEF3C7;color:#92400E;margin-right:3px}
+.tag-tool{display:inline-block;padding:2px 7px;border-radius:4px;font-size:7.5pt;font-weight:700;background:#EDE9FE;color:#5B21B6}
+</style>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <a href="https://diretoriocs.vercel.app/fechamentos.html" class="back-link">← Voltar aos Fechamentos</a>
+      <p class="hero-eyebrow">Londrisoft · Atendimento</p>
+      <h1 class="hero-titulo">Fechamento<span>Setembro 2026</span></h1>
+      <p class="hero-desc">Mês com <strong>17 eventos de instabilidade</strong> — o maior volume do ano. Transição de ferramenta (Octadesk → Huggy) em 09/09. CSAT abaixo de 90% para toda a equipe.</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado do mês</p>
+      <div class="panel-destaque">
+        <div><span class="dk">CSAT geral</span><div class="dv" style="color:#E24B4A">85,82%</div></div>
+        <div class="dpct"><strong>pior resultado do ano</strong><span>17 instabilidades</span></div>
+      </div>
+      <div class="panel-item"><span>Chat válidos</span><strong>1.256</strong></div>
+      <div class="panel-item"><span>Ligações recebidas (base)</span><strong>336</strong></div>
+      <div class="panel-item"><span>Taxa atendimento telefone</span><strong>73,2% ▼</strong></div>
+      <div class="panel-item"><span>TMA chat / TME equipe</span><strong>32min 05s / 5min 42s ⚠</strong></div>
+      <div class="evento-box">⚠ <strong>Transição Octadesk → Huggy em 09/09.</strong> Dados 01–09/09 em Octadesk; 09–30/09 em Huggy. Métricas de TME podem ter variação por diferença de cálculo entre plataformas.</div>
+    </div>
+  </div>
+</section>
+
+<main class="conteudo">
+
+<!-- COMPARATIVO -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Evolução mensal — abril a setembro</h2></div>
+    <p class="sec-desc">Setembro registra o pior CSAT (85,82%) e a pior taxa de atendimento telefônico (73,2%) do ano. TMA chat melhora para 32min, mas o TME de 5:42 superou o limite de 5min pela primeira vez.</p>
+  </div>
+  <div class="hist-wrap">
+    <div class="hist-row" style="grid-template-columns:160px repeat(6,1fr)">
+      <div class="hist-cell hist-head">Indicador</div>
+      <div class="hist-cell hist-head">Abr</div><div class="hist-cell hist-head">Mai</div>
+      <div class="hist-cell hist-head">Jun</div><div class="hist-cell hist-head">Jul</div>
+      <div class="hist-cell hist-head">Ago</div>
+      <div class="hist-cell hist-head hist-julho">Set ★</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:160px repeat(6,1fr)">
+      <div class="hist-cell hist-mes">CSAT geral</div>
+      <div class="hist-cell hist-val">89,1%</div><div class="hist-cell hist-val">90,5%</div>
+      <div class="hist-cell hist-val">88,2%</div><div class="hist-cell hist-val">92,4%</div>
+      <div class="hist-cell hist-val">89,0%</div>
+      <div class="hist-cell hist-val hist-julho" style="color:#E24B4A">85,8% ▼</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:160px repeat(6,1fr)">
+      <div class="hist-cell hist-mes">TMA chat</div>
+      <div class="hist-cell hist-val">59min</div><div class="hist-cell hist-val">43min</div>
+      <div class="hist-cell hist-val">1h52 ⚠</div><div class="hist-cell hist-val">44min</div>
+      <div class="hist-cell hist-val">38min</div>
+      <div class="hist-cell hist-val hist-julho">32min ▲</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:160px repeat(6,1fr)">
+      <div class="hist-cell hist-mes">TME equipe</div>
+      <div class="hist-cell hist-val">1:28</div><div class="hist-cell hist-val">5:09</div>
+      <div class="hist-cell hist-val">1:26</div><div class="hist-cell hist-val">1:24</div>
+      <div class="hist-cell hist-val">~1:30</div>
+      <div class="hist-cell hist-val hist-julho" style="color:#E24B4A">5:42 ⚠</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:160px repeat(6,1fr)">
+      <div class="hist-cell hist-mes">Chat válidos</div>
+      <div class="hist-cell hist-val">1.392</div><div class="hist-cell hist-val">1.192</div>
+      <div class="hist-cell hist-val">1.460</div><div class="hist-cell hist-val">1.178</div>
+      <div class="hist-cell hist-val">1.052</div>
+      <div class="hist-cell hist-val hist-julho">1.256</div>
+    </div>
+    <div class="hist-row" style="grid-template-columns:160px repeat(6,1fr)">
+      <div class="hist-cell hist-mes">Taxa atend. tel.</div>
+      <div class="hist-cell hist-val">45,6%</div><div class="hist-cell hist-val">—</div>
+      <div class="hist-cell hist-val">80,1%</div><div class="hist-cell hist-val">91,1%</div>
+      <div class="hist-cell hist-val">80,7%</div>
+      <div class="hist-cell hist-val hist-julho" style="color:#E24B4A">73,2% ▼</div>
+    </div>
+  </div>
+  <div class="evento-box" style="margin-top:8px">⚠ <strong>Setembro em contexto:</strong> o CSAT caiu 3,2pp vs agosto e 6,6pp vs julho. O TME de 5:42 ultrapassou o limite de 5min pela primeira vez no histórico — resultado direto dos 17 eventos de instabilidade que mantiveram clientes frustrados na fila. A transição de ferramenta pode ter contribuído para distorções no TME.</div>
+</section>
+
+<!-- INSTABILIDADES -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Causa-raiz dominante</p><h2 class="sec-titulo">Instabilidades — 17 eventos em setembro ⚠</h2></div>
+    <p class="sec-desc">Setembro foi o mês com maior concentração de instabilidades do ano. Três padrões distintos: Gestor Nuvem (semanas 1–3), Sefaz (início do mês) e impossibilidade de emitir NF de devolução (semana final).</p>
+  </div>
+
+  <div class="num-grid" style="margin-bottom:14px">
+    <div class="num-card"><p class="num-label">Total de eventos</p><p class="num-val er">17</p><p class="num-sub">maior do ano</p></div>
+    <div class="num-card"><p class="num-label">Gestor Nuvem</p><p class="num-val er">10</p><p class="num-sub">02 a 16/09</p></div>
+    <div class="num-card"><p class="num-label">Sefaz</p><p class="num-val wn">2</p><p class="num-sub">02 e 03/09</p></div>
+    <div class="num-card"><p class="num-label">NF devolução</p><p class="num-val wn">5</p><p class="num-sub">24 a 30/09</p></div>
+    <div class="num-card"><p class="num-label">Dias úteis impactados</p><p class="num-val er">14</p><p class="num-sub">de 22 dias úteis = 64%</p></div>
+  </div>
+
+  <!-- Linha do tempo -->
+  <div class="tabela-wrap" style="margin-bottom:12px">
+    <table style="font-size:8pt">
+      <thead><tr><th>Período</th><th class="al">Evento</th><th class="al">Característica</th><th class="td-r">Chat vol.</th></tr></thead>
+      <tbody>
+        <tr style="background:#FEF2F2"><td><strong>02–04/09</strong></td><td class="al"><span class="tag-inst">Gestor + Sefaz</span></td><td class="al">3 dias consecutivos, dupla instabilidade — início caótico do mês</td><td class="td-r">57 | 49 | 44</td></tr>
+        <tr><td>08/09</td><td class="al"><span class="tag-inst">Servidor Gestor</span></td><td class="al">Oscilação no servidor de processos</td><td class="td-r">65</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>09–10/09</strong></td><td class="al"><span class="tag-inst">Gestor Nuvem</span> <span class="tag-tool">Migração Huggy</span></td><td class="al">09/09: pico de 66 conv — migração + instabilidade simultâneas</td><td class="td-r">66 | 76</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>14–16/09</strong></td><td class="al"><span class="tag-inst">Gestor Nuvem</span></td><td class="al">3 dias seguidos — maior semana de instabilidade. 14/09: 71 conv (top 3)</td><td class="td-r">71 | 47 | 48</td></tr>
+        <tr><td><strong>24–30/09</strong></td><td class="al"><span class="tag-inst">NF devolução</span></td><td class="al">Impossibilidade de emitir NF de devolução — 5 dias seguidos. Impacto fiscal direto nos clientes</td><td class="td-r">59|49|62|49|75</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="analise">
+    <strong>Três padrões distintos, três impactos distintos:</strong><br><br>
+    <strong>Gestor Nuvem (10 eventos):</strong> padrão já observado em julho — volume moderado a alto, conversas curtas, equipe responde rápido com mensagem padronizada. A repetição em setembro, porém, gerou <em>fadiga no cliente</em>: clientes que passaram pela mesma instabilidade em meses anteriores chegam mais frustrados e menos pacientes, o que explica o CSAT de 85,82% apesar do TMA de 32min.<br><br>
+    <strong>Sefaz (02–03/09):</strong> dupla instabilidade na abertura do mês. Coincidiu com ausências de Jaqueline, reduzindo a capacidade da equipe exatamente quando a demanda disparou.<br><br>
+    <strong>NF de devolução (24–30/09):</strong> o mais crítico em impacto de negócio. Impossibilidade de emitir nota fiscal de devolução afeta diretamente a operação contábil/fiscal dos clientes — mais urgente que uma queda de sistema. O pico de 75 conversas em 30/09 (última sexta do mês) reflete clientes tentando resolver antes do fechamento mensal. Este tipo de instabilidade gera insatisfação estrutural: o cliente sabe que o problema não será resolvido no chat e sai frustrado independente da qualidade do atendimento.
+  </div>
+  <div class="alerta alerta-verm">⚠ <strong>Ponto crítico — TME de 5:42:</strong> pela primeira vez no histórico, o TME da equipe ultrapassou o limite de 5min. Com 14 dias impactados por instabilidades, clientes em estado de frustração lotaram as filas, tornando impossível manter o tempo de resposta dentro da meta. O TME de Alexsandro (7:23) indica que ele foi o mais sobrecarregado com filas em dias críticos.</div>
+</section>
+
+<!-- CHAT -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Chat — conversas por atendente</h2></div>
+    <p class="sec-desc">1.256 conversas — maior volume desde junho. Daniel e Alexsandro lideram em volume (29,62% cada). Jaqueline e Thalyta impactadas pelas ausências. TMA melhorou para 32min no geral.</p>
+  </div>
+
+  <div class="rank-grid2" style="margin-bottom:14px">
+    <div class="rank-box">
+      <p class="rank-box-titulo">Volume de conversas</p>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">372</span></div>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">372</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta <span style="font-size:9px;color:#B45309">aus.</span></span><div class="rank-track"><div class="rank-fill" style="width:70%"></div></div><span class="rank-val">262</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline <span style="font-size:9px;color:#B45309">6 aus.</span></span><div class="rank-track"><div class="rank-fill" style="width:67%"></div></div><span class="rank-val">250</span></div>
+    </div>
+    <div class="rank-box">
+      <p class="rank-box-titulo">TMA por atendente</p>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:44%;background:var(--verde)"></div></div><span class="rank-val" style="color:var(--verde)">29min ✓</span></div>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:47%;background:var(--verde)"></div></div><span class="rank-val" style="color:var(--verde)">30min ✓</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:100%;background:var(--verm)"></div></div><span class="rank-val" style="color:var(--verm)">1h08</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:100%;background:var(--verm)"></div></div><span class="rank-val" style="color:var(--verm)">1h10</span></div>
+    </div>
+  </div>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead><tr><th>Atendente</th><th>Conversas</th><th>%</th><th>TMA agente</th><th>TME (1ª resp.)</th><th>CSAT</th></tr></thead>
+      <tbody>
+        <tr><td class="negrito">Daniel Vitor</td><td class="td-r">372</td><td class="td-r">29,62%</td><td class="td-r" style="color:var(--verde)">30min 11s ✓</td><td class="td-r">2min 36s</td><td class="td-r"><span class="chip chip-er">87,43%</span></td></tr>
+        <tr><td class="negrito">Jaqueline <span class="tag-aus">6 aus.</span></td><td class="td-r">250</td><td class="td-r">19,90%</td><td class="td-r" style="color:var(--verde)">29min 19s ✓</td><td class="td-r">1min 40s</td><td class="td-r"><span class="chip chip-er">86,61%</span></td></tr>
+        <tr><td class="negrito">Thalyta <span class="tag-aus">aus.</span></td><td class="td-r">262</td><td class="td-r">20,86%</td><td class="td-r" style="color:var(--verm)">1h 10min</td><td class="td-r">4min 27s</td><td class="td-r"><span class="chip chip-er">86,49%</span></td></tr>
+        <tr><td class="negrito">Alexsandro</td><td class="td-r">372</td><td class="td-r">29,62%</td><td class="td-r" style="color:var(--verm)">1h 08min</td><td class="td-r">7min 23s</td><td class="td-r"><span class="chip chip-er">82,61%</span></td></tr>
+        <tr style="background:var(--cinza-cl)"><td class="negrito">TOTAL / MÉDIA</td><td class="td-r">1.256</td><td class="td-r">100%</td><td class="td-r negrito">32min 05s</td><td class="td-r negrito" style="color:var(--verm)">5min 42s ⚠</td><td class="td-r"><span class="chip chip-er">85,82%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerta alerta-laranja" style="margin-top:8px">
+    ⚠ <strong>Alexsandro e Thalyta com TMA acima de 1h:</strong> em contraste com Daniel (30min) e Jaqueline (29min). O padrão de TMA elevado nesses dois se repete desde agosto — sugere perfil de casos mais complexos ou dificuldade de encerrar conversas em dias de instabilidade prolongada. <strong>Alexsandro TME de 7:23</strong> (único acima de 5min) indica acúmulo de fila nos dias de pico.
+  </div>
+</section>
+
+<!-- TELEFONE -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Canal telefone</p><h2 class="sec-titulo">Telefone — Issabel</h2></div>
+    <p class="sec-desc">Taxa de atendimento de 73,2% — pior do ano. TMA geral de 18:37, acima da meta de 15min. Daniel Vitor lidera em volume de atendimentos (69). Thalyta com maior TMA (25:01).</p>
+  </div>
+
+  <div class="rank-grid2" style="margin-bottom:14px">
+    <div class="rank-box">
+      <p class="rank-box-titulo">Atendidas por agente</p>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:100%"></div></div><span class="rank-val">69</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:64%"></div></div><span class="rank-val">44</span></div>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:61%"></div></div><span class="rank-val">42</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:46%;background:var(--laranja)"></div></div><span class="rank-val">32</span></div>
+    </div>
+    <div class="rank-box">
+      <p class="rank-box-titulo">TMA telefone por agente</p>
+      <div class="rank-row"><span class="rank-nome">Jaqueline</span><div class="rank-track"><div class="rank-fill" style="width:71%;background:var(--laranja)"></div></div><span class="rank-val" style="color:var(--laranja)">17:55</span></div>
+      <div class="rank-row"><span class="rank-nome">Daniel Vitor</span><div class="rank-track"><div class="rank-fill" style="width:75%;background:var(--laranja)"></div></div><span class="rank-val" style="color:var(--laranja)">18:48</span></div>
+      <div class="rank-row"><span class="rank-nome">Alexsandro</span><div class="rank-track"><div class="rank-fill" style="width:87%;background:var(--laranja)"></div></div><span class="rank-val" style="color:var(--laranja)">21:55</span></div>
+      <div class="rank-row"><span class="rank-nome">Thalyta</span><div class="rank-track"><div class="rank-fill" style="width:100%;background:var(--verm)"></div></div><span class="rank-val" style="color:var(--verm)">25:01</span></div>
+    </div>
+  </div>
+
+  <div class="tabela-wrap">
+    <table>
+      <thead><tr><th>Classificação</th><th class="td-r">Qtd</th><th class="td-r">% base</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Atendidas</strong></td><td class="td-r" style="color:var(--verm);font-weight:700">246</td><td class="td-r">73,2%</td></tr>
+        <tr><td>Desistência por fila (≥30s)</td><td class="td-r">24</td><td class="td-r">7,1%</td></tr>
+        <tr><td>Não atendidas</td><td class="td-r">66</td><td class="td-r">19,6%</td></tr>
+        <tr><td>Desistência imediata (&lt;30s) — excluída</td><td class="td-r">391</td><td class="td-r">—</td></tr>
+        <tr style="background:var(--cinza-cl)"><td class="negrito">Base de cálculo</td><td class="td-r negrito">336</td><td class="td-r">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerta alerta-verm" style="margin-top:8px">⚠ 66 não atendidas em setembro — maior número do ano. Com 14 dias úteis impactados por instabilidades e ausências simultâneas, a capacidade de atendimento no telefone ficou consistentemente abaixo da demanda.</div>
+</section>
+
+<!-- AUSÊNCIAS -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Gestão de equipe</p><h2 class="sec-titulo">Ausências — setembro 2026</h2></div>
+    <p class="sec-desc">Jaqueline com 6 ausências e Thalyta com 5 — as mais altas do ano. A coincidência de ausências com dias de instabilidade ampliou o impacto. Daniel com meio período em 03/09.</p>
+  </div>
+
+  <div class="tabela-wrap">
+    <table style="font-size:8pt">
+      <thead><tr><th>Data</th><th class="al">Tipo</th><th class="al">Quem</th><th class="al">Contexto</th></tr></thead>
+      <tbody>
+        <tr style="background:#FEF2F2"><td><strong>02/09</strong></td><td class="al"><span class="tag-aus">Justificada</span></td><td class="al">Jaqueline</td><td class="al">Coincidiu com Gestor Nuvem + Sefaz</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>03/09</strong></td><td class="al"><span class="tag-aus">Justificada + ½ dia</span></td><td class="al">Jaqueline + Daniel (tarde)</td><td class="al">Gestor Nuvem ainda instável — 2 agentes comprometidos</td></tr>
+        <tr style="background:#FEE2E2"><td><strong>04/09</strong></td><td class="al"><span class="tag-aus">Just. + Injust.</span></td><td class="al">Jaqueline + Thalyta</td><td class="al">Ausência dupla — Gestor Nuvem ativo. Alexsandro e Daniel sozinhos</td></tr>
+        <tr><td>08/09</td><td class="al"><span class="tag-aus">Justificada</span></td><td class="al">Thalyta</td><td class="al">Servidor de processos oscilando</td></tr>
+        <tr><td>10/09</td><td class="al"><span class="tag-aus">Justificada</span></td><td class="al">Jaqueline</td><td class="al">Dia de maior pico (76 conv) — Gestor Nuvem instável</td></tr>
+        <tr><td>16/09</td><td class="al"><span class="tag-aus">Início tarde</span></td><td class="al">Jaqueline</td><td class="al">Gestor Nuvem instável — entrou após 8:30</td></tr>
+        <tr style="background:#FEF2F2"><td><strong>17/09</strong></td><td class="al"><span class="tag-aus">Injustificada</span></td><td class="al">Thalyta</td><td class="al">Sem comunicação prévia</td></tr>
+        <tr><td>22/09</td><td class="al"><span class="tag-aus">Justificada</span></td><td class="al">Jaqueline</td><td class="al">—</td></tr>
+        <tr style="background:#FEE2E2"><td><strong>24/09</strong></td><td class="al"><span class="tag-aus">Justificada</span></td><td class="al">Thalyta</td><td class="al">NF devolução ativa — redução de capacidade num dia crítico</td></tr>
+        <tr style="background:#FEE2E2"><td><strong>25/09</strong></td><td class="al"><span class="tag-aus">Justificadas</span></td><td class="al">Jaqueline + Thalyta</td><td class="al">Ausência dupla — NF devolução ainda ativa. 59 conv no chat</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="alerta alerta-azul" style="margin-top:8px">
+    📊 <strong>Padrão crítico — sobreposição ausência + instabilidade:</strong> 7 das 10 datas de ausência coincidiram com dias de instabilidade sistêmica. Jaqueline (6 ausências) e Thalyta (5 ausências) são as mais afetadas pelo volume total — explicando diretamente a participação abaixo de 22% de ambas no P1 da gamificação. O efeito cascata: quando um agente falta num dia de instabilidade, o restante da equipe absorve demanda extra, comprometendo TME e CSAT de todos.
+  </div>
+</section>
+
+<!-- TRANSIÇÃO DE FERRAMENTA -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Evento estrutural</p><h2 class="sec-titulo"><span class="tag-tool">Migração Octadesk → Huggy em 09/09</span></h2></div>
+    <p class="sec-desc">A transição ocorreu no mesmo dia de uma instabilidade do Gestor Nuvem, criando sobreposição de complexidade operacional. As métricas de setembro podem apresentar variações por diferença de cálculo entre plataformas.</p>
+  </div>
+  <div class="rank-grid2">
+    <div class="rank-box">
+      <p class="rank-box-titulo">Octadesk (01–09/09)</p>
+      <div style="font-size:8.5pt;line-height:1.8;color:var(--preto)">
+        <div>📊 565 registros</div>
+        <div>📅 8 dias úteis</div>
+        <div>📊 TME calculado por "Tempo de espera após atribuição"</div>
+        <div>⭐ CSAT: Satisfeito / Insatisfeito / Não respondeu</div>
+      </div>
+    </div>
+    <div class="rank-box">
+      <p class="rank-box-titulo">Huggy (09–30/09)</p>
+      <div style="font-size:8.5pt;line-height:1.8;color:var(--preto)">
+        <div>📊 1.287 registros</div>
+        <div>📅 16 dias úteis</div>
+        <div>📊 TME calculado por "attended_at − created_at"</div>
+        <div>⭐ CSAT: Satisfeito / Insatisfeito / Neutro</div>
+      </div>
+    </div>
+  </div>
+  <div class="nota" style="margin-top:8px">⚠ A coexistência de dois sistemas em setembro pode ter gerado duplicidade pontual em 09/09 e diferença no cálculo do TME (metodologias distintas). O comparativo de TME com meses anteriores deve ser interpretado com cautela.</div>
+</section>
+
+<!-- PICOS -->
+<section class="secao">
+  <div class="secao-header">
+    <div><p class="sec-eyebrow">Demanda</p><h2 class="sec-titulo">Picos de demanda — chat</h2></div>
+  </div>
+  <div class="motivos-grid">
+    <div class="motivo-item"><span class="motivo-num" style="color:var(--verm)">76</span><div class="motivo-txt"><b>10/09 ⚠ Gestor Nuvem</b><span>Maior dia — Jaqueline ausente + migração Huggy + instabilidade</span></div></div>
+    <div class="motivo-item"><span class="motivo-num" style="color:var(--verm)">75</span><div class="motivo-txt"><b>30/09 ⚠ NF devolução</b><span>2º maior — última sexta do mês, clientes fechando fiscal</span></div></div>
+    <div class="motivo-item"><span class="motivo-num">71</span><div class="motivo-txt"><b>14/09 ⚠ Gestor Nuvem</b><span>3º maior — semana de tripla instabilidade (14–16/09)</span></div></div>
+    <div class="motivo-item"><span class="motivo-num">66</span><div class="motivo-txt"><b>09/09 ⚠ Migração + Instab.</b><span>Dia da transição Octadesk → Huggy com Gestor instável</span></div></div>
+    <div class="motivo-item"><span class="motivo-num" style="color:var(--roxo)">179</span><div class="motivo-txt"><b>09h — Horário de pico</b><span>Maior volume horário do mês</span></div></div>
+    <div class="motivo-item"><span class="motivo-num" style="color:var(--roxo)">175</span><div class="motivo-txt"><b>15h — 2º horário</b><span>Tarde com volume expressivo</span></div></div>
+  </div>
+</section>
+
+</main>
+<footer class="rodape">Londrisoft Customer Success · Fechamento Mensal Atendimento · Setembro 2026 · Uso interno</footer>
+</body></html>

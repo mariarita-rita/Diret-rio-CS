@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento CSM — Setembro 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:48px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:32px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.laranja { color:var(--laranja); }
+  .panel-item .v.cinza-txt { color:var(--cinza); font-weight:600; }
+
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .sub-titulo { font-size:14px; font-weight:700; color:var(--preto); margin:24px 0 10px; }
+  .nota { font-size:12px; color:var(--cinza); margin:-4px 0 14px; line-height:1.5; }
+
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); } .num-val.laranja { color:var(--laranja); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); }
+  .chip-ok { background:var(--verde-cl); color:var(--verde); }
+  .chip-info { background:var(--azul-cl); color:var(--azul2); }
+  .chip-warn { background:var(--lar-cl); color:var(--laranja); }
+
+  .csm-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px; }
+  .csm-card { background:#fff; border:1px solid var(--brd); border-radius:12px; overflow:hidden; }
+  .csm-topo { background:linear-gradient(135deg,var(--azul1),var(--azul2)); padding:14px 16px 12px; display:flex; justify-content:space-between; align-items:flex-start; }
+  .csm-nome { font-size:14px; font-weight:700; color:#fff; line-height:1.2; margin-bottom:6px; }
+  .csm-nivel-chip { display:inline-block; background:rgba(255,255,255,.15); color:rgba(255,255,255,.9); font-size:9px; font-weight:700; padding:3px 9px; border-radius:20px; letter-spacing:.06em; text-transform:uppercase; }
+  .csm-pos { display:flex; flex-direction:column; align-items:center; min-width:44px; }
+  .csm-pos-num { font-size:22px; font-weight:800; color:rgba(255,255,255,.25); line-height:1; }
+  .medalha { font-size:26px; line-height:1; }
+  .pos-label { font-size:9px; font-weight:700; color:rgba(255,255,255,.4); letter-spacing:.06em; text-transform:uppercase; margin-top:2px; }
+  .csm-corpo { padding:14px 16px; }
+  .mrr-bloco { background:var(--cinza-cl); border-radius:8px; padding:10px 12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+  .mrr-bloco-label { font-size:10px; font-weight:600; color:var(--cinza); text-transform:uppercase; letter-spacing:.06em; }
+  .mrr-bloco-val { font-size:20px; font-weight:800; color:var(--azul2); }
+  .csm-prog-row { display:flex; justify-content:space-between; font-size:10px; color:var(--cinza); margin-bottom:3px; }
+  .csm-prog { height:5px; background:var(--brd); border-radius:3px; overflow:hidden; margin-bottom:12px; }
+  .csm-prog-fill { height:100%; background:linear-gradient(90deg,var(--azul2),#6366F1); border-radius:3px; }
+  .csm-prog-fill.alerta-bar { background:var(--laranja); }
+  .csm-prog-fill.verm-bar { background:var(--verm); }
+  .csm-linha { display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid var(--cinza-cl); }
+  .csm-linha:last-child { border-bottom:none; }
+  .csm-linha .k { color:var(--cinza); } .csm-linha .v { font-weight:600; }
+
+  .graf-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0; }
+  .graf-box { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px; }
+  .graf-titulo { font-size:12px; font-weight:600; color:var(--cinza); margin-bottom:10px; }
+
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:110px repeat(7,1fr); }
+  .hist-cell { padding:10px 8px; font-size:11px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:10px; text-align:center; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-atual { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+
+  .fluxo { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:16px; }
+  .passo { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:14px; }
+  .passo-num { width:24px; height:24px; border-radius:50%; background:var(--azul2); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
+  .passo b { display:block; font-size:13px; margin-bottom:4px; }
+  .passo span { display:block; font-size:11.5px; color:var(--cinza); line-height:1.45; }
+  .trilhas { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:24px; }
+  .trilha { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:14px 16px; }
+  .trilha b { display:block; font-size:13px; margin:8px 0 4px; }
+  .trilha span.d { display:block; font-size:12px; color:var(--cinza); line-height:1.5; }
+
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+
+  @media (max-width:700px) {
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .graf-grid { grid-template-columns:1fr; }
+    .fluxo, .trilhas { grid-template-columns:1fr; }
+    .hist-row { grid-template-columns:62px repeat(7,1fr); }
+    .hist-cell { padding:6px 3px; font-size:9px; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:34px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="hero-eyebrow">Londrisoft · Customer Success · CSM</p>
+      <h1 class="hero-titulo">Fechamento<span>Setembro 2026</span></h1>
+      <p class="hero-desc">Resultados, desempenho e análise da equipe de Customer Success — referência setembro 2026.</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado da equipe</p>
+      <div class="panel-destaque">
+        <div><p class="dk">MRR incremental líquido</p><p class="dv">R$ 3.535</p></div>
+        <div class="dpct"><strong>58,9%</strong><span>da meta base</span></div>
+      </div>
+      <div class="panel-item"><span class="k">Meta (1,5%) — R$ 6.000</span><span class="v laranja">58,9%</span></div>
+      <div class="panel-item"><span class="k">Super meta (3%) — R$ 9.000</span><span class="v cinza-txt">39,3%</span></div>
+      <div class="panel-item"><span class="k">Ultra meta (4%) — R$ 15.000</span><span class="v cinza-txt">23,6%</span></div>
+      <div class="panel-item"><span class="k">Meta especial (6%) — R$ 20.000</span><span class="v cinza-txt">17,7%</span></div>
+      <div class="panel-item"><span class="k">WON totais</span><span class="v">29 negócios</span></div>
+      <div class="panel-item"><span class="k">LOST totais</span><span class="v">25 negócios</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="conteudo">
+
+  <!-- VISÃO GERAL -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Resultado do mês</p><h2 class="sec-titulo">Visão geral</h2></div>
+      <p class="sec-desc">Setembro fecha abaixo da meta base de equipe: 58,9% de R$ 6.000. O MRR incremental líquido foi de R$ 3.534,54, já descontados três downsells no mês.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">MRR gerado (líquido)</p><p class="num-val verde">R$ 3.535</p><p class="num-sub">−42,8% vs agosto</p></div>
+      <div class="num-card"><p class="num-label">% da meta base</p><p class="num-val laranja">58,9%</p><p class="num-sub">faltaram R$ 2.465</p></div>
+      <div class="num-card"><p class="num-label">WON</p><p class="num-val">29</p><p class="num-sub">negócios ganhos</p></div>
+      <div class="num-card"><p class="num-label">LOST</p><p class="num-val verm">25</p><p class="num-sub">vs 31 em agosto</p></div>
+      <div class="num-card"><p class="num-label">Nível equipe</p><p class="num-val laranja">Abaixo</p><p class="num-sub">da meta base</p></div>
+    </div>
+    <div class="alerta alerta-laranja"><strong>Meta de equipe não atingida.</strong> O MRR incremental líquido de R$ 3.534,54 ficou R$ 2.465,46 abaixo da meta base de R$ 6.000,00. Sem atingimento de nível, não há bônus de equipe no mês.</div>
+    <div class="alerta alerta-azul"><strong>O resultado inclui R$ 534,90 de negócios fechados em agosto</strong> cujos formulários foram enviados ao Financeiro apenas no início de setembro (uma reativação de R$ 514,90 e uma renovação de R$ 20,00), contabilizados neste fechamento.</div>
+  </section>
+
+  <!-- COMPOSIÇÃO -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Composição do MRR</p><h2 class="sec-titulo">De onde veio o resultado</h2></div>
+      <p class="sec-desc">Reativações e crossell somaram 65% do MRR bruto com apenas 5 dos 28 negócios com incremento. As renovações foram três quartos do volume, mas menos de um terço do valor.</p>
+    </div>
+
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Tipo de negócio</th><th class="td-c">Quantidade</th><th class="td-c">% dos negócios</th><th class="td-r">Valor (MRR)</th><th class="td-c">% do MRR bruto</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Reativação</td><td class="td-c">3</td><td class="td-c">10,7%</td><td class="td-r negrito" style="color:var(--azul2);">R$ 1.243,60</td><td class="td-c negrito">33,1%</td></tr>
+          <tr><td class="negrito">Crossell</td><td class="td-c">2</td><td class="td-c">7,1%</td><td class="td-r negrito" style="color:var(--azul2);">R$ 1.192,21</td><td class="td-c negrito">31,7%</td></tr>
+          <tr><td class="negrito">Renovação</td><td class="td-c">21</td><td class="td-c">75,0%</td><td class="td-r">R$ 1.085,10</td><td class="td-c">28,9%</td></tr>
+          <tr><td class="negrito">Upsell</td><td class="td-c">1</td><td class="td-c">3,6%</td><td class="td-r">R$ 150,15</td><td class="td-c">4,0%</td></tr>
+          <tr><td class="negrito">Troca de titularidade (com incremento)</td><td class="td-c">1</td><td class="td-c">3,6%</td><td class="td-r">R$ 86,58</td><td class="td-c">2,3%</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Subtotal ganhos</td><td class="td-c negrito">28</td><td class="td-c">100%</td><td class="td-r negrito">R$ 3.757,64</td><td class="td-c negrito">100%</td></tr>
+          <tr><td class="negrito">Downsells</td><td class="td-c">3</td><td class="td-c">—</td><td class="td-r negrito" style="color:var(--verm);">− R$ 223,10</td><td class="td-c">—</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Total líquido (equipe)</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-r negrito" style="color:var(--azul1);">R$ 3.534,54</td><td class="td-c">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">O total de 29 negócios ganhos inclui 1 troca de titularidade sem incremento de MRR (R$ 0,00), que não aparece na tabela acima.</p>
+
+    <p class="sub-titulo">Downsells do mês</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th>CSM</th><th class="td-r">Mensalidade</th><th class="td-r">Impacto no MRR</th></tr></thead>
+        <tbody>
+          <tr><td>Tempere Alimentos Ltda</td><td>Lucineia Felix</td><td class="td-r">—</td><td class="td-r negrito" style="color:var(--verm);">− R$ 133,90</td></tr>
+          <tr><td>Ally Comércio de Carnes Ltda</td><td>Guilherme Camargo</td><td class="td-r">R$ 349,00 → R$ 299,90</td><td class="td-r negrito" style="color:var(--verm);">− R$ 49,10</td></tr>
+          <tr><td>Jireh Comércio de Peças para Refrigeração</td><td>Lucineia Felix</td><td class="td-r">R$ 220,00 → R$ 179,90</td><td class="td-r negrito" style="color:var(--verm);">− R$ 40,10</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="graf-grid">
+      <div class="graf-box">
+        <p class="graf-titulo">% do MRR bruto por tipo de negócio</p>
+        <div style="position:relative;height:220px;">
+          <canvas id="chartMixValor" role="img" aria-label="Composição do MRR bruto: Reativação 33,1%; Crossell 31,7%; Renovação 28,9%; Upsell 4,0%; Troca de titularidade 2,3%">Reativação 33,1%; Crossell 31,7%; Renovação 28,9%; Upsell 4,0%; Troca de titularidade 2,3%</canvas>
+        </div>
+      </div>
+      <div class="graf-box">
+        <p class="graf-titulo">% dos negócios por tipo (quantidade)</p>
+        <div style="position:relative;height:220px;">
+          <canvas id="chartMixQtd" role="img" aria-label="Quantidade de negócios por tipo: Renovação 21 (75,0%); Reativação 3 (10,7%); Crossell 2 (7,1%); Upsell 1 (3,6%); Troca de titularidade 1 (3,6%)">Renovação 21; Reativação 3; Crossell 2; Upsell 1; Troca de titularidade 1</canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="alerta alerta-azul"><strong>5 negócios (reativações e crossell) geraram 65% do MRR bruto.</strong> O resultado do mês dependeu de poucos negócios de maior valor, com destaque para o crossell de R$ 1.127,30 e três reativações que somaram R$ 1.243,60.</div>
+
+    <p class="sub-titulo">Origem das renovações</p>
+    <p class="nota" style="margin-bottom:12px;">8 das 21 renovações do mês (R$ 365,27) vieram da campanha de renovação automática da base de outubro: o cliente recebeu o aviso do reajuste, pediu para tratar a renovação com o CSM e foi renovado por ele.</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th class="td-c">Origem</th><th class="td-r">Valor</th></tr></thead>
+        <tbody>
+          <tr><td>Therapy Ind. e Com. Ap. Eletrônicos</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 69,92</td></tr>
+          <tr><td>Jaguamolas Ltda</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 61,50</td></tr>
+          <tr><td>Cco Cobranças e Comercial Ltda</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 60,90</td></tr>
+          <tr><td>Bolognesi de Souza &amp; Souza Ltda</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 59,95</td></tr>
+          <tr><td>Antonio Benedetti</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 39,00</td></tr>
+          <tr><td>Bar e Empório da Cerveja Ltda</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 30,00</td></tr>
+          <tr><td>Triângulo Estruturas Metálicas Ltda</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 29,00</td></tr>
+          <tr><td>Fabio Cristiano Malheiros</td><td class="td-c"><span class="chip chip-info">Campanha de reajuste</span></td><td class="td-r">R$ 15,00</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">As demais 13 renovações (R$ 719,83) são remanescentes das bases que estavam sendo trabalhadas e finalizadas ativamente pelos CSMs ao longo do mês. A análise completa da campanha está na seção "Renovação automática — base de outubro".</p>
+  </section>
+
+  <!-- WAIPE -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Produto em destaque</p><h2 class="sec-titulo">Waipe e campanha Waipe e Deploy</h2></div>
+      <p class="sec-desc">Setembro teve 1 fechamento com Waipe, no plano Time. A campanha dedicada de crossell Waipe e Deploy não teve nenhuma conversão direta e respondeu por 20 dos 25 negócios perdidos do mês.</p>
+    </div>
+
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Fechamentos com Waipe</p><p class="num-val verde">1</p><p class="num-sub">plano Time</p></div>
+      <div class="num-card"><p class="num-label">Valor do negócio</p><p class="num-val azul">R$ 1.127</p><p class="num-sub">pacote de crossell</p></div>
+      <div class="num-card"><p class="num-label">Conversões da campanha</p><p class="num-val verm">0</p><p class="num-sub">nenhum fechamento direto</p></div>
+      <div class="num-card"><p class="num-label">Perdidas da campanha</p><p class="num-val verm">20</p><p class="num-sub">80% dos perdidos do mês</p></div>
+    </div>
+
+    <p class="sub-titulo">Fechamento com Waipe — plano contratado</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>CSM</th><th>Cliente</th><th>Plano Waipe</th><th>Pacote</th><th class="td-r">Valor do negócio</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Guilherme Camargo</td><td>Gonçalves &amp; Menoci Ltda</td><td><span class="chip chip-ok">Time</span></td><td>Gestor Intermediário + Waipe Time + Bime App + Cadastro Inteligente + Simplaz Prata</td><td class="td-r">R$ 1.127,30</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Plano Waipe</th><th class="td-c">Fechamentos em setembro</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Individual</td><td class="td-c">0</td></tr>
+          <tr><td class="negrito">Time</td><td class="td-c negrito" style="color:var(--verde);">1</td></tr>
+          <tr><td class="negrito">Enterprise</td><td class="td-c">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Motivos de perda — campanha Waipe e Deploy (20 casos)</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Motivo</th><th class="td-c">Guilherme</th><th class="td-c">Gian</th><th class="td-c">Lucineia</th><th class="td-c">Patrícia</th><th class="td-c">Total</th></tr></thead>
+        <tbody>
+          <tr><td>Cliente cancelado</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c">3</td><td class="td-c">2</td><td class="td-c negrito">8</td></tr>
+          <tr><td>Sem retorno</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c negrito">4</td></tr>
+          <tr><td>Sem contato</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Não há mais demanda para o serviço</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Interesse futuro</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">2</td><td class="td-c">—</td><td class="td-c negrito">2</td></tr>
+          <tr><td>CNPJ será baixado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">1</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total</td><td class="td-c negrito">0</td><td class="td-c negrito">4</td><td class="td-c negrito">6</td><td class="td-c negrito">10</td><td class="td-c negrito">20</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Perdidas da campanha por oferta</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Oferta</th><th class="td-c">Perdidas</th></tr></thead>
+        <tbody>
+          <tr><td>Enterprise</td><td class="td-c negrito">14</td></tr>
+          <tr><td>Enterprise + Deploy Performance</td><td class="td-c">3</td></tr>
+          <tr><td>Enterprise + Deploy Essencial</td><td class="td-c">2</td></tr>
+          <tr><td>Enterprise + Deploy Entrada</td><td class="td-c">1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Os números da campanha referem-se aos negócios com status final registrado em setembro. As oportunidades da campanha que seguem em aberto não fazem parte da base deste fechamento.</p>
+
+    <div class="alerta alerta-verm"><strong>Oito das vinte perdas da campanha foram "cliente cancelado"</strong> — clientes que já não estavam mais ativos, o que indica necessidade de qualificar a base antes de abrir a oportunidade.</div>
+    <div class="alerta alerta-laranja"><strong>Guilherme não marcou nenhum negócio como perdido no mês.</strong> A atualização de status das oportunidades da campanha sob sua carteira é necessária para que o funil reflita a situação real.</div>
+  </section>
+
+  <!-- RANKING -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Ranking dos CSMs</h2></div>
+      <p class="sec-desc">Meta individual de R$ 1.500,00. Guilherme foi o único a atingir a meta; Patrícia ficou a R$ 55,02 de alcançá-la.</p>
+    </div>
+
+    <div class="csm-grid">
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Guilherme Camargo</p><span class="csm-nivel-chip">Meta · 1,5%</span></div>
+          <div class="csm-pos"><span class="medalha">🥇</span><span class="pos-label">1° lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR líquido</span><span class="mrr-bloco-val">R$ 1.907,10</span></div>
+          <div class="csm-prog-row"><span>Meta R$ 1.500</span><span>127%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill" style="width:100%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">8 negócios</span></div>
+          <div class="csm-linha"><span class="k">Downsell</span><span class="v" style="color:var(--verm);">−R$ 49,10</span></div>
+          <div class="csm-linha"><span class="k">Maior deal</span><span class="v">R$ 1.127,30</span></div>
+        </div>
+      </div>
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Patrícia Carvalho</p><span class="csm-nivel-chip">Abaixo da meta</span></div>
+          <div class="csm-pos"><span class="medalha">🥈</span><span class="pos-label">2° lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR incremental</span><span class="mrr-bloco-val">R$ 1.444,98</span></div>
+          <div class="csm-prog-row"><span>Meta R$ 1.500</span><span>96%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill alerta-bar" style="width:96%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">10 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 144,50</span></div>
+          <div class="csm-linha"><span class="k">Faltou p/ meta</span><span class="v">R$ 55,02</span></div>
+        </div>
+      </div>
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Gian Luca</p><span class="csm-nivel-chip">Abaixo da meta</span></div>
+          <div class="csm-pos"><span class="medalha">🥉</span><span class="pos-label">3° lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR incremental</span><span class="mrr-bloco-val">R$ 163,20</span></div>
+          <div class="csm-prog-row"><span>Meta R$ 1.500</span><span>11%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill verm-bar" style="width:11%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">4 negócios</span></div>
+          <div class="csm-linha"><span class="k">Ticket médio</span><span class="v">R$ 40,80</span></div>
+          <div class="csm-linha"><span class="k">Perdidos</span><span class="v">6</span></div>
+        </div>
+      </div>
+
+      <div class="csm-card">
+        <div class="csm-topo">
+          <div><p class="csm-nome">Lucineia Felix</p><span class="csm-nivel-chip">Abaixo da meta</span></div>
+          <div class="csm-pos"><span class="csm-pos-num">4°</span><span class="pos-label">lugar</span></div>
+        </div>
+        <div class="csm-corpo">
+          <div class="mrr-bloco"><span class="mrr-bloco-label">MRR líquido</span><span class="mrr-bloco-val">R$ 19,26</span></div>
+          <div class="csm-prog-row"><span>Meta R$ 1.500</span><span>1%</span></div>
+          <div class="csm-prog"><div class="csm-prog-fill verm-bar" style="width:2%;"></div></div>
+          <div class="csm-linha"><span class="k">WON</span><span class="v">6 negócios</span></div>
+          <div class="csm-linha"><span class="k">Downsells</span><span class="v" style="color:var(--verm);">−R$ 174,00</span></div>
+          <div class="csm-linha"><span class="k">Perdidos</span><span class="v">7</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="alerta alerta-verde"><strong>Guilherme atingiu a meta individual</strong> com o maior deal do mês — o crossell de R$ 1.127,30 (Gonçalves &amp; Menoci), que representou 59% do seu MRR líquido.</div>
+    <div class="alerta alerta-laranja"><strong>Patrícia ficou a 3,7% da meta individual</strong> (R$ 55,02), com o maior número de negócios ganhos da equipe (10) e duas reativações que somaram R$ 728,70.</div>
+    <div class="alerta alerta-azul"><strong>Gian e Lucineia tiveram um mês de volume baixo de fechamentos</strong> (4 e 6 negócios ganhos, respectivamente). Na carteira da Lucineia, dois downsells (R$ 174,00) consumiram quase todo o MRR bruto de R$ 193,26.</div>
+  </section>
+
+  <!-- PERDIDOS -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Pipeline</p><h2 class="sec-titulo">Negócios perdidos</h2></div>
+      <p class="sec-desc">25 perdidos no mês — queda em relação aos 31 de agosto. Oitenta por cento (20) vêm da campanha Waipe e Deploy; fora dela foram apenas 5 perdas.</p>
+    </div>
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Total</p><p class="num-val verm">25</p><p class="num-sub">29 WON no período</p></div>
+      <div class="num-card"><p class="num-label">Cliente cancelado</p><p class="num-val laranja">8</p><p class="num-sub">todos da campanha Waipe</p></div>
+      <div class="num-card"><p class="num-label">Campanha Waipe</p><p class="num-val verm">20</p><p class="num-sub">80% do total</p></div>
+      <div class="num-card"><p class="num-label">Fora da campanha</p><p class="num-val">5</p><p class="num-sub">renovação, cross sell, reativação</p></div>
+    </div>
+
+    <p class="sub-titulo">Motivos de perda por CSM</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Motivo</th><th class="td-c">Guilherme</th><th class="td-c">Gian</th><th class="td-c">Lucineia</th><th class="td-c">Patrícia</th><th class="td-c">Total</th></tr></thead>
+        <tbody>
+          <tr><td>Cliente cancelado</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c">3</td><td class="td-c">2</td><td class="td-c negrito">8</td></tr>
+          <tr><td>Sem retorno</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">4</td><td class="td-c negrito">5</td></tr>
+          <tr><td>Interesse futuro</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">3</td><td class="td-c">—</td><td class="td-c negrito">4</td></tr>
+          <tr><td>Sem contato</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">3</td><td class="td-c negrito">3</td></tr>
+          <tr><td>Não há mais demanda para o serviço</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">1</td><td class="td-c negrito">2</td></tr>
+          <tr><td>Pendência financeira</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">1</td></tr>
+          <tr><td>Renovação automática</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">1</td></tr>
+          <tr><td>CNPJ será baixado</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c">1</td><td class="td-c negrito">1</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total de perdidos</td><td class="td-c negrito">0</td><td class="td-c negrito">6</td><td class="td-c negrito">7</td><td class="td-c negrito">12</td><td class="td-c negrito">25</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="alerta alerta-verm"><strong>"Cliente cancelado" e "sem retorno/sem contato" somam 16 dos 25 perdidos (64%)</strong> — em sua maioria oportunidades da campanha Waipe e Deploy abertas sobre clientes sem relacionamento ativo.</div>
+      <div class="alerta alerta-verde"><strong>Redução de perdidos em relação a agosto:</strong> de 31 para 25 (−19%).</div>
+    </div>
+  </section>
+
+  <!-- RENOVAÇÃO AUTOMÁTICA -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Base de renovação</p><h2 class="sec-titulo">Renovação automática — base de outubro</h2></div>
+      <p class="sec-desc">Dos 117 clientes válidos da base de outubro, 100 (85,5%) foram renovados automaticamente, com R$ 4.555,93 de incremento mensal (R$ 54.671,16 em ARR). Os valores desta seção são apresentados separadamente do MRR incremental dos CSMs usado no cálculo de metas.</p>
+    </div>
+
+    <p class="sub-titulo">Como o processo funciona</p>
+    <div class="fluxo">
+      <div class="passo"><div class="passo-num">1</div><b>Base de outubro</b><span>125 clientes com renovação prevista para o mês.</span></div>
+      <div class="passo"><div class="passo-num">2</div><b>Higienização</b><span>Saem 8 registros que não devem entrar em nenhuma soma: 4 não pertencem à base, 2 foram cancelados em julho e 2 estão duplicados. Restam 117 clientes válidos.</span></div>
+      <div class="passo"><div class="passo-num">3</div><b>Campanha de e-mail</b><span>O cliente recebe o valor do reajuste, com um botão (CTA) para aceitar e o aviso de que, sem manifestação, o valor informado será aplicado na próxima mensalidade.</span></div>
+      <div class="passo"><div class="passo-num">4</div><b>Desfecho</b><span>O que o cliente faz com o e-mail define quem fecha a renovação (veja os três caminhos abaixo).</span></div>
+      <div class="passo"><div class="passo-num">5</div><b>Fechamento</b><span>O valor da coluna "Valor do reajuste" é o incremento de MRR de cada renovação automática.</span></div>
+    </div>
+    <div class="trilhas">
+      <div class="trilha"><span class="chip chip-ok">Aceite explícito</span><b>Renovado pelo Financeiro</b><span class="d">O cliente clicou no CTA do e-mail e aceitou o reajuste. A renovação é feita automaticamente pelo Financeiro.</span></div>
+      <div class="trilha"><span class="chip chip-ultra">Pediu atendimento</span><b>Renovado pelo CSM</b><span class="d">O cliente pediu para falar com o gerente de contas ou para tratar a renovação de alguma forma. A renovação é conduzida e fechada pelo CSM.</span></div>
+      <div class="trilha"><span class="chip chip-info">Sem manifestação</span><b>Renovação automática</b><span class="d">O cliente abriu o e-mail e não clicou, ou nem abriu. Como o e-mail informava que o silêncio mantém o valor do reajuste, a renovação é considerada automática.</span></div>
+    </div>
+    <p class="nota">Como ler a base: na coluna "Valor do reajuste", um valor numérico indica renovação automática e é o próprio incremento. Um texto indica o desfecho ("negociado com CSM", "não vai renovar", "pendência financeira") ou a exclusão da base ("não é da base de outubro", "cancelado em julho", "duplicado").</p>
+
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">Base válida</p><p class="num-val">117</p><p class="num-sub">de 125 (8 excluídos)</p></div>
+      <div class="num-card"><p class="num-label">Renovação automática</p><p class="num-val azul">100</p><p class="num-sub">85,5% da base válida</p></div>
+      <div class="num-card"><p class="num-label">Incremento mensal</p><p class="num-val verde">R$ 4.556</p><p class="num-sub">R$ 54.671 em ARR</p></div>
+      <div class="num-card"><p class="num-label">Negociado pelo CSM</p><p class="num-val roxo">15</p><p class="num-sub">12,8% da base válida</p></div>
+      <div class="num-card"><p class="num-label">Não vai renovar</p><p class="num-val verm">1</p><p class="num-sub">R$ 167,09 de mensalidade</p></div>
+    </div>
+
+    <div class="graf-grid">
+      <div class="graf-box">
+        <p class="graf-titulo">Desfecho dos 117 clientes válidos</p>
+        <div style="position:relative;height:220px;">
+          <canvas id="chartDesfecho" role="img" aria-label="Desfecho da base válida: renovação automática 100; negociado pelo CSM 15; não vai renovar 1; pendência financeira 1">Renovação automática 100; negociado pelo CSM 15; não vai renovar 1; pendência financeira 1</canvas>
+        </div>
+      </div>
+      <div class="graf-box">
+        <p class="graf-titulo">Incremento mensal da renovação automática, por forma de contato (R$)</p>
+        <div style="position:relative;height:220px;">
+          <canvas id="chartIncrContato" role="img" aria-label="Incremento por forma de contato: não abriu o e-mail R$ 2.196; abriu e não clicou R$ 796; aceito R$ 579; WhatsApp R$ 549; sem dado de e-mail R$ 276; sem registro R$ 101; não recebeu R$ 59">Não abriu R$ 2.196; abriu e não clicou R$ 796; aceito R$ 579; WhatsApp R$ 549; sem dado de e-mail R$ 276; sem registro R$ 101; não recebeu R$ 59</canvas>
+        </div>
+      </div>
+    </div>
+
+    <p class="sub-titulo">Desfecho da base válida</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Desfecho</th><th class="td-c">Clientes</th><th class="td-c">% da base válida</th><th>Como foi fechado</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Renovação automática</td><td class="td-c negrito">100</td><td class="td-c">85,5%</td><td>10 por aceite explícito (CTA) e 90 sem aceite explícito</td></tr>
+          <tr><td class="negrito">Negociado pelo CSM</td><td class="td-c negrito">15</td><td class="td-c">12,8%</td><td>Cliente pediu para tratar a renovação. 14 já constam no CRM (ago/set); 1 sem negócio ganho registrado</td></tr>
+          <tr><td class="negrito">Não vai renovar</td><td class="td-c negrito">1</td><td class="td-c">0,9%</td><td>R$ 167,09 de mensalidade anterior</td></tr>
+          <tr><td class="negrito">Pendência financeira</td><td class="td-c negrito">1</td><td class="td-c">0,9%</td><td>Sem valor de reajuste definido</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total válido</td><td class="td-c negrito">117</td><td class="td-c negrito">100%</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Registros excluídos da base e de qualquer soma (8): 4 não pertencem à base de outubro, 2 foram cancelados em julho e 2 são duplicados. Considerando só os 115 clientes que renovaram (automática ou pelo CSM), a renovação automática representa 87,0%.</p>
+
+    <p class="sub-titulo">Renovação automática por forma de contato</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Forma de contato</th><th class="td-c">Clientes</th><th class="td-c">%</th><th class="td-r">Incremento mensal</th><th class="td-c">% do incremento</th><th class="td-r">Média por cliente</th><th class="td-c">Reajuste médio</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Não abriu o e-mail</td><td class="td-c">47</td><td class="td-c">47,0%</td><td class="td-r negrito">R$ 2.196,43</td><td class="td-c">48,2%</td><td class="td-r">R$ 46,73</td><td class="td-c">21,1%</td></tr>
+          <tr><td class="negrito">Abriu o e-mail e não clicou</td><td class="td-c">16</td><td class="td-c">16,0%</td><td class="td-r">R$ 796,46</td><td class="td-c">17,5%</td><td class="td-r">R$ 49,78</td><td class="td-c">23,9%</td></tr>
+          <tr><td class="negrito">Aceito (clicou no CTA)</td><td class="td-c">10</td><td class="td-c">10,0%</td><td class="td-r">R$ 578,69</td><td class="td-c">12,7%</td><td class="td-r">R$ 57,87</td><td class="td-c">16,2%</td></tr>
+          <tr><td class="negrito">Comunicado por WhatsApp</td><td class="td-c">13</td><td class="td-c">13,0%</td><td class="td-r">R$ 548,50</td><td class="td-c">12,0%</td><td class="td-r">R$ 42,19</td><td class="td-c">23,8%</td></tr>
+          <tr><td class="negrito">Sem dado de e-mail na base</td><td class="td-c">9</td><td class="td-c">9,0%</td><td class="td-r">R$ 276,00</td><td class="td-c">6,1%</td><td class="td-r">R$ 30,67</td><td class="td-c">14,2%</td></tr>
+          <tr><td class="negrito">Sem registro de contato</td><td class="td-c">2</td><td class="td-c">2,0%</td><td class="td-r">R$ 101,00</td><td class="td-c">2,2%</td><td class="td-r">R$ 50,50</td><td class="td-c">13,2%</td></tr>
+          <tr><td class="negrito">Não recebeu (sem WhatsApp)</td><td class="td-c">3</td><td class="td-c">3,0%</td><td class="td-r">R$ 58,85</td><td class="td-c">1,3%</td><td class="td-r">R$ 19,62</td><td class="td-c">10,2%</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Total renovação automática</td><td class="td-c negrito">100</td><td class="td-c negrito">100%</td><td class="td-r negrito" style="color:var(--azul1);">R$ 4.555,93</td><td class="td-c negrito">100%</td><td class="td-r negrito">R$ 45,56</td><td class="td-c negrito">19,9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Reajuste médio = incremento dividido pelo valor do plano anterior. "Comunicado por WhatsApp" é o contato feito fora da campanha de e-mail. "Sem dado de e-mail na base" reúne os registros sem informação de abertura do e-mail.</p>
+
+    <div class="alerta alerta-azul"><strong>Apenas 10 dos 100 clientes (10,0%) aceitaram clicando no CTA.</strong> Os outros 90 renovaram sem aceite explícito.</div>
+    <div class="alerta alerta-laranja"><strong>51,7% do incremento (R$ 2.356,28) veio de 52 clientes sem leitura confirmada do reajuste</strong> — não abriram o e-mail, não receberam ou não têm registro de contato. Os 39 clientes que abriram o e-mail, aceitaram ou foram avisados por WhatsApp somam R$ 1.923,65 (42,2%).</div>
+    <div class="alerta alerta-azul"><strong>Entre os 73 clientes com registro de e-mail, 35,6% abriram a mensagem e 13,7% clicaram para aceitar</strong> (38,5% de quem abriu). Quem aceitou explicitamente teve reajuste menor (16,2% do plano) do que quem ficou em silêncio (21% a 24%).</div>
+
+    <p class="sub-titulo">Renovação automática por plano</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Plano</th><th class="td-c">Clientes</th><th class="td-c">%</th><th class="td-r">Incremento mensal</th><th class="td-c">% do incremento</th><th class="td-r">Média por cliente</th><th class="td-c">Reajuste médio</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Básico · Cloud</td><td class="td-c">25</td><td class="td-c">25,0%</td><td class="td-r negrito">R$ 1.255,28</td><td class="td-c">27,6%</td><td class="td-r">R$ 50,21</td><td class="td-c">21,5%</td></tr>
+          <tr><td class="negrito">PLUS / Unique Plus</td><td class="td-c">15</td><td class="td-c">15,0%</td><td class="td-r">R$ 1.015,36</td><td class="td-c">22,3%</td><td class="td-r">R$ 67,69</td><td class="td-c">14,9%</td></tr>
+          <tr><td class="negrito">Básico · LC</td><td class="td-c">10</td><td class="td-c">10,0%</td><td class="td-r">R$ 651,35</td><td class="td-c">14,3%</td><td class="td-r">R$ 65,14</td><td class="td-c negrito" style="color:var(--laranja);">30,2%</td></tr>
+          <tr><td class="negrito">NFe · LC</td><td class="td-c">18</td><td class="td-c">18,0%</td><td class="td-r">R$ 642,17</td><td class="td-c">14,1%</td><td class="td-r">R$ 35,68</td><td class="td-c negrito" style="color:var(--laranja);">28,7%</td></tr>
+          <tr><td class="negrito">NFe · Cloud</td><td class="td-c">22</td><td class="td-c">22,0%</td><td class="td-r">R$ 416,37</td><td class="td-c">9,1%</td><td class="td-r">R$ 18,93</td><td class="td-c">15,4%</td></tr>
+          <tr><td class="negrito">Intermediário · Cloud</td><td class="td-c">6</td><td class="td-c">6,0%</td><td class="td-r">R$ 407,40</td><td class="td-c">8,9%</td><td class="td-r">R$ 67,90</td><td class="td-c">20,2%</td></tr>
+          <tr><td class="negrito">LIGHT</td><td class="td-c">4</td><td class="td-c">4,0%</td><td class="td-r">R$ 168,00</td><td class="td-c">3,7%</td><td class="td-r">R$ 42,00</td><td class="td-c">15,0%</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Total</td><td class="td-c negrito">100</td><td class="td-c negrito">100%</td><td class="td-r negrito" style="color:var(--azul1);">R$ 4.555,93</td><td class="td-c negrito">100%</td><td class="td-r negrito">R$ 45,56</td><td class="td-c negrito">19,9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alerta alerta-azul"><strong>Os planos Básico (Cloud e LC) respondem por 41,8% do incremento.</strong> Os planos LC receberam os maiores reajustes percentuais (Básico LC 30,2% e NFe LC 28,7%), contra 21,5% (Básico Cloud) e 15,4% (NFe Cloud) nos mesmos planos em Cloud.</div>
+
+    <p class="sub-titulo">Distribuição por faixa de reajuste</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Faixa de reajuste (R$/mês)</th><th class="td-c">Clientes</th><th class="td-c">%</th><th class="td-r">Incremento mensal</th></tr></thead>
+        <tbody>
+          <tr><td>Até R$ 0 (redução)</td><td class="td-c">2</td><td class="td-c">2,0%</td><td class="td-r">− R$ 2,00</td></tr>
+          <tr><td>R$ 0,01 a R$ 10,00</td><td class="td-c">8</td><td class="td-c">8,0%</td><td class="td-r">R$ 43,60</td></tr>
+          <tr><td>R$ 10,01 a R$ 30,00</td><td class="td-c">19</td><td class="td-c">19,0%</td><td class="td-r">R$ 437,97</td></tr>
+          <tr><td>R$ 30,01 a R$ 60,00</td><td class="td-c negrito">38</td><td class="td-c">38,0%</td><td class="td-r negrito">R$ 1.557,80</td></tr>
+          <tr><td>R$ 60,01 a R$ 100,00</td><td class="td-c">30</td><td class="td-c">30,0%</td><td class="td-r negrito">R$ 2.195,16</td></tr>
+          <tr><td>Acima de R$ 100,00</td><td class="td-c">3</td><td class="td-c">3,0%</td><td class="td-r">R$ 323,40</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">71 dos 100 clientes (71,0%) tiveram reajuste acima de R$ 30,00 e geraram 89,5% do incremento. Os 10 maiores reajustes somam 20,5% do total.</p>
+
+    <p class="sub-titulo">Renovações negociadas pelo CSM — reajuste proposto × realizado</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Resultado da negociação</th><th class="td-c">Clientes</th><th class="td-r">Reajuste proposto</th><th class="td-r">Realizado no CRM</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Manteve o reajuste integral</td><td class="td-c">7</td><td class="td-r">R$ 389,14</td><td class="td-r">R$ 390,24</td></tr>
+          <tr><td class="negrito">Reajuste reduzido</td><td class="td-c">4</td><td class="td-r">R$ 335,55</td><td class="td-r">R$ 152,00</td></tr>
+          <tr><td class="negrito">Cliente reduziu o plano (downsell)</td><td class="td-c">2</td><td class="td-r">R$ 149,00</td><td class="td-r" style="color:var(--verm);">− R$ 89,20</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Total comparável</td><td class="td-c negrito">13</td><td class="td-r negrito">R$ 873,69</td><td class="td-r negrito" style="color:var(--azul1);">R$ 453,04 (51,9%)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Reajuste proposto = diferença entre o valor do plano anterior e o novo valor de plano informados na base. Das 15 renovações negociadas pelo CSM, 14 já constam no CRM: 4 em agosto e 10 em setembro, somando R$ 494,84 líquidos. Uma delas (reestruturação de plano) não tem comparação com o reajuste proposto e está fora da tabela. A outra não tem negócio ganho no CRM em agosto ou setembro.</p>
+    <div class="alerta alerta-laranja"><strong>As negociações preservaram 51,9% do reajuste proposto.</strong> Em dois casos o cliente trocou o aumento previsto por uma redução de plano: de +R$ 149,00 propostos para − R$ 89,20 realizados.</div>
+
+    <p class="sub-titulo">Visão consolidada do incremento</p>
+    <div class="num-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="num-card"><p class="num-label">MRR incremental dos CSMs</p><p class="num-val azul">R$ 3.534,54</p><p class="num-sub">líquido, usado nas metas</p></div>
+      <div class="num-card"><p class="num-label">+ Renovação automática</p><p class="num-val verde">R$ 4.555,93</p><p class="num-sub">base de outubro, 100 clientes</p></div>
+      <div class="num-card"><p class="num-label">= Incremento total</p><p class="num-val roxo">R$ 8.090,47</p><p class="num-sub">134,8% da meta base de equipe</p></div>
+    </div>
+    <p class="nota">A renovação automática não tem CSM responsável, e as 14 renovações negociadas já constam no MRR dos CSMs, então não há soma em duplicidade. Com a renovação automática, o incremento total ficaria R$ 909,53 abaixo da super meta de equipe (R$ 9.000).</p>
+  </section>
+
+  <!-- HISTÓRICO -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Histórico — março a setembro</h2></div>
+      <p class="sec-desc">Setembro é o segundo mês consecutivo de queda no MRR incremental e o primeiro abaixo da meta base de equipe desde o início do acompanhamento.</p>
+    </div>
+    <div class="hist-wrap">
+      <div class="hist-row">
+        <div class="hist-cell hist-head" style="text-align:left;">Indicador</div>
+        <div class="hist-cell hist-head">Mar</div><div class="hist-cell hist-head">Abr</div><div class="hist-cell hist-head">Mai</div><div class="hist-cell hist-head">Jun</div><div class="hist-cell hist-head">Jul</div><div class="hist-cell hist-head">Ago</div><div class="hist-cell hist-head">Set</div>
+      </div>
+      <div class="hist-row"><div class="hist-cell hist-mes">MRR equipe</div><div class="hist-cell hist-val">R$ 4.589</div><div class="hist-cell hist-val">R$ 7.592</div><div class="hist-cell hist-val">R$ 7.928</div><div class="hist-cell hist-val">R$ 10.897</div><div class="hist-cell hist-val">R$ 11.029</div><div class="hist-cell hist-val">R$ 6.182</div><div class="hist-cell hist-val hist-atual" style="color:var(--verm);">R$ 3.535</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">Nível</div><div class="hist-cell td-c"><span class="chip chip-info">Meta</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ok">Super</span></div><div class="hist-cell td-c"><span class="chip chip-info">Meta</span></div><div class="hist-cell td-c hist-atual"><span class="chip chip-warn">Abaixo</span></div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">WON</div><div class="hist-cell hist-val">109</div><div class="hist-cell hist-val">204</div><div class="hist-cell hist-val">196</div><div class="hist-cell hist-val">244</div><div class="hist-cell hist-val">179</div><div class="hist-cell hist-val">44</div><div class="hist-cell hist-val hist-atual">29</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">LOST</div><div class="hist-cell hist-val">48</div><div class="hist-cell hist-val">29</div><div class="hist-cell hist-val">63</div><div class="hist-cell hist-val">33</div><div class="hist-cell hist-val">40</div><div class="hist-cell hist-val">31</div><div class="hist-cell hist-val hist-atual">25</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">Meta base</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 3.564</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 2.968</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 2.861</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 3.710</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 6.918</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 4.232</div><div class="hist-cell hist-val hist-atual" style="color:var(--cinza);">R$ 6.000</div></div>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="alerta alerta-laranja"><strong>MRR de equipe em queda por dois meses consecutivos:</strong> R$ 11.029 (julho) → R$ 6.182 (agosto) → R$ 3.535 (setembro). O volume de negócios ganhos acompanha a queda: de 244 em junho para 29 em setembro.</div>
+      <div class="alerta alerta-azul"><strong>A meta base de setembro (R$ 6.000) é 42% maior que a de agosto (R$ 4.232)</strong>, o que aumentou a distância a ser percorrida em um mês de volume menor de fechamentos.</div>
+    </div>
+  </section>
+
+</div>
+<div class="rodape">Londrisoft Customer Success · Fechamento Mensal CSM · Setembro 2026 · Uso interno</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  const tickColor = '#64748B';
+
+  new Chart(document.getElementById('chartMixValor'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Reativação', 'Crossell', 'Renovação', 'Upsell', 'Troca de titularidade'],
+      datasets: [{ data: [33.1, 31.7, 28.9, 4.0, 2.3], backgroundColor: ['#0A7C4E','#4338CA','#94A3B8','#0033CC','#B45309'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10 } },
+        tooltip: { callbacks: { label: c => c.label + ': ' + c.raw + '%' } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartMixQtd'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Renovação', 'Reativação', 'Crossell', 'Upsell', 'Troca de titularidade'],
+      datasets: [{ data: [21, 3, 2, 1, 1], backgroundColor: ['#94A3B8','#0A7C4E','#4338CA','#0033CC','#B45309'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10,
+            generateLabels: (chart) => {
+              const d = chart.data;
+              const total = d.datasets[0].data.reduce((a, b) => a + b, 0);
+              return d.labels.map((label, i) => {
+                const val = d.datasets[0].data[i];
+                return { text: label + ': ' + val + ' (' + (val / total * 100).toFixed(1) + '%)', fillStyle: d.datasets[0].backgroundColor[i], index: i };
+              });
+            }
+          }
+        },
+        tooltip: { callbacks: { label: c => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return c.label + ': ' + c.raw + ' negócios (' + (c.raw / t * 100).toFixed(1) + '%)'; } } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartDesfecho'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Renovação automática', 'Negociado pelo CSM', 'Não vai renovar', 'Pendência financeira'],
+      datasets: [{ data: [100, 15, 1, 1], backgroundColor: ['#0033CC','#4338CA','#B91C1C','#B45309'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10,
+            generateLabels: (chart) => {
+              const d = chart.data;
+              const total = d.datasets[0].data.reduce((a, b) => a + b, 0);
+              return d.labels.map((label, i) => {
+                const val = d.datasets[0].data[i];
+                return { text: label + ': ' + val + ' (' + (val / total * 100).toFixed(1) + '%)', fillStyle: d.datasets[0].backgroundColor[i], index: i };
+              });
+            }
+          }
+        },
+        tooltip: { callbacks: { label: c => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return c.label + ': ' + c.raw + ' clientes (' + (c.raw / t * 100).toFixed(1) + '%)'; } } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartIncrContato'), {
+    type: 'bar',
+    data: {
+      labels: ['Não abriu o e-mail', 'Abriu e não clicou', 'Aceito (CTA)', 'WhatsApp', 'Sem dado de e-mail', 'Sem registro', 'Não recebeu'],
+      datasets: [{ data: [2196.43, 796.46, 578.69, 548.50, 276.00, 101.00, 58.85], backgroundColor: ['#0033CC','#4338CA','#0A7C4E','#94A3B8','#64748B','#B45309','#B91C1C'], borderRadius: 4, maxBarThickness: 22 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'R$ ' + c.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) } } },
+      scales: {
+        x: { grid: { color: '#E2E8F0' }, ticks: { color: tickColor, callback: v => 'R$' + v } },
+        y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 11 } } }
+      }
+    }
+  });
+</script>
+</body>
+</html>
