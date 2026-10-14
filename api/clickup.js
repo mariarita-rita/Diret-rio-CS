@@ -2041,6 +2041,10 @@ export async function criarProjetoImplantacao({
   // Default false é o que mantém todo script de migração desta sessão
   // (e qualquer um futuro que não passe isso explicitamente) inofensivo.
   notificarClienteNovo = false,
+  // true só nos caminhos de projeto NOVO (webhook do Moskit e criar-implantacao
+  // do painel) — gera o Lembrete pra Daiane iniciar/agendar a implantação.
+  // Default false: migração/backfill de projeto antigo nunca cria lembrete.
+  criarLembreteInicio = false,
 }) {
   // Projeto que já nasce "Entregue" OU "Cancelado" (ex: migração de um
   // projeto do Moskit que já estava finalizado de verdade, entregue ou não)
@@ -2178,7 +2182,34 @@ export async function criarProjetoImplantacao({
     }
   }
 
+  if (criarLembreteInicio) await criarLembreteInicioImplantacao(projeto.id, nomeProjeto);
+
   return projeto;
+}
+
+// Daiane (CSQ) é quem faz o primeiro contato/agendamento de todo projeto novo.
+const DAIANE_ID = 118033982;
+
+/**
+ * Atividade (fila CSQ) tipo "lembrete" pra Daiane iniciar a implantação de um
+ * projeto novo: mesmo formato da criar-atividade-csq manual. Falha aqui nunca
+ * derruba a criação do projeto — só loga.
+ */
+export async function criarLembreteInicioImplantacao(projetoId, nomeProjeto) {
+  try {
+    const pessoa = PESSOAS_MENCIONAVEIS.find((p) => p.id === DAIANE_ID);
+    await criarAtividadeCsq({
+      name: `Lembrete: ${texto(nomeProjeto, 120)}`,
+      assignees: [DAIANE_ID],
+      markdown_description: linhasDescricaoAtividade({
+        projetoId,
+        tipo: 'lembrete',
+        alvo: `${pessoa?.nome || 'Daiane'} — Iniciar a implantação: fazer o agendamento com o cliente`,
+      }),
+    });
+  } catch (e) {
+    console.error(`[clickup] falha ao criar o lembrete de início do projeto ${projetoId}:`, e?.message);
+  }
 }
 
 /**
@@ -2362,6 +2393,7 @@ async function criarImplantacaoAcao(req, res, sessao) {
 
   const projeto = await criarProjetoImplantacao({
     nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
+    criarLembreteInicio: true,
     ...(dealId ? { vendedor: textoLivre(vendedorDoNegocio, 120), origemMoskitDealId: dealId } : {}),
   });
 

@@ -393,6 +393,7 @@ export async function processarEvento(corpo) {
     csmNome,
     vendedor,
     origemMoskitProjetoId: projetoMoskitId,
+    criarLembreteInicio: true,
   });
 
   await copiarAnexosDoProjeto(projetoClickUp.id, projetoMoskitId);
