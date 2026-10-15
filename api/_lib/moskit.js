@@ -176,6 +176,27 @@ function emailDe(entidade) {
 }
 
 /**
+ * Nome do produto no catálogo do Moskit ("Plano Intermediário Cloud", "Simplaz
+ * Bronze - Gestor", "Plano NFe local") -> nome de plano no padrão do painel
+ * ("Intermediário Cloud", "Bronze", "NFe Local"). Produto fora dos padrões
+ * (ex: "Outro") volta como veio.
+ */
+export function normalizarNomePlano(produto, nome) {
+  let n = String(nome || '').trim();
+  if (!n) return n;
+  if (produto === 'Simplaz Gestor' || produto === 'Simplaz Unique') {
+    const m = /^Simplaz\s+(.+?)(?:\s*-\s*(?:Gestor|Unique))?$/i.exec(n);
+    return m ? m[1].trim() : n;
+  }
+  if (produto === 'Gestor' || produto === 'Unique') {
+    n = n.replace(/^Plano\s+/i, '').replace(/^Unique\s+/i, '');
+    n = n.replace(/\b(local|cloud)\b/gi, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+  return n;
+}
+
+/**
  * Lê um NEGÓCIO do Moskit (REST, GET /deals/{id}) e monta o rascunho que
  * pré-preenche o assistente de novo projeto (botão na tela do negócio →
  * formulário do painel). Só leitura. Formato REST confirmado ao vivo
@@ -204,7 +225,8 @@ export async function montarRascunhoDoNegocio(dealId) {
   ]);
 
   const solucoes = dealProducts.map((dp, i) => {
-    const { produto, nomeOriginal } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
+    const { produto, nomeOriginal: nomeBruto } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
+    const nomeOriginal = normalizarNomePlano(produto, nomeBruto);
     const quantidade = Number(dp?.quantity) > 0 ? Number(dp.quantity) : 1;
     const unitarioCentavos = Number.isFinite(Number(dp?.price)) ? Number(dp.price) : 0;
     return {

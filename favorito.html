@@ -3,46 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Criar projeto de implantação - atalho</title>
+<title>Criar projeto de implantação - como instalar</title>
 <style>
-  :root { --bg:#f6f7fb; --card:#fff; --ink:#1b2333; --muted:#5b6578; --brand:#0A41B4; --border:#dfe3ee; }
+  :root { --bg:#f6f7fb; --card:#fff; --ink:#1b2333; --muted:#5b6578; --brand:#0A41B4; --border:#dfe3ee; --warn:#fff6e0; --warn-ink:#6b4a00; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f1420; --card:#171d2c; --ink:#e8ecf5; --muted:#9aa6bd; --brand:#6d9bff; --border:#2a3350; }
+    :root { --bg:#0f1420; --card:#171d2c; --ink:#e8ecf5; --muted:#9aa6bd; --brand:#6d9bff; --border:#2a3350; --warn:#2b2412; --warn-ink:#f1d48a; }
   }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 system-ui,sans-serif; }
-  main { max-width:640px; margin:0 auto; padding:32px 16px 60px; }
-  h1 { font-size:22px; margin:0 0 6px; }
-  p.sub { color:var(--muted); margin:0 0 24px; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:16px; }
-  h2 { font-size:16px; margin:0 0 8px; }
-  ol { margin:8px 0 0 18px; padding:0; }
-  li { margin:4px 0; }
-  a.atalho { display:inline-block; margin:8px 0; padding:10px 16px; border-radius:8px; background:var(--brand); color:#fff; font-weight:600; text-decoration:none; cursor:grab; }
-  a.baixar { color:var(--brand); font-weight:600; }
-  code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:13px; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui,sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:32px 16px 70px; }
+  h1 { font-size:23px; margin:0 0 6px; }
+  p.sub { color:var(--muted); margin:0 0 22px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 22px; margin-bottom:18px; }
+  h2 { font-size:17px; margin:0 0 4px; }
+  h3 { font-size:14px; margin:18px 0 4px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  ol { margin:8px 0 0 20px; padding:0; }
+  li { margin:7px 0; }
+  a.btn { display:inline-block; padding:10px 18px; border-radius:8px; background:var(--brand); color:#fff; font-weight:600; text-decoration:none; }
+  a.atalho { cursor:grab; }
+  a.link { color:var(--brand); font-weight:600; }
+  code, kbd { background:var(--bg); border:1px solid var(--border); padding:1px 6px; border-radius:5px; font-size:13px; }
+  .aviso { background:var(--warn); color:var(--warn-ink); border-radius:8px; padding:10px 14px; margin:12px 0 0; font-size:14px; }
+  textarea { width:100%; box-sizing:border-box; height:84px; font:12px/1.4 ui-monospace,monospace; padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--ink); }
+  button.copiar { margin-top:6px; padding:7px 14px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--ink); cursor:pointer; font-weight:600; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Criar projeto de implantação a partir do negócio</h1>
-  <p class="sub">Na tela de um negócio <b>ganho</b> no Moskit, abre o formulário do painel já preenchido com os dados do negócio.</p>
+  <h1>Criar projeto de implantação direto do negócio</h1>
+  <p class="sub">Na tela de um negócio <b>ganho</b> no Moskit, um clique abre o formulário do projeto já preenchido com os dados do negócio. Escolha <b>uma</b> das opções abaixo (a extensão é a mais prática; o favorito serve para quem não conseguir instalar).</p>
 
   <div class="card">
-    <h2>Opção 1 — Favorito (não instala nada)</h2>
+    <h2>Opção 1 — Extensão (botão direto na tela do negócio)</h2>
+    <p class="sub" style="margin-bottom:0">Instalação manual, uma vez por computador. Funciona no Chrome e no Edge.</p>
+
+    <h3>Passo 1 — Baixar e extrair</h3>
     <ol>
-      <li>Mostre a barra de favoritos do navegador (<code>Ctrl+Shift+B</code>).</li>
-      <li><b>Arraste o botão abaixo</b> para a barra de favoritos.</li>
-      <li>Abra um negócio ganho no Moskit e clique no favorito.</li>
+      <li>Clique em <a class="btn" href="/extensao-moskit.zip">Baixar a extensão (.zip)</a> e salve o arquivo.</li>
+      <li>Abra a pasta onde ele foi salvo (normalmente <b>Downloads</b>), clique com o botão direito em <code>extensao-moskit.zip</code> e escolha <b>Extrair Tudo…</b> &rarr; <b>Extrair</b>.</li>
+      <li>Mova a pasta extraída para um lugar fixo, por exemplo <b>Documentos</b>.</li>
     </ol>
-    <a class="atalho" href="javascript:(function(){var m=location.pathname.match(/\/deals?\/(\d{5,})/);if(!m){alert('Abra a tela de um negócio ganho no Moskit e clique no favorito de novo.');return;}window.open('https://diretoriocs.vercel.app/implantacao-waipe.html?negocio='+m[1],'projetoLondrisoft','popup,width=520,height=820');})();">Criar projeto de implantação</a>
+    <div class="aviso">Não apague nem mova essa pasta depois de instalar: o navegador usa os arquivos dela. Se apagar, a extensão para de funcionar.</div>
+
+    <h3>Passo 2 — Instalar no Chrome</h3>
+    <ol>
+      <li>No Chrome, digite <code>chrome://extensions</code> na barra de endereço e tecle <kbd>Enter</kbd>.</li>
+      <li>Ative a chave <b>Modo do desenvolvedor</b> (canto superior direito).</li>
+      <li>Clique em <b>Carregar sem compactação</b> (canto superior esquerdo).</li>
+      <li>Escolha a pasta <b>que contém o arquivo <code>manifest.json</code></b>. Atenção: depois de extrair, às vezes há uma pasta <code>extensao-moskit</code> dentro de outra com o mesmo nome &mdash; entre até ver o <code>manifest.json</code> e selecione essa pasta.</li>
+      <li>Confirme que apareceu o cartão <b>Londrisoft - Criar projeto de implantação</b>, com a chave ligada.</li>
+    </ol>
+
+    <h3>Passo 2 — Instalar no Edge</h3>
+    <ol>
+      <li>No Edge, digite <code>edge://extensions</code> na barra de endereço e tecle <kbd>Enter</kbd>.</li>
+      <li>Ative a chave <b>Modo de desenvolvedor</b> (menu à esquerda, na parte de baixo).</li>
+      <li>Clique em <b>Carregar descompactado</b>.</li>
+      <li>Escolha a pasta <b>que contém o arquivo <code>manifest.json</code></b> (mesma observação do Chrome acima).</li>
+      <li>Confirme que apareceu <b>Londrisoft - Criar projeto de implantação</b>, ligada.</li>
+    </ol>
+
+    <h3>Passo 3 — Usar</h3>
+    <ol>
+      <li>Abra no Moskit um negócio que já está <b>Ganho</b>.</li>
+      <li>No canto inferior direito da tela aparece o botão azul <b>Criar projeto de implantação</b> (se não aparecer, atualize a página com <kbd>F5</kbd>).</li>
+      <li>Clique nele: abre uma janela pequena com o formulário já preenchido.</li>
+      <li>No <b>primeiro uso</b>, clique em <b>Entrar com Google</b> e escolha seu e-mail da empresa (<code>@londrisoft.londrina.br</code>). Nas próximas vezes entra direto (a sessão dura cerca de 12 horas).</li>
+      <li>Confira os dados, ajuste os itens se precisar e clique em <b>Confirmar e criar projeto</b>.</li>
+    </ol>
+    <div class="aviso">Se o navegador avisar sobre &ldquo;extensões no modo do desenvolvedor&rdquo; ao abrir, é normal nessa instalação manual: feche o aviso (não desative a extensão).</div>
   </div>
 
   <div class="card">
-    <h2>Opção 2 — Extensão do Chrome / Edge</h2>
-    <p>Mostra um botão direto na tela do negócio. <a class="baixar" href="/extensao-moskit.zip">Baixar a extensão (.zip)</a> e siga o <code>LEIA-ME.txt</code> que vem dentro (instalação manual, uma vez por computador).</p>
+    <h2>Opção 2 — Favorito (não instala nada)</h2>
+    <p class="sub" style="margin-bottom:0">Para quem não conseguir instalar a extensão. Funciona no Chrome e no Edge.</p>
+
+    <h3>Passo 1 — Criar o favorito</h3>
+    <ol>
+      <li>Mostre a barra de favoritos: tecle <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>.</li>
+      <li><b>Arraste</b> o botão abaixo (clicando e segurando) para a barra de favoritos:<br>
+        <a class="btn atalho" id="atalho" href="javascript:(function(){var m=location.pathname.match(/\/deals?\/(\d{5,})/);if(!m){alert('Abra a tela de um negócio ganho no Moskit e clique no favorito de novo.');return;}window.open('https://diretoriocs.vercel.app/implantacao-waipe.html?negocio='+m[1],'projetoLondrisoft','popup,width=520,height=820');})();">Criar projeto de implantação</a>
+      </li>
+      <li><b>Se não conseguir arrastar:</b> clique com o botão direito na barra de favoritos &rarr; <b>Adicionar página…</b> (Chrome) ou <b>Adicionar favorito…</b> (Edge). Em <b>Nome</b> escreva <code>Criar projeto de implantação</code> e em <b>URL</b> cole o código abaixo:
+        <textarea id="codigo" readonly></textarea>
+        <button class="copiar" id="btnCopiar" type="button">Copiar código</button>
+      </li>
+    </ol>
+
+    <h3>Passo 2 — Usar</h3>
+    <ol>
+      <li>Abra no Moskit um negócio que já está <b>Ganho</b>.</li>
+      <li>Clique no favorito <b>Criar projeto de implantação</b> na barra de favoritos.</li>
+      <li>Abre uma janela pequena com o formulário preenchido. No primeiro uso, entre com o Google da empresa.</li>
+    </ol>
+    <div class="aviso">Se a janela não abrir, o navegador bloqueou o pop-up: clique no ícone de pop-up bloqueado, no canto direito da barra de endereço, e escolha <b>Sempre permitir pop-ups do Moskit</b>.</div>
   </div>
 
-  <p class="sub">No primeiro uso, entre com o Google usando o e-mail da empresa.</p>
+  <p class="sub">Dúvidas ou algo não funcionou? Avise o time de CS.</p>
 </main>
+<script>
+  var codigo = document.getElementById('codigo');
+  codigo.value = document.getElementById('atalho').getAttribute('href');
+  document.getElementById('btnCopiar').addEventListener('click', function () {
+    codigo.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    this.textContent = ok ? 'Copiado!' : 'Selecione o código e copie com Ctrl+C';
+  });
+</script>
 </body>
 </html>

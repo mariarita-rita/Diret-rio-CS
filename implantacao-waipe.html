@@ -1345,6 +1345,10 @@
 
   // Mesma lista de PRODUTOS_SOLUCAO_VALIDOS em api/clickup.js — usada só pro
   // seletor de "+ Adicionar item"; o servidor valida de novo do lado dele.
+  var PLANOS_SUGERIDOS = [
+    "Básico Cloud", "Básico Local", "NFe Cloud", "NFe Local", "Intermediário Cloud", "Intermediário Local",
+    "Avançado Cloud", "Avançado Local", "Light", "Plus", "Premium", "Bronze", "Prata", "Ouro"
+  ];
   var PRODUTOS_SOLUCAO_OPCOES = [
     "Gestor", "Simplaz Gestor", "Simplaz Unique", "Unique", "BIME APP", "Bime",
     "Deploy", "Treinamento", "Migração Nuvem", "Homologação de Boleto", "Nota de Serviço",
@@ -6462,7 +6466,7 @@
             '<div class="form-field"><label>Produto</label><select class="form-input" data-f="produto" data-i="' + i + '">' +
               PRODUTOS_SOLUCAO_OPCOES.map(function(v){ return '<option value="' + esc(v) + '"' + (s.produto === v ? " selected" : "") + '>' + esc(v) + '</option>'; }).join("") +
             '</select></div>' +
-            '<div class="form-field"><label>Plano/variação (opcional)</label><input type="text" class="form-input" data-f="planoSugerido" data-i="' + i + '" value="' + esc(s.planoSugerido) + '" placeholder="ex: Básico, NFe Cloud, Sicoob"></div>' +
+            '<div class="form-field"><label>Plano/variação (opcional)</label><input type="text" class="form-input" list="planosSugeridos" data-f="planoSugerido" data-i="' + i + '" value="' + esc(s.planoSugerido) + '" placeholder="ex: Básico, NFe Cloud, Sicoob"></div>' +
           '</div>' +
           '<div class="form-field"><label>Ambiente (opcional)</label><select class="form-input" data-f="variante" data-i="' + i + '">' +
             '<option value=""' + (s.variante ? "" : " selected") + '>—</option>' +
@@ -6472,6 +6476,9 @@
           '<div class="form-field"><label>Observações (opcional)</label><textarea class="form-textarea" rows="2" data-f="observacoes" data-i="' + i + '">' + esc(s.observacoes) + '</textarea></div>' +
         '</div>';
       }).join("");
+      // Sugestões de plano (mesma lista do campo "Plano(s) Contratado(s)" do Moskit) —
+      // dá pra escolher em vez de digitar; o campo continua livre.
+      wrap.insertAdjacentHTML("beforeend", '<datalist id="planosSugeridos">' + PLANOS_SUGERIDOS.map(function(p){ return '<option value="' + esc(p) + '"></option>'; }).join("") + '</datalist>');
       wrap.querySelectorAll("[data-f]").forEach(function(el){
         var evento = el.tagName === "SELECT" ? "change" : "input";
         el.addEventListener(evento, function(){
