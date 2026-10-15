@@ -1,0 +1,142 @@
+[
+ {
+  "id": "bom-dia-empresa",
+  "area": "Diretoria",
+  "nome": "Bom Dia Empresa",
+  "turno": "Todo dia · 08:00",
+  "entrega": "Para a diretoria: um resumo diário no WhatsApp com vendas, caixa e pontos de atenção do dia."
+ },
+ {
+  "id": "reporter-manha",
+  "area": "Diretoria",
+  "nome": "Repórter da Manhã",
+  "turno": "Todo dia · 08:00",
+  "entrega": "Para a gestão: o resumo de ontem com contexto e o alerta do dia, todo dia, inclusive quando está tudo bem."
+ },
+ {
+  "id": "guardiao-meta",
+  "area": "Diretoria",
+  "nome": "Guardião da Meta do Mês",
+  "turno": "Contínuo",
+  "entrega": "Para a gestão: o alerta de desvio dentro do mês, com tempo de corrigir a rota."
+ },
+ {
+  "id": "placar-canais",
+  "area": "Diretoria",
+  "nome": "Placar dos Canais",
+  "turno": "Semanal",
+  "entrega": "Para a gestão: o placar semanal, canal a canal, meta x realizado."
+ },
+ {
+  "id": "analista-vendas-diario",
+  "area": "Diretoria",
+  "nome": "Analista de Vendas Diário",
+  "turno": "Todo dia · fim do expediente",
+  "entrega": "Para a gestão: o resumo executivo do dia, com quem está fora do ritmo."
+ },
+ {
+  "id": "coach-representantes",
+  "area": "Comercial",
+  "nome": "Coach dos Representantes",
+  "turno": "Semanal · segunda de manhã",
+  "entrega": "Para cada vendedor: desempenho e clientes que precisam de ação. Para a gestão: o consolidado da equipe."
+ },
+ {
+  "id": "vendedor-ciclo",
+  "area": "Comercial",
+  "nome": "Vendedor do Ciclo (Recompra)",
+  "turno": "Todo dia",
+  "entrega": "Para o vendedor ou gestor: as ofertas do dia, prontas, aguardando aprovação antes de seguir ao cliente."
+ },
+ {
+  "id": "reativacao-clientes",
+  "area": "Comercial",
+  "nome": "Sentinela de Clientes Inativos & Reativação",
+  "turno": "Todo dia",
+  "entrega": "Para o vendedor ou televendas: os clientes do dia que valem contato, com histórico e abordagem sugerida."
+ },
+ {
+  "id": "guardiao-margem",
+  "area": "Comercial",
+  "nome": "Guardião de Margem, Descontos & Crédito",
+  "turno": "Por evento de venda",
+  "entrega": "Para a gestão: notificação imediata com botão de aprovação ou recusa da exceção."
+ },
+ {
+  "id": "apurador-premiacoes",
+  "area": "Comercial",
+  "nome": "Apurador de Premiações",
+  "turno": "Mensal · fechamento",
+  "entrega": "Para a gestão: o demonstrativo de cada vendedor, pronto para conferência."
+ },
+ {
+  "id": "guardiao-cota-fornecedor",
+  "area": "Comercial",
+  "nome": "Guardião de Cota de Fornecedor",
+  "turno": "Semanal · segunda de manhã",
+  "entrega": "Para compras e gestão comercial: a projeção de atingimento de cada cota contratual e a sugestão de reforço de compra para não perder a bonificação."
+ },
+ {
+  "id": "posvenda",
+  "area": "Comercial",
+  "nome": "Pós-venda & Satisfação",
+  "turno": "Por evento · a cada venda",
+  "entrega": "Para o cliente: o agradecimento e a pesquisa. Para a gestão: as respostas consolidadas e o alerta imediato de insatisfação."
+ },
+ {
+  "id": "analista-variacao",
+  "area": "Comercial",
+  "nome": "Analista de Vendas por Cor & Variação",
+  "turno": "Todo dia",
+  "entrega": "Para compras e gestão: um painel diário do giro por variação, pronto para decisão."
+ },
+ {
+  "id": "vigia-caixa",
+  "area": "Financeiro",
+  "nome": "Vigia de Caixa (Radar de Caixa)",
+  "turno": "Todo dia · manhã",
+  "entrega": "Para o financeiro: aviso antecipado com a causa identificada e sugestão de solução — silêncio quando está tudo bem."
+ },
+ {
+  "id": "cobrador-cordial",
+  "area": "Financeiro",
+  "nome": "Cobrador Cordial (Régua de Cobrança)",
+  "turno": "Todo dia",
+  "entrega": "Para a gestão: o lote do dia pronto para revisão. Para o cliente: a mensagem, só depois da aprovação."
+ },
+ {
+  "id": "auditor-despesas",
+  "area": "Financeiro",
+  "nome": "Auditor de Despesas",
+  "turno": "Todo dia",
+  "entrega": "Para o financeiro: o apontamento do desvio antes do fechamento, com tempo de questionar."
+ },
+ {
+  "id": "sentinela-estoque",
+  "area": "Estoque",
+  "nome": "Sentinela de Estoque",
+  "turno": "Todo dia",
+  "entrega": "Para compras: a lista de reposição do dia, organizada por fornecedor."
+ },
+ {
+  "id": "analista-giro",
+  "area": "Estoque",
+  "nome": "Analista de Giro (Curva ABC)",
+  "turno": "Semanal",
+  "entrega": "Para a gestão: o ranking do que gira e a lista do que está parado, para decidir o que empurrar ou deixar de comprar."
+ },
+ {
+  "id": "sugestao-compra",
+  "area": "Estoque",
+  "nome": "Agente de Sugestão de Compra",
+  "turno": "Semanal",
+  "entrega": "Para compras: a sugestão de pedido por fornecedor, pronta para ajuste e envio."
+ },
+ {
+  "id": "vigia-rastreabilidade",
+  "area": "Estoque",
+  "nome": "Vigia de Rastreabilidade (Lote & Validade)",
+  "turno": "Por evento · NF de entrada/saída",
+  "entrega": "Para qualidade e compliance: o alerta de lote sem vinculação correta, e o Certificado de Qualidade gerado automaticamente para o cliente quando aplicável."
+ }
+]

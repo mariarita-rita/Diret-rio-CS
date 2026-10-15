@@ -317,6 +317,21 @@ export const PLANOS_CONTRATADOS_OPCOES = {
   781063: { produto: 'BIME APP', planoSugerido: '' },
 };
 
+// Frase do contexto pra uma resposta Sim/Não, por chave curta (usada pelo formulário
+// do vendedor, que não conhece os ids dos campos do Moskit). null se a chave for outra.
+const CHAVES_PERGUNTAS = {
+  outroCnpj: 'OUTRO_CNPJ_CONOSCO',
+  duplicacao: 'DUPLICACAO_DE_DADOS',
+  migracao: 'MIGRACAO_DE_BASE',
+  importacao: 'IMPORTACAO_DE_OUTRO_SISTEMA',
+};
+export const CHAVES_PERGUNTAS_VALIDAS = Object.keys(CHAVES_PERGUNTAS);
+export function frasePergunta(chave, resposta) {
+  const campo = CHAVES_PERGUNTAS[chave];
+  if (!campo || (resposta !== 'sim' && resposta !== 'nao')) return null;
+  return CAMPOS_SIM_NAO[CF_PROJETO[campo]]?.frases?.[resposta] || null;
+}
+
 // Os 4 campos Sim/Não do projeto — mesmas duas opções em todos (texto
 // idêntico "Não ❌"/"Sim ✅", só o id da opção "Sim" muda por campo,
 // confirmado ao vivo via listarOpcoesCampo). Usado pra transformar resposta

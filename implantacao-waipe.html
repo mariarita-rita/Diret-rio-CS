@@ -550,6 +550,41 @@
   .chat-flow-waipe-msg .chat-flow-waipe-json-acoes{margin-top:6px;display:flex;gap:6px;}
   .chat-flow-waipe-input{display:flex;gap:6px;padding:10px;border-top:1px solid var(--border);}
   .chat-flow-waipe-input textarea{flex:1;resize:none;font-family:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--border-strong);border-radius:8px;}
+  /* ---- Formulário do vendedor (?negocio=ID): etapas, cartões coloridos, campos preenchidos ---- */
+  .nw-progresso{display:flex;gap:6px;margin:4px 0 14px;flex-wrap:wrap;}
+  .nw-passo{flex:1;min-width:110px;text-align:center;padding:7px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--surface-2,#f1f3f8);color:var(--muted);border:1px solid var(--border);}
+  .nw-passo.atual{background:var(--azul,#0A41B4);color:#fff;border-color:var(--azul,#0A41B4);}
+  .nw-card{background:var(--surface,#fff);border:1px solid var(--border);border-left:6px solid var(--azul,#0A41B4);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .nw-azul{border-left-color:#2563eb;background:linear-gradient(0deg,rgba(37,99,235,.05),rgba(37,99,235,.05)),var(--surface,#fff);}
+  .nw-verde{border-left-color:#16a34a;background:linear-gradient(0deg,rgba(22,163,74,.06),rgba(22,163,74,.06)),var(--surface,#fff);}
+  .nw-roxo{border-left-color:#7c3aed;background:linear-gradient(0deg,rgba(124,58,237,.05),rgba(124,58,237,.05)),var(--surface,#fff);}
+  .nw-laranja{border-left-color:#ea580c;background:linear-gradient(0deg,rgba(234,88,12,.05),rgba(234,88,12,.05)),var(--surface,#fff);}
+  .nw-vermelho{border-left-color:#dc2626;background:linear-gradient(0deg,rgba(220,38,38,.05),rgba(220,38,38,.05)),var(--surface,#fff);}
+  .nw-titulo{font-size:16px;font-weight:700;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .nw-subtitulo{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:14px 0 6px;}
+  .nw-contador{font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:rgba(234,88,12,.15);color:#c2410c;}
+  .nw-linha{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:9px 12px;margin:6px 0;border:1px solid var(--border);border-radius:10px;background:rgba(22,163,74,.08);}
+  .nw-linha-acoes{white-space:nowrap;display:flex;gap:4px;}
+  .nw-form-item{margin-top:12px;padding:12px 14px;border:1px dashed var(--border-strong,#b6bdd1);border-radius:10px;background:rgba(124,58,237,.06);}
+  .nw-agente{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;margin:4px 0;border:1px solid var(--border);border-radius:8px;cursor:pointer;line-height:1.35;}
+  .nw-agente.marcado{background:rgba(234,88,12,.12);border-color:#ea580c;}
+  .nw-agente small{color:var(--muted);}
+  .nw-acoes{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 8px;flex-wrap:wrap;}
+  .nw-pergunta{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .nw-pergunta:last-child{border-bottom:0;}
+  .nw-sn{display:flex;gap:6px;}
+  .nw-sn-btn{padding:6px 14px;border-radius:999px;border:1px solid var(--border-strong,#b6bdd1);background:var(--surface,#fff);color:inherit;font-weight:600;cursor:pointer;font-size:13px;}
+  .nw-sn-btn.sim.ativo{background:#16a34a;border-color:#16a34a;color:#fff;}
+  .nw-sn-btn.nao.ativo{background:#dc2626;border-color:#dc2626;color:#fff;}
+  .campo-preenchido{background:rgba(37,99,235,.09) !important;}
+  .btn-grande{padding:15px 26px !important;font-size:16px !important;border-radius:12px !important;}
+  .btn-enviar{flex:1;min-width:220px;}
+  .nw-confirma{text-align:center;border-left-color:#16a34a;background:linear-gradient(0deg,rgba(22,163,74,.08),rgba(22,163,74,.08)),var(--surface,#fff);padding:30px 20px;}
+  .nw-confirma-icone{font-size:46px;line-height:1;}
+  .nw-confirma-titulo{font-size:20px;font-weight:800;margin:8px 0;}
+  .nw-prazo{display:inline-block;margin-top:8px;padding:10px 16px;border-radius:10px;background:rgba(22,163,74,.15);font-size:15px;}
+  /* O botão do chat de flow do Waipe não faz sentido na janela do vendedor. */
+  body.modo-negocio #chatFlowWaipeBtn, body.modo-negocio #chatFlowWaipePainel{display:none !important;}
   /* Janela pequena aberta da tela do negocio no Moskit (?negocio=ID): so o formulario. */
   body.modo-negocio nav.tabs, body.modo-negocio .header-title p, body.modo-negocio .header-meta:not(#sessaoIdentidade){display:none;}
   body.modo-negocio .page{padding-left:10px;padding-right:10px;}
@@ -4198,6 +4233,13 @@
   // Chave do corpo é "urgencia", NUNCA "prioridade" — essa já é a ordem dos
   // agentes Waipe no pipeline (sim.prioridade), enviada em toda chamada de
   // atualizar-implantacao; reaproveitar o nome sobrescreveria esse array.
+  /** "Rua X, 123 - Compl - Bairro - Cidade/UF - CEP" a partir de p.endereco; '' se vazio. */
+  function enderecoTexto(e){
+    if (!e) return "";
+    var rua = [e.rua, e.numero].filter(Boolean).join(", ");
+    var cidadeUf = [e.cidade, e.uf].filter(Boolean).join("/");
+    return [rua, e.complemento, e.bairro, cidadeUf, e.cep].filter(Boolean).join(" - ");
+  }
   function seletorUrgenciaProjeto(p){
     var urgencia = p.urgencia || "normal";
     return '<select data-projeto-urgencia class="form-input" style="width:auto; display:inline-block; margin-left:8px; font-size:12px; padding:4px 8px;">' +
@@ -5500,6 +5542,7 @@
       (p.dataFimReal ? '<div class="sp-v" style="margin-top:4px;">Entregue em: ' + esc(new Date(p.dataFimReal).toLocaleDateString("pt-BR")) + '</div>' : '') +
       '<div class="sp-k" style="margin-top:10px;">Urgência</div>' +
       '<div>' + seletorUrgenciaProjeto(p) + slaBadgeHtml(p) + '</div>' +
+      (p.motivoUrgencia ? '<div class="sp-v" style="margin-top:4px;font-size:12px;">Motivo da urgência: ' + esc(p.motivoUrgencia) + '</div>' : '') +
       '<div class="sp-k" style="margin-top:10px;">🚨 Alertas <span style="font-size:10px;color:var(--muted);font-weight:400;">(mesmo campo da Carteira CSM)</span></div>' +
       '<div>' + seletorAlertasProjeto(p) + '</div>' +
       '<div class="sp-k">Contexto</div>' +
@@ -5522,6 +5565,7 @@
       '<div id="contatosAdicionaisWrap">' +
         (p.contatosAdicionais || []).map(function(c){ return linhaContatoAdicionalHtml(c.nome, c.telefone); }).join("") +
       '</div>' +
+      (enderecoTexto(p.endereco) ? '<div class="sp-k" style="margin-top:10px;">Endereço</div><div class="sp-v">' + esc(enderecoTexto(p.endereco)) + '</div>' : '') +
       '<button type="button" class="btn-flow-secondary" id="btnAdicionarContato" style="margin-top:6px;">+ Adicionar contato</button>' +
       '<button type="button" class="btn-flow-secondary" id="btnSalvarDadosCliente" style="margin-top:6px;">Salvar dados do cliente</button>' +
       (!p.csm ? '<button type="button" class="btn-flow-secondary" id="btnDefinirGerente" style="margin-top:6px;margin-left:8px;">🎯 Definir Gerente de Contas</button>' : '') +
@@ -6274,7 +6318,8 @@
   // ==================== ASSISTENTE DE NOVO PROJETO (extração por IA) ====================
 
   function renderWizard(root){
-    if (wizard.step === "colar") renderWizardColar(root);
+    if (wizard.step === "negocio") renderNegocioWizard(root);
+    else if (wizard.step === "colar") renderWizardColar(root);
     else renderWizardRevisao(root);
   }
 
@@ -6622,24 +6667,461 @@
   // não precisa duplicar a chamada aqui embaixo.
   // Formulário aberto da tela do negócio no Moskit (extensão/favorito):
   // ?negocio=ID — pré-preenche o assistente de novo projeto com o negócio ganho.
-  function iniciarRevisaoDoNegocio(r){
-    wizard = {
-      step: "revisao",
-      origemMoskitDealId: r.id,
-      cliente: r.cliente || "",
-      contexto: r.contexto || "",
-      // Vendedor não conhece o ID Núcleo (cliente acabou de fechar): "0" é o
-      // placeholder que o Comercial já usa; CS/gestão preenchem o real.
-      idNucleo: r.idNucleo || (sessaoNivelAtual === "vendedor" ? "0" : ""),
-      cnpj: r.cnpj || "", nomeContato: r.nomeContato || "", telefone: r.telefone || "", email: r.email || "",
-      agentes: [],
-      solucoes: (r.solucoes || []).map(function(s){
-        return { produto: s.produto, planoSugerido: s.planoSugerido || "", variante: s.variante || "", observacoes: s.observacoes || "", quantidade: s.quantidade, valorManual: s.valorManual };
+  // ==================== FORMULÁRIO DO VENDEDOR (?negocio=ID) — passo a passo ====================
+  // Aberto da tela do negócio no Moskit (extensão/favorito). Três etapas curtas
+  // (dados → itens → detalhes) + confirmação. Estado em `wizard` (step "negocio").
+  var TIPOS_IMPLANTACAO = ["Cliente Novo", "Migração", "Waipe", "Reativação", "Troca de Titularidade", "Treinamento", "Cadastro Inteligente", "Simplaz - Contador", "Simplaz - Empresário", "Analytics", "SERPRO", "Bime APP", "Homologação de Boleto", "Importa Facil"];
+  var PLANOS_GESTOR_NW = ["Básico Cloud", "Básico Local", "NFe Cloud", "NFe Local", "Intermediário Cloud", "Intermediário Local", "Avançado Cloud", "Avançado Local"];
+  var PLANOS_SIMPLAZ_NW = ["Bronze", "Prata", "Ouro", "Personalizado"];
+  var PLANOS_POR_PRODUTO_NW = {
+    "Gestor": PLANOS_GESTOR_NW,
+    "Unique": ["Light", "Plus", "Premium"],
+    "Simplaz Gestor": PLANOS_SIMPLAZ_NW,
+    "Simplaz Unique": PLANOS_SIMPLAZ_NW,
+    "Treinamento": ["Financeiro", "Estoque", "NFe", "Faturamento", "Outros temas"]
+  };
+  // Mesmos tetos de agentes por plano de waipe-diagnostico.html (AGENT_CAP): Individual 1, Team 3, Enterprise sem limite.
+  var LIMITE_AGENTES_WAIPE = { "Waipe Individual": 1, "Waipe Team": 3, "Waipe Enterprise": Infinity };
+  var PERGUNTAS_NW = [
+    { chave: "outroCnpj", rotulo: "Já tem outro CNPJ conosco?" },
+    { chave: "duplicacao", rotulo: "Vai precisar de duplicação de dados?" },
+    { chave: "migracao", rotulo: "Vai precisar de migração de base?" },
+    { chave: "importacao", rotulo: "Vai importar dados de outro sistema?" }
+  ];
+  var EXT_MIME_NW = {
+    pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+    doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    csv: "text/csv", txt: "text/plain", pfx: "application/x-pkcs12", p12: "application/x-pkcs12"
+  };
+  var MAX_ANEXO_NW = 3 * 1024 * 1024; // o corpo de uma requisição na Vercel passa de ~4,5 MB com o base64
+  var agentesPadraoNw = null; // catálogo (agentes-padrao.json, copiado de AGENTS em waipe-diagnostico.html)
+
+  function nwLimiteAgentes(){
+    var max = 0;
+    (wizard.itens || []).forEach(function(it){ var l = LIMITE_AGENTES_WAIPE[it.produto]; if (l !== undefined && l > max) max = l; });
+    return max;
+  }
+  function nwPrazoTexto(){
+    var d = SLA_DIAS_UTEIS[wizard.urgencia] || SLA_DIAS_UTEIS.normal;
+    return d + (d === 1 ? " dia útil" : " dias úteis");
+  }
+  function nwExtensao(nome){ var m = /\.([a-z0-9]+)$/i.exec(nome || ""); return m ? m[1].toLowerCase() : ""; }
+  function nwSet(caminho, valor){
+    var partes = caminho.split(".");
+    var alvo = wizard;
+    for (var i = 0; i < partes.length - 1; i++) alvo = alvo[partes[i]];
+    alvo[partes[partes.length - 1]] = valor;
+  }
+  /** Liga todo [data-w="caminho"] do container ao wizard (input/change grava direto). */
+  function nwLigarCampos(root){
+    root.querySelectorAll("[data-w]").forEach(function(el){
+      var evento = el.tagName === "SELECT" ? "change" : "input";
+      el.addEventListener(evento, function(){
+        nwSet(el.getAttribute("data-w"), el.value);
+        el.classList.toggle("campo-preenchido", !!el.value);
+      });
+    });
+  }
+  function nwCampo(caminho, rotulo, valor, opts){
+    opts = opts || {};
+    var cls = "form-input" + (valor ? " campo-preenchido" : "");
+    return '<div class="form-field"><label>' + rotulo + '</label><input type="' + (opts.tipo || "text") + '" class="' + cls + '" data-w="' + caminho + '" value="' + esc(valor || "") + '"' +
+      (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : "") + (opts.max ? ' maxlength="' + opts.max + '"' : "") + ' autocomplete="off"></div>';
+  }
+  function nwProgresso(etapa){
+    var passos = [["dados", "1 · Dados do cliente"], ["itens", "2 · Itens"], ["detalhes", "3 · Detalhes"]];
+    return '<div class="nw-progresso">' + passos.map(function(p){
+      return '<span class="nw-passo' + (p[0] === etapa ? " atual" : "") + '">' + p[1] + '</span>';
+    }).join("") + '</div>';
+  }
+  function nwErro(){
+    return wizard.erro ? '<div class="callout danger" style="margin-top:12px;"><div class="dot"></div><div>' + esc(wizard.erro) + '</div></div>' : "";
+  }
+
+  function renderNegocioWizard(root){
+    var etapa = wizard.etapaNegocio;
+    if (etapa === "dados") return renderNwDados(root);
+    if (etapa === "itens") return renderNwItens(root);
+    if (etapa === "detalhes") return renderNwDetalhes(root);
+    return renderNwEnviado(root);
+  }
+
+  // ---------- Etapa 1: dados do cliente ----------
+  function renderNwDados(root){
+    var e = wizard.endereco;
+    root.innerHTML = nwProgresso("dados") +
+      '<div class="nw-card nw-azul">' +
+        '<div class="nw-titulo">👤 Dados do cliente</div>' +
+        '<p class="sub">Confira se os dados estão corretos. Corrija o que precisar e avance.</p>' +
+        '<div class="form-field"><label>Tipo de implantação</label><select class="form-input campo-preenchido" data-w="tipo">' +
+          TIPOS_IMPLANTACAO.map(function(t){ return '<option value="' + esc(t) + '"' + (wizard.tipo === t ? " selected" : "") + '>' + esc(t) + '</option>'; }).join("") +
+        '</select></div>' +
+        nwCampo("cliente", "Nome do cliente", wizard.cliente) +
+        '<div class="form-grid-2">' + nwCampo("cnpj", "CPF/CNPJ", wizard.cnpj) + nwCampo("idNucleo", "ID Núcleo (se já tiver)", wizard.idNucleo === "0" ? "" : wizard.idNucleo) + '</div>' +
+        '<div class="form-grid-2">' + nwCampo("nomeContato", "Nome do contato", wizard.nomeContato) + nwCampo("telefone", "Telefone", wizard.telefone) + '</div>' +
+        nwCampo("email", "E-mail", wizard.email, { tipo: "email" }) +
+      '</div>' +
+      '<div class="nw-card nw-verde">' +
+        '<div class="nw-titulo">📍 Endereço</div>' +
+        '<p class="sub">Vem do cadastro da empresa no Moskit — complete o número e o que faltar.</p>' +
+        '<div class="form-grid-2">' + nwCampo("endereco.rua", "Rua / logradouro", e.rua) + nwCampo("endereco.numero", "Número", e.numero) + '</div>' +
+        '<div class="form-grid-2">' + nwCampo("endereco.complemento", "Complemento", e.complemento) + nwCampo("endereco.bairro", "Bairro", e.bairro) + '</div>' +
+        '<div class="form-grid-2">' + nwCampo("endereco.cidade", "Cidade", e.cidade) + '<div class="form-grid-2" style="margin:0;">' + nwCampo("endereco.uf", "UF", e.uf, { max: 2 }) + nwCampo("endereco.cep", "CEP", e.cep) + '</div></div>' +
+      '</div>' +
+      nwErro() +
+      '<div class="nw-acoes"><button type="button" class="btn-flow btn-grande" id="nwAvancar1">✅ Os dados estão corretos — avançar</button></div>';
+    nwLigarCampos(root);
+    document.getElementById("nwAvancar1").addEventListener("click", function(){
+      var falta = [];
+      if (!(wizard.cliente || "").trim()) falta.push("Nome do cliente");
+      if (!(wizard.cnpj || "").trim()) falta.push("CPF/CNPJ");
+      if (!(wizard.telefone || "").trim()) falta.push("Telefone");
+      if (!(wizard.email || "").trim()) falta.push("E-mail");
+      if (falta.length){ wizard.erro = "Preencha: " + falta.join(", ") + "."; renderProjetosPanel(); return; }
+      wizard.erro = ""; wizard.etapaNegocio = "itens"; renderProjetosPanel();
+    });
+  }
+
+  // ---------- Etapa 2: itens (linhas salvas + seção de preenchimento) ----------
+  function nwNomeItem(it){ return it.produto + (it.planoSugerido ? " — " + it.planoSugerido : ""); }
+  function nwNovoRascunho(it, idx){
+    return {
+      idx: idx, produto: it ? it.produto : "Gestor", planoSugerido: it ? it.planoSugerido : "",
+      observacoes: it ? it.observacoes : "", motivo: it ? it.motivo : "",
+      quantidade: it ? it.quantidade : undefined, valorManual: it ? it.valorManual : undefined, sujo: !it
+    };
+  }
+  function nwApararAgentes(){
+    var limite = nwLimiteAgentes();
+    if (wizard.agentesSel.length > limite) wizard.agentesSel = wizard.agentesSel.slice(0, limite === Infinity ? undefined : limite);
+  }
+
+  function renderNwItens(root){
+    var linhas = wizard.itens.map(function(it, i){
+      return '<div class="nw-linha"><div><b>✅ ' + esc(nwNomeItem(it)) + '</b>' +
+        (it.motivo ? '<div class="sub" style="margin:2px 0 0;">Motivo: ' + esc(it.motivo) + '</div>' : "") +
+        (it.observacoes ? '<div class="sub" style="margin:2px 0 0;">' + esc(it.observacoes) + '</div>' : "") + '</div>' +
+        '<div class="nw-linha-acoes"><button type="button" class="btn-reset" data-editar="' + i + '">✏️ Editar</button> <button type="button" class="btn-reset" data-remover="' + i + '">🗑 Remover</button></div></div>';
+    }).join("");
+    root.innerHTML = nwProgresso("itens") +
+      '<div class="nw-card nw-roxo">' +
+        '<div class="nw-titulo">📦 Itens do projeto</div>' +
+        '<p class="sub">Estes itens vieram dos produtos do negócio. Edite, remova ou adicione outros.</p>' +
+        (linhas || '<div class="callout warn"><div class="dot"></div><div>Nenhum item ainda — adicione ao menos um.</div></div>') +
+        '<div id="nwFormItemWrap"></div>' +
+        '<div style="margin-top:12px;" id="nwAddWrap"><button type="button" class="btn-flow-secondary" id="nwAddItem">+ Adicionar item</button></div>' +
+      '</div>' +
+      '<div id="nwAgentesWrap"></div>' +
+      nwErro() +
+      '<div class="nw-acoes"><button type="button" class="btn-flow-secondary" id="nwVoltar2">← Voltar</button>' +
+      '<button type="button" class="btn-flow btn-grande" id="nwAvancar2">Avançar →</button></div>';
+
+    root.querySelectorAll("[data-editar]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var i = parseInt(b.getAttribute("data-editar"), 10);
+        wizard.rascunho = nwNovoRascunho(wizard.itens[i], i); renderNwFormItem();
+      });
+    });
+    root.querySelectorAll("[data-remover]").forEach(function(b){
+      b.addEventListener("click", function(){
+        wizard.itens.splice(parseInt(b.getAttribute("data-remover"), 10), 1);
+        nwApararAgentes(); renderProjetosPanel();
+      });
+    });
+    document.getElementById("nwAddItem").addEventListener("click", function(){
+      wizard.rascunho = nwNovoRascunho(null, -1); renderNwFormItem();
+    });
+    document.getElementById("nwVoltar2").addEventListener("click", function(){ wizard.erro = ""; wizard.etapaNegocio = "dados"; renderProjetosPanel(); });
+    document.getElementById("nwAvancar2").addEventListener("click", function(){
+      if (!wizard.itens.length){ wizard.erro = "Adicione ao menos um item ao projeto."; renderProjetosPanel(); return; }
+      if (wizard.rascunho){ wizard.erro = "Salve ou cancele o item que está sendo preenchido."; renderProjetosPanel(); return; }
+      wizard.erro = ""; wizard.etapaNegocio = "detalhes"; renderProjetosPanel();
+    });
+    if (wizard.rascunho) renderNwFormItem();
+    renderNwAgentes();
+  }
+
+  function renderNwFormItem(){
+    var wrap = document.getElementById("nwFormItemWrap");
+    var addWrap = document.getElementById("nwAddWrap");
+    if (!wrap) return;
+    var r = wizard.rascunho;
+    if (!r){ wrap.innerHTML = ""; if (addWrap) addWrap.style.display = ""; return; }
+    if (addWrap) addWrap.style.display = "none";
+    var opcoesPlano = PLANOS_POR_PRODUTO_NW[r.produto];
+    var campoPlano;
+    if (opcoesPlano){
+      var lista = opcoesPlano.slice();
+      if (r.planoSugerido && lista.indexOf(r.planoSugerido) < 0) lista.unshift(r.planoSugerido);
+      campoPlano = '<div class="form-field"><label>' + (r.produto === "Treinamento" ? "Tipo de treinamento" : "Plano") + '</label><select class="form-input" data-r="planoSugerido">' +
+        '<option value="">— selecione —</option>' +
+        lista.map(function(p){ return '<option value="' + esc(p) + '"' + (r.planoSugerido === p ? " selected" : "") + '>' + esc(p) + '</option>'; }).join("") + '</select></div>';
+    } else if (LIMITE_AGENTES_WAIPE[r.produto] !== undefined){
+      campoPlano = "";
+    } else {
+      campoPlano = '<div class="form-field"><label>Plano / variação (opcional)</label><input type="text" class="form-input" data-r="planoSugerido" value="' + esc(r.planoSugerido) + '"></div>';
+    }
+    wrap.innerHTML = '<div class="nw-form-item">' +
+      '<div class="nw-subtitulo">' + (r.idx >= 0 ? "Editar item" : "Novo item") + '</div>' +
+      '<div class="form-field"><label>Produto</label><select class="form-input" data-r="produto">' +
+        PRODUTOS_SOLUCAO_OPCOES.map(function(p){ return '<option value="' + esc(p) + '"' + (r.produto === p ? " selected" : "") + '>' + esc(p) + '</option>'; }).join("") + '</select></div>' +
+      campoPlano +
+      (r.produto === "Treinamento" ? '<div class="form-field"><label>Motivo do treinamento avulso <span style="color:var(--danger)">(obrigatório)</span></label><textarea class="form-textarea" rows="2" data-r="motivo">' + esc(r.motivo) + '</textarea></div>' : "") +
+      '<div class="form-field"><label>Observações (opcional)</label><textarea class="form-textarea" rows="2" data-r="observacoes">' + esc(r.observacoes) + '</textarea></div>' +
+      '<div id="nwErroItem" style="color:var(--danger);font-size:13px;min-height:16px;"></div>' +
+      '<div class="nw-acoes" style="justify-content:flex-start;gap:8px;">' +
+        '<button type="button" class="btn-flow-secondary' + (r.sujo ? " tem-pendencia" : "") + '" id="nwSalvarItem">💾 Salvar item</button>' +
+        '<button type="button" class="btn-reset" id="nwCancelarItem">Cancelar</button>' +
+      '</div></div>';
+    wrap.querySelectorAll("[data-r]").forEach(function(el){
+      el.addEventListener(el.tagName === "SELECT" ? "change" : "input", function(){
+        var campo = el.getAttribute("data-r");
+        r[campo] = el.value;
+        r.sujo = true;
+        var botao = document.getElementById("nwSalvarItem"); if (botao) botao.classList.add("tem-pendencia");
+        if (campo === "produto"){ r.planoSugerido = ""; renderNwFormItem(); }
+      });
+    });
+    document.getElementById("nwCancelarItem").addEventListener("click", function(){ wizard.rascunho = null; renderNwFormItem(); });
+    document.getElementById("nwSalvarItem").addEventListener("click", function(){
+      var erroEl = document.getElementById("nwErroItem");
+      if (r.produto === "Treinamento" && !(r.motivo || "").trim()){ erroEl.textContent = "Informe o motivo do treinamento avulso."; return; }
+      var item = { produto: r.produto, planoSugerido: (r.planoSugerido || "").trim(), observacoes: (r.observacoes || "").trim(),
+        motivo: r.produto === "Treinamento" ? (r.motivo || "").trim() : "", quantidade: r.quantidade, valorManual: r.valorManual };
+      if (r.idx >= 0) wizard.itens[r.idx] = item; else wizard.itens.push(item);
+      wizard.rascunho = null; nwApararAgentes(); wizard.erro = ""; renderProjetosPanel();
+    });
+  }
+
+  function renderNwAgentes(){
+    var wrap = document.getElementById("nwAgentesWrap");
+    if (!wrap) return;
+    var limite = nwLimiteAgentes();
+    if (!limite){ wrap.innerHTML = ""; return; }
+    if (!agentesPadraoNw){
+      wrap.innerHTML = '<div class="nw-card nw-laranja"><div class="nw-titulo">🤖 Agentes do Waipe</div><p class="sub">Carregando a lista de agentes…</p></div>';
+      fetch("/agentes-padrao.json").then(function(r){ return r.json(); }).then(function(lista){ agentesPadraoNw = lista; renderNwAgentes(); })
+        .catch(function(){ agentesPadraoNw = []; renderNwAgentes(); });
+      return;
+    }
+    var sel = wizard.agentesSel;
+    var cheio = limite !== Infinity && sel.length >= limite;
+    var porArea = {};
+    agentesPadraoNw.forEach(function(a){ (porArea[a.area] = porArea[a.area] || []).push(a); });
+    var estaSel = function(id){ return sel.some(function(s){ return s.id === id; }); };
+    var html = '<div class="nw-card nw-laranja"><div class="nw-titulo">🤖 Agentes do Waipe <span class="nw-contador">' + sel.length + (limite === Infinity ? " selecionados · sem limite" : " de " + limite) + '</span></div>' +
+      '<p class="sub">Opcional. Escolha os agentes que o cliente já sabe que quer — o limite depende do plano Waipe.</p>';
+    Object.keys(porArea).forEach(function(area){
+      html += '<div class="nw-subtitulo">' + esc(area) + '</div>';
+      porArea[area].forEach(function(a){
+        var marcado = estaSel(a.id);
+        html += '<label class="nw-agente' + (marcado ? " marcado" : "") + '"><input type="checkbox" data-agente="' + esc(a.id) + '"' + (marcado ? " checked" : "") + (cheio && !marcado ? " disabled" : "") + '> <span><b>' + esc(a.nome) + '</b><br><small>' + esc(a.entrega) + '</small></span></label>';
+      });
+    });
+    var proprios = sel.filter(function(s){ return !s.id; });
+    html += '<div class="nw-subtitulo">Outro agente</div>' +
+      proprios.map(function(s, i){ return '<div class="nw-linha"><div><b>🤖 ' + esc(s.nome) + '</b></div><div class="nw-linha-acoes"><button type="button" class="btn-reset" data-rem-proprio="' + i + '">🗑 Remover</button></div></div>'; }).join("") +
+      '<div style="display:flex;gap:6px;margin-top:6px;"><input type="text" class="form-input" id="nwAgenteProprio" placeholder="Nome do agente" style="flex:1;"' + (cheio ? " disabled" : "") + '>' +
+      '<button type="button" class="btn-flow-secondary" id="nwAddProprio"' + (cheio ? " disabled" : "") + '>Adicionar</button></div></div>';
+    wrap.innerHTML = html;
+    wrap.querySelectorAll("[data-agente]").forEach(function(c){
+      c.addEventListener("change", function(){
+        var id = c.getAttribute("data-agente");
+        if (c.checked){
+          var a = agentesPadraoNw.filter(function(x){ return x.id === id; })[0];
+          if (a) wizard.agentesSel.push({ id: a.id, nome: a.nome, area: a.area, turno: a.turno, entrega: a.entrega });
+        } else {
+          wizard.agentesSel = wizard.agentesSel.filter(function(s){ return s.id !== id; });
+        }
+        renderNwAgentes();
+      });
+    });
+    wrap.querySelectorAll("[data-rem-proprio]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var alvo = proprios[parseInt(b.getAttribute("data-rem-proprio"), 10)];
+        wizard.agentesSel = wizard.agentesSel.filter(function(s){ return s !== alvo; });
+        renderNwAgentes();
+      });
+    });
+    document.getElementById("nwAddProprio").addEventListener("click", function(){
+      var campo = document.getElementById("nwAgenteProprio");
+      var nome = (campo.value || "").trim();
+      if (!nome) return;
+      wizard.agentesSel.push({ id: null, nome: nome, area: "", turno: "", entrega: "" });
+      renderNwAgentes();
+    });
+  }
+
+  // ---------- Etapa 3: detalhes ----------
+  function nwSimNao(chave, valorAtual){
+    return '<div class="nw-sn" data-sn="' + chave + '">' +
+      '<button type="button" class="nw-sn-btn sim' + (valorAtual === "sim" ? " ativo" : "") + '" data-v="sim">Sim ✅</button>' +
+      '<button type="button" class="nw-sn-btn nao' + (valorAtual === "nao" ? " ativo" : "") + '" data-v="nao">Não ❌</button></div>';
+  }
+
+  function renderNwDetalhes(root){
+    var temTipoNovo = wizard.tipo === "Cliente Novo";
+    var altaOuUrgente = wizard.urgencia === "alta" || wizard.urgencia === "urgente";
+    root.innerHTML = nwProgresso("detalhes") +
+      '<div class="nw-card nw-laranja">' +
+        '<div class="nw-titulo">🔎 Sobre a implantação</div>' +
+        (temTipoNovo ? '<div class="nw-pergunta"><span>🎓 Esse cliente vai precisar de treinamento?</span>' + nwSimNao("precisaTreinamento", wizard.precisaTreinamento) + '</div>' : "") +
+        PERGUNTAS_NW.map(function(p){ return '<div class="nw-pergunta"><span>' + esc(p.rotulo) + '</span>' + nwSimNao("p:" + p.chave, wizard.perguntas[p.chave]) + '</div>'; }).join("") +
+      '</div>' +
+      '<div class="nw-card nw-azul">' +
+        '<div class="nw-titulo">📝 Contexto do projeto / Observações para o CS</div>' +
+        '<p class="sub">Já vem preenchido com o que está no negócio. Acrescente o que a equipe precisa saber.</p>' +
+        '<textarea class="form-textarea' + (wizard.contexto ? " campo-preenchido" : "") + '" rows="6" data-w="contexto">' + esc(wizard.contexto) + '</textarea>' +
+      '</div>' +
+      '<div class="nw-card nw-vermelho">' +
+        '<div class="nw-titulo">⏱️ Urgência</div>' +
+        '<p class="sub">Define o prazo (SLA) da implantação.</p>' +
+        '<div class="form-field"><select class="form-input campo-preenchido" data-w="urgencia">' +
+          ["baixa", "normal", "alta", "urgente"].map(function(u){ return '<option value="' + u + '"' + (wizard.urgencia === u ? " selected" : "") + '>' + URGENCIA_LABEL[u] + ' — ' + SLA_DIAS_UTEIS[u] + ' dias úteis</option>'; }).join("") + '</select></div>' +
+        (altaOuUrgente ? '<div class="form-field"><label>Motivo da urgência <span style="color:var(--danger)">(obrigatório)</span></label><textarea class="form-textarea" rows="2" data-w="motivoUrgencia">' + esc(wizard.motivoUrgencia) + '</textarea></div>' : "") +
+      '</div>' +
+      '<div class="nw-card nw-verde">' +
+        '<div class="nw-titulo">📎 Anexos</div>' +
+        '<p class="sub">Opcional: documentos do projeto ou do negócio (PDF, imagem, Word, Excel, certificado .pfx). Até 3 MB cada.</p>' +
+        '<div id="nwAnexosLista"></div>' +
+        '<input type="file" id="nwArquivo" multiple style="display:none;">' +
+        '<button type="button" class="btn-flow-secondary" id="nwAddAnexo">+ Adicionar arquivo</button>' +
+      '</div>' +
+      nwErro() +
+      '<div class="nw-acoes"><button type="button" class="btn-flow-secondary" id="nwVoltar3">← Voltar</button>' +
+      '<button type="button" class="btn-flow btn-grande btn-enviar" id="nwEnviar"' + (wizard.salvando ? " disabled" : "") + '>' + (wizard.salvando ? "Enviando…" : "🚀 Enviar para implantação") + '</button></div>';
+
+    nwLigarCampos(root);
+    // urgência muda o bloco do motivo (e o prazo) — re-renderiza a etapa
+    root.querySelector('[data-w="urgencia"]').addEventListener("change", function(){ renderProjetosPanel(); });
+    root.querySelectorAll(".nw-sn").forEach(function(g){
+      g.querySelectorAll(".nw-sn-btn").forEach(function(b){
+        b.addEventListener("click", function(){
+          var chave = g.getAttribute("data-sn"), v = b.getAttribute("data-v");
+          if (chave === "precisaTreinamento") wizard.precisaTreinamento = (wizard.precisaTreinamento === v ? null : v);
+          else { var k = chave.slice(2); wizard.perguntas[k] = (wizard.perguntas[k] === v ? null : v); }
+          renderProjetosPanel();
+        });
+      });
+    });
+    renderNwAnexos();
+    document.getElementById("nwAddAnexo").addEventListener("click", function(){ document.getElementById("nwArquivo").click(); });
+    document.getElementById("nwArquivo").addEventListener("change", function(ev){
+      var avisos = [];
+      Array.prototype.forEach.call(ev.target.files, function(f){
+        var ext = nwExtensao(f.name);
+        if (!EXT_MIME_NW[ext]) { avisos.push(f.name + ": tipo de arquivo não permitido"); return; }
+        if (f.size > MAX_ANEXO_NW) { avisos.push(f.name + ": maior que 3 MB"); return; }
+        wizard.anexos.push(f);
+      });
+      ev.target.value = "";
+      wizard.erro = avisos.join(" · ");
+      renderProjetosPanel();
+    });
+    document.getElementById("nwVoltar3").addEventListener("click", function(){ wizard.erro = ""; wizard.etapaNegocio = "itens"; renderProjetosPanel(); });
+    document.getElementById("nwEnviar").addEventListener("click", nwEnviar);
+  }
+
+  function renderNwAnexos(){
+    var el = document.getElementById("nwAnexosLista");
+    if (!el) return;
+    el.innerHTML = wizard.anexos.map(function(f, i){
+      return '<div class="nw-linha"><div>📄 ' + esc(f.name) + ' <small>(' + Math.max(1, Math.round(f.size / 1024)) + ' KB)</small></div>' +
+        '<div class="nw-linha-acoes"><button type="button" class="btn-reset" data-rem-anexo="' + i + '">🗑 Remover</button></div></div>';
+    }).join("");
+    el.querySelectorAll("[data-rem-anexo]").forEach(function(b){
+      b.addEventListener("click", function(){ wizard.anexos.splice(parseInt(b.getAttribute("data-rem-anexo"), 10), 1); renderProjetosPanel(); });
+    });
+  }
+
+  function nwEnviar(){
+    if (wizard.salvando) return;
+    var altaOuUrgente = wizard.urgencia === "alta" || wizard.urgencia === "urgente";
+    if (wizard.tipo === "Cliente Novo" && !wizard.precisaTreinamento){ wizard.erro = "Responda: esse cliente vai precisar de treinamento?"; renderProjetosPanel(); return; }
+    if (altaOuUrgente && !(wizard.motivoUrgencia || "").trim()){ wizard.erro = "Informe o motivo da urgência."; renderProjetosPanel(); return; }
+    var perguntas = {};
+    PERGUNTAS_NW.forEach(function(p){ if (wizard.perguntas[p.chave]) perguntas[p.chave] = wizard.perguntas[p.chave]; });
+    var dados = {
+      origemMoskitDealId: wizard.origemMoskitDealId,
+      tipoImplantacao: wizard.tipo,
+      cliente: (wizard.cliente || "").trim(), contexto: wizard.contexto || "",
+      idNucleo: (wizard.idNucleo || "").trim() || "0", cnpj: (wizard.cnpj || "").trim(),
+      email: (wizard.email || "").trim(), telefone: (wizard.telefone || "").trim(), nomeContato: (wizard.nomeContato || "").trim(),
+      endereco: wizard.endereco,
+      urgencia: wizard.urgencia, motivoUrgencia: altaOuUrgente ? (wizard.motivoUrgencia || "").trim() : "",
+      perguntas: perguntas,
+      precisaTreinamento: wizard.tipo === "Cliente Novo" ? wizard.precisaTreinamento === "sim" : false,
+      solucoes: wizard.itens.map(function(it){
+        return { produto: it.produto, planoSugerido: it.planoSugerido, observacoes: it.observacoes, motivo: it.motivo, quantidade: it.quantidade || undefined, valorManual: typeof it.valorManual === "number" ? it.valorManual : undefined, incluir: true };
       }),
+      agentes: wizard.agentesSel.map(function(a){ return { nome: a.nome, frente: a.area || "", frequencia: a.turno || "", entrega: a.entrega ? [a.entrega] : [] }; })
+    };
+    wizard.salvando = true; wizard.erro = ""; renderProjetosPanel();
+    apiPost("criar-implantacao", dados).then(function(resp){
+      wizard.projetoId = resp && resp.id;
+      return nwEnviarAnexos(wizard.projetoId);
+    }).then(function(falhas){
+      wizard.salvando = false; wizard.falhasAnexo = falhas || []; wizard.etapaNegocio = "enviado";
+      projetosCache = null; renderProjetosPanel();
+    }).catch(function(e){
+      wizard.salvando = false;
+      wizard.erro = "Não deu para enviar o projeto (" + mensagemErro(e) + ").";
+      renderProjetosPanel();
+    });
+  }
+
+  /** Envia os arquivos um a um (corpo da requisição é limitado) — devolve os nomes dos que falharam. */
+  function nwEnviarAnexos(projetoId){
+    var falhas = [];
+    var cadeia = Promise.resolve();
+    wizard.anexos.forEach(function(f){
+      cadeia = cadeia.then(function(){
+        return arquivoParaBase64(f).then(function(base64){
+          return apiPost("anexar-arquivo-implantacao", { id: projetoId, nomeArquivo: f.name, mimeType: EXT_MIME_NW[nwExtensao(f.name)] || f.type || "application/octet-stream", base64: base64 });
+        }).catch(function(){ falhas.push(f.name); });
+      });
+    });
+    return cadeia.then(function(){ return falhas; });
+  }
+
+  // ---------- Confirmação ----------
+  function renderNwEnviado(root){
+    var falhas = wizard.falhasAnexo || [];
+    root.innerHTML = '<div class="nw-card nw-confirma">' +
+      '<div class="nw-confirma-icone">🎉</div>' +
+      '<div class="nw-confirma-titulo">Seu projeto foi enviado para implantação!</div>' +
+      '<p>Em breve a equipe entrará em contato com o cliente.</p>' +
+      '<div class="nw-prazo">⏱️ Prazo para a implantação: <b>' + esc(nwPrazoTexto()) + '</b></div>' +
+      (falhas.length ? '<div class="callout warn" style="text-align:left;margin-top:14px;"><div class="dot"></div><div>Estes arquivos não foram anexados: ' + falhas.map(esc).join(", ") + '. Peça para o time anexar direto no projeto.</div></div>' : "") +
+      (wizard.projetoId ? '<div style="margin-top:16px;"><a class="btn-flow" style="display:inline-block;text-decoration:none;" href="/implantacao-waipe.html?projeto=' + encodeURIComponent(wizard.projetoId) + '" target="_blank" rel="noopener">Abrir o projeto</a></div>' : "") +
+      '</div>';
+  }
+
+  /** Estado inicial do formulário a partir do rascunho do negócio (obter-negocio-moskit). */
+  function iniciarRevisaoDoNegocio(r){
+    var end = r.endereco || {};
+    wizard = {
+      step: "negocio", etapaNegocio: "dados",
+      origemMoskitDealId: r.id,
+      tipo: "Cliente Novo",
+      cliente: r.cliente || "", contexto: r.contexto || "",
+      // Vendedor não conhece o ID Núcleo (cliente acabou de fechar): vazio vira "0" no envio.
+      idNucleo: r.idNucleo || "",
+      cnpj: r.cnpj || "", nomeContato: r.nomeContato || "", telefone: r.telefone || "", email: r.email || "",
+      endereco: { rua: end.rua || "", numero: "", complemento: "", bairro: end.bairro || "", cidade: end.cidade || "", uf: end.uf || "", cep: end.cep || "" },
+      itens: (r.solucoes || []).map(function(s){
+        return { produto: s.produto, planoSugerido: s.planoSugerido || "", observacoes: s.observacoes || "", motivo: "", quantidade: s.quantidade, valorManual: s.valorManual };
+      }),
+      rascunho: null, agentesSel: [],
+      perguntas: {}, precisaTreinamento: null,
+      urgencia: "normal", motivoUrgencia: "",
+      anexos: [], falhasAnexo: [], projetoId: null,
       erro: "", salvando: false
     };
     renderProjetosPanel();
   }
+
   function iniciarFluxoNegocio(idNegocio){
     document.body.classList.add("modo-negocio");
     var root = document.getElementById("projetosRoot");

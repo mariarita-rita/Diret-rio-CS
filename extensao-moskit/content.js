@@ -17,13 +17,20 @@ function criarBotao() {
   var b = document.createElement('button');
   b.id = ID_BOTAO;
   b.type = 'button';
-  b.textContent = 'Criar projeto de implantação';
+  b.textContent = '➕ Criar projeto de implantação';
   b.style.cssText = [
-    'position:fixed', 'right:20px', 'bottom:20px', 'z-index:2147483647',
-    'padding:10px 16px', 'border:0', 'border-radius:8px', 'cursor:pointer',
-    'background:#0A41B4', 'color:#fff', 'font:600 13px/1.2 system-ui,sans-serif',
-    'box-shadow:0 4px 14px rgba(0,0,0,.25)'
+    'position:fixed', 'right:24px', 'bottom:28px', 'z-index:2147483647',
+    'padding:16px 28px', 'border:0', 'border-radius:12px', 'cursor:pointer',
+    'background:#0A41B4', 'color:#fff', 'font:700 16px/1.2 system-ui,sans-serif',
+    'box-shadow:0 6px 22px rgba(10,65,180,.55)', 'animation:londrisoftPulse 2.4s ease-in-out 3'
   ].join(';');
+  if (!document.getElementById('londrisoft-criar-projeto-css')) {
+    var css = document.createElement('style');
+    css.id = 'londrisoft-criar-projeto-css';
+    css.textContent = '@keyframes londrisoftPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}' +
+      '#' + ID_BOTAO + ':hover{background:#0b52e0}';
+    document.head.appendChild(css);
+  }
   b.addEventListener('click', function () {
     var id = idDoNegocioNaUrl();
     if (!id) return;

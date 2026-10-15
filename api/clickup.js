@@ -206,6 +206,7 @@ import {
 } from './_lib/clickup.js';
 import { urlAutorizacaoGoogle, renovarAccessToken, consultarFreeBusy, listarFreeBusy, criarEventoComMeet, enviarEmailGmail, listarEventos, excluirEventoGoogle, ErroGoogle, ErroConfigGoogle } from './_lib/google.js';
 import { montarRascunhoDoNegocio, buscarAnexosNegocio, ErroUpstreamMoskit, ErroConfigMoskit } from './_lib/moskit.js';
+import { TIPO_IMPLANTACAO_OPCOES, CHAVES_PERGUNTAS_VALIDAS, frasePergunta } from './_lib/moskit-projetos.js';
 import { telefoneParaE164, garantirContato, garantirConversa, enviarMensagem, buscarHistoricoConversa, ErroUmbler, ErroConfigUmbler } from './_lib/umbler.js';
 
 // Leitura: 300s de frescor / 600s de revalidacao, mas em cache PRIVADO.
@@ -284,8 +285,29 @@ const ACOES_PROIBIDAS_CSM = new Set(['conectar-agenda-google']);
 // aqui de proposito. Nada de carteira/IA/conversa do cliente/agenda.
 const ACOES_VENDEDOR = new Set([
   'listar-implantacoes', 'obter-implantacao', 'listar-comentarios',
-  'obter-negocio-moskit', 'criar-implantacao',
+  'obter-negocio-moskit', 'criar-implantacao', 'anexar-arquivo-implantacao',
 ]);
+
+// Teto de agentes por plano Waipe (mesmos números de AGENT_CAP em waipe-diagnostico.html:
+// Individual 1, Team/Time 3, Enterprise sem limite — aqui limitado por MAX_AGENTES).
+const LIMITE_AGENTES_POR_PRODUTO_WAIPE = { 'Waipe Individual': 1, 'Waipe Team': 3, 'Waipe Enterprise': Infinity };
+const URGENCIAS_QUE_EXIGEM_MOTIVO = new Set(['alta', 'urgente']);
+// Janela em que o vendedor ainda pode anexar arquivo no projeto que ele mesmo criou.
+const JANELA_ANEXO_VENDEDOR_MS = 2 * 60 * 60 * 1000;
+
+/** Endereço do cliente saneado ({rua, numero, complemento, bairro, cidade, uf, cep}) — sempre strings. */
+function sanearEndereco(e) {
+  const o = e && typeof e === 'object' ? e : {};
+  return {
+    rua: textoLivre(o.rua, 160),
+    numero: textoLivre(o.numero, 20),
+    complemento: textoLivre(o.complemento, 80),
+    bairro: textoLivre(o.bairro, 80),
+    cidade: textoLivre(o.cidade, 80),
+    uf: textoLivre(o.uf, 2).toUpperCase(),
+    cep: textoLivre(o.cep, 9),
+  };
+}
 
 // Fila AGREGADA de Atividades (ver todas, de todo projeto, e fechar
 // qualquer uma) — csq/gestao/ism. Registrar uma atividade NUM projeto
@@ -1939,6 +1961,9 @@ async function obterImplantacaoAcao(req, res, sessao) {
       // direto de pai.custom_fields; ver alertasDaTask/CAMPO_ALERTAS. É o
       // MESMO campo da Carteira: gravar aqui espelha lá, e vice-versa.
       ...alertasDaTask(pai),
+      // Formulário do vendedor: endereço do cliente e motivo da urgência (alta/urgente).
+      endereco: sanearEndereco(estadoProjeto.endereco),
+      motivoUrgencia: textoLivre(estadoProjeto.motivoUrgencia, 400),
       ...dadosTributariosCampos(estadoProjeto, agentes, pai.id, pai.name),
     },
     agentes,
@@ -2045,6 +2070,10 @@ export async function criarProjetoImplantacao({
   // do painel) — gera o Lembrete pra Daiane iniciar/agendar a implantação.
   // Default false: migração/backfill de projeto antigo nunca cria lembrete.
   criarLembreteInicio = false,
+  // Só no formulário do vendedor (negócio do Moskit): urgência define o SLA; motivo
+  // é obrigatório pra alta/urgente (validado por quem chama); endereço do cliente;
+  // e-mail de quem criou (libera o vendedor a anexar arquivos só nesse projeto).
+  urgencia, motivoUrgencia, endereco, criadoPorEmail,
 }) {
   // Projeto que já nasce "Entregue" OU "Cancelado" (ex: migração de um
   // projeto do Moskit que já estava finalizado de verdade, entregue ou não)
@@ -2100,6 +2129,10 @@ export async function criarProjetoImplantacao({
       // atualizarImplantacaoAcao trata (ver comentário lá) — já nasce
       // preenchido, não só numa edição posterior.
       ismIds: sanearAssignees(ismProjeto),
+      ...(urgencia ? { urgencia: sanearUrgencia(urgencia) } : {}),
+      ...(motivoUrgencia ? { motivoUrgencia: textoLivre(motivoUrgencia, 400) } : {}),
+      ...(endereco ? { endereco: sanearEndereco(endereco) } : {}),
+      ...(criadoPorEmail ? { criadoPorEmail: texto(criadoPorEmail, 200).toLowerCase() } : {}),
       ...dadosCliente,
     }
   );
@@ -2352,7 +2385,20 @@ async function criarImplantacaoAcao(req, res, sessao) {
   if (!cliente) {
     return erro(res, 400, 'cliente_invalido', 'Nome do cliente é obrigatório.');
   }
-  const contexto = textoLivre(corpo.contexto, 6000);
+  // Perguntas Sim/Não do formulário do vendedor viram frases no contexto (mesmo texto
+  // do webhook de Projeto) — nunca a resposta crua.
+  const frasesPerguntas = dealId
+    ? CHAVES_PERGUNTAS_VALIDAS.map((k) => frasePergunta(k, corpo.perguntas?.[k])).filter(Boolean)
+    : [];
+  const contexto = [textoLivre(corpo.contexto, 6000), ...frasesPerguntas].filter(Boolean).join('\n\n').slice(0, 6000);
+
+  // Urgência define o SLA; alta/urgente exigem o motivo.
+  const urgencia = corpo.urgencia !== undefined ? sanearUrgencia(corpo.urgencia) : undefined;
+  const motivoUrgencia = textoLivre(corpo.motivoUrgencia, 400);
+  if (urgencia && URGENCIAS_QUE_EXIGEM_MOTIVO.has(urgencia) && !motivoUrgencia) {
+    return erro(res, 400, 'motivo_urgencia_obrigatorio', 'Informe o motivo da urgência (obrigatório para urgência alta ou urgente).');
+  }
+  const endereco = corpo.endereco ? sanearEndereco(corpo.endereco) : undefined;
 
   // Criação direta (sem passar pela proposta) já é "virar projeto de
   // implantação de verdade" — os 4 campos são obrigatórios aqui, mesmo
@@ -2371,6 +2417,33 @@ async function criarImplantacaoAcao(req, res, sessao) {
   const solucoesRaw = Array.isArray(corpo.solucoes) ? corpo.solucoes.slice(0, MAX_OUTRAS_SOLUCOES) : [];
   const solucoes = solucoesRaw.map(sanearOutraSolucao).filter(Boolean);
 
+  let tipoImplantacao = '';
+  if (dealId) {
+    tipoImplantacao = Object.values(TIPO_IMPLANTACAO_OPCOES).includes(corpo.tipoImplantacao) ? corpo.tipoImplantacao : 'Cliente Novo';
+    // Treinamento avulso (item escolhido pela pessoa) exige o motivo.
+    if (solucoes.some((s) => s.produto === 'Treinamento' && !s.motivo)) {
+      return erro(res, 400, 'motivo_treinamento_obrigatorio', 'Informe o motivo do treinamento avulso.');
+    }
+    // Agentes só existem com Waipe, e dentro do limite do plano.
+    const limites = solucoes.map((s) => LIMITE_AGENTES_POR_PRODUTO_WAIPE[s.produto]).filter((l) => l !== undefined);
+    const limiteAgentes = limites.length ? Math.max(...limites) : 0;
+    if (agentes.length > limiteAgentes) {
+      return erro(res, 400, 'limite_agentes', limiteAgentes === 0
+        ? 'Agentes só podem ser incluídos junto com um plano Waipe.'
+        : `O plano Waipe escolhido permite até ${limiteAgentes} agente(s).`);
+    }
+    // Cliente Novo que vai precisar de treinamento: os 3 treinamentos padrão, na base
+    // (Gestor/Unique) dos itens — sem base, só numerados.
+    if (tipoImplantacao === 'Cliente Novo' && corpo.precisaTreinamento === true) {
+      // Base do nome: Gestor, senão Unique, senão o produto do 1º item (ex: "Simplaz Unique 1").
+      const base = solucoes.some((s) => s.produto === 'Gestor') ? 'Gestor' : solucoes.some((s) => s.produto === 'Unique') ? 'Unique' : (solucoes[0]?.produto || 'Treinamento');
+      for (let i = 1; i <= 3; i++) {
+        const t = sanearOutraSolucao({ produto: 'Treinamento', planoSugerido: `${base} ${i}`, quantidade: 1, valorManual: 0, incluir: true });
+        if (t) solucoes.push(t);
+      }
+    }
+  }
+
   // Projeto não precisa mais ser baseado em agente Waipe — pode nascer só
   // com solução (troca de plano Gestor, inclusão de usuário BIME, etc.).
   if (!agentes.length && !solucoes.length) {
@@ -2388,12 +2461,14 @@ async function criarImplantacaoAcao(req, res, sessao) {
   // nenhum) chamado de "Implantação Waipe" seria enganoso. Projeto vindo de
   // negocio do Moskit segue o padrao "Cliente Novo - {cliente}" do webhook.
   const nomeProjeto = dealId
-    ? `Cliente Novo - ${cliente}`
+    ? `${tipoImplantacao} - ${cliente}`
     : (agentes.length ? `${cliente} — Implantação Waipe` : `${cliente} — Implantação`);
 
   const projeto = await criarProjetoImplantacao({
     nomeProjeto, cliente, contexto, dadosCliente, agentes, solucoes, ismProjeto, csmNome,
     criarLembreteInicio: true,
+    urgencia, motivoUrgencia, endereco,
+    ...(ehVendedor ? { criadoPorEmail: sessao.email } : {}),
     ...(dealId ? { vendedor: textoLivre(vendedorDoNegocio, 120), origemMoskitDealId: dealId } : {}),
   });
 
@@ -4884,7 +4959,8 @@ async function excluirImplantacaoAcao(req, res, sessao) {
 
 async function anexarArquivoImplantacaoAcao(req, res, sessao) {
   res.setHeader('Cache-Control', 'no-store');
-  if (!podeEscrever(sessao)) {
+  const ehVendedor = sessao.nivel === 'vendedor';
+  if (!podeEscrever(sessao) && !ehVendedor) {
     return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
   }
 
@@ -4907,6 +4983,16 @@ async function anexarArquivoImplantacaoAcao(req, res, sessao) {
   const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
   if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
     return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+  if (ehVendedor) {
+    // Vendedor só anexa no PRÓPRIO projeto, logo depois de criá-lo (não na subtask,
+    // nem em projeto de outra pessoa, nem depois da janela).
+    const estadoProjeto = parseWaipeState(resolvido.projeto.description);
+    const idade = Date.now() - Number(resolvido.projeto.date_created);
+    const dono = !!estadoProjeto.criadoPorEmail && estadoProjeto.criadoPorEmail === String(sessao.email || '').toLowerCase();
+    if (resolvido.tarefa.id !== resolvido.projeto.id || !dono || !(idade >= 0 && idade <= JANELA_ANEXO_VENDEDOR_MS)) {
+      return erro(res, 403, 'nivel_nao_permitido', 'Você só pode anexar arquivos no projeto que acabou de criar.');
+    }
   }
 
   const anexado = await anexarArquivoTask(corpo.id, arquivo);

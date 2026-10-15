@@ -76,6 +76,16 @@ export async function buscarAnexosNegocio(dealId) {
  * interface do Moskit, não pelo código. Preencher com os ids reais (GET
  * /customFields, module=DEAL) antes do teste ao vivo do webhook.
  */
+// Campos personalizados da EMPRESA (módulo COMPANY) com o endereço — ids confirmados
+// ao vivo (2026-10-16). Número e complemento não existem no Moskit.
+export const CF_EMPRESA = {
+  ENDERECO: 'CF_YXoDkWU3CKx39DGE', // "Endereço" (rua/logradouro)
+  BAIRRO: 'CF_gvGm31U0CWkpRq45',
+  CIDADE: 'CF_A4wMWKUgCBo7nMB8',
+  UF: 'CF_6rRmw4UvCyGlkD4X', // "Estado UF"
+  CEP: 'CF_A4wMWKUzSBoxwMB8', // NUMBER: perde o zero à esquerda
+};
+
 export const CF_NEGOCIO = {
   ID_NUCLEO: 'CF_g40MLBiYSjOzYD29', // campo "ID NÚCLEO" (module DEAL, type NUMBER)
   // Mesmo id de CF_DEAL.CNPJ em api/moskit.js — o Comercial preenche o CNPJ
@@ -175,6 +185,19 @@ function emailDe(entidade) {
   return principal?.address || entidade.emails?.[0]?.address || '';
 }
 
+/** Endereço do cadastro da empresa no Moskit ({rua, bairro, cidade, uf, cep}); '' onde não houver. */
+function enderecoDaEmpresa(empresa) {
+  const cf = Array.isArray(empresa?.entityCustomFields) ? empresa.entityCustomFields : [];
+  const cepBruto = valorCampoPersonalizado(cf, CF_EMPRESA.CEP).replace(/\D/g, '');
+  return {
+    rua: valorCampoPersonalizado(cf, CF_EMPRESA.ENDERECO).trim(),
+    bairro: valorCampoPersonalizado(cf, CF_EMPRESA.BAIRRO).trim(),
+    cidade: valorCampoPersonalizado(cf, CF_EMPRESA.CIDADE).trim(),
+    uf: valorCampoPersonalizado(cf, CF_EMPRESA.UF).trim().toUpperCase().slice(0, 2),
+    cep: cepBruto ? cepBruto.padStart(8, '0').replace(/^(\d{5})(\d{3})$/, '$1-$2') : '',
+  };
+}
+
 /**
  * Nome do produto no catálogo do Moskit ("Plano Intermediário Cloud", "Simplaz
  * Bronze - Gestor", "Plano NFe local") -> nome de plano no padrão do painel
@@ -262,5 +285,6 @@ export async function montarRascunhoDoNegocio(dealId) {
     solucoes,
     vendedor: responsavel?.name || '',
     totalAnexos: Array.isArray(anexos) ? anexos.length : 0,
+    endereco: enderecoDaEmpresa(empresa),
   };
 }
