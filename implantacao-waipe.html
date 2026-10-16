@@ -572,6 +572,7 @@
   .nw-acoes{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:16px 0 8px;flex-wrap:wrap;}
   .nw-pergunta{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
   .nw-pergunta:last-child{border-bottom:0;}
+  .nw-aviso{flex-basis:100%;color:#dc2626;font-weight:700;font-size:13px;}
   .nw-sn{display:flex;gap:6px;}
   .nw-sn-btn{padding:6px 14px;border-radius:999px;border:1px solid var(--border-strong,#b6bdd1);background:var(--surface,#fff);color:inherit;font-weight:600;cursor:pointer;font-size:13px;}
   .nw-sn-btn.sim.ativo{background:#16a34a;border-color:#16a34a;color:#fff;}
@@ -6763,6 +6764,14 @@
         '<div class="form-grid-2">' + nwCampo("cnpj", "CPF/CNPJ", wizard.cnpj) + nwCampo("idNucleo", "ID Núcleo (se já tiver)", wizard.idNucleo === "0" ? "" : wizard.idNucleo) + '</div>' +
         '<div class="form-grid-2">' + nwCampo("nomeContato", "Nome do contato", wizard.nomeContato) + nwCampo("telefone", "Telefone", wizard.telefone) + '</div>' +
         nwCampo("email", "E-mail", wizard.email, { tipo: "email" }) +
+        '<div class="nw-subtitulo">Outros contatos do negócio</div>' +
+        (wizard.contatosAdicionais.length ? "" : '<div class="sub" style="margin:0 0 6px;">Nenhum outro contato vinculado.</div>') +
+        wizard.contatosAdicionais.map(function(c, i){
+          return '<div class="form-grid-2" style="align-items:end;">' + nwCampo("contatosAdicionais." + i + ".nome", "Nome", c.nome) +
+            '<div style="display:flex;gap:6px;align-items:end;"><div style="flex:1;">' + nwCampo("contatosAdicionais." + i + ".telefone", "Telefone", c.telefone) + '</div>' +
+            '<button type="button" class="btn-reset" data-rem-contato="' + i + '" style="margin-bottom:12px;">🗑</button></div></div>';
+        }).join("") +
+        '<button type="button" class="btn-flow-secondary" id="nwAddContato">+ Adicionar contato</button>' +
       '</div>' +
       '<div class="nw-card nw-verde">' +
         '<div class="nw-titulo">📍 Endereço</div>' +
@@ -6774,6 +6783,10 @@
       nwErro() +
       '<div class="nw-acoes"><button type="button" class="btn-flow btn-grande" id="nwAvancar1">✅ Os dados estão corretos — avançar</button></div>';
     nwLigarCampos(root);
+    root.querySelectorAll("[data-rem-contato]").forEach(function(b){
+      b.addEventListener("click", function(){ wizard.contatosAdicionais.splice(parseInt(b.getAttribute("data-rem-contato"), 10), 1); renderProjetosPanel(); });
+    });
+    document.getElementById("nwAddContato").addEventListener("click", function(){ wizard.contatosAdicionais.push({ nome: "", telefone: "" }); renderProjetosPanel(); });
     document.getElementById("nwAvancar1").addEventListener("click", function(){
       var falta = [];
       if (!(wizard.cliente || "").trim()) falta.push("Nome do cliente");
@@ -6969,7 +6982,11 @@
       '<div class="nw-card nw-laranja">' +
         '<div class="nw-titulo">🔎 Sobre a implantação</div>' +
         (temTipoNovo ? '<div class="nw-pergunta"><span>🎓 Esse cliente vai precisar de treinamento?</span>' + nwSimNao("precisaTreinamento", wizard.precisaTreinamento) + '</div>' : "") +
-        PERGUNTAS_NW.map(function(p){ return '<div class="nw-pergunta"><span>' + esc(p.rotulo) + '</span>' + nwSimNao("p:" + p.chave, wizard.perguntas[p.chave]) + '</div>'; }).join("") +
+        PERGUNTAS_NW.map(function(p){
+          var aviso = p.chave === "outroCnpj" && wizard.perguntas.outroCnpj === "sim"
+            ? '<div class="nw-aviso">⚠️ Sinalize o outro CNPJ na observação (campo de contexto abaixo).</div>' : "";
+          return '<div class="nw-pergunta"><span>' + esc(p.rotulo) + '</span>' + nwSimNao("p:" + p.chave, wizard.perguntas[p.chave]) + aviso + '</div>';
+        }).join("") +
       '</div>' +
       '<div class="nw-card nw-azul">' +
         '<div class="nw-titulo">📝 Contexto do projeto / Observações para o CS</div>' +
@@ -7065,6 +7082,7 @@
       idNucleo: (wizard.idNucleo || "").trim() || "0", cnpj: (wizard.cnpj || "").trim(),
       email: (wizard.email || "").trim(), telefone: (wizard.telefone || "").trim(), nomeContato: (wizard.nomeContato || "").trim(),
       endereco: wizard.endereco,
+      contatosAdicionais: wizard.contatosAdicionais.filter(function(c){ return (c.telefone || "").trim(); }).map(function(c){ return { nome: (c.nome || "").trim(), telefone: c.telefone.trim() }; }),
       urgencia: wizard.urgencia, motivoUrgencia: altaOuUrgente ? (wizard.motivoUrgencia || "").trim() : "",
       perguntas: perguntas,
       precisaTreinamento: wizard.tipo === "Cliente Novo" ? wizard.precisaTreinamento === "sim" : false,
@@ -7179,6 +7197,13 @@
     return achado || "";
   }
 
+  /** Funil sugerido pelo tipo de solicitação: Venda = Prospect (padrão dos lançamentos), Troca de titularidade = ela mesma. */
+  function finFunilSugerido(tipoSolicitacao){
+    if (tipoSolicitacao === "Venda") return "Prospect";
+    if (tipoSolicitacao === "Troca de titularidade") return "Troca de titularidade";
+    return "";
+  }
+
   /** Sugestões do formulário financeiro a partir do que a pessoa já informou (uma vez, ao entrar na etapa). */
   function nwInicializarFin(){
     var f = wizard.fin;
@@ -7208,7 +7233,7 @@
     f.periodicidade = base.periodicidade || "Anual";
     f.formaPagamento = base.formaPagamento === undefined ? "Mensal" : base.formaPagamento;
     f.primeiroVencimento = finProximoVencimento(f.dataContrato, base.diaVencimento) || finMaisUmMes(f.dataContrato);
-    f.funil = wizard.tipo === "Troca de Titularidade" ? "Troca de titularidade" : "";
+    f.funil = finFunilSugerido(f.tipoSolicitacao);
     f.obsPagamento = "";
     var nomes = itens.map(nwNomeItem).join(" + ");
     f.observacao = [f.tipoSolicitacao || wizard.tipo, nomes, f.mrr ? "MRR " + finFormatarReais(finLerReais(f.mrr)) : "", f.arr ? "ARR " + finFormatarReais(finLerReais(f.arr)) : ""].filter(Boolean).join(" - ");
@@ -7226,7 +7251,9 @@
     add("mdCliente", idn && idn !== "0" ? idn : "*");
     add("cnpj", wizard.cnpj);
     add("razao", wizard.cliente);
-    add("contato", [wizard.nomeContato, wizard.telefone].filter(Boolean).join(" "));
+    add("contato", [[wizard.nomeContato, wizard.telefone].filter(Boolean).join(" ")]
+      .concat((wizard.contatosAdicionais || []).map(function(c){ return [c.nome, c.telefone].filter(Boolean).join(" "); }))
+      .filter(Boolean).join(" / "));
     add("email", wizard.email);
     add("tipo", f.tipoSolicitacao);
     add("produto", f.produto);
@@ -7302,6 +7329,11 @@
       '<button type="button" class="btn-flow btn-grande btn-enviar" id="nwEnviar"' + (wizard.salvando ? " disabled" : "") + '>' + (wizard.salvando ? "Enviando…" : "🚀 Enviar para implantação") + '</button></div>';
     nwLigarCampos(root);
     root.querySelector('[data-w="fin.produto"]').addEventListener("change", function(){ wizard.fin.plano = ""; renderProjetosPanel(); });
+    // Trocou o tipo de solicitação: refaz a sugestão de funil, salvo se a pessoa já escolheu outro à mão.
+    var funilAutomatico = wizard.fin.funil === finFunilSugerido(wizard.fin.tipoSolicitacao);
+    root.querySelector('[data-w="fin.tipoSolicitacao"]').addEventListener("change", function(){
+      if (funilAutomatico || !wizard.fin.funil){ wizard.fin.funil = finFunilSugerido(wizard.fin.tipoSolicitacao); renderProjetosPanel(); }
+    });
     document.getElementById("nwVoltar4").addEventListener("click", function(){ wizard.erro = ""; wizard.etapaNegocio = "detalhes"; renderProjetosPanel(); });
     document.getElementById("nwEnviar").addEventListener("click", nwEnviar);
   }
@@ -7338,6 +7370,8 @@
       // Vendedor não conhece o ID Núcleo (cliente acabou de fechar): vazio vira "0" no envio.
       idNucleo: r.idNucleo || "",
       cnpj: r.cnpj || "", nomeContato: r.nomeContato || "", telefone: r.telefone || "", email: r.email || "",
+      // Demais contatos vinculados ao negócio (o 1º já é o principal acima). Só entram com telefone (é o que o painel guarda).
+      contatosAdicionais: (r.contatos || []).slice(1).filter(function(c){ return c.telefone; }).map(function(c){ return { nome: c.nome || "", telefone: c.telefone }; }),
       endereco: { rua: end.rua || "", numero: "", complemento: "", bairro: end.bairro || "", cidade: end.cidade || "", uf: end.uf || "", cep: end.cep || "" },
       itens: (r.solucoes || []).map(function(s){
         return { produto: s.produto, planoSugerido: s.planoSugerido || "", observacoes: s.observacoes || "", motivo: "", quantidade: s.quantidade, valorManual: s.valorManual };

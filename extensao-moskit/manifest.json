@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Londrisoft - Criar projeto de implantação",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Na tela de um negócio ganho no Moskit, abre o formulário de criação do projeto de implantação já preenchido e envia o formulário do financeiro com um clique.",
   "content_scripts": [
     {
@@ -15,7 +15,7 @@
       "run_at": "document_start"
     },
     {
-      "matches": ["https://docs.google.com/forms/d/e/*/viewform*", "https://docs.google.com/forms/d/e/*/formResponse*"],
+      "matches": ["https://docs.google.com/forms/*"],
       "js": ["financeiro.js"],
       "run_at": "document_idle"
     }

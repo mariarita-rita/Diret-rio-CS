@@ -271,19 +271,23 @@ export function normalizarNomePlano(produto, nome) {
 export async function montarRascunhoDoNegocio(dealId) {
   const negocio = await buscarNegocio(dealId);
   const cf = Array.isArray(negocio.entityCustomFields) ? negocio.entityCustomFields : [];
-  const contatoId = negocio.contacts?.[0]?.id ?? null;
+  const contatoIds = (Array.isArray(negocio.contacts) ? negocio.contacts : []).map((c) => c?.id).filter(Boolean).slice(0, 8);
   const empresaId = negocio.companies?.[0]?.id ?? null;
   const responsavelId = negocio.responsible?.id ?? null;
   const dealProducts = Array.isArray(negocio.dealProducts) ? negocio.dealProducts : [];
 
-  const [contato, empresa, notas, responsavel, anexos, produtos] = await Promise.all([
-    contatoId ? buscarContato(contatoId).catch(() => null) : null,
+  const [contatosBrutos, empresa, notas, responsavel, anexos, produtos] = await Promise.all([
+    Promise.all(contatoIds.map((id) => buscarContato(id).catch(() => null))),
     empresaId ? buscarEmpresa(empresaId).catch(() => null) : null,
     buscarNotasNegocio(dealId).catch(() => []),
     responsavelId ? buscarUsuario(responsavelId).catch(() => null) : null,
     buscarAnexosNegocio(dealId).catch(() => []),
     Promise.all(dealProducts.map((dp) => (dp?.product?.id ? buscarProduto(dp.product.id).catch(() => null) : null))),
   ]);
+
+  // Principal = 1º contato do negócio que respondeu; os demais seguem em `contatos` (nenhum se perde).
+  const contatosOk = contatosBrutos.filter(Boolean);
+  const contato = contatosOk[0] || null;
 
   const solucoes = dealProducts.map((dp, i) => {
     const { produto, nomeOriginal: nomeBruto } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
@@ -323,6 +327,7 @@ export async function montarRascunhoDoNegocio(dealId) {
     solucoes,
     vendedor: responsavel?.name || '',
     totalAnexos: Array.isArray(anexos) ? anexos.length : 0,
+    contatos: contatosOk.map((c) => ({ nome: c.name || '', telefone: telefoneDe(c), email: emailDe(c) })),
     endereco: enderecoDaEmpresa(empresa),
     financeiro: financeiroDoNegocio(negocio, cf, dealProducts, responsavel),
   };

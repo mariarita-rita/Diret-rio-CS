@@ -164,6 +164,7 @@
   async function passo() {
     banner.mostrar('⏳ Enviando para o financeiro… não feche esta aba.', 'info');
     await esperar(function () { return itensDaPagina().length || /resposta foi registrada|response has been recorded/i.test(document.body.innerText || ''); }, 15000);
+    await dormir(800); // deixa o Forms terminar de ligar os eventos da página
     if (cancelado) return;
 
     // Depois do Enviar o Forms mostra a confirmação (sem perguntas).
@@ -197,10 +198,14 @@
     var proximo = enviar ? null : botao(/^(Avançar|Next)$/i);
     if (!enviar && !proximo) throw new Error('não achei o botão Avançar/Enviar');
     await dormir(600);
-    clicar(enviar || proximo);
     // Se a página recarregar, esta execução termina aqui e a próxima carga continua. Se ainda
-    // estamos aqui depois de alguns segundos, o Forms barrou (pergunta obrigatória sem resposta).
-    await dormir(7000);
+    // estamos aqui depois de alguns segundos, ou o clique foi ignorado (tenta de novo, até 3 vezes)
+    // ou o Forms barrou (pergunta obrigatória sem resposta — aí não adianta insistir).
+    for (var tentativaClique = 0; tentativaClique < 3; tentativaClique++) {
+      clicar(enviar || proximo);
+      await dormir(5000);
+      if (perguntasComErro().length) break;
+    }
     var faltando = perguntasComErro();
     throw new Error((enviar ? 'o envio' : 'o avanço') + ' não foi aceito' + (faltando.length ? ' — falta: ' + faltando.join(', ') : ''));
   }
