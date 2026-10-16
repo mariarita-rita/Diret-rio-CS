@@ -104,7 +104,16 @@ export const CF_NEGOCIO = {
   OBSERVACAO: 'CF_POEMywieC5JWdDdk', // confirmado ao vivo (2026-10-02): "Observações para a implantação"
   RAZAO_SOCIAL: 'CF_oJZmP1iKCQaRzDgv', // "Razão Social"
   OBSERVACAO_NEGOCIO: 'CF_0WGqoEiKCad6GmnP', // "Observação do negócio"
+  // Dados de faturamento (alimentam o formulário do financeiro) — ids/opções conferidos ao vivo (2026-10-16).
+  DIA_VENCIMENTO: 'CF_GwyMgWiaS9Lb0MLA', // "Dia de vencimento" (NUMBER)
+  QTD_USUARIOS: 'CF_Lo1qjyidSaYQyDer', // "Qtd de usuários" (NUMBER)
+  PAGAMENTO: 'CF_AE5mpEiQil7yVDO3', // "Pagamento" (SINGLE_OPTION)
+  VIGENCIA: 'CF_R7PDNQiviKvoYmWJ', // "Vigência contratual" (SINGLE_OPTION)
 };
+
+// id da opção -> rótulo do formulário do financeiro.
+const PAGAMENTO_OPCOES = { 569146: 'Mensal', 569148: 'A vista' }; // 569147 "Parcelado": a pessoa escolhe 2x–5x
+const VIGENCIA_OPCOES = { 569143: 'Anual', 569144: 'Semestral', 569145: 'Trimestral' };
 
 /** Valor de um campo personalizado pelo id, já como texto — '' se ausente. */
 export function valorCampoPersonalizado(entityCustomFields, id) {
@@ -183,6 +192,35 @@ function emailDe(entidade) {
   if (!entidade) return '';
   const principal = entidade.emails?.find((e) => e.id === entidade.primaryEmail?.id);
   return principal?.address || entidade.emails?.[0]?.address || '';
+}
+
+/**
+ * Valores pra pré-preencher o formulário do financeiro. MRR = soma do valor MENSAL
+ * (price, centavos) dos produtos — conferido contra lançamentos reais (249,00/mês →
+ * ARR 2.988,00). Números em reais.
+ */
+function financeiroDoNegocio(negocio, cf, dealProducts, responsavel) {
+  const soma = (campo) => dealProducts.reduce((t, dp) => t + (Number(dp?.[campo]) || 0), 0) / 100;
+  const mrr = soma('price');
+  // ARR = valor ANUAL (MRR x 12, como os vendedores lançam: 142,40 -> 1.708,80). Só cai pro
+  // total do contrato quando não há valor mensal — a quantidade do produto no negócio nem
+  // sempre é 12 (ex.: 1), então finalPrice sozinho não é confiável.
+  const arr = mrr ? Math.round(mrr * 12 * 100) / 100 : (soma('finalPrice') || (Number(negocio.price) || 0) / 100);
+  const idUnico = (id) => cf.find((c) => c.id === id)?.options?.[0];
+  const dia = Number(valorCampoPersonalizado(cf, CF_NEGOCIO.DIA_VENCIMENTO));
+  const qtd = Number(valorCampoPersonalizado(cf, CF_NEGOCIO.QTD_USUARIOS));
+  const primeiroNome = String(responsavel?.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().split(/\s+/)[0] || '';
+  return {
+    mrr: mrr || null,
+    arr: arr || null,
+    dataContrato: typeof negocio.closeDate === 'string' ? negocio.closeDate.slice(0, 10) : '',
+    diaVencimento: Number.isInteger(dia) && dia >= 1 && dia <= 31 ? dia : null,
+    periodicidade: VIGENCIA_OPCOES[idUnico(CF_NEGOCIO.VIGENCIA)] || 'Anual',
+    formaPagamento: PAGAMENTO_OPCOES[idUnico(CF_NEGOCIO.PAGAMENTO)] || (idUnico(CF_NEGOCIO.PAGAMENTO) === 569147 ? '' : 'Mensal'),
+    qtdUsuarios: Number.isInteger(qtd) && qtd > 0 ? qtd : 1,
+    consultor: primeiroNome,
+    observacaoNegocio: valorCampoPersonalizado(cf, CF_NEGOCIO.OBSERVACAO_NEGOCIO).trim(),
+  };
 }
 
 /** Endereço do cadastro da empresa no Moskit ({rua, bairro, cidade, uf, cep}); '' onde não houver. */
@@ -286,5 +324,6 @@ export async function montarRascunhoDoNegocio(dealId) {
     vendedor: responsavel?.name || '',
     totalAnexos: Array.isArray(anexos) ? anexos.length : 0,
     endereco: enderecoDaEmpresa(empresa),
+    financeiro: financeiroDoNegocio(negocio, cf, dealProducts, responsavel),
   };
 }

@@ -552,7 +552,7 @@
   .chat-flow-waipe-input textarea{flex:1;resize:none;font-family:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--border-strong);border-radius:8px;}
   /* ---- Formulário do vendedor (?negocio=ID): etapas, cartões coloridos, campos preenchidos ---- */
   .nw-progresso{display:flex;gap:6px;margin:4px 0 14px;flex-wrap:wrap;}
-  .nw-passo{flex:1;min-width:110px;text-align:center;padding:7px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--surface-2,#f1f3f8);color:var(--muted);border:1px solid var(--border);}
+  .nw-passo{flex:1;min-width:90px;text-align:center;padding:7px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--surface-2,#f1f3f8);color:var(--muted);border:1px solid var(--border);}
   .nw-passo.atual{background:var(--azul,#0A41B4);color:#fff;border-color:var(--azul,#0A41B4);}
   .nw-card{background:var(--surface,#fff);border:1px solid var(--border);border-left:6px solid var(--azul,#0A41B4);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .nw-azul{border-left-color:#2563eb;background:linear-gradient(0deg,rgba(37,99,235,.05),rgba(37,99,235,.05)),var(--surface,#fff);}
@@ -582,6 +582,7 @@
   .nw-confirma{text-align:center;border-left-color:#16a34a;background:linear-gradient(0deg,rgba(22,163,74,.08),rgba(22,163,74,.08)),var(--surface,#fff);padding:30px 20px;}
   .nw-confirma-icone{font-size:46px;line-height:1;}
   .nw-confirma-titulo{font-size:20px;font-weight:800;margin:8px 0;}
+  .nw-financeiro-box{margin-top:18px;padding:14px 16px;border-radius:12px;background:rgba(234,88,12,.1);border:1px solid #ea580c;text-align:left;}
   .nw-prazo{display:inline-block;margin-top:8px;padding:10px 16px;border-radius:10px;background:rgba(22,163,74,.15);font-size:15px;}
   /* O botão do chat de flow do Waipe não faz sentido na janela do vendedor. */
   body.modo-negocio #chatFlowWaipeBtn, body.modo-negocio #chatFlowWaipePainel{display:none !important;}
@@ -6730,7 +6731,7 @@
       (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : "") + (opts.max ? ' maxlength="' + opts.max + '"' : "") + ' autocomplete="off"></div>';
   }
   function nwProgresso(etapa){
-    var passos = [["dados", "1 · Dados do cliente"], ["itens", "2 · Itens"], ["detalhes", "3 · Detalhes"]];
+    var passos = [["dados", "1 · Cliente"], ["itens", "2 · Itens"], ["detalhes", "3 · Detalhes"], ["financeiro", "4 · Financeiro"]];
     return '<div class="nw-progresso">' + passos.map(function(p){
       return '<span class="nw-passo' + (p[0] === etapa ? " atual" : "") + '">' + p[1] + '</span>';
     }).join("") + '</div>';
@@ -6744,6 +6745,7 @@
     if (etapa === "dados") return renderNwDados(root);
     if (etapa === "itens") return renderNwItens(root);
     if (etapa === "detalhes") return renderNwDetalhes(root);
+    if (etapa === "financeiro") return renderNwFinanceiro(root);
     return renderNwEnviado(root);
   }
 
@@ -6990,7 +6992,7 @@
       '</div>' +
       nwErro() +
       '<div class="nw-acoes"><button type="button" class="btn-flow-secondary" id="nwVoltar3">← Voltar</button>' +
-      '<button type="button" class="btn-flow btn-grande btn-enviar" id="nwEnviar"' + (wizard.salvando ? " disabled" : "") + '>' + (wizard.salvando ? "Enviando…" : "🚀 Enviar para implantação") + '</button></div>';
+      '<button type="button" class="btn-flow btn-grande btn-enviar" id="nwAvancar3">Avançar →</button></div>';
 
     nwLigarCampos(root);
     // urgência muda o bloco do motivo (e o prazo) — re-renderiza a etapa
@@ -7020,7 +7022,12 @@
       renderProjetosPanel();
     });
     document.getElementById("nwVoltar3").addEventListener("click", function(){ wizard.erro = ""; wizard.etapaNegocio = "itens"; renderProjetosPanel(); });
-    document.getElementById("nwEnviar").addEventListener("click", nwEnviar);
+    document.getElementById("nwAvancar3").addEventListener("click", function(){
+      var altaOuUrgente = wizard.urgencia === "alta" || wizard.urgencia === "urgente";
+      if (wizard.tipo === "Cliente Novo" && !wizard.precisaTreinamento){ wizard.erro = "Responda: esse cliente vai precisar de treinamento?"; renderProjetosPanel(); return; }
+      if (altaOuUrgente && !(wizard.motivoUrgencia || "").trim()){ wizard.erro = "Informe o motivo da urgência."; renderProjetosPanel(); return; }
+      wizard.erro = ""; wizard.etapaNegocio = "financeiro"; renderProjetosPanel();
+    });
   }
 
   function renderNwAnexos(){
@@ -7037,6 +7044,15 @@
 
   function nwEnviar(){
     if (wizard.salvando) return;
+    var f = wizard.fin || {};
+    var faltaFin = [];
+    if (!f.tipoSolicitacao) faltaFin.push("Tipo de solicitação");
+    if (!f.produto) faltaFin.push("Produto contratado");
+    if (finLerReais(f.mrr) === null) faltaFin.push("MRR");
+    if (finLerReais(f.arr) === null) faltaFin.push("ARR");
+    if (!f.dataContrato) faltaFin.push("Data do contrato");
+    if (!f.primeiroVencimento) faltaFin.push("Data do 1º vencimento");
+    if (faltaFin.length){ wizard.erro = "Preencha os dados do financeiro: " + faltaFin.join(", ") + "."; wizard.etapaNegocio = "financeiro"; renderProjetosPanel(); return; }
     var altaOuUrgente = wizard.urgencia === "alta" || wizard.urgencia === "urgente";
     if (wizard.tipo === "Cliente Novo" && !wizard.precisaTreinamento){ wizard.erro = "Responda: esse cliente vai precisar de treinamento?"; renderProjetosPanel(); return; }
     if (altaOuUrgente && !(wizard.motivoUrgencia || "").trim()){ wizard.erro = "Informe o motivo da urgência."; renderProjetosPanel(); return; }
@@ -7085,6 +7101,211 @@
     return cadeia.then(function(){ return falhas; });
   }
 
+  // ---------- Formulário do financeiro (Google Forms "Comercial - Financeiro - CS") ----------
+  // O Forms exige login e registra o e-mail de quem responde, então o nosso servidor não
+  // envia nada: montamos um link PRÉ-PREENCHIDO que o vendedor abre, confere e envia com a
+  // própria conta. Ids de `entry.*` e rótulos copiados do formulário (se o Google mudar um
+  // campo, é só ajustar aqui). Conferido em 2026-10-16.
+  var FORM_FINANCEIRO = {
+    // Formulário real do financeiro. Para TESTAR sem enviar nada ao financeiro, abra o painel com
+    // "&formFin=copia" na URL (usa a cópia, mesmas entradas) — ver urlFormularioFinanceiro.
+    id: "1FAIpQLSftTW3egRhUZjxWV3Z0IdHZ7KFsnHOmWsmhy5k-EqSCa0sA4Q",
+    idCopia: "1FAIpQLSd6W32oTp0_HTS77oXx-xqk1faOa2IzM-uWA-T71wkO3PBJvA",
+    entry: {
+      consultor: "649755029", mdCliente: "1881466119", cnpj: "582292360", razao: "1464215092",
+      contato: "194286024", email: "1003856315", tipo: "1685908223", produto: "368414024",
+      qtdUsuarios: "1145974582", primeiroVencimento: "177526392", mrr: "2116462472", arr: "1273316485",
+      dataContrato: "531557871", jaDaBase: "1221743681", onboarding: "358569146", periodicidade: "1727985337",
+      formaPagamento: "1314469355", funil: "1512619258", observacao: "1840672222", obsPagamento: "2036952452",
+      numeroSerie: "1721927294", planoGestor: "94328336", planoUnique: "808532151", planoSimplaz: "153583817"
+    }
+  };
+  var FIN_CONSULTORES = ["Clayton", "Gian Luca", "Lucineia", "Guilherme", "Patricia", "Adriano"];
+  var FIN_TIPOS = ["Venda", "Renovação", "Alteração Plano", "Treinamento Avulso", "Retenção", "Downsell", "Upsell", "Troca de titularidade", "Crossell", "Reativação"];
+  var FIN_PRODUTOS = ["Gestor", "Unique", "Simplaz", "Waipe", "Bime", "Bime APP", "Analytics Inteligência de vendas", "Analytics Plano Basico - Modular", "Usuários", "Consulta CPF", "IA Londrisoft", "Classificador Tributário", "Assessoria de Dados", "Projeto de Dados"];
+  var FIN_PLANOS = {
+    "Gestor": ["NFe Local", "NFe Nuvem", "Starter", "Basico Local", "Basico Nuvem", "Avançado Local", "Avançado nuvem", "Intermediário Local", "Intermediário Nuvem"],
+    "Unique": ["Unique Light", "Unique Plus", "Unique Preminum", "Unique Ligt parceria", "Unique Plus parceria", "Unique Preminum parceria"],
+    "Simplaz": ["Bronze", "Prata", "Ouro"]
+  };
+  // plano do painel -> rótulo do formulário (o do Google tem grafias próprias, ex.: "Avançado nuvem")
+  var FIN_PLANO_DO_PAINEL = {
+    "Básico Cloud": "Basico Nuvem", "Básico Local": "Basico Local", "NFe Cloud": "NFe Nuvem", "NFe Local": "NFe Local",
+    "Intermediário Cloud": "Intermediário Nuvem", "Intermediário Local": "Intermediário Local",
+    "Avançado Cloud": "Avançado nuvem", "Avançado Local": "Avançado Local",
+    "Light": "Unique Light", "Plus": "Unique Plus", "Premium": "Unique Preminum",
+    "Bronze": "Bronze", "Prata": "Prata", "Ouro": "Ouro"
+  };
+  var FIN_TIPO_DO_TIPO_IMPLANTACAO = { "Cliente Novo": "Venda", "Reativação": "Reativação", "Troca de Titularidade": "Troca de titularidade" };
+  var FIN_PERIODICIDADES = ["Anual", "Semestral", "Trimestral", "Unico"];
+  var FIN_PAGAMENTOS = ["Mensal", "A vista", "Parcelado 2x", "Parcelado 3x", "Parcelado 4x", "Parcelado 5x"];
+  var FIN_FUNIS = ["Renovação", "Prospect", "Inbound", "Canais", "Anl-Pro", "Retenção", "Upsell", "Troca de titularidade"];
+
+  function finFormatarReais(n){
+    if (n === null || n === undefined || n === "" || isNaN(Number(n))) return "";
+    return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  /** "249,00", "R$ 1.234,56", "249.5" -> número (ou null). */
+  function finLerReais(t){
+    var s = String(t === undefined || t === null ? "" : t).replace(/[^\d,.-]/g, "");
+    if (!s) return null;
+    if (s.indexOf(",") >= 0) s = s.replace(/\./g, "").replace(",", ".");
+    var n = Number(s);
+    return isNaN(n) ? null : n;
+  }
+  function finDataIso(d){ return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  /** Próxima ocorrência do dia `dia` depois da data do contrato (YYYY-MM-DD) — só uma sugestão. */
+  function finProximoVencimento(dataContrato, dia){
+    if (!dia || !dataContrato) return "";
+    var p = dataContrato.split("-").map(Number);
+    var base = new Date(p[0], p[1] - 1, p[2]);
+    var cand = new Date(base.getFullYear(), base.getMonth(), dia);
+    if (cand <= base) cand = new Date(base.getFullYear(), base.getMonth() + 1, dia);
+    return finDataIso(cand);
+  }
+  /** Mesma data do mês seguinte (YYYY-MM-DD) — sugestão quando o negócio não informa o dia de vencimento. */
+  function finMaisUmMes(dataContrato){
+    if (!dataContrato) return "";
+    var p = dataContrato.split("-").map(Number);
+    var d = new Date(p[0], p[1], p[2]);
+    if (d.getDate() !== p[2]) d = new Date(p[0], p[1] + 1, 0); // 31/01 -> último dia de fev
+    return finDataIso(d);
+  }
+  function finSemAcento(t){ return String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+  function finConsultor(primeiroNome){
+    var alvo = finSemAcento(primeiroNome).toLowerCase();
+    if (!alvo) return "";
+    var achado = FIN_CONSULTORES.filter(function(c){ return finSemAcento(c).toLowerCase().split(" ")[0] === alvo; })[0];
+    return achado || "";
+  }
+
+  /** Sugestões do formulário financeiro a partir do que a pessoa já informou (uma vez, ao entrar na etapa). */
+  function nwInicializarFin(){
+    var f = wizard.fin;
+    if (f.inicializado) return;
+    var base = wizard.finBase || {};
+    var itens = wizard.itens || [];
+    var principal = null;
+    ["Gestor", "Unique", "Simplaz Gestor", "Simplaz Unique", "Waipe Individual", "Waipe Team", "Waipe Enterprise", "Bime APP", "Bime", "Analytics"].some(function(p){
+      var it = itens.filter(function(x){ return x.produto === p; })[0];
+      if (it){ principal = it; return true; }
+      return false;
+    });
+    var produtoForm = "";
+    if (principal){
+      var p = principal.produto;
+      produtoForm = p === "Gestor" || p === "Unique" || p === "Bime APP" || p === "Bime" ? p : (p.indexOf("Simplaz") === 0 ? "Simplaz" : (p.indexOf("Waipe") === 0 ? "Waipe" : "Analytics Inteligência de vendas"));
+    }
+    f.tipoSolicitacao = FIN_TIPO_DO_TIPO_IMPLANTACAO[wizard.tipo] || "";
+    f.produto = produtoForm;
+    f.plano = principal && FIN_PLANOS[produtoForm] ? (FIN_PLANO_DO_PAINEL[principal.planoSugerido] || "") : "";
+    f.qtdUsuarios = String(base.qtdUsuarios || 1);
+    f.mrr = base.mrr ? String(base.mrr.toFixed(2)).replace(".", ",") : "";
+    f.arr = base.arr ? String(base.arr.toFixed(2)).replace(".", ",") : "";
+    f.dataContrato = base.dataContrato || finDataIso(new Date());
+    f.jaDaBase = wizard.perguntas.outroCnpj === "sim" ? "Sim" : (wizard.tipo === "Cliente Novo" ? "Não" : "Sim");
+    f.onboarding = "0";
+    f.periodicidade = base.periodicidade || "Anual";
+    f.formaPagamento = base.formaPagamento === undefined ? "Mensal" : base.formaPagamento;
+    f.primeiroVencimento = finProximoVencimento(f.dataContrato, base.diaVencimento) || finMaisUmMes(f.dataContrato);
+    f.funil = wizard.tipo === "Troca de Titularidade" ? "Troca de titularidade" : "";
+    f.obsPagamento = "";
+    var nomes = itens.map(nwNomeItem).join(" + ");
+    f.observacao = [f.tipoSolicitacao || wizard.tipo, nomes, f.mrr ? "MRR " + finFormatarReais(finLerReais(f.mrr)) : "", f.arr ? "ARR " + finFormatarReais(finLerReais(f.arr)) : ""].filter(Boolean).join(" - ");
+    f.consultor = finConsultor(base.consultor);
+    f.inicializado = true;
+  }
+
+  /** Valores do formulário do financeiro por id de entrada (entry.*): { "649755029": "Clayton", ... }. Vazios ficam de fora; só ID Núcleo e nº de série levam "*" (obrigatórios que o vendedor não sabe). */
+  function finCampos(){
+    var f = wizard.fin, E = FORM_FINANCEIRO.entry;
+    var idn = (wizard.idNucleo || "").trim();
+    var campos = {};
+    function add(chave, valor){ if (valor !== undefined && valor !== null && String(valor).trim() !== "") campos[E[chave]] = String(valor).trim(); }
+    add("consultor", f.consultor);
+    add("mdCliente", idn && idn !== "0" ? idn : "*");
+    add("cnpj", wizard.cnpj);
+    add("razao", wizard.cliente);
+    add("contato", [wizard.nomeContato, wizard.telefone].filter(Boolean).join(" "));
+    add("email", wizard.email);
+    add("tipo", f.tipoSolicitacao);
+    add("produto", f.produto);
+    add("qtdUsuarios", f.qtdUsuarios);
+    add("primeiroVencimento", f.primeiroVencimento);
+    add("mrr", finFormatarReais(finLerReais(f.mrr)));
+    add("arr", finFormatarReais(finLerReais(f.arr)));
+    add("dataContrato", f.dataContrato);
+    add("jaDaBase", f.jaDaBase);
+    add("onboarding", f.onboarding || "0");
+    add("periodicidade", f.periodicidade);
+    add("formaPagamento", f.formaPagamento);
+    add("funil", f.funil);
+    add("observacao", f.observacao);
+    add("obsPagamento", f.obsPagamento);
+    add("numeroSerie", "*");
+    if (f.produto === "Gestor") add("planoGestor", f.plano);
+    if (f.produto === "Unique") add("planoUnique", f.plano);
+    if (f.produto === "Simplaz") add("planoSimplaz", f.plano);
+    return campos;
+  }
+  /** Link do Google Forms já preenchido (usp=pp_url) — o vendedor confere e envia. */
+  function urlFormularioFinanceiro(){
+    var campos = finCampos();
+    var pares = Object.keys(campos).map(function(k){ return "entry." + k + "=" + encodeURIComponent(campos[k]); });
+    var usarCopia = new URLSearchParams(window.location.search).get("formFin") === "copia";
+    return "https://docs.google.com/forms/d/e/" + (usarCopia ? FORM_FINANCEIRO.idCopia : FORM_FINANCEIRO.id) + "/viewform?usp=pp_url&" + pares.join("&");
+  }
+  /** Mesmo link + a marca #londrisoft=<base64> que a extensão lê pra preencher e ENVIAR sozinha (o fragmento não vai a nenhum servidor). */
+  function urlFormularioFinanceiroAuto(){
+    var json = JSON.stringify({ v: 1, campos: finCampos() });
+    var b64 = btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_");
+    return urlFormularioFinanceiro() + "#londrisoft=" + b64;
+  }
+  function extensaoInstalada(){ return document.documentElement.getAttribute("data-londrisoft-ext") === "1"; }
+
+  function nwSelect(caminho, rotulo, valor, opcoes, opts){
+    opts = opts || {};
+    var lista = opcoes.slice();
+    if (valor && lista.indexOf(valor) < 0) lista.unshift(valor);
+    return '<div class="form-field"><label>' + rotulo + '</label><select class="form-input' + (valor ? " campo-preenchido" : "") + '" data-w="' + caminho + '">' +
+      '<option value="">' + (opts.vazio || "— selecione —") + '</option>' +
+      lista.map(function(o){ return '<option value="' + esc(o) + '"' + (valor === o ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("") + '</select></div>';
+  }
+
+  // ---------- Etapa 4: financeiro ----------
+  function renderNwFinanceiro(root){
+    nwInicializarFin();
+    var f = wizard.fin;
+    var planos = FIN_PLANOS[f.produto];
+    root.innerHTML = nwProgresso("financeiro") +
+      '<div class="nw-card nw-verde">' +
+        '<div class="nw-titulo">💰 Dados para o financeiro</div>' +
+        '<p class="sub">Já calculamos o que dá a partir do negócio. Confira: depois do envio abrimos o formulário do financeiro com tudo isso preenchido.</p>' +
+        nwSelect("fin.tipoSolicitacao", "Tipo de solicitação *", f.tipoSolicitacao, FIN_TIPOS) +
+        '<div class="form-grid-2">' + nwSelect("fin.produto", "Produto contratado *", f.produto, FIN_PRODUTOS) +
+          (planos ? nwSelect("fin.plano", "Plano", f.plano, planos) : '<div></div>') + '</div>' +
+        '<div class="form-grid-2">' + nwCampo("fin.qtdUsuarios", "Qtd de usuários", f.qtdUsuarios) +
+          nwCampo("fin.dataContrato", "Data em que o contrato foi assinado *", f.dataContrato, { tipo: "date" }) + '</div>' +
+        '<div class="form-grid-2">' + nwCampo("fin.mrr", "MRR (valor da mensalidade) R$ *", f.mrr, { placeholder: "249,00" }) +
+          nwCampo("fin.arr", "ARR (valor anual do contrato) R$ *", f.arr, { placeholder: "2.988,00" }) + '</div>' +
+        '<div class="form-grid-2">' + nwSelect("fin.jaDaBase", "Já é da base?", f.jaDaBase, ["Sim", "Não"]) +
+          nwCampo("fin.onboarding", "Valor do onboarding R$", f.onboarding) + '</div>' +
+        '<div class="form-grid-2">' + nwSelect("fin.periodicidade", "Prazo / periodicidade contratual", f.periodicidade, FIN_PERIODICIDADES) +
+          nwSelect("fin.formaPagamento", "Forma de pagamento", f.formaPagamento, FIN_PAGAMENTOS) + '</div>' +
+        '<div class="form-grid-2">' + nwCampo("fin.primeiroVencimento", "Data do 1º vencimento *", f.primeiroVencimento, { tipo: "date" }) +
+          nwSelect("fin.funil", "Qual o funil? (opcional)", f.funil, FIN_FUNIS) + '</div>' +
+        '<div class="form-field"><label>Observação</label><textarea class="form-textarea' + (f.observacao ? " campo-preenchido" : "") + '" rows="3" data-w="fin.observacao">' + esc(f.observacao) + '</textarea></div>' +
+        nwCampo("fin.obsPagamento", "Observação sobre o pagamento do onboarding (opcional)", f.obsPagamento) +
+      '</div>' +
+      nwErro() +
+      '<div class="nw-acoes"><button type="button" class="btn-flow-secondary" id="nwVoltar4">← Voltar</button>' +
+      '<button type="button" class="btn-flow btn-grande btn-enviar" id="nwEnviar"' + (wizard.salvando ? " disabled" : "") + '>' + (wizard.salvando ? "Enviando…" : "🚀 Enviar para implantação") + '</button></div>';
+    nwLigarCampos(root);
+    root.querySelector('[data-w="fin.produto"]').addEventListener("change", function(){ wizard.fin.plano = ""; renderProjetosPanel(); });
+    document.getElementById("nwVoltar4").addEventListener("click", function(){ wizard.erro = ""; wizard.etapaNegocio = "detalhes"; renderProjetosPanel(); });
+    document.getElementById("nwEnviar").addEventListener("click", nwEnviar);
+  }
+
   // ---------- Confirmação ----------
   function renderNwEnviado(root){
     var falhas = wizard.falhasAnexo || [];
@@ -7094,7 +7315,15 @@
       '<p>Em breve a equipe entrará em contato com o cliente.</p>' +
       '<div class="nw-prazo">⏱️ Prazo para a implantação: <b>' + esc(nwPrazoTexto()) + '</b></div>' +
       (falhas.length ? '<div class="callout warn" style="text-align:left;margin-top:14px;"><div class="dot"></div><div>Estes arquivos não foram anexados: ' + falhas.map(esc).join(", ") + '. Peça para o time anexar direto no projeto.</div></div>' : "") +
-      (wizard.projetoId ? '<div style="margin-top:16px;"><a class="btn-flow" style="display:inline-block;text-decoration:none;" href="/implantacao-waipe.html?projeto=' + encodeURIComponent(wizard.projetoId) + '" target="_blank" rel="noopener">Abrir o projeto</a></div>' : "") +
+      (extensaoInstalada()
+        ? '<div class="nw-financeiro-box"><div style="font-weight:700;margin-bottom:4px;">💰 Falta só o financeiro</div>' +
+          '<div class="sub" style="margin:0 0 10px;">Um clique e a extensão preenche e envia o formulário do financeiro por você (abre uma aba rápida que fecha sozinha).</div>' +
+          '<a class="btn-flow btn-grande" style="display:inline-block;text-decoration:none;" href="' + esc(urlFormularioFinanceiroAuto()) + '" target="_blank" rel="noopener">⚡ Enviar para o financeiro</a>' +
+          '<div style="margin-top:10px;font-size:13px;"><a href="' + esc(urlFormularioFinanceiro()) + '" target="_blank" rel="noopener">ou abrir o formulário só pra conferir e enviar você mesmo</a></div></div>'
+        : '<div class="nw-financeiro-box"><div style="font-weight:700;margin-bottom:4px;">💰 Falta só o formulário do financeiro</div>' +
+          '<div class="sub" style="margin:0 0 10px;">Abrimos o formulário já preenchido. Confira, marque <b>Registrar meu endereço de e-mail</b> e clique em <b>Enviar</b>. (Com a extensão instalada, o envio é automático.)</div>' +
+          '<a class="btn-flow btn-grande" style="display:inline-block;text-decoration:none;" href="' + esc(urlFormularioFinanceiro()) + '" target="_blank" rel="noopener">💰 Preencher formulário do financeiro</a></div>') +
+      (wizard.projetoId ? '<div style="margin-top:16px;"><a class="btn-flow-secondary" style="display:inline-block;text-decoration:none;" style="display:inline-block;text-decoration:none;" href="/implantacao-waipe.html?projeto=' + encodeURIComponent(wizard.projetoId) + '" target="_blank" rel="noopener">Abrir o projeto</a></div>' : "") +
       '</div>';
   }
 
@@ -7115,6 +7344,7 @@
       }),
       rascunho: null, agentesSel: [],
       perguntas: {}, precisaTreinamento: null,
+      fin: {}, finBase: r.financeiro || {},
       urgencia: "normal", motivoUrgencia: "",
       anexos: [], falhasAnexo: [], projetoId: null,
       erro: "", salvando: false

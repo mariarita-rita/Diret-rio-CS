@@ -5,6 +5,10 @@ projeto de implantação" (canto inferior direito). Ao clicar, abre uma janela
 pequena com o formulário do painel já preenchido com os dados do negócio. No
 primeiro uso, entre com o Google (e-mail da empresa).
 
+NOVIDADE v1.1: na tela final do formulário, o botão "Enviar para o financeiro" preenche e envia o
+formulário do financeiro (Google Forms) automaticamente, usando o seu login do Google. Para atualizar
+de uma versão antiga: baixe o zip de novo, troque a pasta e clique em "Recarregar" na página de extensões.
+
 GUIA COMPLETO, COM TODOS OS PASSOS: https://diretoriocs.vercel.app/favorito.html
 
 RESUMO
