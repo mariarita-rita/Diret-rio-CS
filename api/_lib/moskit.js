@@ -109,6 +109,7 @@ export const CF_NEGOCIO = {
   QTD_USUARIOS: 'CF_Lo1qjyidSaYQyDer', // "Qtd de usuários" (NUMBER)
   PAGAMENTO: 'CF_AE5mpEiQil7yVDO3', // "Pagamento" (SINGLE_OPTION)
   VIGENCIA: 'CF_R7PDNQiviKvoYmWJ', // "Vigência contratual" (SINGLE_OPTION)
+  TIPO_NEGOCIACAO: 'CF_wPVm2Vijia2GXmK6', // "🟢 Tipo de negociação" (SINGLE_OPTION)
 };
 
 // id da opção -> rótulo do formulário do financeiro.
@@ -223,6 +224,50 @@ function financeiroDoNegocio(negocio, cf, dealProducts, responsavel) {
   };
 }
 
+// Produtos do negócio que NÃO viram item de implantação (só mexem no valor): incremento de upsell,
+// reajuste anual, redução de downsell. Continuam somando no MRR/ARR do financeiro.
+const PRODUTO_SEM_ITEM = /^(incremento|reajuste|redu[cç][aã]o)/i;
+
+// "Tipo de negociação" do negócio (campo personalizado, opções conferidas ao vivo em 2026-10-16).
+const TIPO_NEGOCIACAO_OPCOES = { 665723: 'Crossell', 665724: 'Downsell', 665725: 'Renovação', 665726: 'Troca de Titularidade', 665727: 'Upsell', 694857: 'Reativação' };
+
+const cachePipelines = new Map();
+/** Nome do funil (pipeline) do negócio a partir da etapa dele: GET /stages/{id} -> pipeline.id -> GET /pipelines/{id}. '' se não achar. */
+async function nomeDoFunil(stageId) {
+  const etapa = await moskitGet(`/stages/${stageId}`);
+  const pipelineId = etapa?.pipeline?.id;
+  if (!pipelineId) return '';
+  if (!cachePipelines.has(pipelineId)) {
+    const pipeline = await moskitGet(`/pipelines/${pipelineId}`);
+    cachePipelines.set(pipelineId, String(pipeline?.name || ''));
+  }
+  return cachePipelines.get(pipelineId);
+}
+
+/**
+ * Sugere o "Tipo de implantação" a partir do NOME do negócio (os CSM costumam escrever
+ * migração, troca de titularidade, ativação de Simplaz...) e do funil (Comercial = cliente novo).
+ * '' quando não dá pra deduzir — a pessoa escolhe.
+ */
+export function tipoImplantacaoSugerido(nomeNegocio, funil) {
+  const n = String(nomeNegocio || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/migra/.test(n)) return 'Migração';
+  if (/titularidade/.test(n)) return 'Troca de Titularidade';
+  if (/reativa/.test(n)) return 'Reativação';
+  if (/homologa/.test(n) && /boleto/.test(n)) return 'Homologação de Boleto';
+  if (/cadastro inteligente/.test(n)) return 'Cadastro Inteligente';
+  if (/treinamento/.test(n)) return 'Treinamento';
+  if (/simplaz/.test(n) && /contador/.test(n)) return 'Simplaz - Contador';
+  if (/simplaz/.test(n) && /empresario/.test(n)) return 'Simplaz - Empresário';
+  if (/serpro/.test(n)) return 'SERPRO';
+  if (/importa facil/.test(n)) return 'Importa Facil';
+  if (/bime app/.test(n)) return 'Bime APP';
+  if (/analytics/.test(n)) return 'Analytics';
+  if (/waipe/.test(n)) return 'Waipe';
+  if (/^comercial/i.test(String(funil || '').trim())) return 'Cliente Novo';
+  return '';
+}
+
 /** Endereço do cadastro da empresa no Moskit ({rua, bairro, cidade, uf, cep}); '' onde não houver. */
 function enderecoDaEmpresa(empresa) {
   const cf = Array.isArray(empresa?.entityCustomFields) ? empresa.entityCustomFields : [];
@@ -289,7 +334,9 @@ export async function montarRascunhoDoNegocio(dealId) {
   const contatosOk = contatosBrutos.filter(Boolean);
   const contato = contatosOk[0] || null;
 
+  const produtosIgnorados = [];
   const solucoes = dealProducts.map((dp, i) => {
+    if (PRODUTO_SEM_ITEM.test(String(produtos[i]?.name || '').trim())) { produtosIgnorados.push(produtos[i].name); return null; }
     const { produto, nomeOriginal: nomeBruto } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
     const nomeOriginal = normalizarNomePlano(produto, nomeBruto);
     const quantidade = Number(dp?.quantity) > 0 ? Number(dp.quantity) : 1;
@@ -302,7 +349,10 @@ export async function montarRascunhoDoNegocio(dealId) {
       quantidade,
       valorManual: Math.round(unitarioCentavos) / 100,
     };
-  });
+  }).filter(Boolean);
+
+  const funil = negocio.stage?.id ? await nomeDoFunil(negocio.stage.id).catch(() => '') : '';
+  const tipoNegociacao = TIPO_NEGOCIACAO_OPCOES[(cf.find((c) => c.id === CF_NEGOCIO.TIPO_NEGOCIACAO)?.options || [])[0]] || '';
 
   const textos = [
     valorCampoPersonalizado(cf, CF_NEGOCIO.OBSERVACAO),
@@ -328,6 +378,10 @@ export async function montarRascunhoDoNegocio(dealId) {
     vendedor: responsavel?.name || '',
     totalAnexos: Array.isArray(anexos) ? anexos.length : 0,
     contatos: contatosOk.map((c) => ({ nome: c.name || '', telefone: telefoneDe(c), email: emailDe(c) })),
+    funil,
+    tipoNegociacao,
+    tipoImplantacaoSugerido: tipoImplantacaoSugerido(negocio.name, funil),
+    produtosIgnorados,
     endereco: enderecoDaEmpresa(empresa),
     financeiro: financeiroDoNegocio(negocio, cf, dealProducts, responsavel),
   };

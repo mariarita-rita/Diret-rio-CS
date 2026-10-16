@@ -6757,7 +6757,8 @@
       '<div class="nw-card nw-azul">' +
         '<div class="nw-titulo">👤 Dados do cliente</div>' +
         '<p class="sub">Confira se os dados estão corretos. Corrija o que precisar e avance.</p>' +
-        '<div class="form-field"><label>Tipo de implantação</label><select class="form-input campo-preenchido" data-w="tipo">' +
+        '<div class="form-field"><label>Tipo de implantação' + (wizard.tipo ? "" : ' <span style="color:var(--danger)">(escolha)</span>') + '</label><select class="form-input' + (wizard.tipo ? " campo-preenchido" : "") + '" data-w="tipo">' +
+          (wizard.tipo ? "" : '<option value="">Selecione…</option>') +
           TIPOS_IMPLANTACAO.map(function(t){ return '<option value="' + esc(t) + '"' + (wizard.tipo === t ? " selected" : "") + '>' + esc(t) + '</option>'; }).join("") +
         '</select></div>' +
         nwCampo("cliente", "Nome do cliente", wizard.cliente) +
@@ -6789,6 +6790,7 @@
     document.getElementById("nwAddContato").addEventListener("click", function(){ wizard.contatosAdicionais.push({ nome: "", telefone: "" }); renderProjetosPanel(); });
     document.getElementById("nwAvancar1").addEventListener("click", function(){
       var falta = [];
+      if (!wizard.tipo) falta.push("Tipo de implantação");
       if (!(wizard.cliente || "").trim()) falta.push("Nome do cliente");
       if (!(wizard.cnpj || "").trim()) falta.push("CPF/CNPJ");
       if (!(wizard.telefone || "").trim()) falta.push("Telefone");
@@ -6975,6 +6977,10 @@
       '<button type="button" class="nw-sn-btn nao' + (valorAtual === "nao" ? " ativo" : "") + '" data-v="nao">Não ❌</button></div>';
   }
 
+  /** Negócio do funil "Base de clientes" é cliente que já existe: as perguntas de cliente novo (outro CNPJ, duplicação, migração, importação) não se aplicam. */
+  function noFunilBaseDeClientes(){ return /^base de clientes/i.test((wizard.funil || "").trim()); }
+  function perguntasNwVisiveis(){ return noFunilBaseDeClientes() ? [] : PERGUNTAS_NW; }
+
   function renderNwDetalhes(root){
     var temTipoNovo = wizard.tipo === "Cliente Novo";
     var altaOuUrgente = wizard.urgencia === "alta" || wizard.urgencia === "urgente";
@@ -6982,7 +6988,7 @@
       '<div class="nw-card nw-laranja">' +
         '<div class="nw-titulo">🔎 Sobre a implantação</div>' +
         (temTipoNovo ? '<div class="nw-pergunta"><span>🎓 Esse cliente vai precisar de treinamento?</span>' + nwSimNao("precisaTreinamento", wizard.precisaTreinamento) + '</div>' : "") +
-        PERGUNTAS_NW.map(function(p){
+        perguntasNwVisiveis().map(function(p){
           var aviso = p.chave === "outroCnpj" && wizard.perguntas.outroCnpj === "sim"
             ? '<div class="nw-aviso">⚠️ Sinalize o outro CNPJ na observação (campo de contexto abaixo).</div>' : "";
           return '<div class="nw-pergunta"><span>' + esc(p.rotulo) + '</span>' + nwSimNao("p:" + p.chave, wizard.perguntas[p.chave]) + aviso + '</div>';
@@ -7074,7 +7080,7 @@
     if (wizard.tipo === "Cliente Novo" && !wizard.precisaTreinamento){ wizard.erro = "Responda: esse cliente vai precisar de treinamento?"; renderProjetosPanel(); return; }
     if (altaOuUrgente && !(wizard.motivoUrgencia || "").trim()){ wizard.erro = "Informe o motivo da urgência."; renderProjetosPanel(); return; }
     var perguntas = {};
-    PERGUNTAS_NW.forEach(function(p){ if (wizard.perguntas[p.chave]) perguntas[p.chave] = wizard.perguntas[p.chave]; });
+    perguntasNwVisiveis().forEach(function(p){ if (wizard.perguntas[p.chave]) perguntas[p.chave] = wizard.perguntas[p.chave]; });
     var dados = {
       origemMoskitDealId: wizard.origemMoskitDealId,
       tipoImplantacao: wizard.tipo,
@@ -7154,6 +7160,8 @@
     "Light": "Unique Light", "Plus": "Unique Plus", "Premium": "Unique Preminum",
     "Bronze": "Bronze", "Prata": "Prata", "Ouro": "Ouro"
   };
+  // "Tipo de negociação" do negócio no Moskit -> "Tipo de solicitação" do formulário
+  var FIN_TIPO_DA_NEGOCIACAO = { "Upsell": "Upsell", "Crossell": "Crossell", "Downsell": "Downsell", "Renovação": "Renovação", "Troca de Titularidade": "Troca de titularidade", "Reativação": "Reativação" };
   var FIN_TIPO_DO_TIPO_IMPLANTACAO = { "Cliente Novo": "Venda", "Reativação": "Reativação", "Troca de Titularidade": "Troca de titularidade" };
   var FIN_PERIODICIDADES = ["Anual", "Semestral", "Trimestral", "Unico"];
   var FIN_PAGAMENTOS = ["Mensal", "A vista", "Parcelado 2x", "Parcelado 3x", "Parcelado 4x", "Parcelado 5x"];
@@ -7201,6 +7209,8 @@
   function finFunilSugerido(tipoSolicitacao){
     if (tipoSolicitacao === "Venda") return "Prospect";
     if (tipoSolicitacao === "Troca de titularidade") return "Troca de titularidade";
+    if (tipoSolicitacao === "Upsell") return "Upsell";
+    if (tipoSolicitacao === "Renovação") return "Renovação";
     return "";
   }
 
@@ -7221,14 +7231,14 @@
       var p = principal.produto;
       produtoForm = p === "Gestor" || p === "Unique" || p === "Bime APP" || p === "Bime" ? p : (p.indexOf("Simplaz") === 0 ? "Simplaz" : (p.indexOf("Waipe") === 0 ? "Waipe" : "Analytics Inteligência de vendas"));
     }
-    f.tipoSolicitacao = FIN_TIPO_DO_TIPO_IMPLANTACAO[wizard.tipo] || "";
+    f.tipoSolicitacao = FIN_TIPO_DA_NEGOCIACAO[wizard.tipoNegociacao] || FIN_TIPO_DO_TIPO_IMPLANTACAO[wizard.tipo] || "";
     f.produto = produtoForm;
     f.plano = principal && FIN_PLANOS[produtoForm] ? (FIN_PLANO_DO_PAINEL[principal.planoSugerido] || "") : "";
     f.qtdUsuarios = String(base.qtdUsuarios || 1);
     f.mrr = base.mrr ? String(base.mrr.toFixed(2)).replace(".", ",") : "";
     f.arr = base.arr ? String(base.arr.toFixed(2)).replace(".", ",") : "";
     f.dataContrato = base.dataContrato || finDataIso(new Date());
-    f.jaDaBase = wizard.perguntas.outroCnpj === "sim" ? "Sim" : (wizard.tipo === "Cliente Novo" ? "Não" : "Sim");
+    f.jaDaBase = wizard.perguntas.outroCnpj === "sim" || noFunilBaseDeClientes() ? "Sim" : (wizard.tipo === "Cliente Novo" ? "Não" : "Sim");
     f.onboarding = "0";
     f.periodicidade = base.periodicidade || "Anual";
     f.formaPagamento = base.formaPagamento === undefined ? "Mensal" : base.formaPagamento;
@@ -7365,7 +7375,8 @@
     wizard = {
       step: "negocio", etapaNegocio: "dados",
       origemMoskitDealId: r.id,
-      tipo: "Cliente Novo",
+      // Sugerido pelo nome do negócio + funil (backend); vazio = a pessoa escolhe.
+      tipo: r.tipoImplantacaoSugerido || "", funil: r.funil || "", tipoNegociacao: r.tipoNegociacao || "",
       cliente: r.cliente || "", contexto: r.contexto || "",
       // Vendedor não conhece o ID Núcleo (cliente acabou de fechar): vazio vira "0" no envio.
       idNucleo: r.idNucleo || "",
