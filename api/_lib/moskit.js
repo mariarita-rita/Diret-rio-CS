@@ -339,7 +339,9 @@ export async function montarRascunhoDoNegocio(dealId) {
     if (PRODUTO_SEM_ITEM.test(String(produtos[i]?.name || '').trim())) { produtosIgnorados.push(produtos[i].name); return null; }
     const { produto, nomeOriginal: nomeBruto } = mapearProdutoSolucao(dp?.product?.id != null ? { id: dp.product.id, name: produtos[i]?.name } : null);
     const nomeOriginal = normalizarNomePlano(produto, nomeBruto);
-    const quantidade = Number(dp?.quantity) > 0 ? Number(dp.quantity) : 1;
+    // dp.quantity no Moskit é o número de PARCELAS do contrato (ex.: 12 x R$ 249,00), não a
+    // quantidade de itens: cada produto do negócio vira 1 item de implantação.
+    const quantidade = 1;
     const unitarioCentavos = Number.isFinite(Number(dp?.price)) ? Number(dp.price) : 0;
     return {
       produto,
