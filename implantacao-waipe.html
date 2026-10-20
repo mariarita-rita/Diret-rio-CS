@@ -3644,6 +3644,187 @@
       ' <button type="button" class="btn-reset" data-destacar-comentario="' + esc(id) + '" data-destaque-atual="' + (destaque ? "1" : "0") + '" title="' + (destaque ? "Remover destaque" : "Destacar (fundo diferenciado)") + '" style="margin-left:4px;' + (destaque ? "border-color:var(--warning);color:var(--warning);" : "") + '">🖍️</button>';
   }
 
+  // ==================== Fluxo (JSON) por agente — versões ====================
+  // Cada fluxo salvo é um comentário [[FLOW]] na task do agente; a ordem
+  // cronológica deles dá V1, V2... "Atualizar" reescreve o JSON de uma versão
+  // (atualizar-fluxo-implantacao, mantém posição/data); "Salvar como nova
+  // versão" cria outro comentário e guarda o anterior.
+  var FLOW_MARCADOR = "[[FLOW]]";
+  var FLOW_MAX_CHARS = 39000; // mesmo teto do servidor (o ClickUp aceita 40.000 no comentário todo)
+  var versaoFlowPorId = {};   // id do comentário -> nº da versão (preenchido em renderComentarios)
+
+  function jsonValidoTexto(t){
+    try { JSON.parse(t); return true; } catch (e) { return false; }
+  }
+
+  // Devolve os fluxos em ordem cronológica (V1 primeiro) a partir da lista de comentários.
+  function versoesFluxoDe(comentarios){
+    var fluxos = (comentarios || []).filter(function(c){
+      return metaComentarioTexto(c.texto).texto.indexOf(FLOW_MARCADOR) === 0;
+    }).map(function(c){
+      return { id: c.id, autor: c.autor, data: Number(c.data) || 0, json: metaComentarioTexto(c.texto).texto.slice(FLOW_MARCADOR.length) };
+    });
+    fluxos.sort(function(a, b){ return a.data - b.data; });
+    fluxos.forEach(function(f, i){ f.versao = i + 1; });
+    return fluxos;
+  }
+
+  // Janela "📐 Fluxo" de UM agente — funciona em qualquer etapa e também pra
+  // agente já entregue, sem mexer no "agente atual" do projeto.
+  function abrirFluxoAgente(agente, aoAtualizar){
+    var antigo = document.getElementById("fluxoAgenteOverlay");
+    if (antigo) antigo.remove();
+    var overlay = document.createElement("div");
+    overlay.id = "fluxoAgenteOverlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(16,16,53,.6);z-index:998;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto;";
+    overlay.innerHTML = '<div class="card" style="width:100%;max-width:760px;margin:0 auto;"><div id="fluxoAgenteConteudo"><div class="sub">Carregando…</div></div></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", function(e){ if (e.target === overlay) overlay.remove(); });
+
+    var podeEditar = sessaoNivelAtual !== "consulta";
+    var alvoId = null; // versão carregada no editor, pra "Atualizar"
+
+    function fechar(){ overlay.remove(); }
+
+    function render(versoes){
+      var conteudo = document.getElementById("fluxoAgenteConteudo");
+      if (!conteudo) return;
+      var proxima = versoes.length + 1;
+      var listaHtml = versoes.length
+        ? versoes.slice().reverse().map(function(v){
+            var valido = jsonValidoTexto(v.json);
+            var tag = valido
+              ? '<span style="background:#E3F6E8;color:#1B6B34;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">JSON válido</span>'
+              : '<span style="background:#FFF0D6;color:#8A5A00;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">⚠ JSON incompleto ou inválido</span>';
+            return '<div class="build-check" style="flex-wrap:wrap;gap:6px;">' +
+              '<span style="min-width:0;flex:1 1 280px;"><b>V' + v.versao + '</b>' +
+                (v.versao === versoes.length ? ' <span class="tag londrisoft">atual</span>' : '') + ' ' + tag +
+                '<br><span style="font-size:11px;color:var(--muted)">' + esc(v.autor) + ' · ' + formatarData(v.data) + ' · ' + v.json.length + ' caracteres</span></span>' +
+              '<button type="button" class="btn-reset" data-fluxo-copiar="' + esc(v.id) + '">Copiar JSON</button>' +
+              (podeEditar ? '<button type="button" class="btn-reset" data-fluxo-editar="' + esc(v.id) + '">Editar esta versão</button>' : "") +
+            '</div>';
+          }).join("")
+        : '<div class="sub">Nenhum fluxo salvo ainda para este agente.</div>';
+      conteudo.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<h2 style="margin:0;">📐 Fluxo — ' + esc(agente.nome) + '</h2>' +
+          '<button type="button" class="btn-reset" id="btnFluxoFechar" title="Fechar">✕</button>' +
+        '</div>' +
+        '<div class="sub" style="margin-top:4px;">Cole o JSON exportado do Flow. Cada save vira uma versão (V1, V2…); dá para atualizar uma versão já salva ou guardar uma nova.</div>' +
+        '<div style="margin-top:10px;">' + listaHtml + '</div>' +
+        (podeEditar
+          ? '<div class="sp-k" style="margin-top:14px;" id="fluxoRotuloEditor">JSON do fluxo</div>' +
+            '<textarea id="fluxoTexto" class="form-textarea" rows="9" style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px;" placeholder="Cole aqui o JSON exportado do Flow..."></textarea>' +
+            '<div class="sub" id="fluxoContador" style="margin-top:4px;">0 / ' + FLOW_MAX_CHARS.toLocaleString("pt-BR") + ' caracteres</div>' +
+            '<div id="fluxoErro" style="display:none;color:var(--danger);font-size:12px;margin-top:6px;"></div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">' +
+              '<button type="button" class="btn-flow-secondary" id="btnFluxoNova">' + (versoes.length ? "Salvar como V" + proxima + " (nova versão)" : "Salvar fluxo (V1)") + '</button>' +
+              '<button type="button" class="btn-flow-secondary" id="btnFluxoAtualizar" style="display:none;"></button>' +
+            '</div>'
+          : '<div class="sub" style="margin-top:12px;">Seu perfil é somente leitura — dá para copiar o JSON, não salvar.</div>');
+
+      document.getElementById("btnFluxoFechar").addEventListener("click", fechar);
+      conteudo.querySelectorAll("[data-fluxo-copiar]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var v = versoes.filter(function(x){ return String(x.id) === btn.getAttribute("data-fluxo-copiar"); })[0];
+          if (!v) return;
+          copyToClipboard(v.json).then(function(){ showSimToast("JSON da V" + v.versao + " copiado."); }).catch(function(){ showSimToast("Não deu para copiar."); });
+        });
+      });
+      if (!podeEditar) return;
+
+      var ta = document.getElementById("fluxoTexto");
+      var contador = document.getElementById("fluxoContador");
+      var erroEl = document.getElementById("fluxoErro");
+      var btnNova = document.getElementById("btnFluxoNova");
+      var btnAtualizar = document.getElementById("btnFluxoAtualizar");
+      function mostrarErro(msg){ erroEl.textContent = msg; erroEl.style.display = msg ? "block" : "none"; }
+      function atualizarContador(){
+        var n = ta.value.trim().length;
+        contador.textContent = n.toLocaleString("pt-BR") + " / " + FLOW_MAX_CHARS.toLocaleString("pt-BR") + " caracteres";
+        contador.style.color = n > FLOW_MAX_CHARS ? "var(--danger)" : "";
+      }
+      ta.addEventListener("input", atualizarContador);
+
+      conteudo.querySelectorAll("[data-fluxo-editar]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var v = versoes.filter(function(x){ return String(x.id) === btn.getAttribute("data-fluxo-editar"); })[0];
+          if (!v) return;
+          alvoId = v.id;
+          ta.value = v.json;
+          atualizarContador();
+          mostrarErro("");
+          document.getElementById("fluxoRotuloEditor").textContent = "Editando a V" + v.versao + " — “Atualizar” substitui esta versão; “Salvar como V" + proxima + "” guarda uma nova e mantém a antiga";
+          btnAtualizar.textContent = "Atualizar V" + v.versao;
+          btnAtualizar.style.display = "inline-block";
+          ta.focus();
+          ta.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      });
+
+      // Valida antes de qualquer save: vazio, grande demais, JSON inválido (aviso, não bloqueio).
+      function textoParaSalvar(){
+        mostrarErro("");
+        var t = ta.value.trim();
+        if (!t){ mostrarErro("Cole o JSON do fluxo antes de salvar."); return null; }
+        if (t.length > FLOW_MAX_CHARS){ mostrarErro("Fluxo grande demais (" + t.length.toLocaleString("pt-BR") + " caracteres; o máximo é " + FLOW_MAX_CHARS.toLocaleString("pt-BR") + ")."); return null; }
+        if (!jsonValidoTexto(t) && !window.confirm("Este texto não é um JSON válido (pode estar incompleto). Salvar mesmo assim?")) return null;
+        return t;
+      }
+      function aposSalvar(mensagem){
+        showSimToast(mensagem);
+        alvoId = null;
+        if (typeof aoAtualizar === "function") aoAtualizar();
+        carregar();
+      }
+      function falhou(e, botao, rotulo){
+        mostrarErro(mensagemErro(e) || "Não deu para salvar o fluxo.");
+        botao.disabled = false;
+        botao.textContent = rotulo;
+      }
+      btnNova.addEventListener("click", function(){
+        var t = textoParaSalvar();
+        if (t === null) return;
+        var rotulo = btnNova.textContent;
+        btnNova.disabled = true; btnNova.textContent = "Salvando…";
+        apiPost("comentar-implantacao", { taskId: agente.id, texto: FLOW_MARCADOR + t })
+          .then(function(){ aposSalvar("Fluxo salvo como V" + proxima + "."); })
+          .catch(function(e){ falhou(e, btnNova, rotulo); });
+      });
+      btnAtualizar.addEventListener("click", function(){
+        if (!alvoId) return;
+        var t = textoParaSalvar();
+        if (t === null) return;
+        var rotulo = btnAtualizar.textContent;
+        btnAtualizar.disabled = true; btnAtualizar.textContent = "Atualizando…";
+        apiPost("atualizar-fluxo-implantacao", { taskId: agente.id, comentarioId: alvoId, texto: t })
+          .then(function(){ aposSalvar(rotulo.replace("Atualizar ", "") + " atualizada."); })
+          .catch(function(e){ falhou(e, btnAtualizar, rotulo); });
+      });
+    }
+
+    function carregar(){
+      apiGet("listar-comentarios", { taskId: agente.id }).then(function(resp){
+        render(versoesFluxoDe(resp.comentarios));
+      }).catch(function(){
+        var c = document.getElementById("fluxoAgenteConteudo");
+        if (c) c.innerHTML = '<div class="sub">Não deu para carregar os fluxos deste agente.</div>';
+      });
+    }
+    carregar();
+  }
+
+  // Liga os botões "📐 Fluxo" (data-fluxo-agente) de um trecho de tela.
+  function wireBotoesFluxoAgente(){
+    document.querySelectorAll("[data-fluxo-agente]").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.stopPropagation(); // dentro do card da Visão geral: não troca o agente atual
+        var ag = agentePorId(btn.getAttribute("data-fluxo-agente"));
+        if (ag) abrirFluxoAgente(ag);
+      });
+    });
+  }
+
   // Markdown leve SÓ pra exibir comentários (negrito, itálico, código, links
   // http(s), títulos, listas, parágrafos). O texto é escapado por esc() ANTES
   // de qualquer transformação — nenhuma tag chega do usuário, só as que este
@@ -3696,7 +3877,9 @@
     var seloFixado = meta.pin ? '<span class="tag londrisoft" style="margin-right:6px;">📌 Fixado</span>' : "";
     if (/^\[\[FLOW\]\]/.test(textoBruto)){
       var jsonTexto = textoBruto.replace(/^\[\[FLOW\]\]/, "");
-      return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '📐 <b>Fluxo salvo</b> — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
+      var versaoFlow = versaoFlowPorId[c.id] ? " V" + versaoFlowPorId[c.id] : "";
+      var avisoFlow = jsonValidoTexto(jsonTexto) ? "" : ' <span style="color:#8A5A00;font-weight:700;" title="Este JSON está incompleto ou inválido (versões salvas antes do limite de tamanho subir ficaram cortadas). Abra o Fluxo do agente e atualize.">⚠ incompleto</span>';
+      return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '📐 <b>Fluxo salvo' + versaoFlow + '</b>' + avisoFlow + ' — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
         ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button>' +
         botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
     }
@@ -3725,6 +3908,9 @@
     container.innerHTML = '<div class="card"><h2>' + esc(titulo || "Comentários") + '</h2><div class="sub">Carregando…</div></div>';
     apiGet("listar-comentarios", { taskId: taskId }).then(function(resp){
       var lista = resp.comentarios || [];
+      // Nº da versão de cada fluxo salvo (V1, V2…), lido por comentarioHtml.
+      versaoFlowPorId = {};
+      versoesFluxoDe(lista).forEach(function(f){ versaoFlowPorId[f.id] = f.versao; });
       // Fixados sempre no topo (pra todo mundo achar de cara), na frente dos
       // demais — que continuam na ordem normal (mais recente primeiro).
       var fixados = lista.filter(function(c){ return metaComentarioTexto(c.texto).pin; });
@@ -4155,6 +4341,7 @@
       '<div class="apmeta">' + esc(e.frente || "") + (e.canal ? ' · ' + esc(e.canal) : "") + '</div>' +
       '<div style="margin-top:6px"><span class="tag ' + cls + '">' + esc(rotulo) + '</span></div>' +
       (a.ism && a.ism.length ? '<div class="apmeta" style="margin-top:4px">ISM: ' + esc(a.ism.join(", ")) + '</div>' : "") +
+      '<div style="margin-top:8px"><button type="button" class="btn-reset" data-fluxo-agente="' + esc(a.id) + '" title="Salvar, atualizar ou copiar o JSON do fluxo deste agente (também nos já entregues)">📐 Fluxo</button></div>' +
     '</div>';
   }
 
@@ -6123,6 +6310,7 @@
         }).join("") + '</div>' +
       '</div>';
     document.getElementById("stepContent").innerHTML = html;
+    wireBotoesFluxoAgente();
     document.querySelectorAll("[data-agente-overview]").forEach(function(el){
       el.addEventListener("click", function(){
         sim.agenteAtual = el.getAttribute("data-agente-overview");
@@ -6163,9 +6351,8 @@
       '<div class="card"><h2>Por onde começar — checklist de construção</h2><div class="sub">Agente atual: ' + esc(a.nome) + '</div>' +
       renderChecklist(PASSOS_CONSTRUCAO, "build", a.buildChecks || {}) +
       '</div>' +
-      '<div class="card"><h2>📐 Salvar Fluxo</h2><div class="sub">Depois de montar no Flow (ou de mapear com o cliente no Miro), cole aqui o JSON exportado — fica guardado como comentário na task deste agente.</div>' +
-        '<textarea class="form-textarea" rows="4" id="flowJsonInput" placeholder="Cole o JSON exportado do Flow..."></textarea>' +
-        '<div style="margin-top:8px"><button type="button" class="btn-flow-secondary" id="btnSalvarFlow">Salvar Fluxo</button></div>' +
+      '<div class="card"><h2>📐 Fluxo do agente</h2><div class="sub">Depois de montar no Flow (ou de mapear com o cliente no Miro), guarde aqui o JSON exportado. Cada save vira uma versão (V1, V2…) na task deste agente, e dá para atualizar uma versão já salva.</div>' +
+        '<div style="margin-top:8px"><button type="button" class="btn-flow-secondary" id="btnAbrirFluxo">📐 Salvar / atualizar Fluxo</button></div>' +
       '</div>' +
       '<div id="comentariosConstrucao"></div>' +
       '<div class="flow-actions">' +
@@ -6175,14 +6362,10 @@
     document.getElementById("stepContent").innerHTML = html;
     wireChecklist("build", a, a.buildChecks || (a.buildChecks = {}), "buildChecks");
     renderComentarios(a.id, document.getElementById("comentariosConstrucao"), "Comentários deste agente");
-    document.getElementById("btnSalvarFlow").addEventListener("click", function(){
-      var texto = document.getElementById("flowJsonInput").value.trim();
-      if (!texto) return;
-      apiPost("comentar-implantacao", { taskId: a.id, texto: "[[FLOW]]" + texto }).then(function(){
-        showSimToast("Fluxo salvo como comentário.");
-        document.getElementById("flowJsonInput").value = "";
+    document.getElementById("btnAbrirFluxo").addEventListener("click", function(){
+      abrirFluxoAgente(a, function(){
         renderComentarios(a.id, document.getElementById("comentariosConstrucao"), "Comentários deste agente");
-      }).catch(function(e){ showSimToast(mensagemErro(e) || "Não deu para salvar o Fluxo."); });
+      });
     });
     wireLinkVisaoGeral();
     document.getElementById("btnVoltarAlinhamento").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
@@ -6228,8 +6411,14 @@
       });
       var htmlFim = '<div class="callout"><div class="dot"></div><div>🎉 <b>Toda a prioridade validada foi entregue!</b> ' +
         (pendentes.length ? "Volte ao Alinhamento para validar o próximo agente e seguir a cadência mensal." : "Não há mais agentes aguardando validação no backlog.") + '</div></div>' +
-        '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamentoFim">Ir para o Alinhamento →</button></div>';
+        '<div class="flow-actions"><button type="button" class="btn-flow" id="btnIrAlinhamentoFim">Ir para o Alinhamento →</button></div>' +
+        // Agentes já entregues continuam podendo ter o fluxo (JSON) salvo/atualizado.
+        '<div class="card" style="margin-top:12px;"><h2>📐 Fluxos dos agentes</h2><div class="sub">Salvar, atualizar ou copiar o JSON do fluxo de qualquer agente, inclusive os já entregues.</div>' +
+          '<div style="margin-top:6px;">' + agentesReais().filter(function(ag){ return sim.prioridade.indexOf(ag.id) !== -1; }).map(function(ag){
+            return '<button type="button" class="btn-flow-secondary" data-fluxo-agente="' + esc(ag.id) + '" style="margin:4px 6px 0 0;">📐 ' + esc(ag.nome) + '</button>';
+          }).join("") + '</div></div>';
       document.getElementById("stepContent").innerHTML = htmlFim;
+      wireBotoesFluxoAgente();
       document.getElementById("btnIrAlinhamentoFim").addEventListener("click", function(){ irParaEtapa("alinhamento"); });
       return;
     }

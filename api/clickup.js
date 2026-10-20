@@ -27,6 +27,13 @@
 //        colado no comentario sobe primeiro como anexo, e a URL entra no
 //        texto do comentario (o ClickUp nao aceita imagem embutida direto
 //        no corpo do comentario pela API)
+//        -> comentario normal cabe ate 2.000 caracteres; um FLUXO (texto que
+//        comeca com [[FLOW]], o JSON exportado do Flow) cabe ate 39.000 (o
+//        ClickUp aceita 40.000 no comentario inteiro) e, se passar, e
+//        RECUSADO — nunca cortado (cortar deixava o JSON invalido).
+//   POST /api/clickup?action=atualizar-fluxo-implantacao { taskId, comentarioId, texto }
+//        -> substitui o JSON de uma versao de fluxo ja salva (comentario
+//        [[FLOW]] do agente), mantendo a posicao/data dela no historico.
 //   GET  /api/clickup?action=listar-comentarios    { taskId }
 //   POST /api/clickup?action=anexar-arquivo-implantacao { id, nomeArquivo,
 //        mimeType, base64 } -> anexa um arquivo a um projeto ou subtask
@@ -385,6 +392,7 @@ export default async function handler(req, res) {
     }
     if (req.method === 'POST' && acao === 'atualizar-agente') return await atualizarAgenteAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'comentar-implantacao') return await comentarImplantacaoAcao(req, res, sessao);
+    if (req.method === 'POST' && acao === 'atualizar-fluxo-implantacao') return await atualizarFluxoImplantacaoAcao(req, res, sessao);
     if (req.method === 'GET' && acao === 'listar-comentarios') return await listarComentariosAcao(req, res, sessao);
     if (req.method === 'POST' && acao === 'excluir-comentario-implantacao') {
       return await excluirComentarioImplantacaoAcao(req, res, sessao);
@@ -449,7 +457,7 @@ export default async function handler(req, res) {
       'listar-implantacoes', 'listar-indicadores-snapshot', 'obter-implantacao', 'criar-implantacao',
       'obter-negocio-moskit', 'definir-gerente-contas',
       'atualizar-implantacao', 'renomear-implantacao', 'adicionar-item-implantacao',
-      'atualizar-agente', 'comentar-implantacao',
+      'atualizar-agente', 'comentar-implantacao', 'atualizar-fluxo-implantacao',
       'listar-comentarios', 'excluir-comentario-implantacao', 'marcar-comentario-implantacao', 'excluir-implantacao',
       'anexar-arquivo-implantacao', 'salvar-proposta-implantacao',
       'confirmar-fechamento-implantacao', 'listar-reservas', 'compromissos-hoje', 'criar-reserva',
@@ -4741,6 +4749,74 @@ async function listarComentariosAcao(req, res, sessao) {
 // Ver comentarImplantacaoAcao (por que existe) e listarComentariosAcao (onde é lido).
 const MARCADOR_AUTOR_RE = /^(\[\[PIN\]\])?(\[\[DESTAQUE\]\])?\[\[AUTOR:([^\]]*)\]\]/;
 
+// Fluxo salvo = comentario do agente que comeca com [[FLOW]] (depois dos
+// marcadores de PIN/DESTAQUE/AUTOR, se houver). O ClickUp aceita 40.000
+// caracteres num comentario (testado ao vivo; acima disso devolve 413) — o
+// teto abaixo deixa folga pros marcadores prependados (~100 caracteres).
+const MARCADOR_FLUXO = '[[FLOW]]';
+const MAX_FLUXO_CHARS = 39000;
+const MARCADOR_FLUXO_RE = /^(\[\[PIN\]\])?(\[\[DESTAQUE\]\])?(?:\[\[AUTOR:[^\]]*\]\])?\[\[FLOW\]\]/;
+
+/**
+ * POST ?action=atualizar-fluxo-implantacao { taskId, comentarioId, texto }
+ * Substitui o JSON de uma VERSAO de fluxo ja salva num agente (o comentario
+ * [[FLOW]] dele), sem criar versao nova — a posicao/data dela no historico
+ * (V1, V2...) continua a mesma. Serve tambem pra corrigir um fluxo que foi
+ * salvo cortado (antes do teto de 2.000 caracteres sair). Guardar como
+ * versao nova e o fluxo normal de comentar-implantacao.
+ */
+async function atualizarFluxoImplantacaoAcao(req, res, sessao) {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!podeEscrever(sessao)) {
+    return erro(res, 403, 'somente_leitura', 'Seu perfil tem acesso somente de leitura.');
+  }
+
+  let corpo;
+  try {
+    corpo = await lerCorpo(req, { limiteBytes: LIMITE_CORPO_ANEXO });
+  } catch (e) {
+    if (e instanceof ErroCorpo) return erro(res, 400, 'corpo_invalido', e.message);
+    throw e;
+  }
+
+  if (!taskIdValido(corpo.taskId)) {
+    return erro(res, 400, 'task_invalida', 'taskId inválido.');
+  }
+  const comentarioId = texto(corpo.comentarioId, 40);
+  if (!comentarioId) {
+    return erro(res, 400, 'comentario_invalido', 'comentarioId inválido.');
+  }
+  const json = texto(corpo.texto, MAX_FLUXO_CHARS + 1);
+  if (!json) {
+    return erro(res, 400, 'texto_invalido', 'Fluxo vazio.');
+  }
+  if (json.length > MAX_FLUXO_CHARS) {
+    return erro(res, 400, 'fluxo_grande_demais', `Fluxo grande demais (${json.length} caracteres; o máximo é ${MAX_FLUXO_CHARS}).`);
+  }
+
+  const resolvido = await resolverImplantacao(corpo.taskId);
+  if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
+  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
+  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
+    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
+  }
+
+  // O comentario precisa ser DESTA task e ser um fluxo — nunca edita
+  // comentario qualquer pelo id.
+  const comentarios = await listarComentarios(corpo.taskId);
+  const alvo = comentarios.find((c) => String(c.id) === comentarioId);
+  const marcadores = alvo ? MARCADOR_FLUXO_RE.exec(String(alvo.comment_text || '')) : null;
+  if (!alvo || !marcadores) {
+    return erro(res, 404, 'fluxo_nao_encontrado', 'Fluxo não encontrado neste agente.');
+  }
+
+  // Mantem PIN/DESTAQUE que o comentario ja tinha; autor passa a ser quem
+  // atualizou (mesmo marcador de comentarImplantacaoAcao).
+  const autorMarcado = sessao.nome ? `[[AUTOR:${texto(sessao.nome, 60).replace(/\]/g, '')}]]` : '';
+  await atualizarComentario(comentarioId, `${marcadores[1] || ''}${marcadores[2] || ''}${autorMarcado}${MARCADOR_FLUXO}${json}`);
+  return res.status(200).json({ ok: true });
+}
+
 // Fixar/destacar um comentário não é um campo nativo do ClickUp — vive como
 // um marcador no INÍCIO do próprio texto do comentário (mesmo espírito do
 // prefixo [[FLOW]] já usado pra "fluxo salvo"). O front usa a mesma lógica
@@ -4824,7 +4900,14 @@ async function comentarImplantacaoAcao(req, res, sessao) {
   if (!taskIdValido(corpo.taskId)) {
     return erro(res, 400, 'task_invalida', 'taskId inválido.');
   }
-  const comentario = texto(corpo.texto, 2000);
+  // Fluxo ([[FLOW]] + JSON exportado do Flow) tem teto bem maior que um
+  // comentario comum — e passar dele e erro, nunca corte silencioso (um JSON
+  // cortado no meio e invalido e "Copiar JSON" entregava lixo).
+  const ehFluxo = typeof corpo.texto === 'string' && corpo.texto.trimStart().startsWith(MARCADOR_FLUXO);
+  const comentario = ehFluxo ? texto(corpo.texto, MAX_FLUXO_CHARS + 1) : texto(corpo.texto, 2000);
+  if (ehFluxo && comentario.length > MAX_FLUXO_CHARS) {
+    return erro(res, 400, 'fluxo_grande_demais', `Fluxo grande demais (${comentario.length} caracteres; o máximo é ${MAX_FLUXO_CHARS}).`);
+  }
 
   // `imagem` e opcional: um print colado no comentario. O ClickUp nao aceita
   // imagem embutida no corpo do comentario pela API — sobe como anexo comum
@@ -4869,7 +4952,8 @@ async function comentarImplantacaoAcao(req, res, sessao) {
 
   // "@Nome" no texto vira uma Atividade CSQ pra quem foi mencionado — não
   // bloqueia o comentário se falhar (o comentário em si já foi salvo).
-  const mencoes = comentario ? mencoesNoTexto(comentario) : [];
+  // Fluxo ([[FLOW]]) é dado, não conversa: nunca procura menção dentro do JSON.
+  const mencoes = comentario && !ehFluxo ? mencoesNoTexto(comentario) : [];
   if (mencoes.length) {
     const nomeProjeto = texto(resolvido.projeto.name, 120);
     await Promise.all(mencoes.map((pessoa) => criarAtividadeCsq({
