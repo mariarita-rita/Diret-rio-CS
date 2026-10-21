@@ -582,7 +582,9 @@ function mapTask(t) {
 function mapMeta(t) {
   const mesRefId = cfOpcaoId(t, CM.MES_REF);
   const anoBruto = cfVal(t, CM.ANO_BASE);
-  const ano = Number(String(anoBruto ?? '').trim());
+  // Ano Base e texto livre: ja veio "Outubro/2026" em vez de "2026" e o periodo
+  // inteiro sumiu do painel. Extrai o ano de 4 digitos de onde estiver.
+  const ano = Number(String(anoBruto ?? '').match(/\b(\d{4})\b/)?.[1]);
   return {
     id: t.id,
     nome: t.name,
