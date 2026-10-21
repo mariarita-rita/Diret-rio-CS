@@ -3525,6 +3525,17 @@
     try { return new Date(Number(ms)).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }); } catch(e){ return ""; }
   }
 
+  // Data + horário (fuso de Brasília) — usado nos comentários, onde saber a hora
+  // do registro ajuda a ordenar o que aconteceu no mesmo dia.
+  function formatarDataHora(ms){
+    if (!ms) return "";
+    try {
+      return new Date(Number(ms)).toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+      });
+    } catch(e){ return ""; }
+  }
+
   // Mesma allowlist do backend (_lib/clickup.js, ISM_OPCOES) — ids de usuario
   // real do ClickUp, nao texto livre. Duplicado de proposito, igual outras
   // opcoes espelhadas entre front e servidor neste projeto.
@@ -3699,7 +3710,7 @@
             return '<div class="build-check" style="flex-wrap:wrap;gap:6px;">' +
               '<span style="min-width:0;flex:1 1 280px;"><b>V' + v.versao + '</b>' +
                 (v.versao === versoes.length ? ' <span class="tag londrisoft">atual</span>' : '') + ' ' + tag +
-                '<br><span style="font-size:11px;color:var(--muted)">' + esc(v.autor) + ' · ' + formatarData(v.data) + ' · ' + v.json.length + ' caracteres</span></span>' +
+                '<br><span style="font-size:11px;color:var(--muted)">' + esc(v.autor) + ' · ' + formatarDataHora(v.data) + ' · ' + v.json.length + ' caracteres</span></span>' +
               '<button type="button" class="btn-reset" data-fluxo-copiar="' + esc(v.id) + '">Copiar JSON</button>' +
               (podeEditar ? '<button type="button" class="btn-reset" data-fluxo-editar="' + esc(v.id) + '">Editar esta versão</button>' : "") +
             '</div>';
@@ -3879,7 +3890,7 @@
       var jsonTexto = textoBruto.replace(/^\[\[FLOW\]\]/, "");
       var versaoFlow = versaoFlowPorId[c.id] ? " V" + versaoFlowPorId[c.id] : "";
       var avisoFlow = jsonValidoTexto(jsonTexto) ? "" : ' <span style="color:#8A5A00;font-weight:700;" title="Este JSON está incompleto ou inválido (versões salvas antes do limite de tamanho subir ficaram cortadas). Abra o Fluxo do agente e atualize.">⚠ incompleto</span>';
-      return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '📐 <b>Fluxo salvo' + versaoFlow + '</b>' + avisoFlow + ' — ' + esc(c.autor) + ' em ' + formatarData(c.data) +
+      return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '📐 <b>Fluxo salvo' + versaoFlow + '</b>' + avisoFlow + ' — ' + esc(c.autor) + ' em ' + formatarDataHora(c.data) +
         ' <button type="button" class="btn-reset" data-copiar-flow="' + esc(encodeURIComponent(jsonTexto)) + '" style="margin-left:6px">Copiar JSON</button>' +
         botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
     }
@@ -3899,7 +3910,7 @@
     }
     return '<div class="build-check" style="' + estiloDiv + '"><span style="min-width:0;">' + seloFixado + '<b>' + esc(c.autor) + '</b>' + corpoHtml +
       imagemHtml +
-      '<br><span style="font-size:11px; color:var(--muted)">' + formatarData(c.data) + '</span>' + botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
+      '<br><span style="font-size:11px; color:var(--muted)">' + formatarDataHora(c.data) + '</span>' + botoesFixarDestacar(c.id, meta.pin, meta.destaque) + botaoExcluirComentario(c.id) + '</span></div>';
   }
 
   function renderComentarios(taskId, container, titulo){
@@ -5831,8 +5842,14 @@
           var feitos = total ? o.checklist.filter(function(_, i){ return !!checks[i]; }).length : 0;
           var progresso = total ? (feitos + "/" + total + " no checklist") : "checklist a detalhar";
           var fase = o.fase || "nao_iniciado";
+          // 👍 = marcar como entregue direto da lista, sem abrir o item (mesma
+          // coisa que trocar a fase pra "Entregue" lá dentro). Some quando o
+          // item já foi entregue ou cancelado, e pro perfil somente leitura.
+          var botaoEntregue = (fase !== "entregue" && fase !== "cancelado" && sessaoNivelAtual !== "consulta")
+            ? ' <button type="button" class="btn-reset" data-entregar-item="' + esc(o.id) + '" title="Marcar este item como entregue" style="margin-left:6px;">👍 Entregue</button>'
+            : "";
           return '<div class="agent-pick" data-item="' + esc(o.id) + '"><div class="apname">' + esc(o.produto) + (o.planoSugerido ? " — " + esc(o.planoSugerido) : "") + '</div><div class="apmeta">' + progresso + '</div>' +
-            '<div style="margin-top:6px"><span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span></div></div>';
+            '<div style="margin-top:6px"><span class="tag ' + (FASE_TAG_CLASS[fase] || "neutro") + '">' + esc(FASE_LABEL[fase] || fase) + '</span>' + botaoEntregue + '</div></div>';
         }).join("") +
         (agentes.length ? '<div class="agent-pick" data-item="__waipe__"><div class="apname">Waipe — ' + agentes.length + ' agente' + (agentes.length === 1 ? "" : "s") + '</div><div class="apmeta">' + esc(resumoItemWaipe()) + '</div>' +
           (p.faseWaipe ? '<div style="margin-top:6px"><span class="tag ' + (FASE_TAG_CLASS[p.faseWaipe] || "neutro") + '">' + esc(FASE_LABEL[p.faseWaipe] || p.faseWaipe) + '</span></div>' : "") +
@@ -6007,6 +6024,23 @@
         itemAtual = el.getAttribute("data-item");
         if (itemAtual === "__waipe__") waipeVisaoGeral = true;
         renderConteudoProjeto();
+      });
+    });
+    document.querySelectorAll("[data-entregar-item]").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.stopPropagation(); // não abre o item
+        var cid = btn.getAttribute("data-entregar-item");
+        btn.disabled = true;
+        btn.textContent = "Salvando…";
+        apiPost("atualizar-agente", { taskId: cid, fase: "entregue" }).then(function(){
+          showSimToast("Item marcado como entregue.");
+          projetosCache = null;
+          abrirProjeto(p.id); // recarrega: a fase do projeto e a barra de progresso dependem dos itens
+        }).catch(function(err){
+          showSimToast(mensagemErro(err) || "Não deu para marcar como entregue.");
+          btn.disabled = false;
+          btn.textContent = "👍 Entregue";
+        });
       });
     });
   }
