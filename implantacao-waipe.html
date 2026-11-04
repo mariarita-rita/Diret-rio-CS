@@ -1696,13 +1696,20 @@
   // resumo da tela toda) ----
   // `geradoEm` (ms) do snapshot mostrado agora — null enquanto carrega ou se
   // o snapshot ainda não existe (1ª vez, antes do cron rodar às 7h10).
+  // A métrica de Treinamento (engajamento da Central de Treinamento) lê do Supabase. Enquanto as
+  // trilhas de clientes não estiverem em uso, a busca fica PAUSADA: não chama /api/trilhas-admin
+  // e a aba mostra só os indicadores do ClickUp. Trocar para true quando as trilhas forem ativadas.
+  var INDICADORES_TREINAMENTO_ATIVO = false;
   var indicadoresGeradoEm = null;
   function carregarIndicadores(forcar){
     var root = document.getElementById("indicadoresRoot");
     if (!root) return;
     root.innerHTML = '<div class="sub">Carregando...</div>';
     Promise.all([
-      fetch("/api/trilhas-admin?recurso=indicadores", { credentials: "same-origin" }).then(tratarRespostaApi),
+      // Com a busca pausada (ou se o Supabase falhar) a aba segue só com os dados do ClickUp.
+      INDICADORES_TREINAMENTO_ATIVO
+        ? fetch("/api/trilhas-admin?recurso=indicadores", { credentials: "same-origin" }).then(tratarRespostaApi).catch(function(){ return { indicadores: [] }; })
+        : Promise.resolve({ indicadores: [] }),
       // Lê um snapshot pré-calculado (cron job=snapshot-indicadores, ~10min
       // depois do relatório de finalização das 7h) em vez de recalcular o
       // histórico inteiro toda vez que a aba abre — projetosCache não serve
@@ -1873,6 +1880,9 @@
   // "uma seção" via secaoIndicador, em vez de ser a tela inteira) — a lista
   // detalhada por cliente continua só em trilhas-admin.html.
   function secaoTreinamento(linhas){
+    if (!INDICADORES_TREINAMENTO_ATIVO){
+      return secaoIndicador("Treinamento", '<div class="sub">Busca pausada por enquanto: as trilhas de clientes ainda não estão ativas.</div>');
+    }
     var comTrilha = (linhas || []).filter(function(l){ return l.videosDisponiveis > 0; });
     if (!comTrilha.length){
       return secaoIndicador("Treinamento", '<div class="sub">Nenhum cliente com trilha disponível ainda.</div>');
