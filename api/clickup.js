@@ -1908,6 +1908,10 @@ async function obterImplantacaoAcao(req, res, sessao) {
       // antes dessa mudança.
       cliente: texto(estadoProjeto.cliente, 120) || limparSufixoProposta(pai.name),
       status: pai.status?.status || '',
+      // Quando a task nasceu no ClickUp + de qual negócio/projeto do Moskit veio (rodapé da tela do projeto).
+      criadoEm: Number.isFinite(Number(pai.date_created)) ? Number(pai.date_created) : null,
+      origemMoskitDealId: Number.isFinite(Number(estadoProjeto.origemMoskitDealId)) ? Number(estadoProjeto.origemMoskitDealId) : null,
+      origemMoskitProjetoId: Number.isFinite(Number(estadoProjeto.origemMoskitProjetoId)) ? Number(estadoProjeto.origemMoskitProjetoId) : null,
       csm,
       ism: nomesIsm(ismIdsDoProjeto(pai, estadoProjeto).map((id) => ({ id }))),
       ismIds: ismIdsDoProjeto(pai, estadoProjeto),

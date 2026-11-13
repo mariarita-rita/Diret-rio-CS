@@ -173,6 +173,8 @@
   .faq-item[open] summary::before{content:"–";}
   .faq-item .a{font-size:13px; color:var(--muted); line-height:1.6; margin:9px 0 0 20px;}
 
+  #rodapeProjeto{flex-basis:100%; font-size:14px; color:var(--muted); line-height:1.6;}
+  #rodapeProjeto a{color:var(--brand); font-weight:600;}
   footer.page-footer{margin-top:44px; padding-top:16px; border-top:1px solid var(--border); font-size:11.5px; color:var(--muted-2); display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;}
 
   /* ---- Simulador de fluxo ---- */
@@ -905,6 +907,7 @@
   </section>
 
   <footer class="page-footer">
+    <div id="rodapeProjeto" style="display:none;"></div>
     <span>Uso interno — time de Implantação e CS · Londrisoft</span>
     <span>Fonte: docs.londrisoft.com.br — Central do Cliente Waipe</span>
   </footer>
@@ -2574,7 +2577,31 @@
   // "Projetos em Andamento" e "Projetos Entregues" são a mesma lista/estado
   // (projetosCache, projetoAtualId, dadosProjeto, wizard) — só o mount div e
   // o filtro mudam conforme filtroProjetosAtivo.
+  /** Rodapé da tela de um projeto aberto: data de criação + negócio/projeto de origem no Moskit. */
+  function atualizarRodapeProjeto(){
+    var el = document.getElementById("rodapeProjeto");
+    if (!el) return;
+    var p = (!wizard && projetoAtualId && dadosProjeto && dadosProjeto.projeto) ? dadosProjeto.projeto : null;
+    if (!p){ el.style.display = "none"; el.innerHTML = ""; return; }
+    var partes = [];
+    if (p.criadoEm){
+      var d = new Date(p.criadoEm);
+      partes.push("📅 <b>Criado em</b> " + d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) + " às " +
+        d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }));
+    }
+    if (p.origemMoskitDealId){
+      partes.push("🔗 <b>Negócio de origem:</b> <a href=\"https://app.ollow.com.br/deal/" + p.origemMoskitDealId + '" target="_blank" rel="noopener">#' + p.origemMoskitDealId + "</a>");
+    }
+    if (p.origemMoskitProjetoId){
+      partes.push("📁 <b>Projeto de origem:</b> <a href=\"https://app.ollow.com.br/project/" + p.origemMoskitProjetoId + '" target="_blank" rel="noopener">#' + p.origemMoskitProjetoId + "</a>");
+    }
+    if (!p.origemMoskitDealId && !p.origemMoskitProjetoId) partes.push("🔗 <b>Origem:</b> criado direto no painel");
+    el.innerHTML = partes.join(" &nbsp;·&nbsp; ");
+    el.style.display = "block";
+  }
+
   function renderProjetosPanel(){
+    atualizarRodapeProjeto();
     var root = projetosRootAtivo();
     if (!root) return;
     if (wizard){ renderWizard(root); return; }
