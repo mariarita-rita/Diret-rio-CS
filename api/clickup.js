@@ -1766,7 +1766,10 @@ export function construirLinhasImplantacoes(tasks, sessao) {
  * tudo igual "gestao" dentro de implantacao — a unica diferenca de nivel
  * fica nos dados financeiros (carteira/metas/cliente), nunca aqui. */
 function linhasVisiveisPara(linhas, sessao) {
-  return sessao.nivel === 'csm' ? linhas.filter((l) => pertenceAoCsm(l.csm, sessao.csm)) : linhas;
+  // Gerentes de contas (nivel 'csm') VEEM os projetos de todo mundo (de outros gerentes e dos ainda
+  // sem gerente); só editam os da própria carteira (ver os gates de escrita e 'somenteLeitura' em
+  // obterImplantacaoAcao). A leitura dos dados financeiros (Carteira/Metas) continua restrita.
+  return linhas;
 }
 
 async function listarImplantacoesAcao(req, res, sessao) {
@@ -1828,9 +1831,9 @@ async function obterImplantacaoAcao(req, res, sessao) {
   }
 
   const csm = csmDaDescricaoImplantacao(pai.description);
-  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
+  // CSM abre qualquer projeto, mas só edita os da própria carteira: nos demais a tela fica em
+  // modo visualização e a senha do certificado digital não é devolvida.
+  const somenteLeitura = sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm);
 
   const estadoProjeto = parseWaipeState(pai.description);
   const agentes = subtasks
@@ -1897,9 +1900,13 @@ async function obterImplantacaoAcao(req, res, sessao) {
   if (faseWaipe) fasesItens.push(faseWaipe);
   const faseProjetoManual = FASES_ITEM_VALIDAS.has(estadoProjeto.faseProjetoManual) ? estadoProjeto.faseProjetoManual : null;
 
+  const tributarios = dadosTributariosCampos(estadoProjeto, agentes, pai.id, pai.name);
+  if (somenteLeitura) tributarios.dadosTributarios = { ...tributarios.dadosTributarios, senhaCertificado: '' };
+
   return res.status(200).json({
     projeto: {
       id: pai.id,
+      somenteLeitura,
       // Preferir o "cliente" salvo no estado (ver salvarPropostaImplantacaoAcao)
       // — o nome da task ganha um sufixo "— Proposta — <data>" a cada save,
       // então usá-lo aqui faria esse sufixo (às vezes mais de um, acumulado)
@@ -1976,7 +1983,7 @@ async function obterImplantacaoAcao(req, res, sessao) {
       // Formulário do vendedor: endereço do cliente e motivo da urgência (alta/urgente).
       endereco: sanearEndereco(estadoProjeto.endereco),
       motivoUrgencia: textoLivre(estadoProjeto.motivoUrgencia, 400),
-      ...dadosTributariosCampos(estadoProjeto, agentes, pai.id, pai.name),
+      ...tributarios,
     },
     agentes,
   });
@@ -3064,11 +3071,7 @@ async function historicoConversaUmblerAcao(req, res, sessao) {
   const resolvido = await resolverImplantacao(id);
   if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Projeto não encontrado.');
   const { projeto } = resolvido;
-
-  const csm = csmDaDescricaoImplantacao(projeto.description);
-  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
+  // Só leitura: qualquer gerente de contas pode ver o histórico (o envio, em iniciar-conversa-umbler, segue restrito à carteira).
 
   const estado = parseWaipeState(projeto.description);
   const contato = resolverContatoConversa(estado, req.query?.telefone);
@@ -4726,10 +4729,7 @@ async function listarComentariosAcao(req, res, sessao) {
 
   const resolvido = await resolverImplantacao(taskId);
   if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
-  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
-  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
+  // Só leitura: qualquer gerente de contas pode ler os comentários (comentar/marcar seguem restritos à carteira).
 
   const comentarios = await listarComentarios(taskId);
   const mapeados = comentarios.map((c) => {
@@ -4931,10 +4931,10 @@ async function comentarImplantacaoAcao(req, res, sessao) {
 
   const resolvido = await resolverImplantacao(corpo.taskId);
   if (!resolvido) return erro(res, 404, 'nao_encontrado', 'Tarefa não encontrada.');
-  const csm = csmDaDescricaoImplantacao(resolvido.projeto.description);
-  if (sessao.nivel === 'csm' && !pertenceAoCsm(csm, sessao.csm)) {
-    return erro(res, 403, 'fora_da_carteira', 'Este projeto não está na sua carteira.');
-  }
+  // Comentar é liberado pra qualquer CSM em qualquer projeto (um CSM cobre o
+  // outro na ausência e precisa deixar atualização pro ISM). Não é brecha: o
+  // comentário sai com [[AUTOR:Nome]] de quem comentou de verdade. As demais
+  // edições (renomear, itens, fixar, destacar, anexar...) seguem só da carteira.
 
   let textoFinal = comentario;
   if (arquivo) {

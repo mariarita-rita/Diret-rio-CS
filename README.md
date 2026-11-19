@@ -112,6 +112,7 @@ Uma variável por perfil. O valor é sempre o **hash**, no formato
 | `AUTH_CSM_PATRICIA`   | Patricia Carvalho | `csm`      | Patricia Carvalho |
 | `AUTH_ISM_BRUNO`      | Bruno Vaz         | `ism`      | implantação (igual gestão), agenda só a própria |
 | `AUTH_ISM_ERICA`      | Erica Fernanda    | `ism`      | implantação (igual gestão), agenda só a própria |
+| `AUTH_ISM_VANESSA`    | Vanessa Nobre     | `ism`      | implantação (igual gestão), agenda só a própria |
 | `AUTH_ISM_AUXILIAR`   | Daiane / Aline (senha compartilhada) | `ism` | implantação (igual gestão), agenda de qualquer ISM |
 | `AUTH_CLIENTE_TRILHAS` | Senha única e global de todos os clientes na Central de Treinamento (`central-cliente-trilhas.html`) — o e-mail (cadastrado em `trilhas-admin.html`) é quem identifica o cliente, não a senha | — |
 
@@ -125,7 +126,7 @@ Dentro da implantação (listar/ver/editar projeto, agentes, comentários,
 conversa do Umbler, IA) **não tem diferença nenhuma entre `ism` e `gestao`** —
 todo `ism` vê e edita TODOS os projetos, atribuídos ou não a ele, igual
 gestão. A única distinção entre as duas variantes do nível é a **agenda**:
-- **ISM responsável** (Bruno, Erica): `ismId` aponta pro id dele em
+- **ISM responsável** (Bruno, Erica, Vanessa): `ismId` aponta pro id dele em
   `ISM_OPCOES` (`api/_lib/clickup.js`) — só mexe na PRÓPRIA agenda (conectar
   Google, criar/atualizar/cancelar reserva, vincular agendamento).
 - **ISM auxiliar** (Daiane, Aline): `ismId: null` — não é responsável por

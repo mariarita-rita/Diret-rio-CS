@@ -48,6 +48,7 @@ export const PERFIS = [
   { env: 'AUTH_CSM_PATRICIA', nivel: 'csm', csm: 'Patricia Carvalho', ismId: null, nome: 'Patricia Carvalho' },
   { env: 'AUTH_ISM_BRUNO', nivel: 'ism', csm: null, ismId: 118125102, nome: 'Bruno Vaz' },
   { env: 'AUTH_ISM_ERICA', nivel: 'ism', csm: null, ismId: 48933858, nome: 'Erica Fernanda' },
+  { env: 'AUTH_ISM_VANESSA', nivel: 'ism', csm: null, ismId: 118159241, nome: 'Vanessa Nobre' },
   // Daiane e Aline: papel CSQ (implantação/ISM + agenda de CSM + Atividades),
   // não ISM responsável por projeto — por isso `ismId: null`, mesmo "sem
   // restrição" que csm=null já tinha (pertenceAoIsm/os checks de agenda por

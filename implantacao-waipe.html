@@ -3583,14 +3583,15 @@
   // registro de qual horário/link ficou combinado, pra referência do projeto).
   var ISM_OPCOES = [
     { id: 118125102, nome: "Bruno Vaz", linkAgenda: "https://calendar.app.google/hJxRUZAzrF6EhPEr8" },
-    { id: 48933858, nome: "Erica Fernanda", linkAgenda: null }
+    { id: 48933858, nome: "Erica Fernanda", linkAgenda: null },
+    { id: 118159241, nome: "Vanessa Nobre", linkAgenda: null }
   ];
 
   // Cor própria por pessoa na tag de "ISM responsável" dos cards (ver
   // cardHtml) — cores literais escolhidas pela usuária, não var(--tag-*)
   // (mesmo motivo das outras tags literais deste arquivo: um 2º bloco
   // :root mais abaixo redefine essas variáveis).
-  var ISM_COR = { "Bruno Vaz": "#29b0d5", "Erica Fernanda": "#f18cd4" };
+  var ISM_COR = { "Bruno Vaz": "#29b0d5", "Erica Fernanda": "#f18cd4", "Vanessa Nobre": "#f59e0b" };
   function corIsm(nome){ return ISM_COR[nome] || "#065F46"; }
 
   // CSMs que também agendam reunião com cliente (retenção/renovação) — mesmos
@@ -4119,6 +4120,11 @@
       return;
     }
     root.innerHTML =
+      (dadosProjeto.projeto.somenteLeitura
+        ? '<div class="callout" style="margin-bottom:14px;"><div class="dot"></div><div><b>👁️ Somente visualização.</b> Este projeto está ' +
+          (dadosProjeto.projeto.csm ? 'na carteira de <b>' + esc(dadosProjeto.projeto.csm) + '</b>' : 'sem gerente de contas definido') +
+          '. Você pode ler tudo e comentar (o comentário registra o seu nome, e o ISM vê). Só o gerente responsável edita o projeto ou envia mensagens.</div></div>'
+        : '') +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">' +
         '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
           '<button type="button" class="btn-flow-secondary" id="btnVoltarLista">← Voltar aos projetos</button>' +

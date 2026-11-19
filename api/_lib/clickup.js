@@ -1495,6 +1495,7 @@ export async function anexarArquivoTask(taskId, { nomeArquivo, mimeType, base64 
 export const ISM_OPCOES = [
   { id: 118125102, nome: 'Bruno Vaz' },
   { id: 48933858, nome: 'Erica Fernanda' },
+  { id: 118159241, nome: 'Vanessa Nobre' },
 ];
 
 /**
