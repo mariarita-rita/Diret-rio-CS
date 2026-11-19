@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento CSM — Outubro 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --azul1:#001B6B; --azul2:#0033CC; --azul3:#0055FF; --azul-cl:#E8EEFF;
+    --verde:#0A7C4E; --verde-cl:#E6F4EE; --cinza:#64748B; --cinza-cl:#F1F5F9;
+    --brd:#E2E8F0; --preto:#0F172A; --roxo:#4338CA; --roxo-cl:#EEF2FF;
+    --laranja:#B45309; --lar-cl:#FFFBEB; --verm:#B91C1C; --verm-cl:#FEF2F2;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--cinza-cl); color:var(--preto); font-size:15px; line-height:1.6; }
+
+  .hero { background:linear-gradient(135deg,var(--azul1) 0%,var(--azul2) 55%,var(--azul3) 100%); padding:64px 0 56px; position:relative; overflow:hidden; }
+  .hero::after { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 50%,rgba(0,120,255,.18) 0%,transparent 65%); pointer-events:none; }
+  .hero-inner { max-width:960px; margin:0 auto; padding:0 40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; position:relative; z-index:1; }
+  .hero-eyebrow { font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.55); margin-bottom:16px; }
+  .hero-titulo { font-size:48px; font-weight:800; color:#fff; line-height:1.05; margin-bottom:12px; }
+  .hero-titulo span { color:rgba(255,255,255,.45); font-weight:400; font-size:32px; display:block; margin-top:4px; }
+  .hero-desc { font-size:14px; color:rgba(255,255,255,.65); line-height:1.6; max-width:340px; }
+  .hero-panel { background:#fff; border-radius:16px; padding:28px 28px 24px; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+  .panel-titulo { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--azul2); margin-bottom:16px; }
+  .panel-destaque { background:linear-gradient(135deg,var(--azul1),var(--azul2)); border-radius:10px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+  .panel-destaque .dk { font-size:12px; color:rgba(255,255,255,.7); font-weight:500; }
+  .panel-destaque .dv { font-size:26px; font-weight:800; color:#fff; }
+  .panel-destaque .dpct { text-align:right; }
+  .panel-destaque .dpct strong { font-size:20px; color:#fff; display:block; }
+  .panel-destaque .dpct span { font-size:12px; color:rgba(255,255,255,.7); }
+  .panel-item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--brd); font-size:13px; }
+  .panel-item:last-child { border-bottom:none; }
+  .panel-item .k { color:var(--cinza); }
+  .panel-item .v { font-weight:700; color:var(--preto); font-size:14px; text-align:right; }
+  .panel-item .v.verde { color:var(--verde); }
+  .panel-item .v.laranja { color:var(--laranja); }
+  .panel-item .v.cinza-txt { color:var(--cinza); font-weight:600; }
+
+  .conteudo { max-width:960px; margin:0 auto; padding:48px 40px 64px; }
+  .secao { margin-bottom:52px; }
+  .secao-header { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:end; margin-bottom:20px; padding-bottom:14px; border-bottom:2px solid var(--azul2); }
+  .sec-eyebrow { font-size:10px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--azul2); margin-bottom:4px; }
+  .sec-titulo { font-size:22px; font-weight:800; color:var(--preto); line-height:1.2; }
+  .sec-desc { font-size:13px; color:var(--cinza); line-height:1.55; }
+  .sub-titulo { font-size:14px; font-weight:700; color:var(--preto); margin:24px 0 10px; }
+  .nota { font-size:12px; color:var(--cinza); margin:-4px 0 14px; line-height:1.5; }
+
+  .num-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:24px; }
+  .num-card { background:#fff; border-radius:10px; padding:18px 16px; border:1px solid var(--brd); }
+  .num-label { font-size:11px; color:var(--cinza); font-weight:500; margin-bottom:6px; }
+  .num-val { font-size:28px; font-weight:800; line-height:1; color:var(--preto); }
+  .num-val.verde { color:var(--verde); } .num-val.azul { color:var(--azul2); } .num-val.roxo { color:var(--roxo); } .num-val.verm { color:var(--verm); } .num-val.laranja { color:var(--laranja); }
+  .num-sub { font-size:11px; color:var(--cinza); margin-top:4px; }
+
+  .tabela-wrap { border-radius:10px; border:1px solid var(--brd); overflow:hidden; margin-bottom:14px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-size:11px; font-weight:600; letter-spacing:.04em; padding:11px 14px; text-align:left; white-space:nowrap; }
+  tbody tr { background:#fff; } tbody tr:nth-child(even) { background:var(--cinza-cl); }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody td { padding:10px 14px; border-bottom:1px solid var(--brd); vertical-align:middle; }
+  .td-r { text-align:right; font-variant-numeric:tabular-nums; } .td-c { text-align:center; } .negrito { font-weight:700; }
+
+  .chip { display:inline-block; font-size:10px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .chip-ultra { background:var(--roxo-cl); color:var(--roxo); }
+  .chip-ok { background:var(--verde-cl); color:var(--verde); }
+  .chip-info { background:var(--azul-cl); color:var(--azul2); }
+  .chip-warn { background:var(--lar-cl); color:var(--laranja); }
+
+  .graf-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0; }
+  .graf-box { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:16px; }
+  .graf-box.full { grid-column:1 / -1; }
+  .graf-titulo { font-size:12px; font-weight:600; color:var(--cinza); margin-bottom:10px; }
+
+  .alerta { border-radius:8px; padding:12px 16px; font-size:13px; line-height:1.55; margin-bottom:10px; border-left:3px solid; }
+  .alerta-verde { background:var(--verde-cl); border-color:var(--verde); color:#064E3B; }
+  .alerta-azul { background:var(--azul-cl); border-color:var(--azul2); color:var(--azul1); }
+  .alerta-verm { background:var(--verm-cl); border-color:var(--verm); color:#7F1D1D; }
+  .alerta-laranja { background:var(--lar-cl); border-color:var(--laranja); color:#78350F; }
+
+  .faixas { background:#fff; border:1px solid var(--brd); border-radius:10px; padding:18px 20px 8px; margin-bottom:14px; }
+  .faixa-linha { margin-bottom:26px; }
+  .faixa-topo { display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px; }
+  .faixa-topo b { font-weight:700; }
+  .faixa-topo span { color:var(--cinza); font-variant-numeric:tabular-nums; }
+  .trk { position:relative; height:10px; background:var(--brd); border-radius:5px; }
+  .trk-fill { height:100%; border-radius:5px; background:linear-gradient(90deg,var(--azul2),#6366F1); }
+  .tick { position:absolute; top:-3px; width:2px; height:16px; background:#94A3B8; }
+  .tick-lbl { position:absolute; top:16px; transform:translateX(-50%); font-size:10px; color:var(--cinza); }
+  .faixas-legenda { font-size:11px; color:var(--cinza); padding:2px 0 12px; }
+
+  .hist-wrap { background:#fff; border:1px solid var(--brd); border-radius:10px; overflow:hidden; }
+  .hist-row { display:grid; grid-template-columns:110px repeat(8,1fr); }
+  .hist-cell { padding:10px 8px; font-size:11px; border-bottom:1px solid var(--brd); border-right:1px solid var(--brd); }
+  .hist-cell:last-child { border-right:none; }
+  .hist-row:last-child .hist-cell { border-bottom:none; }
+  .hist-head { background:linear-gradient(90deg,var(--azul1),var(--azul2)); color:#fff; font-weight:700; font-size:10px; text-align:center; }
+  .hist-mes { font-weight:700; background:var(--cinza-cl); color:var(--preto); }
+  .hist-val { text-align:right; font-variant-numeric:tabular-nums; }
+  .hist-atual { background:var(--azul-cl); font-weight:700; color:var(--azul1); }
+
+  .rodape { text-align:center; padding:28px 24px; font-size:12px; color:var(--cinza); border-top:1px solid var(--brd); }
+
+  @media (max-width:700px) {
+    .hero-inner { grid-template-columns:1fr; gap:28px; padding:0 20px; }
+    .secao-header { grid-template-columns:1fr; }
+    .graf-grid { grid-template-columns:1fr; }
+    .hist-row { grid-template-columns:58px repeat(8,1fr); }
+    .hist-cell { padding:6px 2px; font-size:8.5px; }
+    .conteudo { padding:32px 20px 48px; }
+    .hero-titulo { font-size:34px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="hero-eyebrow">Londrisoft · Customer Success · CSM</p>
+      <h1 class="hero-titulo">Fechamento<span>Outubro 2026</span></h1>
+      <p class="hero-desc">Resultados, desempenho e análise da equipe de Customer Success — referência outubro 2026, mês dedicado à campanha de convites do Londrisoft Camp.</p>
+    </div>
+    <div class="hero-panel">
+      <p class="panel-titulo">Resultado do mês</p>
+      <div class="panel-destaque">
+        <div><p class="dk">Incremento total de MRR</p><p class="dv">R$ 4.417</p></div>
+        <div class="dpct"><strong>360</strong><span>de 567 convites</span></div>
+      </div>
+      <div class="panel-item"><span class="k">MRR dos CSMs (CRM, líquido)</span><span class="v verde">R$ 1.095,25</span></div>
+      <div class="panel-item"><span class="k">Renovação automática — base NOV (revisada)</span><span class="v verde">R$ 3.321,47</span></div>
+      <div class="panel-item"><span class="k">Metas de MRR (meta, super e ultra)</span><span class="v cinza-txt">Não definidas no mês</span></div>
+      <div class="panel-item"><span class="k">Campanha de convites do Camp</span><span class="v" style="color:var(--azul2);">360</span></div>
+      <div class="panel-item"><span class="k">Campanha de convites — % da meta de 567</span><span class="v laranja">63,5%</span></div>
+      <div class="panel-item"><span class="k">Base OUT revisada</span><span class="v cinza-txt">R$ 3.021,80<small style="display:block;font-size:11px;color:var(--verm);font-weight:600;">− R$ 1.534,13</small></span></div>
+      <div class="panel-item"><span class="k">Ganhos totais CSMs</span><span class="v">19 negócios</span></div>
+      <div class="panel-item"><span class="k">Perdidos totais CSMs</span><span class="v">4 negócios</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="conteudo">
+
+  <!-- VISÃO GERAL -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Resultado do mês</p><h2 class="sec-titulo">Visão geral</h2></div>
+      <p class="sec-desc">Em outubro o foco da equipe foi a venda de convites do Londrisoft Camp, e o mês não teve metas de MRR. O incremento total foi de R$ 4.416,72: R$ 1.095,25 dos CSMs mais R$ 3.321,47 da renovação automática da base de novembro, já revisada.</p>
+    </div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">Incremento total</p><p class="num-val verde">R$ 4.417</p><p class="num-sub">CSMs + renovação automática</p></div>
+      <div class="num-card"><p class="num-label">MRR dos CSMs (líquido)</p><p class="num-val azul">R$ 1.095</p><p class="num-sub">−69,0% vs setembro</p></div>
+      <div class="num-card"><p class="num-label">Renovação automática</p><p class="num-val roxo">R$ 3.321</p><p class="num-sub">base NOV revisada, 81 clientes</p></div>
+      <div class="num-card"><p class="num-label">Correção da base de outubro</p><p class="num-val verm">− R$ 1.534</p><p class="num-sub">R$ 4.555,93 → R$ 3.021,80 (− R$ 1.534,13)</p></div>
+      <div class="num-card"><p class="num-label">Convites acumulados</p><p class="num-val laranja">360</p><p class="num-sub">63,5% da meta de 567</p></div>
+      <div class="num-card"><p class="num-label">WON</p><p class="num-val">19</p><p class="num-sub">negócios ganhos</p></div>
+      <div class="num-card"><p class="num-label">LOST</p><p class="num-val verm">4</p><p class="num-sub">vs 25 em setembro</p></div>
+    </div>
+    <div class="alerta alerta-azul"><strong>Mês sem metas de MRR.</strong> Não houve meta, super meta nem ultra meta de MRR em outubro, e por isso não há comissão sobre MRR no mês. A premiação do mês segue o regulamento da campanha de convites.</div>
+    <div class="alerta alerta-laranja"><strong>Campanha de convites abaixo da linha:</strong> 360 de 567 ingressos (63,5%), faltando 207 para a meta coletiva.</div>
+  </section>
+
+  <!-- CAMPANHA DE CONVITES -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Londrisoft Camp</p><h2 class="sec-titulo">Campanha de convites</h2></div>
+      <p class="sec-desc">A 2ª fase é a continuação da 1ª: 263 ingressos da 1ª fase mais 304 novos Full Pass formam a meta de 567, dividida entre os quatro gerentes de contas. A contagem não é reiniciada.</p>
+    </div>
+
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Convites acumulados</p><p class="num-val azul">360</p><p class="num-sub">duas fases</p></div>
+      <div class="num-card"><p class="num-label">Meta da equipe</p><p class="num-val">567</p><p class="num-sub">263 + 304 ingressos</p></div>
+      <div class="num-card"><p class="num-label">Faltam</p><p class="num-val laranja">207</p><p class="num-sub">para a meta coletiva</p></div>
+      <div class="num-card"><p class="num-label">Atingimento</p><p class="num-val laranja">63,5%</p><p class="num-sub">da meta de 567</p></div>
+    </div>
+
+    <p class="sub-titulo">Convites acumulados por gerente</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Gerente</th><th class="td-c">Convites</th><th class="td-c">Referência</th><th class="td-c">% da referência</th><th class="td-c">Faixa atingida</th><th class="td-c">Próxima faixa</th><th class="td-c">Faltam</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Patrícia Carvalho</td><td class="td-c negrito" style="color:var(--azul2);">100</td><td class="td-c">142</td><td class="td-c">70,4%</td><td class="td-c"><span class="chip chip-ultra">100 ingressos</span></td><td class="td-c">125</td><td class="td-c">25</td></tr>
+          <tr><td class="negrito">Guilherme Camargo</td><td class="td-c negrito" style="color:var(--azul2);">88</td><td class="td-c">141</td><td class="td-c">62,4%</td><td class="td-c"><span class="chip chip-ok">75 ingressos</span></td><td class="td-c">100</td><td class="td-c">12</td></tr>
+          <tr><td class="negrito">Gian Luca</td><td class="td-c negrito" style="color:var(--azul2);">87</td><td class="td-c">142</td><td class="td-c">61,3%</td><td class="td-c"><span class="chip chip-ok">75 ingressos</span></td><td class="td-c">100</td><td class="td-c">13</td></tr>
+          <tr><td class="negrito">Lucineia Felix</td><td class="td-c negrito" style="color:var(--azul2);">85</td><td class="td-c">142</td><td class="td-c">59,9%</td><td class="td-c"><span class="chip chip-ok">75 ingressos</span></td><td class="td-c">100</td><td class="td-c">15</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Equipe</td><td class="td-c negrito">360</td><td class="td-c negrito">567</td><td class="td-c negrito">63,5%</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-c negrito">207</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Posição acumulada conforme o painel Londrisoft Camp (CSM). A referência individual é a meta de 567 dividida entre os quatro gerentes. A premiação individual segue a maior faixa de ingressos atingida.</p>
+
+    <p class="sub-titulo">Posição nas faixas de ingressos</p>
+    <div class="faixas">
+      <div class="faixa-linha">
+        <div class="faixa-topo"><b>Patrícia Carvalho</b><span>100 ingressos</span></div>
+        <div class="trk"><div class="trk-fill" style="width:66.2%;"></div>
+          <div class="tick" style="left:49.7%;"></div><div class="tick-lbl" style="left:49.7%;">75</div>
+          <div class="tick" style="left:66.2%;"></div><div class="tick-lbl" style="left:66.2%;">100</div>
+          <div class="tick" style="left:82.8%;"></div><div class="tick-lbl" style="left:82.8%;">125</div>
+          <div class="tick" style="left:92.7%;"></div><div class="tick-lbl" style="left:92.7%;">140</div>
+          <div class="tick" style="left:99.7%;"></div><div class="tick-lbl" style="left:99.7%;">151</div>
+        </div>
+      </div>
+      <div class="faixa-linha">
+        <div class="faixa-topo"><b>Guilherme Camargo</b><span>88 ingressos</span></div>
+        <div class="trk"><div class="trk-fill" style="width:58.3%;"></div>
+          <div class="tick" style="left:49.7%;"></div><div class="tick" style="left:66.2%;"></div><div class="tick" style="left:82.8%;"></div><div class="tick" style="left:92.7%;"></div><div class="tick" style="left:99.7%;"></div>
+        </div>
+      </div>
+      <div class="faixa-linha" style="margin-bottom:14px;">
+        <div class="faixa-topo"><b>Gian Luca</b><span>87 ingressos</span></div>
+        <div class="trk"><div class="trk-fill" style="width:57.6%;"></div>
+          <div class="tick" style="left:49.7%;"></div><div class="tick" style="left:66.2%;"></div><div class="tick" style="left:82.8%;"></div><div class="tick" style="left:92.7%;"></div><div class="tick" style="left:99.7%;"></div>
+        </div>
+      </div>
+      <div class="faixa-linha" style="margin-bottom:14px;">
+        <div class="faixa-topo"><b>Lucineia Felix</b><span>85 ingressos</span></div>
+        <div class="trk"><div class="trk-fill" style="width:56.3%;"></div>
+          <div class="tick" style="left:49.7%;"></div><div class="tick" style="left:66.2%;"></div><div class="tick" style="left:82.8%;"></div><div class="tick" style="left:92.7%;"></div><div class="tick" style="left:99.7%;"></div>
+        </div>
+      </div>
+      <p class="faixas-legenda">Faixas de ingressos acumulados: 75, 100, 125, 140 e 151. Vale a maior faixa atingida, e os valores não são cumulativos entre faixas.</p>
+    </div>
+
+    <div class="alerta alerta-azul"><strong>Patrícia lidera com 100 ingressos</strong> e é a única que atingiu a faixa de 100. Os outros três gerentes estão entre 85 e 88 ingressos e a 12–15 ingressos dessa faixa.</div>
+    <div class="alerta alerta-laranja"><strong>A equipe está a 207 ingressos da meta coletiva de 567.</strong> O bônus coletivo depende de a equipe alcançar essa meta, com todos os gerentes acima do mínimo de 75 ingressos (condição já cumprida pelos quatro).</div>
+    <div class="alerta alerta-azul"><strong>Com os 263 ingressos da 1ª fase, a 2ª fase soma 97 dos 304 ingressos novos (31,9%).</strong> Considera que o painel acumula as duas fases.</div>
+  </section>
+
+  <!-- COMPOSIÇÃO -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Composição do MRR — negociações do CS</p><h2 class="sec-titulo">De onde veio o resultado</h2></div>
+      <p class="sec-desc">Origem dos resultados das negociações do CS: os 4 negócios de upsell, troca de plano e migração geraram metade do MRR bruto (50,8%). As renovações foram 12 dos 17 negócios com incremento, mas um terço do valor.</p>
+    </div>
+
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Tipo de negócio</th><th class="td-c">Quantidade</th><th class="td-c">% dos negócios</th><th class="td-r">Valor (MRR)</th><th class="td-c">% do MRR bruto</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Upsell, troca de plano e migração</td><td class="td-c">4</td><td class="td-c">23,5%</td><td class="td-r negrito" style="color:var(--azul2);">R$ 632,20</td><td class="td-c negrito">50,8%</td></tr>
+          <tr><td class="negrito">Renovação</td><td class="td-c">12</td><td class="td-c">70,6%</td><td class="td-r">R$ 413,05</td><td class="td-c">33,2%</td></tr>
+          <tr><td class="negrito">Crossell</td><td class="td-c">1</td><td class="td-c">5,9%</td><td class="td-r">R$ 200,00</td><td class="td-c">16,1%</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Subtotal ganhos</td><td class="td-c negrito">17</td><td class="td-c">100%</td><td class="td-r negrito">R$ 1.245,25</td><td class="td-c negrito">100%</td></tr>
+          <tr><td class="negrito">Downsell</td><td class="td-c">1</td><td class="td-c">—</td><td class="td-r negrito" style="color:var(--verm);">− R$ 150,00</td><td class="td-c">—</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Total líquido (equipe)</td><td class="td-c">—</td><td class="td-c">—</td><td class="td-r negrito" style="color:var(--azul1);">R$ 1.095,25</td><td class="td-c">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">O total de 19 negócios ganhos inclui 2 sem incremento de MRR no CRM (R$ 0,00): uma troca de titularidade e uma renovação com valor zerado. O downsell é o da D Borin de Jesus — Comércio de Embalagens, cuja mensalidade passou de R$ 249,00 para R$ 99,00.</p>
+
+    <div class="graf-grid">
+      <div class="graf-box">
+        <p class="graf-titulo">% do MRR bruto por tipo de negócio</p>
+        <div style="position:relative;height:220px;">
+          <canvas id="chartMixValor" role="img" aria-label="Composição do MRR bruto: upsell, troca de plano e migração 50,8%; renovação 33,2%; crossell 16,1%">Upsell, troca de plano e migração 50,8%; renovação 33,2%; crossell 16,1%</canvas>
+        </div>
+      </div>
+      <div class="graf-box">
+        <p class="graf-titulo">% dos negócios por tipo (quantidade)</p>
+        <div style="position:relative;height:220px;">
+          <canvas id="chartMixQtd" role="img" aria-label="Quantidade de negócios por tipo: renovação 12 (70,6%); upsell, troca de plano e migração 4 (23,5%); crossell 1 (5,9%)">Renovação 12; upsell, troca de plano e migração 4; crossell 1</canvas>
+        </div>
+      </div>
+    </div>
+
+    <p class="sub-titulo">Maiores negócios do mês</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>CSM</th><th>Cliente</th><th>Tipo</th><th class="td-r">Valor do negócio</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Lucineia Felix</td><td>Xtrad Terraplanagem Ltda</td><td>Upsell + Simplaz Prata</td><td class="td-r">R$ 431,60</td></tr>
+          <tr><td class="negrito">Guilherme Camargo</td><td>Minas Meat Transportes Ltda</td><td>Crossell (Simplaz Ouro)</td><td class="td-r">R$ 200,00</td></tr>
+          <tr><td class="negrito">Gian Luca</td><td>Apiário J. Siqueira Ltda</td><td>Troca de plano</td><td class="td-r">R$ 93,00</td></tr>
+          <tr><td class="negrito">Lucineia Felix</td><td>Daupar Ferramentas Ltda</td><td>Migração de Local para Nuvem</td><td class="td-r">R$ 54,60</td></tr>
+          <tr><td class="negrito">Patrícia Carvalho</td><td>Atecsoftwares Soluções em Softwares Ltda</td><td>Upsell</td><td class="td-r">R$ 53,00</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alerta alerta-azul"><strong>Cinco negócios concentram 66,8% do MRR bruto</strong> (R$ 832,20 de R$ 1.245,25), com destaque para o upsell de R$ 431,60, que sozinho vale 34,7% do total.</div>
+  </section>
+
+  <!-- DESEMPENHO POR GERENTE -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Desempenho individual</p><h2 class="sec-titulo">Resumo por gerente de contas</h2></div>
+      <p class="sec-desc">MRR líquido do CRM e convites acumulados da campanha. Sem metas de MRR no mês, o resumo não traz nível de meta.</p>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Gerente</th><th class="td-r">MRR líquido</th><th class="td-c">Ganhos</th><th class="td-r">Ticket médio</th><th class="td-c">Perdidos</th><th class="td-c">Convites</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Lucineia Felix</td><td class="td-r negrito" style="color:var(--azul2);">R$ 560,31</td><td class="td-c">5</td><td class="td-r">R$ 140,08</td><td class="td-c">0</td><td class="td-c">85</td></tr>
+          <tr><td class="negrito">Guilherme Camargo</td><td class="td-r negrito" style="color:var(--azul2);">R$ 301,79</td><td class="td-c">4</td><td class="td-r">R$ 75,45</td><td class="td-c">0</td><td class="td-c">88</td></tr>
+          <tr><td class="negrito">Patrícia Carvalho</td><td class="td-r negrito" style="color:var(--azul2);">R$ 208,40</td><td class="td-c">6</td><td class="td-r">R$ 41,68</td><td class="td-c">1</td><td class="td-c">100</td></tr>
+          <tr><td class="negrito">Gian Luca</td><td class="td-r negrito" style="color:var(--azul2);">R$ 24,75</td><td class="td-c">4</td><td class="td-r">R$ 43,69</td><td class="td-c">2</td><td class="td-c">87</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Equipe</td><td class="td-r negrito" style="color:var(--azul1);">R$ 1.095,25</td><td class="td-c negrito">19</td><td class="td-r">—</td><td class="td-c negrito">4</td><td class="td-c negrito">360</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Gian: R$ 174,75 de ganhos menos o downsell de R$ 150,00. Ticket médio calculado sobre os negócios com incremento de MRR. Dos 4 perdidos, 1 está no nome de Aline Rosa, fora da lista de gerentes.</p>
+    <div class="alerta alerta-verde"><strong>Lucineia teve o maior MRR do mês</strong> (R$ 560,31), puxado pelo upsell de R$ 431,60, e o maior ticket médio (R$ 140,08).</div>
+    <div class="alerta alerta-azul"><strong>Patrícia teve o maior número de negócios ganhos (6) e de convites (100).</strong> Gian fechou o mês com R$ 24,75 líquidos, porque o downsell de R$ 150,00 consumiu quase todo o MRR bruto.</div>
+  </section>
+
+  <!-- PERDIDOS -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Pipeline</p><h2 class="sec-titulo">Negócios perdidos</h2></div>
+      <p class="sec-desc">Foram 4 perdidos no mês, o menor número desde o início do acompanhamento. Dois deles têm a concorrência como motivo.</p>
+    </div>
+    <div class="num-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="num-card"><p class="num-label">Total</p><p class="num-val verm">4</p><p class="num-sub">19 WON no período</p></div>
+      <div class="num-card"><p class="num-label">Concorrência</p><p class="num-val verm">2</p><p class="num-sub">50% dos perdidos</p></div>
+      <div class="num-card"><p class="num-label">Interesse futuro</p><p class="num-val laranja">1</p><p class="num-sub">manter em nutrição</p></div>
+      <div class="num-card"><p class="num-label">Renovação automática</p><p class="num-val">1</p><p class="num-sub">motivo registrado</p></div>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Motivo</th><th>Cliente</th><th>Responsável</th><th>Tipo</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Oferta melhor na concorrência</td><td>Santos Carlos &amp; Cia Ltda</td><td>Gian Luca</td><td>Renovação</td></tr>
+          <tr><td class="negrito">Contratou outro software</td><td>Indústria e Locação de Bilhares D C Quatro</td><td>Patrícia Carvalho</td><td>Renovação</td></tr>
+          <tr><td class="negrito">Interesse futuro</td><td>Diamond Ferragens Ltda</td><td>Gian Luca</td><td>Usuário adicional</td></tr>
+          <tr><td class="negrito">Renovação automática</td><td>Miosotis Presentes Ltda</td><td>Aline Rosa</td><td>Renovação</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alerta alerta-verm"><strong>Duas das quatro perdas foram para a concorrência, ambas em renovações</strong> (oferta melhor e contratação de outro software).</div>
+    <div class="alerta alerta-verde"><strong>Perdidos caíram de 25 em setembro para 4 em outubro.</strong> Em setembro, 20 dos 25 vinham da campanha Waipe e Deploy.</div>
+  </section>
+
+  <!-- RENOVAÇÃO AUTOMÁTICA -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Base de renovação</p><h2 class="sec-titulo">Renovação automática</h2></div>
+      <p class="sec-desc">Fechamento da base de novembro (já revisada, posição de 19/11) e revisão da base de outubro. O incremento da base de novembro soma ao MRR dos CSMs no incremento total do mês.</p>
+    </div>
+
+    <div class="alerta alerta-azul"><strong>Critério de apuração:</strong> entram só os clientes com o boleto reajustado já pago. Quando o boleto sai com reajuste menor, conta o valor que o cliente pagou. Ficam de fora os inadimplentes, os negociados pelo CSM (que contam no MRR dos CSMs), os cancelados, os já renovados em outra base e os boletos sem reajuste.</div>
+
+    <p class="sub-titulo">Revisão do fechamento anterior — base de outubro</p>
+    <div class="alerta alerta-verm"><strong>O fechamento da base de outubro, publicado em setembro, foi revisado.</strong> Os 100 clientes e R$ 4.555,93 de incremento mensal passaram a 72 clientes e R$ 3.021,80 (diferença de −R$ 1.534,13 por mês e −R$ 18.409,56 em ARR). A revisão passou a considerar somente boletos reajustados efetivamente pagos.</div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Indicador</th><th class="td-r">Fechamento de setembro</th><th class="td-r">Fechamento revisado</th><th class="td-r">Diferença</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Clientes renovados automaticamente</td><td class="td-r">100</td><td class="td-r negrito">72</td><td class="td-r" style="color:var(--verm);">− 28</td></tr>
+          <tr><td class="negrito">Incremento mensal (MRR)</td><td class="td-r">R$ 4.555,93</td><td class="td-r negrito">R$ 3.021,80</td><td class="td-r" style="color:var(--verm);">− R$ 1.534,13</td></tr>
+          <tr><td class="negrito">Incremento anual (ARR)</td><td class="td-r">R$ 54.671,16</td><td class="td-r negrito">R$ 36.261,60</td><td class="td-r" style="color:var(--verm);">− R$ 18.409,56</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Ponte do valor publicado para o fechamento revisado</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Etapa</th><th class="td-c">Clientes</th><th class="td-r">MRR</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Valor publicado no fechamento de setembro</td><td class="td-c">100</td><td class="td-r negrito">R$ 4.555,93</td></tr>
+          <tr><td>Diferença de base: registros fora da aba OUT/26</td><td class="td-c">− 6</td><td class="td-r">− R$ 254,22</td></tr>
+          <tr><td>Negociados pelo CSM (saem do fechamento da renovação automática e contabilizam somente no fechamento do CS)</td><td class="td-c">− 10</td><td class="td-r">− R$ 615,11</td></tr>
+          <tr><td>Inadimplentes (boleto reajustado em atraso)</td><td class="td-c">− 5</td><td class="td-r">− R$ 283,76</td></tr>
+          <tr><td>Cancelados</td><td class="td-c">− 4</td><td class="td-r">− R$ 227,09</td></tr>
+          <tr><td>Já renovados em outra base</td><td class="td-c">− 2</td><td class="td-r">− R$ 76,00</td></tr>
+          <tr><td>Boleto gerado sem reajuste (correção pedida ao Financeiro)</td><td class="td-c">− 1</td><td class="td-r">− R$ 47,25</td></tr>
+          <tr><td>Boleto faturado com valor menor do que o informado ao Financeiro</td><td class="td-c">0</td><td class="td-r">− R$ 30,70</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito">Fechamento revisado</td><td class="td-c negrito">72</td><td class="td-r negrito" style="color:var(--azul1);">R$ 3.021,80</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Base de outubro — situação dos 94 clientes</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Situação</th><th class="td-c">Clientes</th><th class="td-r">Reajuste</th><th class="td-r">MRR</th><th>Entra no fechamento?</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Pago em dia</td><td class="td-c">49</td><td class="td-r">R$ 2.114,62</td><td class="td-r">R$ 15.272,92</td><td><span class="chip chip-ok">Sim</span></td></tr>
+          <tr><td class="negrito">Pago com atraso</td><td class="td-c">23</td><td class="td-r">R$ 937,88</td><td class="td-r">R$ 6.401,73</td><td><span class="chip chip-ok">Sim</span></td></tr>
+          <tr><td class="negrito">Em atraso</td><td class="td-c">5</td><td class="td-r">R$ 283,76</td><td class="td-r">R$ 1.647,36</td><td>Não — inadimplente</td></tr>
+          <tr><td class="negrito">CSM</td><td class="td-c">10</td><td class="td-r">R$ 615,11</td><td class="td-r">R$ 2.875,51</td><td>Não — negociado pelo CSM</td></tr>
+          <tr><td class="negrito">Cancelado</td><td class="td-c">4</td><td class="td-r">R$ 227,09</td><td class="td-r">R$ 745,00</td><td>Não — cancelado</td></tr>
+          <tr><td class="negrito">Já renovado em outra base</td><td class="td-c">2</td><td class="td-r">R$ 76,00</td><td class="td-r">R$ 338,00</td><td>Não — já renovado em outra base</td></tr>
+          <tr><td class="negrito">Não gerou boleto com reajuste</td><td class="td-c">1</td><td class="td-r">R$ 47,25</td><td class="td-r">R$ 362,25</td><td>Não — reajuste não cobrado</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total da base</td><td class="td-c negrito">94</td><td class="td-r negrito">R$ 4.301,71</td><td class="td-r negrito">R$ 27.642,77</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Base de outubro — resumo do fechamento revisado</p>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">Clientes contabilizados</p><p class="num-val azul">72</p><p class="num-sub">boleto reajustado pago</p></div>
+      <div class="num-card"><p class="num-label">Incremento mensal</p><p class="num-val verde">R$ 3.022</p><p class="num-sub">R$ 3.021,80</p></div>
+      <div class="num-card"><p class="num-label">Incremento anual</p><p class="num-val verde">R$ 36.262</p><p class="num-sub">R$ 36.261,60 (× 12)</p></div>
+      <div class="num-card"><p class="num-label">Reajuste médio</p><p class="num-val">16,23%</p><p class="num-sub">sobre o MRR anterior</p></div>
+      <div class="num-card"><p class="num-label">MRR antes → depois</p><p class="num-val" style="font-size:18px;">R$ 18.622 → R$ 21.644</p><p class="num-sub">72 clientes</p></div>
+    </div>
+
+    <p class="sub-titulo">Base de outubro — ajustes e observações</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th>Situação na base</th><th class="td-r">Reajuste correto</th><th class="td-r">Reajuste pago</th><th class="td-r">Descontado</th><th>Observação</th></tr></thead>
+        <tbody>
+          <tr><td>Edson Alves da Cruz</td><td>Sem boleto com reajuste</td><td class="td-r">R$ 47,25</td><td class="td-r">—</td><td class="td-r">—</td><td>Boleto gerado sem o reajuste. Correção solicitada ao Financeiro. Fora do fechamento.</td></tr>
+          <tr><td>Ambient Ar Soluções Ambientais Ltda</td><td>Pago em dia</td><td class="td-r">R$ 73,50</td><td class="td-r">R$ 69,00</td><td class="td-r">R$ 4,50</td><td>O correto era R$ 283,50 e o boleto saiu com R$ 279,00. Considerado o valor pago.</td></tr>
+          <tr><td>Rr Franco Comércio de Laticínios e Frios Ltda</td><td>Pago em dia</td><td class="td-r">R$ 33,00</td><td class="td-r">R$ 6,80</td><td class="td-r">R$ 26,20</td><td>O correto era ajustar R$ 33,00 e o boleto saiu com R$ 6,80 de reajuste.</td></tr>
+          <tr><td>Freitas Higiene e Limpeza Ltda</td><td>Já renovado em outra base</td><td class="td-r">R$ 39,00</td><td class="td-r">R$ 6,50</td><td class="td-r">0</td><td>Marcado como já renovado em outra base: não soma no fechamento.</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total dos boletos a menor</td><td></td><td class="td-r negrito">R$ 145,50</td><td class="td-r negrito">R$ 82,30</td><td class="td-r negrito">R$ 30,70</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Base de novembro — posição de 19/11/2026 <span class="chip chip-ok" style="margin-left:6px;vertical-align:middle;">Base já revisada</span></p>
+    <div class="alerta alerta-verde"><strong>A base de novembro já está revisada.</strong> Os ajustes e observações listados abaixo estão considerados no incremento de R$ 3.321,47, que entra no incremento total do mês.</div>
+    <div class="num-grid">
+      <div class="num-card"><p class="num-label">Clientes contabilizados</p><p class="num-val azul">81</p><p class="num-sub">boleto reajustado pago</p></div>
+      <div class="num-card"><p class="num-label">Incremento mensal</p><p class="num-val verde">R$ 3.321</p><p class="num-sub">R$ 3.321,47</p></div>
+      <div class="num-card"><p class="num-label">Incremento anual</p><p class="num-val verde">R$ 39.858</p><p class="num-sub">R$ 39.857,58 (× 12)</p></div>
+      <div class="num-card"><p class="num-label">Reajuste médio</p><p class="num-val">16,40%</p><p class="num-sub">sobre o MRR anterior</p></div>
+      <div class="num-card"><p class="num-label">MRR antes → depois</p><p class="num-val" style="font-size:18px;">R$ 20.250 → R$ 23.571</p><p class="num-sub">81 clientes</p></div>
+    </div>
+    <p class="nota">Números atualizados automaticamente na planilha de renovações a partir da situação do boleto. A posição muda conforme os boletos em atraso forem pagos.</p>
+
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Situação</th><th class="td-c">Clientes</th><th class="td-r">Reajuste</th><th class="td-r">MRR</th><th>Entra no fechamento?</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Pago em dia</td><td class="td-c">33</td><td class="td-r">R$ 1.518,50</td><td class="td-r">R$ 9.319,70</td><td><span class="chip chip-ok">Sim</span></td></tr>
+          <tr><td class="negrito">Pago com atraso</td><td class="td-c">49</td><td class="td-r">R$ 1.872,37</td><td class="td-r">R$ 14.420,42</td><td><span class="chip chip-ok">Sim</span></td></tr>
+          <tr><td class="negrito">Em atraso</td><td class="td-c">50</td><td class="td-r">R$ 3.098,22</td><td class="td-r">R$ 13.436,99</td><td>Não — inadimplente</td></tr>
+          <tr><td class="negrito">CSM</td><td class="td-c">10</td><td class="td-r">R$ 766,18</td><td class="td-r">R$ 2.737,86</td><td>Não — fechamento com CSM</td></tr>
+          <tr><td class="negrito">Cancelado</td><td class="td-c">4</td><td class="td-r">R$ 96,17</td><td class="td-r">R$ 1.320,00</td><td>Não — cancelado</td></tr>
+          <tr><td class="negrito">Sem boleto de reajuste</td><td class="td-c">2</td><td class="td-r">R$ 90,22</td><td class="td-r">R$ 1.394,88</td><td>Não — reajuste não cobrado</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total da base</td><td class="td-c negrito">148</td><td class="td-r negrito">R$ 7.441,65</td><td class="td-r negrito">R$ 42.629,84</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo">Base de novembro — ajustes e observações</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th>Situação na base</th><th class="td-r">Reajuste</th><th class="td-r">MRR</th><th>Tratamento no fechamento</th></tr></thead>
+        <tbody>
+          <tr><td>Regional Planejamento e Construções Civis Ltda</td><td>Sem boleto de reajuste</td><td class="td-r">R$ 59,82</td><td class="td-r">R$ 856,48</td><td>Já fora do fechamento. Correção solicitada ao Financeiro.</td></tr>
+          <tr><td>Bruniel &amp; Silva Ltda</td><td>Sem boleto de reajuste</td><td class="td-r">R$ 30,40</td><td class="td-r">R$ 538,40</td><td>Já fora do fechamento. Correção solicitada ao Financeiro.</td></tr>
+          <tr><td>Klusinski Comércio e Recapagens de Pneus Ltda</td><td>Sem boleto de reajuste</td><td class="td-r">R$ 69,40</td><td class="td-r">R$ 169,00</td><td>Retirado do resumo: pagou o boleto sem reajuste.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Cliente (reajuste a menor, já pago)</th><th>Situação na base</th><th class="td-r">MRR correto</th><th class="td-r">MRR gerado e pago</th><th class="td-r">Diferença mensal</th></tr></thead>
+        <tbody>
+          <tr><td>Ventspar Peças e Equipamentos Ltda</td><td>Reajuste menor do que o solicitado</td><td class="td-r">R$ 346,90</td><td class="td-r">R$ 299,00</td><td class="td-r">R$ 47,90</td></tr>
+          <tr><td>Belly Iluminação Ltda</td><td>Reajuste menor do que o solicitado</td><td class="td-r">R$ 346,90</td><td class="td-r">R$ 299,00</td><td class="td-r">R$ 47,90</td></tr>
+          <tr><td>João Vitor Tabaquini Ltda</td><td>Reajuste menor do que o solicitado</td><td class="td-r">R$ 346,90</td><td class="td-r">R$ 299,00</td><td class="td-r">R$ 47,90</td></tr>
+          <tr style="background:var(--cinza-cl);"><td class="negrito">Total</td><td></td><td class="td-r negrito">R$ 1.040,70</td><td class="td-r negrito">R$ 897,00</td><td class="td-r negrito">R$ 143,70</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Nesses três casos o cliente já pagou o boleto menor, e o fechamento considera o valor pago.</p>
+
+    <p class="sub-titulo">Erros de faturamento encaminhados ao Financeiro — impacto no fechamento</p>
+    <div class="alerta alerta-laranja"><strong>No fechamento das renovações automáticas das bases de outubro e novembro, alguns boletos não saíram com o reajuste ou saíram com valor diferente do combinado.</strong> Os casos estão organizados em dois grupos: os que precisam de correção pelo Financeiro e os que ficam só para registro.</div>
+
+    <p class="sub-titulo" style="font-size:13px;">Precisam de correção</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Base</th><th>CNPJ/CPF</th><th>Cliente</th><th>Problema</th><th class="td-r">Reajuste não aplicado</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Novembro</td><td>80840259000180</td><td>Regional Planejamento e Construções Civis Ltda</td><td>Boleto gerado sem o reajuste da renovação (nova mensalidade R$ 856,48)</td><td class="td-r">R$ 59,82</td></tr>
+          <tr><td class="negrito">Novembro</td><td>23914653000181</td><td>Bruniel &amp; Silva Ltda</td><td>Boleto gerado sem o reajuste da renovação (nova mensalidade R$ 538,40)</td><td class="td-r">R$ 30,40</td></tr>
+          <tr><td class="negrito">Novembro</td><td>34444197000170</td><td>Klusinski Comércio e Recapagens de Pneus Ltda</td><td>Boleto gerado sem o reajuste (nova mensalidade R$ 169,00). O boleto saiu em R$ 99,60 e já foi pago pelo cliente</td><td class="td-r">R$ 69,40</td></tr>
+          <tr><td class="negrito">Outubro</td><td>20520590910</td><td>Edson Alves da Cruz</td><td>Boleto gerado sem o reajuste (nova mensalidade R$ 362,25). O boleto saiu em R$ 315,00</td><td class="td-r">R$ 47,25</td></tr>
+          <tr><td class="negrito">Novembro</td><td>01150786000196</td><td>Estilo Esquadrias de Alumínio Ltda</td><td>Valor errado: o contrato é semestral à vista, mas o boleto saiu no valor anual. Valor correto: R$ 1.155,00</td><td class="td-r">—</td></tr>
+          <tr style="background:var(--azul-cl);"><td class="negrito" colspan="4">Reajuste não aplicado (4 clientes)</td><td class="td-r negrito" style="color:var(--azul1);">R$ 206,87</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sub-titulo" style="font-size:13px;">Só para registro</p>
+    <p class="nota" style="margin-bottom:12px;">Os boletos abaixo saíram com valor diferente, mas o cliente já pagou e não há outro lançamento no Forms nem no Moskit. Por isso o fechamento considera o valor pago.</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Base</th><th>CNPJ/CPF</th><th>Cliente</th><th>Correto</th><th>Gerado e pago</th><th class="td-r">Diferença</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Outubro</td><td>51858701000105</td><td>Rr Franco Comércio de Laticínios e Frios Ltda</td><td>Correto: reajuste de R$ 33,00 (mensalidade R$ 169,00)</td><td>Gerado: reajuste de R$ 6,80 (boleto de R$ 142,80)</td><td class="td-r">R$ 26,20</td></tr>
+          <tr><td class="negrito">Outubro</td><td>10855439000150</td><td>Freitas Higiene e Limpeza Ltda</td><td>Correto: reajuste de R$ 39,00 (mensalidade R$ 169,00)</td><td>Gerado: reajuste de R$ 6,50 (boleto de R$ 136,50)</td><td class="td-r">R$ 32,50</td></tr>
+          <tr><td class="negrito">Outubro</td><td>19226767000161</td><td>Ambient Ar Soluções Ambientais Ltda</td><td>Correto: R$ 283,50</td><td>Gerado: R$ 279,00</td><td class="td-r">R$ 4,50</td></tr>
+          <tr><td class="negrito">Novembro</td><td>09045275000116</td><td>Ventspar Peças e Equipamentos Ltda.</td><td>Correto: R$ 346,90</td><td>Gerado: R$ 299,00</td><td class="td-r">R$ 47,90</td></tr>
+          <tr><td class="negrito">Novembro</td><td>47691755000143</td><td>Belly Iluminação Ltda</td><td>Correto: R$ 346,90</td><td>Gerado: R$ 299,00</td><td class="td-r">R$ 47,90</td></tr>
+          <tr><td class="negrito">Novembro</td><td>18887514000176</td><td>João Vitor Tabaquini Ltda</td><td>Correto: R$ 346,90</td><td>Gerado: R$ 299,00</td><td class="td-r">R$ 47,90</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+
+    <div class="alerta alerta-laranja"><strong>Quatro boletos somam R$ 206,87 por mês (R$ 2.482,44 por ano) de reajuste não aplicado:</strong> R$ 159,62 na base de novembro (Regional, Bruniel e Klusinski) e R$ 47,25 na de outubro (Edson). O quinto caso, Estilo Esquadrias, é erro no valor do boleto.</div>
+    <div class="alerta alerta-azul"><strong>Se os boletos corrigidos forem pagos, o incremento da base de novembro passa de R$ 3.321,47 para R$ 3.481,09</strong> e o incremento total do mês, de R$ 4.416,72 para R$ 4.576,34. A base de outubro iria de R$ 3.021,80 para R$ 3.069,05.</div>
+    <div class="alerta alerta-azul"><strong>Se os inadimplentes pagarem nos próximos dias, o incremento da base de novembro passa de R$ 3.321,47 para R$ 6.419,69</strong> (somam-se R$ 3.098,22 dos 50 clientes em atraso) e o incremento total do mês, de R$ 4.416,72 para R$ 7.514,94. A base de outubro iria de R$ 3.021,80 para R$ 3.305,56 (R$ 283,76 dos 5 clientes em atraso). Simulação com o pagamento de todos os inadimplentes, sem as correções de boleto.</div>
+
+    <p class="sub-titulo">Comparativo entre as bases de outubro e novembro</p>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Indicador</th><th class="td-r">Outubro (revisada)</th><th class="td-r">Novembro (19/11)</th></tr></thead>
+        <tbody>
+          <tr><td class="negrito">Clientes na base</td><td class="td-r">94</td><td class="td-r">148</td></tr>
+          <tr><td class="negrito">Contabilizados (boleto reajustado pago)</td><td class="td-r">72 (76,6%)</td><td class="td-r">81 (54,7%)</td></tr>
+          <tr><td class="negrito">Incremento mensal</td><td class="td-r">R$ 3.021,80</td><td class="td-r negrito">R$ 3.321,47</td></tr>
+          <tr><td class="negrito">Incremento anual</td><td class="td-r">R$ 36.261,60</td><td class="td-r negrito">R$ 39.857,58</td></tr>
+          <tr><td class="negrito">Reajuste médio sobre o MRR anterior</td><td class="td-r">16,23%</td><td class="td-r">16,40%</td></tr>
+          <tr><td class="negrito">Pago em dia</td><td class="td-r">49 (52,1%)</td><td class="td-r">33 (22,3%)</td></tr>
+          <tr><td class="negrito">Pago com atraso</td><td class="td-r">23 (24,5%)</td><td class="td-r">49 (33,1%)</td></tr>
+          <tr><td class="negrito">Em atraso (inadimplente)</td><td class="td-r">5 (5,3%)</td><td class="td-r" style="color:var(--verm);font-weight:700;">50 (33,8%)</td></tr>
+          <tr><td class="negrito">Reajuste em atraso (por mês)</td><td class="td-r">R$ 283,76</td><td class="td-r" style="color:var(--verm);font-weight:700;">R$ 3.098,22</td></tr>
+          <tr><td class="negrito">Negociado pelo CSM</td><td class="td-r">10</td><td class="td-r">10</td></tr>
+          <tr><td class="negrito">Cancelado</td><td class="td-r">4</td><td class="td-r">4</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="graf-grid">
+      <div class="graf-box full">
+        <p class="graf-titulo">Situação dos clientes da base (% do total de cada base)</p>
+        <div style="position:relative;height:260px;">
+          <canvas id="chartSitRenov" role="img" aria-label="Situação dos clientes: outubro revisada, pago em dia 52,1%, pago com atraso 24,5%, em atraso 5,3%, CSM 10,6%, cancelado 4,3%, outros 3,2%. Novembro, pago em dia 22,3%, pago com atraso 33,1%, em atraso 33,8%, CSM 6,8%, cancelado 2,7%, outros 1,4%">Outubro: pago em dia 52,1%; com atraso 24,5%; em atraso 5,3%. Novembro: pago em dia 22,3%; com atraso 33,1%; em atraso 33,8%.</canvas>
+        </div>
+      </div>
+    </div>
+    <p class="nota">Outros = já renovado em outra base e sem boleto de reajuste.</p>
+
+    <div class="alerta alerta-laranja"><strong>Na base de novembro, 50 clientes (33,8%) estão em atraso, somando R$ 3.098,22 de reajuste mensal fora do fechamento.</strong> Na base de outubro eram 5 (5,3%). Se todos pagassem, o incremento de novembro chegaria ao teto de R$ 6.419,69 por mês.</div>
+    <div class="alerta alerta-azul"><strong>Entre os contabilizados de novembro, 60,5% (49 de 81) pagaram com atraso,</strong> contra 31,9% (23 de 72) em outubro. O incremento da base de novembro é maior (+9,9%), mas depende mais de pagamentos fora do prazo.</div>
+    <div class="alerta alerta-verde"><strong>O reajuste médio ficou estável:</strong> 16,23% na base de outubro e 16,40% na de novembro.</div>
+  </section>
+
+  <!-- HISTÓRICO -->
+  <section class="secao">
+    <div class="secao-header">
+      <div><p class="sec-eyebrow">Tendência</p><h2 class="sec-titulo">Histórico — março a outubro</h2></div>
+    </div>
+    <div class="hist-wrap">
+      <div class="hist-row">
+        <div class="hist-cell hist-head" style="text-align:left;">Indicador</div>
+        <div class="hist-cell hist-head">Mar</div><div class="hist-cell hist-head">Abr</div><div class="hist-cell hist-head">Mai</div><div class="hist-cell hist-head">Jun</div><div class="hist-cell hist-head">Jul</div><div class="hist-cell hist-head">Ago</div><div class="hist-cell hist-head">Set</div><div class="hist-cell hist-head">Out</div>
+      </div>
+      <div class="hist-row"><div class="hist-cell hist-mes">MRR equipe</div><div class="hist-cell hist-val">R$ 4.589</div><div class="hist-cell hist-val">R$ 7.592</div><div class="hist-cell hist-val">R$ 7.928</div><div class="hist-cell hist-val">R$ 10.897</div><div class="hist-cell hist-val">R$ 11.029</div><div class="hist-cell hist-val">R$ 6.182</div><div class="hist-cell hist-val">R$ 3.535</div><div class="hist-cell hist-val hist-atual" style="color:var(--verm);">R$ 1.095</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">Nível</div><div class="hist-cell td-c"><span class="chip chip-info">Meta</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ultra">Ultra</span></div><div class="hist-cell td-c"><span class="chip chip-ok">Super</span></div><div class="hist-cell td-c"><span class="chip chip-info">Meta</span></div><div class="hist-cell td-c"><span class="chip chip-warn">Abaixo</span></div><div class="hist-cell td-c hist-atual"><span class="chip chip-info">Sem meta</span></div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">WON</div><div class="hist-cell hist-val">109</div><div class="hist-cell hist-val">204</div><div class="hist-cell hist-val">196</div><div class="hist-cell hist-val">244</div><div class="hist-cell hist-val">179</div><div class="hist-cell hist-val">44</div><div class="hist-cell hist-val">29</div><div class="hist-cell hist-val hist-atual">19</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">LOST</div><div class="hist-cell hist-val">48</div><div class="hist-cell hist-val">29</div><div class="hist-cell hist-val">63</div><div class="hist-cell hist-val">33</div><div class="hist-cell hist-val">40</div><div class="hist-cell hist-val">31</div><div class="hist-cell hist-val">25</div><div class="hist-cell hist-val hist-atual">4</div></div>
+      <div class="hist-row"><div class="hist-cell hist-mes">Meta base</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 3.564</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 2.968</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 2.861</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 3.710</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 6.918</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 4.232</div><div class="hist-cell hist-val" style="color:var(--cinza);">R$ 6.000</div><div class="hist-cell hist-val hist-atual" style="color:var(--cinza);">—</div></div>
+    </div>
+  </section>
+
+</div>
+<div class="rodape">Londrisoft Customer Success · Fechamento Mensal CSM · Outubro 2026 · Uso interno</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+  const gridColor = '#E2E8F0';
+  const tickColor = '#64748B';
+
+  new Chart(document.getElementById('chartMixValor'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Upsell, troca de plano e migração', 'Renovação', 'Crossell'],
+      datasets: [{ data: [50.8, 33.2, 16.1], backgroundColor: ['#0033CC','#94A3B8','#4338CA'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10 } },
+        tooltip: { callbacks: { label: c => c.label + ': ' + c.raw + '%' } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartMixQtd'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Renovação', 'Upsell, troca de plano e migração', 'Crossell'],
+      datasets: [{ data: [12, 4, 1], backgroundColor: ['#94A3B8','#0033CC','#4338CA'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 10,
+            generateLabels: (chart) => {
+              const d = chart.data;
+              const total = d.datasets[0].data.reduce((a, b) => a + b, 0);
+              return d.labels.map((label, i) => {
+                const val = d.datasets[0].data[i];
+                return { text: label + ': ' + val + ' (' + (val / total * 100).toFixed(1) + '%)', fillStyle: d.datasets[0].backgroundColor[i], index: i };
+              });
+            }
+          }
+        },
+        tooltip: { callbacks: { label: c => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return c.label + ': ' + c.raw + ' negócios (' + (c.raw / t * 100).toFixed(1) + '%)'; } } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('chartSitRenov'), {
+    type: 'bar',
+    data: {
+      labels: ['Pago em dia', 'Pago com atraso', 'Em atraso', 'Negociado pelo CSM', 'Cancelado', 'Outros'],
+      datasets: [
+        { label: 'Outubro (revisada, 94 clientes)', data: [52.1, 24.5, 5.3, 10.6, 4.3, 3.2], backgroundColor: '#94A3B8', borderRadius: 4, maxBarThickness: 28 },
+        { label: 'Novembro (19/11, 148 clientes)', data: [22.3, 33.1, 33.8, 6.8, 2.7, 1.4], backgroundColor: '#0033CC', borderRadius: 4, maxBarThickness: 28 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: tickColor, font: { size: 11 }, boxWidth: 10, padding: 12 } },
+        tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.raw.toFixed(1) + '%' } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: v => v + '%' }, beginAtZero: true }
+      }
+    }
+  });
+</script>
+</body>
+</html>
